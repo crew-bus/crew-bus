@@ -32,7 +32,7 @@ Your **Crew Boss** is your AI chief of staff — the only agent that talks to yo
 
 ```bash
 # Replace with your GitHub username in the URL
-git clone https://github.com/YOUR_GITHUB_USERNAME/crew-bus.git
+git clone https://github.com/crew-bus/crew-bus.git
 cd crew-bus
 pip install pyyaml
 python dashboard.py
