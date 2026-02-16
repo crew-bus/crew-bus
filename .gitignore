@@ -19,3 +19,5 @@ build/
 _b64_*.txt
 _tmp_*
 configs/ryan_stack.yaml
+crew_bus.db-shm
+crew_bus.db-wal
