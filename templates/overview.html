@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Command Center</h2>
+        <span class="subtitle">{{ human.name }}'s Agent Hierarchy</span>
+    </div>
+    <div class="btn-group">
+        <a href="/briefing/morning" class="btn btn-primary">Morning Briefing</a>
+        <a href="/briefing/evening" class="btn">Evening Summary</a>
+    </div>
+</div>
+
+<!-- Top Stats Row -->
+<div class="grid grid-4 mb-2">
+    <div class="stat-card">
+        <div class="stat-value {% if human.burnout_score <= 3 %}burnout-low{% elif human.burnout_score <= 6 %}burnout-mid{% else %}burnout-high{% endif %}">
+            {{ human.burnout_score }}<span class="text-dim text-sm">/10</span>
+        </div>
+        <div class="stat-label">Burnout Score</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value {% if rh.trust_score <= 3 %}trust-low{% elif rh.trust_score <= 6 %}trust-mid{% else %}trust-high{% endif %}">
+            {{ rh.trust_score }}<span class="text-dim text-sm">/10</span>
+        </div>
+        <div class="stat-label">Trust Score ({{ autonomy.level }})</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value text-info">
+            {{ active_count }}<span class="text-dim text-sm">/{{ agents|length }}</span>
+        </div>
+        <div class="stat-label">Active Agents</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">Messages Today</div>
+    </div>
+</div>
+
+<!-- Middle Row: Trust Slider + Message Stats -->
+<div class="grid grid-2 mb-2">
+    <!-- Trust Score Slider -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Crew Boss Trust Level</h3>
+            <span class="badge badge-info">{{ autonomy.level }}</span>
+        </div>
+        <div class="slider-wrap">
+            <input type="range" id="trustSlider" min="1" max="10" value="{{ rh.trust_score }}"
+                   oninput="document.getElementById('trustVal').textContent=this.value">
+            <span class="slider-val" id="trustVal">{{ rh.trust_score }}</span>
+        </div>
+        <div class="mt-1 flex justify-between items-center">
+            <span class="text-xs text-muted">1 = Observer | 5 = Assistant | 8 = Operator | 10 = Chief of Staff</span>
+            <button class="btn btn-sm btn-primary" onclick="updateTrust()">Save</button>
+        </div>
+        <div class="mt-1 text-sm text-dim">
+            <strong>Abilities:</strong>
+            {% for ability in autonomy.abilities %}
+                <span class="badge badge-info" style="margin:2px">{{ ability }}</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Message Stats -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Message Flow (24h)</h3>
+        </div>
+        <div class="grid grid-4" style="text-align:center">
+            <div>
+                <div class="fw-bold text-info" style="font-size:1.5rem">{{ stats.total }}</div>
+                <div class="text-xs text-muted">TOTAL</div>
+            </div>
+            <div>
+                <div class="fw-bold text-success" style="font-size:1.5rem">{{ stats.delivered }}</div>
+                <div class="text-xs text-muted">DELIVERED</div>
+            </div>
+            <div>
+                <div class="fw-bold text-warning" style="font-size:1.5rem">{{ stats.queued }}</div>
+                <div class="text-xs text-muted">QUEUED</div>
+            </div>
+            <div>
+                <div class="fw-bold text-danger" style="font-size:1.5rem">{{ stats.blocked }}</div>
+                <div class="text-xs text-muted">BLOCKED</div>
+            </div>
+        </div>
+        <div class="mt-2">
+            <a href="/messages" class="btn btn-sm">View All Messages</a>
+        </div>
+    </div>
+</div>
+
+<!-- Burnout Slider -->
+<div class="card mb-2">
+    <div class="card-header">
+        <h3>Burnout Score</h3>
+        <span class="badge {% if human.burnout_score <= 3 %}badge-success{% elif human.burnout_score <= 6 %}badge-warning{% else %}badge-danger{% endif %}">
+            {% if human.burnout_score <= 3 %}LOW{% elif human.burnout_score <= 6 %}MODERATE{% else %}HIGH{% endif %}
+        </span>
+    </div>
+    <div class="slider-wrap">
+        <input type="range" id="burnoutSlider" min="1" max="10" value="{{ human.burnout_score }}"
+               oninput="document.getElementById('burnoutVal').textContent=this.value; updateBurnoutColor(this.value)">
+        <span class="slider-val {% if human.burnout_score <= 3 %}burnout-low{% elif human.burnout_score <= 6 %}burnout-mid{% else %}burnout-high{% endif %}" id="burnoutVal">{{ human.burnout_score }}</span>
+    </div>
+    <div class="mt-1 flex justify-between items-center">
+        <span class="text-xs text-muted">1-3: Full energy | 4-6: Moderate | 7+: Crew Boss protects your attention</span>
+        <button class="btn btn-sm btn-primary" onclick="updateBurnout()">Save</button>
+    </div>
+</div>
+
+<!-- Recent Messages Feed -->
+<div class="card">
+    <div class="card-header">
+        <h3>Recent Messages</h3>
+        <a href="/messages" class="btn btn-sm">View All</a>
+    </div>
+    <div class="msg-feed">
+        {% for msg in messages %}
+        <div class="msg-item" onclick="this.querySelector('.msg-body').classList.toggle('show')">
+            <div class="msg-arrow">
+                <span class="from-name">{{ msg.from_name }}</span>
+                &rarr;
+                <span class="to-name">{{ msg.to_name }}</span>
+            </div>
+            <div class="msg-content">
+                <div class="subject">
+                    <span class="priority-{{ msg.priority }}">
+                        {% if msg.priority == 'critical' %}[!] {% elif msg.priority == 'high' %}[H] {% endif %}
+                    </span>
+                    {{ msg.subject }}
+                </div>
+                <div class="meta">
+                    {{ msg.message_type }} | {{ msg.status }} | {{ format_time_ago(msg.created_at) }}
+                </div>
+                {% if msg.body %}
+                <div class="msg-body">{{ msg.body }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% if not messages %}
+        <p class="text-muted text-center mt-2">No messages yet. Send one from the CLI or API.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateBurnoutColor(val) {
+    const el = document.getElementById('burnoutVal');
+    el.className = 'slider-val ' + (val <= 3 ? 'burnout-low' : val <= 6 ? 'burnout-mid' : 'burnout-high');
+}
+</script>
+{% endblock %}

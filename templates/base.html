@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Command Center{% endblock %} - crew-bus</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
+
+<div class="shell">
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <h1>Crew-Bus</h1>
+            <small>Command Center</small>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">
+                <span class="nav-icon">&#9632;</span> Overview
+            </a></li>
+            <li><a href="/agents" class="{% if '/agents' in request.path %}active{% endif %}">
+                <span class="nav-icon">&#9679;</span> Agents
+            </a></li>
+            <li><a href="/messages" class="{% if request.path == '/messages' %}active{% endif %}">
+                <span class="nav-icon">&#9993;</span> Messages
+            </a></li>
+            <li><a href="/decisions" class="{% if request.path == '/decisions' %}active{% endif %}">
+                <span class="nav-icon">&#9881;</span> Decisions
+            </a></li>
+            <li><a href="/briefing/morning" class="{% if '/briefing' in request.path %}active{% endif %}">
+                <span class="nav-icon">&#9788;</span> Briefings
+            </a></li>
+            <li><a href="/settings" class="{% if request.path == '/settings' %}active{% endif %}">
+                <span class="nav-icon">&#9881;</span> Settings
+            </a></li>
+        </ul>
+    </nav>
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal">
+        <h3 id="confirmTitle">Confirm Action</h3>
+        <p id="confirmMessage">Are you sure?</p>
+        <div class="btn-group">
+            <button class="btn" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmBtn" onclick="confirmAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

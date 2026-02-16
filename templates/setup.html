@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Setup Required - crew-bus</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="setup-page">
+    <div class="setup-box">
+        <h1>crew-bus</h1>
+        <p>Command Center is ready, but no agent hierarchy has been loaded yet.</p>
+        <p>Initialize your crew with:</p>
+        <code>python cli.py init configs/example_stack.yaml</code>
+        <p class="text-muted text-sm mt-2">Then refresh this page.</p>
+        <a href="/" class="btn btn-primary mt-2">Refresh</a>
+    </div>
+</div>
+</body>
+</html>

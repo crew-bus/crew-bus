@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}{{ agent.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>
+            <span class="dot {% if not agent.active %}dot-inactive{% elif agent.status == 'active' %}dot-active{% elif agent.status == 'quarantined' %}dot-quarantined{% else %}dot-terminated{% endif %}"></span>
+            {{ agent.name }}
+        </h2>
+        <span class="subtitle">
+            {{ agent.agent_type|capitalize }} | {{ agent.role|replace('_', ' ')|capitalize }}
+            {% if parent_name %} | Reports to: <a href="/agent/{{ agent.parent_agent_id }}">{{ parent_name }}</a>{% endif %}
+        </span>
+    </div>
+    <div class="btn-group">
+        {% if agent.agent_type != 'human' %}
+            {% if agent.status == 'active' %}
+                <button class="btn btn-warning btn-sm" onclick="showConfirm('Quarantine {{ agent.name }}?', 'This agent will be unable to send or receive messages.', function(){ agentAction('quarantine', {{ agent.id }}) })">Quarantine</button>
+                {% if agent.active %}
+                <button class="btn btn-sm" onclick="agentAction('deactivate', {{ agent.id }})">Deactivate</button>
+                {% else %}
+                <button class="btn btn-success btn-sm" onclick="agentAction('activate', {{ agent.id }})">Activate</button>
+                {% endif %}
+            {% elif agent.status == 'quarantined' %}
+                <button class="btn btn-success btn-sm" onclick="agentAction('restore', {{ agent.id }})">Restore</button>
+            {% endif %}
+            {% if agent.status != 'terminated' %}
+                <button class="btn btn-danger btn-sm" onclick="showConfirm('Terminate {{ agent.name }}?', 'This action is permanent. The agent will be shut down.', function(){ agentAction('terminate', {{ agent.id }}) })">Terminate</button>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Agent Info Cards -->
+<div class="grid grid-3 mb-2">
+    <div class="card">
+        <div class="card-header"><h3>Status</h3></div>
+        <div class="text-sm">
+            <p><strong>Status:</strong>
+                <span class="{% if agent.status == 'active' %}text-success{% elif agent.status == 'quarantined' %}text-warning{% else %}text-danger{% endif %}">
+                    {{ agent.status|upper }}
+                </span>
+            </p>
+            <p><strong>Active:</strong> {{ 'Yes' if agent.active else 'No' }}</p>
+            <p><strong>Channel:</strong> {{ agent.channel }}</p>
+            {% if agent.channel_address %}
+            <p><strong>Address:</strong> {{ agent.channel_address }}</p>
+            {% endif %}
+            <p><strong>Created:</strong> {{ format_time_ago(agent.created_at) }}</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Scores</h3></div>
+        <div class="text-sm">
+            {% if agent.agent_type == 'right_hand' %}
+            <p><strong>Trust Score:</strong>
+                <span class="{% if agent.trust_score <= 3 %}trust-low{% elif agent.trust_score <= 6 %}trust-mid{% else %}trust-high{% endif %} fw-bold">
+                    {{ agent.trust_score }}/10
+                </span>
+            </p>
+            {% endif %}
+            {% if agent.agent_type == 'human' %}
+            <p><strong>Burnout Score:</strong>
+                <span class="{% if agent.burnout_score <= 3 %}burnout-low{% elif agent.burnout_score <= 6 %}burnout-mid{% else %}burnout-high{% endif %} fw-bold">
+                    {{ agent.burnout_score }}/10
+                </span>
+            </p>
+            {% endif %}
+            {% set counts = agent_msg_counts(agent.id) %}
+            <p><strong>Sent (24h):</strong> {{ counts.sent }}</p>
+            <p><strong>Received (24h):</strong> {{ counts.received }}</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Description</h3></div>
+        <p class="text-sm text-dim">{{ agent.description or 'No description.' }}</p>
+    </div>
+</div>
+
+<!-- Crew Boss Specific -->
+{% if rh_data %}
+<div class="card mb-2">
+    <div class="card-header">
+        <h3>Crew Boss - Autonomy Dashboard</h3>
+        <span class="badge badge-info">{{ rh_data.autonomy.level|upper }}</span>
+    </div>
+    <div class="grid grid-3" style="text-align:center">
+        <div>
+            <div class="fw-bold text-info" style="font-size:1.8rem">{{ rh_data.autonomy.trust_score }}</div>
+            <div class="text-xs text-muted">TRUST</div>
+        </div>
+        <div>
+            <div class="fw-bold" style="font-size:1.8rem">{{ rh_data.autonomy.total_decisions }}</div>
+            <div class="text-xs text-muted">DECISIONS</div>
+        </div>
+        <div>
+            <div class="fw-bold {% if rh_data.autonomy.accuracy_pct >= 80 %}text-success{% elif rh_data.autonomy.accuracy_pct >= 60 %}text-warning{% else %}text-danger{% endif %}" style="font-size:1.8rem">{{ rh_data.autonomy.accuracy_pct }}%</div>
+            <div class="text-xs text-muted">ACCURACY</div>
+        </div>
+    </div>
+    <div class="mt-1 text-sm">
+        <strong>Abilities:</strong>
+        {% for a in rh_data.autonomy.abilities %}
+        <span class="badge badge-info" style="margin:2px">{{ a }}</span>
+        {% endfor %}
+    </div>
+    {% if rh_data.autonomy.recommendation %}
+    <div class="mt-1 text-sm text-dim">
+        <strong>Recommendation:</strong> {{ rh_data.autonomy.recommendation }}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Message History -->
+<div class="card mb-2">
+    <div class="card-header">
+        <h3>Message History ({{ total_msgs }} total)</h3>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Direction</th>
+                    <th>Type</th>
+                    <th>Subject</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for msg in messages %}
+                <tr>
+                    <td class="text-muted text-xs">{{ format_time_ago(msg.created_at) }}</td>
+                    <td>
+                        {% if msg.from_agent_id == agent.id %}
+                            <span class="text-info">{{ agent.name }}</span> &rarr; {{ msg.to_name }}
+                        {% else %}
+                            {{ msg.from_name }} &rarr; <span class="text-info">{{ agent.name }}</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-muted">{{ msg.message_type }}</span></td>
+                    <td>{{ msg.subject }}</td>
+                    <td><span class="priority-{{ msg.priority }}">{{ msg.priority }}</span></td>
+                    <td><span class="badge {% if msg.status == 'delivered' %}badge-success{% elif msg.status == 'queued' %}badge-warning{% else %}badge-muted{% endif %}">{{ msg.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}">&laquo;</a>
+        {% endif %}
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="active">{{ p }}</span>
+            {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+            <a href="?page={{ p }}">{{ p }}</a>
+            {% elif p == 4 or p == total_pages - 2 %}
+            <span class="text-muted">...</span>
+            {% endif %}
+        {% endfor %}
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}">&raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Audit Trail -->
+<div class="card">
+    <div class="card-header">
+        <h3>Audit Trail (Last 50)</h3>
+    </div>
+    <div style="max-height:300px;overflow-y:auto">
+        {% for entry in audit %}
+        <div class="audit-entry">
+            <span class="audit-type">{{ entry.event_type }}</span>
+            <span class="audit-time">{{ format_time_ago(entry.timestamp) }}</span>
+            <div class="text-xs text-muted">{{ entry.details[:120] }}{% if entry.details|length > 120 %}...{% endif %}</div>
+        </div>
+        {% endfor %}
+        {% if not audit %}
+        <p class="text-muted text-sm text-center mt-1">No audit entries.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

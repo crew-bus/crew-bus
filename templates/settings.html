@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Settings</h2>
+        <span class="subtitle">Configure your crew hierarchy</span>
+    </div>
+</div>
+
+<div class="grid grid-2 mb-2">
+    <!-- Trust Score -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Crew Boss Trust Score</h3>
+            {% if rh %}
+            <span class="badge badge-info">Currently {{ rh.trust_score }}/10</span>
+            {% endif %}
+        </div>
+        {% if rh %}
+        <div class="slider-wrap mb-1">
+            <input type="range" id="settingsTrust" min="1" max="10" value="{{ rh.trust_score }}"
+                   oninput="document.getElementById('settingsTrustVal').textContent=this.value">
+            <span class="slider-val" id="settingsTrustVal">{{ rh.trust_score }}</span>
+        </div>
+        <div class="text-xs text-muted mb-1">
+            1-3: Observer (delivers everything) | 4-6: Assistant (handles routine) | 7-8: Operator (autonomous) | 9-10: Chief of Staff
+        </div>
+        <button class="btn btn-primary" onclick="updateTrust()">Save Trust Score</button>
+        {% endif %}
+    </div>
+
+    <!-- Burnout Score -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Burnout Score Override</h3>
+            {% if human %}
+            <span class="badge {% if human.burnout_score <= 3 %}badge-success{% elif human.burnout_score <= 6 %}badge-warning{% else %}badge-danger{% endif %}">
+                Currently {{ human.burnout_score }}/10
+            </span>
+            {% endif %}
+        </div>
+        {% if human %}
+        <div class="slider-wrap mb-1">
+            <input type="range" id="settingsBurnout" min="1" max="10" value="{{ human.burnout_score }}"
+                   oninput="document.getElementById('settingsBurnoutVal').textContent=this.value">
+            <span class="slider-val" id="settingsBurnoutVal">{{ human.burnout_score }}</span>
+        </div>
+        <div class="text-xs text-muted mb-1">
+            1-3: Full energy | 4-6: Moderate | 7+: Crew Boss protects attention, queues non-urgent items
+        </div>
+        <button class="btn btn-primary" onclick="updateBurnout()">Save Burnout Score</button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quiet Hours -->
+<div class="card mb-2">
+    <div class="card-header">
+        <h3>Quiet Hours</h3>
+        <span class="badge badge-muted">
+            {% if timing.get('quiet_hours') %}
+                {{ timing.quiet_hours.start }} - {{ timing.quiet_hours.end }}
+            {% else %}
+                Not set
+            {% endif %}
+        </span>
+    </div>
+    <div class="form-row">
+        <div class="form-group" style="flex:1">
+            <label>Start Time</label>
+            <input type="time" id="quietStart" value="{{ timing.get('quiet_hours', {}).get('start', '22:00') }}">
+        </div>
+        <div class="form-group" style="flex:1">
+            <label>End Time</label>
+            <input type="time" id="quietEnd" value="{{ timing.get('quiet_hours', {}).get('end', '07:00') }}">
+        </div>
+        <div class="form-group" style="flex:1">
+            <label>Timezone</label>
+            <input type="text" id="timezone" value="{{ timing.get('quiet_hours', {}).get('timezone', 'America/Vancouver') }}">
+        </div>
+        <div class="form-group">
+            <button class="btn btn-primary" onclick="saveQuietHours()">Save</button>
+        </div>
+    </div>
+    <p class="text-xs text-muted mt-1">During quiet hours, only high/critical messages are delivered. Everything else is queued for morning.</p>
+</div>
+
+<!-- Agent Channels -->
+<div class="card mb-2">
+    <div class="card-header">
+        <h3>Agent Channels</h3>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Agent</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Channel</th>
+                    <th>Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in agents %}
+                <tr>
+                    <td><a href="/agent/{{ a.id }}">{{ a.name }}</a></td>
+                    <td><span class="badge badge-muted">{{ a.agent_type }}</span></td>
+                    <td>
+                        <span class="dot {% if a.status == 'active' %}dot-active{% elif a.status == 'quarantined' %}dot-quarantined{% else %}dot-terminated{% endif %}"></span>
+                        {{ a.status }}
+                    </td>
+                    <td>{{ a.channel }}</td>
+                    <td>
+                        {% if a.active %}
+                        <span class="text-success">Active</span>
+                        {% else %}
+                        <span class="text-muted">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function saveQuietHours() {
+    const start = document.getElementById('quietStart').value;
+    const end = document.getElementById('quietEnd').value;
+    const tz = document.getElementById('timezone').value;
+
+    fetch('/api/settings/timing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({quiet_start: start, quiet_end: end, timezone: tz})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Quiet hours saved', 'success');
+        } else {
+            showToast(data.error || 'Failed to save', 'error');
+        }
+    });
+}
+</script>
+{% endblock %}

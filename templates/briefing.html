@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ briefing_type|capitalize }} Briefing{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>
+            {% if briefing_type == 'morning' %}Morning Briefing
+            {% elif briefing_type == 'evening' %}Evening Summary
+            {% else %}Urgent Alert
+            {% endif %}
+        </h2>
+        <span class="subtitle">{{ briefing.subject }}</span>
+    </div>
+    <div class="btn-group">
+        <a href="/briefing/morning" class="btn {% if briefing_type == 'morning' %}btn-primary{% endif %}">Morning</a>
+        <a href="/briefing/evening" class="btn {% if briefing_type == 'evening' %}btn-primary{% endif %}">Evening</a>
+        <a href="/briefing/urgent" class="btn {% if briefing_type == 'urgent' %}btn-danger{% endif %}">Urgent</a>
+    </div>
+</div>
+
+<!-- Briefing Stats -->
+<div class="grid grid-3 mb-2">
+    <div class="stat-card">
+        <div class="stat-value">{{ briefing.item_count }}</div>
+        <div class="stat-label">Items</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value priority-{{ briefing.priority }}">{{ briefing.priority|upper }}</div>
+        <div class="stat-label">Priority</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value {% if briefing.burnout <= 3 %}burnout-low{% elif briefing.burnout <= 6 %}burnout-mid{% else %}burnout-high{% endif %}">{{ briefing.burnout }}</div>
+        <div class="stat-label">Burnout Level</div>
+    </div>
+</div>
+
+<!-- Briefing Body -->
+<div class="card">
+    <div class="card-header">
+        <h3>{{ briefing.subject }}</h3>
+        <span class="text-xs text-muted">From: {{ briefing.rh_name }}</span>
+    </div>
+    <div class="briefing-body">{{ briefing.body_plain }}</div>
+</div>
+{% endblock %}

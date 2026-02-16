@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Agent Hierarchy</h2>
+        <span class="subtitle">Visual command structure</span>
+    </div>
+</div>
+
+<!-- Human -->
+{% if tree.human %}
+<div class="tree-level">
+    <a href="/agent/{{ tree.human.id }}" class="agent-card human-card" style="text-decoration:none;color:inherit">
+        <div class="flex items-center justify-between mb-1">
+            <span class="dot {% if tree.human.status == 'active' %}dot-active{% else %}dot-terminated{% endif %}"></span>
+            <span class="badge badge-danger">HUMAN</span>
+        </div>
+        <div class="agent-name">{{ tree.human.name }}</div>
+        <div class="agent-role">Principal</div>
+        <div class="agent-stats">
+            Burnout: <span class="{% if tree.human.burnout_score <= 3 %}burnout-low{% elif tree.human.burnout_score <= 6 %}burnout-mid{% else %}burnout-high{% endif %}">{{ tree.human.burnout_score }}/10</span>
+        </div>
+    </a>
+</div>
+{% endif %}
+
+<div class="tree-connector">|</div>
+
+<!-- Crew Boss -->
+{% if tree.right_hand %}
+<div class="tree-level">
+    <a href="/agent/{{ tree.right_hand.id }}" class="agent-card rh-card" style="text-decoration:none;color:inherit">
+        <div class="flex items-center justify-between mb-1">
+            <span class="dot {% if tree.right_hand.status == 'active' %}dot-active{% else %}dot-terminated{% endif %}"></span>
+            <span class="badge badge-info">CREW BOSS</span>
+        </div>
+        <div class="agent-name">{{ tree.right_hand.name }}</div>
+        <div class="agent-role">AI Chief of Staff</div>
+        <div class="agent-stats">
+            Trust: <span class="{% if tree.right_hand.trust_score <= 3 %}trust-low{% elif tree.right_hand.trust_score <= 6 %}trust-mid{% else %}trust-high{% endif %}">{{ tree.right_hand.trust_score }}/10</span>
+            {% set counts = agent_msg_counts(tree.right_hand.id) %}
+            | {{ counts.sent + counts.received }} msgs
+        </div>
+    </a>
+</div>
+{% endif %}
+
+<div class="tree-connector">|</div>
+
+<!-- Core Crew -->
+{% if tree.core_crew %}
+<div class="tree-level">
+    {% for agent in tree.core_crew %}
+    <a href="/agent/{{ agent.id }}" class="agent-card {% if not agent.active %}inactive-card{% endif %}" style="text-decoration:none;color:inherit">
+        <div class="flex items-center justify-between mb-1">
+            <span class="dot {% if not agent.active %}dot-inactive{% elif agent.status == 'active' %}dot-active{% elif agent.status == 'quarantined' %}dot-quarantined{% else %}dot-terminated{% endif %}"></span>
+            <span class="badge badge-success">{{ agent.agent_type|upper }}</span>
+        </div>
+        <div class="agent-name">{{ agent.name }}</div>
+        <div class="agent-role">Core Crew</div>
+        <div class="agent-stats">
+            {% set counts = agent_msg_counts(agent.id) %}
+            {{ counts.sent }}&#8593; {{ counts.received }}&#8595;
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Departments -->
+{% for dept in tree.departments %}
+<div class="dept-section mt-2">
+    <h4>
+        Department: {{ dept.manager.name|replace('-Manager', '') }}
+    </h4>
+
+    <!-- Manager -->
+    <div class="tree-level">
+        <a href="/agent/{{ dept.manager.id }}" class="agent-card {% if not dept.manager.active %}inactive-card{% endif %}" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-1">
+                <span class="dot {% if not dept.manager.active %}dot-inactive{% elif dept.manager.status == 'active' %}dot-active{% elif dept.manager.status == 'quarantined' %}dot-quarantined{% else %}dot-terminated{% endif %}"></span>
+                <span class="badge badge-warning">MANAGER</span>
+            </div>
+            <div class="agent-name">{{ dept.manager.name }}</div>
+            <div class="agent-role">Department Manager</div>
+            <div class="agent-stats">
+                {% set counts = agent_msg_counts(dept.manager.id) %}
+                {{ counts.sent }}&#8593; {{ counts.received }}&#8595;
+            </div>
+        </a>
+    </div>
+
+    {% if dept.workers %}
+    <div class="tree-connector">|</div>
+    <!-- Workers -->
+    <div class="tree-level">
+        {% for worker in dept.workers %}
+        <a href="/agent/{{ worker.id }}" class="agent-card {% if not worker.active %}inactive-card{% endif %}" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-1">
+                <span class="dot {% if not worker.active %}dot-inactive{% elif worker.status == 'active' %}dot-active{% elif worker.status == 'quarantined' %}dot-quarantined{% else %}dot-terminated{% endif %}"></span>
+                <span class="badge badge-muted">WORKER</span>
+            </div>
+            <div class="agent-name">{{ worker.name }}</div>
+            <div class="agent-role">{{ worker.agent_type }}</div>
+            <div class="agent-stats">
+                {% set counts = agent_msg_counts(worker.id) %}
+                {{ counts.sent }}&#8593; {{ counts.received }}&#8595;
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

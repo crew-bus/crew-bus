@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Decisions{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Decision Log</h2>
+        <span class="subtitle">{{ rh.name }}'s decisions - building trust through transparency</span>
+    </div>
+</div>
+
+<!-- Accuracy Meter -->
+<div class="accuracy-meter">
+    <div>
+        <div class="meter-value {% if accuracy >= 80 %}text-success{% elif accuracy >= 60 %}text-warning{% else %}text-danger{% endif %}">
+            {{ accuracy }}%
+        </div>
+        <div class="meter-label">Override Accuracy</div>
+    </div>
+    <div style="flex:1">
+        <div class="accuracy-bar">
+            <div class="accuracy-fill" style="width:{{ accuracy }}%; background:{% if accuracy >= 80 %}var(--success){% elif accuracy >= 60 %}var(--warning){% else %}var(--danger){% endif %}"></div>
+        </div>
+        <div class="flex justify-between mt-1 text-xs text-muted">
+            <span>{{ total_decisions }} decisions</span>
+            <span>{{ overrides }} override(s)</span>
+        </div>
+    </div>
+    <div style="text-align:center">
+        <div class="fw-bold text-info" style="font-size:1.5rem">{{ autonomy.trust_score }}/10</div>
+        <div class="text-xs text-muted">Trust Level</div>
+    </div>
+</div>
+
+<!-- Filter Buttons -->
+<div class="btn-group mb-2">
+    <a href="/decisions?filter=all" class="btn {% if filter_type == 'all' %}btn-primary{% endif %}">All ({{ total_decisions }})</a>
+    <a href="/decisions?filter=approved" class="btn {% if filter_type == 'approved' %}btn-success{% endif %}">Approved</a>
+    <a href="/decisions?filter=overridden" class="btn {% if filter_type == 'overridden' %}btn-danger{% endif %}">Overridden ({{ overrides }})</a>
+</div>
+
+<!-- Decision List -->
+<div class="card">
+    {% for d in decisions %}
+    {% set ctx = d.context %}
+    <div class="decision-row">
+        <div class="decision-header">
+            <div>
+                <span class="decision-type">
+                    {% if d.decision_type == 'deliver' %}
+                        <span class="text-success">DELIVER</span>
+                    {% elif d.decision_type == 'filter' %}
+                        <span class="text-warning">FILTER</span>
+                    {% elif d.decision_type == 'handle' %}
+                        <span class="text-info">HANDLE</span>
+                    {% elif d.decision_type == 'queue' %}
+                        <span class="text-muted">QUEUE</span>
+                    {% elif d.decision_type == 'escalate' %}
+                        <span class="text-danger">ESCALATE</span>
+                    {% endif %}
+                </span>
+                <span class="text-dim text-sm">{{ format_time_ago(d.created_at) }}</span>
+            </div>
+            <div>
+                {% if d.human_override %}
+                    <span class="override-badge">OVERRIDDEN</span>
+                {% elif d.feedback_note %}
+                    <span class="approved-badge">APPROVED</span>
+                {% else %}
+                    <button class="btn btn-sm btn-success" onclick="learnDecision({{ d.id }}, true)">Approve</button>
+                    <button class="btn btn-sm btn-danger" onclick="learnDecision({{ d.id }}, false)">Override</button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="decision-detail">
+            <strong>Action:</strong> {{ d.right_hand_action }}
+        </div>
+        {% if d.human_action %}
+        <div class="decision-detail text-warning">
+            <strong>Human did instead:</strong> {{ d.human_action }}
+        </div>
+        {% endif %}
+        {% if d.feedback_note %}
+        <div class="decision-detail text-dim">
+            <strong>Note:</strong> {{ d.feedback_note }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not decisions %}
+    <div class="text-center text-muted mt-2 mb-2">
+        <p>No decisions recorded yet. As {{ rh.name }} processes messages, decisions will appear here.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function learnDecision(id, approved) {
+    const note = approved ? '' : prompt('What should have happened instead?', '');
+    if (!approved && note === null) return;
+
+    fetch('/api/learn', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({decision_id: id, approved: approved, note: note || ''})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast(approved ? 'Decision approved' : 'Override recorded', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(data.error || 'Failed', 'error');
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,747 @@
+"""
+crew-bus Crew Boss Decision Engine.
+
+The most important file in the project. This is the brain that makes the
+whole system human-first. The Crew Boss is a personal AI Chief of Staff
+that sits between the human and all other agents, filtering, prioritizing,
+and managing cognitive load.
+"""
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+import bus
+
+
+class RightHand:
+    """The Crew Boss decision engine.
+
+    Manages all communication flow to and from the human based on:
+    - Trust score (1-10): governs autonomy level
+    - Burnout score: protects human's cognitive load
+    - Timing rules: quiet hours, busy signals, focus mode
+    - Knowledge store: past decisions, rejections, preferences
+    """
+
+    def __init__(self, right_hand_id: int, human_id: int,
+                 db_path: Optional[Path] = None):
+        """Initialize the Crew Boss with its agent and human context.
+
+        Args:
+            right_hand_id: Database ID of the Crew Boss agent.
+            human_id: Database ID of the human principal.
+            db_path: Optional database path override.
+        """
+        self.rh_id = right_hand_id
+        self.human_id = human_id
+        self.db_path = db_path
+
+        # Load profiles
+        self.rh = bus.get_agent_by_name(
+            bus.get_agent_status(right_hand_id, db_path)["name"], db_path
+        )
+        self.human = bus.get_agent_by_name(
+            bus.get_agent_status(human_id, db_path)["name"], db_path
+        )
+        self.trust_score = self.rh["trust_score"]
+
+    def _refresh(self):
+        """Reload current state from database."""
+        self.rh = bus.get_agent_status(self.rh_id, self.db_path)
+        self.human = bus.get_agent_status(self.human_id, self.db_path)
+        self.trust_score = self.rh["trust_score"]
+
+    @property
+    def autonomy(self) -> dict:
+        """Current autonomy level and abilities."""
+        return bus.get_autonomy_level(self.rh_id, self.db_path)
+
+    # ------------------------------------------------------------------
+    # Core decision: should we deliver a message to the human?
+    # ------------------------------------------------------------------
+
+    def assess_delivery(self, message: dict) -> dict:
+        """Assess whether a message should be delivered to the human right now.
+
+        This is the central decision function. Every message destined for the
+        human passes through here.
+
+        Args:
+            message: Dict with keys from the messages table (id, from_agent_id,
+                     message_type, subject, body, priority, etc).
+
+        Returns:
+            {
+                deliver: bool,
+                reason: str,
+                delay_until: str|None,
+                modified_message: str|None  (rewritten for brevity/tone)
+            }
+        """
+        self._refresh()
+        priority = message.get("priority", "normal")
+        msg_type = message.get("message_type", "report")
+
+        # Critical/safety ALWAYS delivers immediately
+        if priority == "critical" or msg_type == "escalation":
+            decision = {
+                "deliver": True,
+                "reason": "Critical/safety - immediate delivery",
+                "delay_until": None,
+                "modified_message": None,
+            }
+            self._log("deliver", message, f"Immediate: {decision['reason']}")
+            return decision
+
+        # Strategy ideas get filtered first
+        if msg_type == "idea":
+            filter_result = self.filter_idea(message.get("id"))
+            if filter_result["action"] == "filter":
+                decision = {
+                    "deliver": False,
+                    "reason": filter_result["reason"],
+                    "delay_until": None,
+                    "modified_message": None,
+                }
+                self._log("filter", message, f"Filtered idea: {filter_result['reason']}")
+                return decision
+            elif filter_result["action"] == "queue":
+                decision = {
+                    "deliver": False,
+                    "reason": filter_result["reason"],
+                    "delay_until": filter_result.get("delay_until"),
+                    "modified_message": None,
+                }
+                self._log("queue", message, f"Queued idea: {filter_result['reason']}")
+                return decision
+
+        # Check timing rules (burnout, quiet hours, busy, focus)
+        timing = bus.should_deliver_now(self.human_id, priority, self.db_path)
+
+        if not timing["deliver"]:
+            decision = {
+                "deliver": False,
+                "reason": timing["reason"],
+                "delay_until": timing["delay_until"],
+                "modified_message": None,
+            }
+            self._log("queue", message, f"Timing: {timing['reason']}")
+            return decision
+
+        # All checks passed - deliver
+        decision = {
+            "deliver": True,
+            "reason": "All checks passed - delivering to human",
+            "delay_until": None,
+            "modified_message": None,
+        }
+        self._log("deliver", message, "Delivered")
+        return decision
+
+    # ------------------------------------------------------------------
+    # Strategy idea filtering
+    # ------------------------------------------------------------------
+
+    def filter_idea(self, idea_message_id: Optional[int]) -> dict:
+        """Check whether a strategy idea should reach the human.
+
+        Examines knowledge_store for past rejections of similar ideas.
+        Also checks human burnout level.
+
+        Args:
+            idea_message_id: The message ID of the idea.
+
+        Returns:
+            {action: "pass"|"filter"|"queue", reason: str}
+        """
+        if idea_message_id is None:
+            return {"action": "pass", "reason": "No message ID provided, passing through"}
+
+        return bus.filter_strategy_idea(self.rh_id, idea_message_id, self.db_path)
+
+    # ------------------------------------------------------------------
+    # Escalation handling
+    # ------------------------------------------------------------------
+
+    def handle_escalation(self, message: dict) -> dict:
+        """Decide how to handle an escalation based on trust score.
+
+        Trust 1-3: Always deliver to human (can't handle autonomously).
+        Trust 4-6: Handle routine escalations, deliver novel ones.
+        Trust 7-10: Handle most autonomously, only deliver critical/unprecedented.
+
+        Args:
+            message: Message dict from the messages table.
+
+        Returns:
+            {
+                action: "deliver_to_human"|"handle_autonomously"|"queue",
+                response: str|None  (response if handled autonomously)
+            }
+        """
+        self._refresh()
+        priority = message.get("priority", "normal")
+        msg_type = message.get("message_type", "escalation")
+
+        # Trust 1-3: Always deliver to human
+        if self.trust_score <= 3:
+            result = {
+                "action": "deliver_to_human",
+                "response": None,
+            }
+            self._log("escalate", message, "Low trust - delivering to human")
+            return result
+
+        # Trust 4-6: Handle routine, deliver novel
+        if self.trust_score <= 6:
+            # Check if we've seen similar escalations before
+            similar = bus.search_knowledge(
+                message.get("subject", ""), category_filter="decision",
+                limit=3, db_path=self.db_path,
+            )
+            if similar:
+                result = {
+                    "action": "handle_autonomously",
+                    "response": f"Handled based on precedent (similar to {len(similar)} past decisions). "
+                                f"Will include in evening summary.",
+                }
+                self._log("handle", message,
+                          f"Mid-trust autonomous: {len(similar)} precedents found")
+                return result
+            else:
+                result = {
+                    "action": "deliver_to_human",
+                    "response": None,
+                }
+                self._log("escalate", message, "Mid-trust, novel situation - delivering to human")
+                return result
+
+        # Trust 7-10: Handle most, only deliver truly critical/unprecedented
+        if priority == "critical":
+            result = {
+                "action": "deliver_to_human",
+                "response": None,
+            }
+            self._log("escalate", message, "High trust but critical priority - delivering to human")
+            return result
+
+        result = {
+            "action": "handle_autonomously",
+            "response": f"Handled autonomously at trust level {self.trust_score}. "
+                        f"Will include in evening summary.",
+        }
+        self._log("handle", message, f"High trust autonomous handling (trust={self.trust_score})")
+        return result
+
+    # ------------------------------------------------------------------
+    # Briefing compilation
+    # ------------------------------------------------------------------
+
+    def compile_briefing(self, briefing_type: str = "morning") -> dict:
+        """Compile a briefing for the human.
+
+        Types:
+            morning: Overnight messages, queued items, today's priorities.
+            evening: Day summary, autonomous decisions, items for tomorrow.
+            urgent: Immediate delivery, critical items only.
+
+        Returns:
+            {
+                subject: str,
+                body_plain: str,
+                body_html: str,
+                priority: str,
+                item_count: int,
+                briefing_type: str,
+            }
+        """
+        self._refresh()
+        burnout = self.human["burnout_score"]
+        now = datetime.now(timezone.utc)
+        human_name = self.human["name"]
+        rh_name = self.rh["name"]
+
+        if briefing_type == "morning":
+            return self._compile_morning(now, burnout, human_name, rh_name)
+        elif briefing_type == "evening":
+            return self._compile_evening(now, burnout, human_name, rh_name)
+        elif briefing_type == "urgent":
+            return self._compile_urgent(now, human_name, rh_name)
+        else:
+            raise ValueError(f"Unknown briefing type: {briefing_type}")
+
+    def _compile_morning(self, now: datetime, burnout: int,
+                         human_name: str, rh_name: str) -> dict:
+        """Compile the morning briefing."""
+        # Get overnight messages (last 12 hours)
+        cutoff = (now - timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn = bus.get_conn(self.db_path)
+
+        # Messages to Crew Boss (reports from crew)
+        inbox = conn.execute(
+            "SELECT m.*, a.name AS from_name, a.agent_type AS from_type "
+            "FROM messages m JOIN agents a ON m.from_agent_id = a.id "
+            "WHERE m.to_agent_id = ? AND m.created_at >= ? "
+            "ORDER BY CASE m.priority "
+            "  WHEN 'critical' THEN 0 WHEN 'high' THEN 1 "
+            "  WHEN 'normal' THEN 2 WHEN 'low' THEN 3 END, m.created_at DESC",
+            (self.rh_id, cutoff),
+        ).fetchall()
+
+        # Queued messages for human (not yet delivered)
+        queued = conn.execute(
+            "SELECT m.*, a.name AS from_name, a.agent_type AS from_type "
+            "FROM messages m JOIN agents a ON m.from_agent_id = a.id "
+            "WHERE m.to_agent_id = ? AND m.status = 'queued' "
+            "ORDER BY CASE m.priority "
+            "  WHEN 'critical' THEN 0 WHEN 'high' THEN 1 "
+            "  WHEN 'normal' THEN 2 WHEN 'low' THEN 3 END",
+            (self.human_id,),
+        ).fetchall()
+
+        # Decisions made autonomously last 24h
+        decisions = conn.execute(
+            "SELECT * FROM decision_log WHERE right_hand_id = ? AND created_at >= ?",
+            (self.rh_id, (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")),
+        ).fetchall()
+        conn.close()
+
+        auto_handled = [d for d in decisions if d["decision_type"] in ("handle", "filter")]
+
+        # Build sections
+        date_str = now.strftime("%A %b %d")
+        item_count = len(inbox) + len(queued)
+
+        # Tone based on burnout
+        if burnout >= 7:
+            greeting = f"Light day ahead, {human_name}. Only the essentials."
+            priority_label = "Just one thing to look at" if item_count <= 1 else f"Only {item_count} items need attention"
+        elif burnout >= 4:
+            greeting = f"Good morning, {human_name}. Here's your rundown."
+            priority_label = f"{item_count} items for your review"
+        else:
+            greeting = f"Productive day ahead, {human_name}. Here's your full rundown."
+            priority_label = f"{item_count} items ready for you"
+
+        # Plain text
+        lines = [greeting, ""]
+
+        # Priority items (high/critical from inbox)
+        priority_items = [m for m in inbox if m["priority"] in ("high", "critical")]
+        if priority_items:
+            lines.append("PRIORITY ITEMS:")
+            for m in priority_items:
+                lines.append(f"  ACTION: [{m['priority'].upper()}] {m['subject']} (from {m['from_name']})")
+                if m["body"]:
+                    for bl in m["body"].split("\n")[:2]:
+                        lines.append(f"    {bl}")
+            lines.append("")
+
+        # Overnight activity
+        if inbox:
+            lines.append(f"OVERNIGHT ACTIVITY ({len(inbox)} messages):")
+            for m in inbox:
+                if m["priority"] not in ("high", "critical"):
+                    lines.append(f"  * {m['subject']} (from {m['from_name']}, {m['message_type']})")
+            lines.append("")
+
+        # Queued for review
+        if queued:
+            lines.append(f"QUEUED FOR YOUR REVIEW ({len(queued)}):")
+            for m in queued:
+                lines.append(f"  * {m['subject']} (from {m['from_name']})")
+            lines.append("")
+
+        # Autonomous decisions
+        if auto_handled:
+            lines.append(f"HANDLED AUTONOMOUSLY ({len(auto_handled)} decisions):")
+            for d in auto_handled:
+                ctx = json.loads(d["context"]) if isinstance(d["context"], str) else d["context"]
+                lines.append(f"  * [{d['decision_type']}] {ctx.get('subject', 'N/A')} -> {d['right_hand_action']}")
+            lines.append("")
+
+        # Footer
+        autonomy = self.autonomy
+        lines.append(f"Best,")
+        lines.append(f"{rh_name}")
+        lines.append("")
+        lines.append(f"Trust level: {autonomy['trust_score']}/10 | "
+                     f"Decisions today: {len(decisions)} | "
+                     f"Override rate: {100 - autonomy['accuracy_pct']:.0f}%")
+
+        subject = f"[Morning Brief] {date_str} - {priority_label}"
+
+        return {
+            "subject": subject,
+            "body_plain": "\n".join(lines),
+            "body_html": "",  # Will be formatted by email_formatter
+            "priority": "high" if priority_items else "normal",
+            "item_count": item_count,
+            "briefing_type": "morning",
+            "burnout": burnout,
+            "human_name": human_name,
+            "rh_name": rh_name,
+            "sections": {
+                "priority_items": [dict(m) for m in priority_items],
+                "overnight": [dict(m) for m in inbox],
+                "queued": [dict(m) for m in queued],
+                "auto_handled": [dict(d) for d in auto_handled],
+            },
+        }
+
+    def _compile_evening(self, now: datetime, burnout: int,
+                         human_name: str, rh_name: str) -> dict:
+        """Compile the evening summary."""
+        cutoff = (now - timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn = bus.get_conn(self.db_path)
+
+        # Today's decisions
+        decisions = conn.execute(
+            "SELECT * FROM decision_log WHERE right_hand_id = ? AND created_at >= ?",
+            (self.rh_id, cutoff),
+        ).fetchall()
+
+        # Messages handled today
+        messages_today = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE (to_agent_id=? OR from_agent_id=?) AND created_at >= ?",
+            (self.rh_id, self.rh_id, cutoff),
+        ).fetchone()[0]
+
+        conn.close()
+
+        auto_handled = [d for d in decisions if d["decision_type"] in ("handle", "filter")]
+        needs_input = [d for d in decisions if d["decision_type"] == "escalate"]
+
+        date_str = now.strftime("%A %b %d")
+
+        if burnout >= 7:
+            greeting = f"Quick wrap-up, {human_name}. Rest up tonight."
+        else:
+            greeting = f"End of day summary, {human_name}."
+
+        lines = [greeting, ""]
+
+        if auto_handled:
+            lines.append(f"HANDLED TODAY ({len(auto_handled)}):")
+            for d in auto_handled:
+                ctx = json.loads(d["context"]) if isinstance(d["context"], str) else d["context"]
+                lines.append(f"  * {ctx.get('subject', 'N/A')} -> {d['right_hand_action']}")
+            lines.append("")
+
+        if needs_input:
+            lines.append(f"NEEDS YOUR DECISION TOMORROW ({len(needs_input)}):")
+            for d in needs_input:
+                ctx = json.loads(d["context"]) if isinstance(d["context"], str) else d["context"]
+                lines.append(f"  ACTION: {ctx.get('subject', 'N/A')}")
+            lines.append("")
+
+        lines.append(f"STATS: {messages_today} messages processed, "
+                     f"{len(decisions)} decisions made")
+        lines.append("")
+
+        autonomy = self.autonomy
+        lines.append(f"Best,")
+        lines.append(f"{rh_name}")
+        lines.append("")
+        lines.append(f"Trust level: {autonomy['trust_score']}/10 | "
+                     f"Decisions today: {len(decisions)} | "
+                     f"Override rate: {100 - autonomy['accuracy_pct']:.0f}%")
+
+        status = "All clear" if not needs_input else f"{len(needs_input)} items pending"
+        subject = f"[Evening Summary] {date_str} - {status}"
+
+        return {
+            "subject": subject,
+            "body_plain": "\n".join(lines),
+            "body_html": "",
+            "priority": "normal",
+            "item_count": len(decisions),
+            "briefing_type": "evening",
+            "burnout": burnout,
+            "human_name": human_name,
+            "rh_name": rh_name,
+            "sections": {
+                "auto_handled": [dict(d) for d in auto_handled],
+                "needs_input": [dict(d) for d in needs_input],
+            },
+        }
+
+    def _compile_urgent(self, now: datetime, human_name: str,
+                        rh_name: str) -> dict:
+        """Compile an urgent briefing (critical items only)."""
+        conn = bus.get_conn(self.db_path)
+
+        critical = conn.execute(
+            "SELECT m.*, a.name AS from_name "
+            "FROM messages m JOIN agents a ON m.from_agent_id = a.id "
+            "WHERE m.to_agent_id IN (?, ?) AND m.priority = 'critical' "
+            "AND m.status = 'queued' ORDER BY m.created_at DESC",
+            (self.rh_id, self.human_id),
+        ).fetchall()
+        conn.close()
+
+        lines = [f"{human_name} - urgent items requiring immediate attention:", ""]
+        for m in critical:
+            lines.append(f"  [CRITICAL] {m['subject']} (from {m['from_name']})")
+            if m["body"]:
+                for bl in m["body"].split("\n")[:3]:
+                    lines.append(f"    {bl}")
+            lines.append("")
+
+        if not critical:
+            lines.append("  No critical items at this time.")
+
+        lines.append(f"- {rh_name}")
+
+        subject = f"[URGENT] {len(critical)} critical item(s) require attention"
+
+        return {
+            "subject": subject,
+            "body_plain": "\n".join(lines),
+            "body_html": "",
+            "priority": "critical",
+            "item_count": len(critical),
+            "briefing_type": "urgent",
+            "burnout": 0,
+            "human_name": human_name,
+            "rh_name": rh_name,
+            "sections": {"critical": [dict(m) for m in critical]},
+        }
+
+    # ------------------------------------------------------------------
+    # Learning loop
+    # ------------------------------------------------------------------
+
+    def learn_from_feedback(self, decision_id: int, human_approved: bool,
+                            human_action: Optional[str] = None,
+                            note: Optional[str] = None) -> dict:
+        """Record whether the human agreed with a Crew Boss decision.
+
+        This is the recursive learning loop. Stores patterns for future matching.
+
+        Args:
+            decision_id: The decision log entry ID.
+            human_approved: True if human agreed, False if overridden.
+            human_action: What the human did instead (if overridden).
+            note: Free-text feedback note.
+
+        Returns:
+            Summary of what was recorded.
+        """
+        override = not human_approved
+        bus.record_human_feedback(
+            decision_id, override=override,
+            human_action=human_action, note=note,
+            db_path=self.db_path,
+        )
+
+        return {
+            "decision_id": decision_id,
+            "human_approved": human_approved,
+            "override": override,
+            "human_action": human_action,
+            "note": note,
+            "feedback": "Pattern stored for future matching" if override else "Confirmed",
+        }
+
+    # ------------------------------------------------------------------
+    # Autonomy summary
+    # ------------------------------------------------------------------
+
+    def get_autonomy_summary(self) -> dict:
+        """Return current trust score, abilities, accuracy, and recommendation.
+
+        This is the dashboard view for the human to understand what their
+        Crew Boss can and cannot do.
+        """
+        return self.autonomy
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Reputation protection (Day 2)
+    # ------------------------------------------------------------------
+
+    def protect_reputation(self, outbound_message: dict) -> dict:
+        """Review outbound communication before it leaves the system.
+
+        Checks tone, burnout-driven risk, and consistency with the human's
+        personal brand.
+
+        Args:
+            outbound_message: Dict with keys subject, body, to, priority.
+
+        Returns:
+            {action: "approve"|"flag_for_review"|"suggest_edit",
+             concerns: list, suggested_edits: str|None}
+        """
+        self._refresh()
+        burnout = self.human["burnout_score"]
+        concerns = []
+        body = outbound_message.get("body", "")
+        subject = outbound_message.get("subject", "")
+
+        # Check if written during high-burnout or late-night
+        if burnout >= 7:
+            concerns.append(
+                "Written during high burnout (score %d/10). "
+                "Flag for morning review." % burnout
+            )
+
+        # Check for late-night writing
+        delivery = bus.should_deliver_now(self.human_id, "normal", self.db_path)
+        if not delivery.get("deliver", True) and "quiet" in delivery.get("reason", "").lower():
+            concerns.append("Written during quiet hours. Delay send until morning.")
+
+        # Check for anger/frustration indicators
+        anger_words = ["unacceptable", "furious", "demand", "lawsuit",
+                       "incompetent", "pathetic", "disgusting", "useless"]
+        body_lower = body.lower()
+        found_anger = [w for w in anger_words if w in body_lower]
+        if found_anger:
+            concerns.append(
+                "Potential frustration language detected: %s. "
+                "Review before sending." % ", ".join(found_anger)
+            )
+
+        # Check for overpromising
+        promise_words = ["guarantee", "definitely", "absolutely", "100%",
+                         "no problem", "easy", "simple"]
+        found_promises = [w for w in promise_words if w in body_lower]
+        if found_promises:
+            concerns.append(
+                "Potential overpromising: %s. Verify commitments." % ", ".join(found_promises)
+            )
+
+        # Get human profile for communication style check
+        profile = bus.get_human_profile(self.human_id, self.db_path)
+        if profile and profile.get("communication_preferences"):
+            prefs = profile["communication_preferences"]
+            formality = prefs.get("formality", "casual")
+            if formality == "casual" and len(body) > 500:
+                concerns.append("Message is longer than typical casual style.")
+
+        if not concerns:
+            action = "approve"
+        elif any("morning review" in c or "frustration" in c for c in concerns):
+            action = "flag_for_review"
+        else:
+            action = "suggest_edit"
+
+        # Log the reputation check
+        bus.log_decision(
+            self.rh_id, self.human_id, "reputation_protect",
+            {"subject": subject, "concerns_count": len(concerns)},
+            action,
+            reasoning="Reputation protection check on outbound message",
+            pattern_tags=["outbound", "reputation"],
+            db_path=self.db_path,
+        )
+
+        return {
+            "action": action,
+            "concerns": concerns,
+            "suggested_edits": None,
+        }
+
+    # ------------------------------------------------------------------
+    # Relationship health (Day 2)
+    # ------------------------------------------------------------------
+
+    def check_relationship_health(self) -> list:
+        """Review all tracked relationships and return nudges for attention.
+
+        Returns list of relationship nudges sorted by urgency.
+        Used in morning briefings to remind the human about connections.
+        """
+        return bus.get_relationship_nudges(self.human_id, db_path=self.db_path)
+
+    # ------------------------------------------------------------------
+    # Human state assessment (Day 2)
+    # ------------------------------------------------------------------
+
+    def assess_human_state(self) -> dict:
+        """Compile current human state from all sources.
+
+        Used before every delivery decision to determine the recommended
+        cognitive load level.
+
+        Returns:
+            {burnout_score, energy, activity, mood, consecutive_work_days,
+             social_isolation_days, messages_received_today,
+             decisions_made_today, recommended_load}
+        """
+        state = bus.get_human_state(self.human_id, db_path=self.db_path)
+
+        # Count messages received today
+        conn = bus.get_conn(self.db_path)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        msg_today = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE to_agent_id=? AND created_at>=?",
+            (self.human_id, today),
+        ).fetchone()[0]
+
+        decisions_today = conn.execute(
+            "SELECT COUNT(*) FROM decision_log WHERE human_id=? AND created_at>=?",
+            (self.human_id, today),
+        ).fetchone()[0]
+        conn.close()
+
+        # Calculate social isolation days
+        social_days = 0
+        if state.get("last_social_activity"):
+            try:
+                ls = datetime.fromisoformat(
+                    state["last_social_activity"].replace("Z", "+00:00")
+                )
+                social_days = (datetime.now(timezone.utc) - ls).days
+            except (ValueError, TypeError):
+                social_days = 0
+
+        burnout = state.get("burnout_score", 5)
+        energy = state.get("energy_level", "medium")
+        activity = state.get("current_activity", "working")
+
+        # Determine recommended load
+        if burnout >= 8 or activity in ("driving", "unavailable"):
+            load = "emergency_only"
+        elif burnout >= 6 or activity in ("resting", "family_time"):
+            load = "minimal"
+        elif burnout >= 4 or energy == "low":
+            load = "light"
+        else:
+            load = "full"
+
+        return {
+            "burnout_score": burnout,
+            "energy": energy,
+            "activity": activity,
+            "mood": state.get("mood_indicator", "neutral"),
+            "consecutive_work_days": state.get("consecutive_work_days", 0),
+            "social_isolation_days": social_days,
+            "messages_received_today": msg_today,
+            "decisions_made_today": decisions_today,
+            "recommended_load": load,
+        }
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _log(self, decision_type: str, message: dict, action: str) -> int:
+        """Log a decision to the decision_log table."""
+        context = {
+            "message_id": message.get("id"),
+            "message_type": message.get("message_type"),
+            "subject": message.get("subject", ""),
+            "priority": message.get("priority", "normal"),
+            "from_agent_id": message.get("from_agent_id"),
+        }
+        return bus.log_decision(
+            self.rh_id, self.human_id, decision_type,
+            context, action, db_path=self.db_path,
+        )

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Messages{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Messages</h2>
+        <span class="subtitle">{{ total }} messages{% if agent_filter or type_filter or status_filter %} (filtered){% endif %}</span>
+    </div>
+</div>
+
+<!-- Filters -->
+<form class="filter-bar" method="GET" action="/messages">
+    <div class="form-group">
+        <label>Agent</label>
+        <select name="agent">
+            <option value="">All Agents</option>
+            {% for a in agents %}
+            <option value="{{ a.id }}" {% if agent_filter == a.id|string %}selected{% endif %}>{{ a.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Type</label>
+        <select name="type">
+            <option value="">All Types</option>
+            {% for t in ['report','task','alert','escalation','idea','briefing'] %}
+            <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Status</label>
+        <select name="status">
+            <option value="">All Status</option>
+            {% for s in ['queued','delivered','read','archived'] %}
+            <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Priority</label>
+        <select name="priority">
+            <option value="">All Priority</option>
+            {% for p in ['low','normal','high','critical'] %}
+            <option value="{{ p }}" {% if priority_filter == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="/messages" class="btn">Clear</a>
+    </div>
+</form>
+
+<!-- Messages Table -->
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Priority</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for msg in messages %}
+            <tr class="msg-row" onclick="this.querySelector('.msg-body')&&this.querySelector('.msg-body').classList.toggle('show')" style="cursor:pointer">
+                <td class="text-muted text-xs" style="white-space:nowrap">{{ format_time_ago(msg.created_at) }}</td>
+                <td><a href="/agent/{{ msg.from_agent_id }}">{{ msg.from_name }}</a></td>
+                <td><a href="/agent/{{ msg.to_agent_id }}">{{ msg.to_name }}</a></td>
+                <td><span class="badge badge-muted">{{ msg.message_type }}</span></td>
+                <td>
+                    {{ msg.subject }}
+                    {% if msg.body %}
+                    <div class="msg-body">{{ msg.body }}</div>
+                    {% endif %}
+                </td>
+                <td><span class="priority-{{ msg.priority }}">{{ msg.priority }}</span></td>
+                <td>
+                    <span class="badge {% if msg.status == 'delivered' %}badge-success{% elif msg.status == 'queued' %}badge-warning{% elif msg.status == 'read' %}badge-info{% else %}badge-muted{% endif %}">
+                        {{ msg.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if not messages %}
+<div class="card mt-2 text-center">
+    <p class="text-muted">No messages match these filters.</p>
+</div>
+{% endif %}
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}&agent={{ agent_filter }}&type={{ type_filter }}&status={{ status_filter }}&priority={{ priority_filter }}">&laquo;</a>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+        <a href="?page={{ p }}&agent={{ agent_filter }}&type={{ type_filter }}&status={{ status_filter }}&priority={{ priority_filter }}">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 2 %}
+        <span class="text-muted">...</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}&agent={{ agent_filter }}&type={{ type_filter }}&status={{ status_filter }}&priority={{ priority_filter }}">&raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

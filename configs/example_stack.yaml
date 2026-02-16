@@ -1,0 +1,159 @@
+# crew-bus Example Configuration
+# Generic starting point — copy this file and customize for your setup.
+#
+# To customize: cp configs/example_stack.yaml configs/my_stack.yaml
+# Then edit my_stack.yaml with your own teams, agent names, and preferences.
+#
+# FREE AND OPEN SOURCE - crew-bus is free infrastructure for the world.
+# Security Guard module available separately (paid activation key).
+
+organization:
+  name: "My Crew"
+
+hierarchy:
+  human:
+    name: Human
+    channel: console
+    timezone: UTC
+    quiet_hours:
+      start: "22:00"
+      end: "07:00"
+    personality:
+      type: hybrid
+      work_style: balanced
+      social_recharge: mixed
+    communication:
+      preferred_channel: console
+      message_length: concise
+      formality: casual
+    known_triggers:
+      - "unnecessary meetings"
+    relationship_priorities:
+      - name: "Family"
+        type: family
+        importance: 10
+        preferred_frequency_days: 7
+
+  right_hand:
+    name: Crew-Boss
+    agent_type: right_hand
+    channel: console
+    reports_to: Human
+    trust_score: 5
+    budget_limit: 500.00
+    description: "Personal AI Chief of Staff. Filters all communication to you."
+    escalation_overrides:
+      - "financial decisions over $500"
+      - "legal matters"
+
+  core_crew:
+    security:
+      name: Security
+      agent_type: security
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Watches everything including other agents."
+      monitors:
+        - physical
+        - digital
+        - financial
+        - legal
+        - reputation
+        - mutiny
+        - relationship
+      direct_human_feed: false
+
+    wellness:
+      name: Wellness
+      agent_type: wellness
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Tracks your health, energy, and burnout."
+
+    strategy:
+      name: Ideas
+      agent_type: strategy
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Business idea generator. Market intelligence."
+
+    financial:
+      name: Wallet
+      agent_type: financial
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Tracks your money. Income, expenses, budgets."
+
+    legal:
+      name: Legal
+      agent_type: legal
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Compliance and risk awareness."
+
+    knowledge:
+      name: Memory
+      agent_type: knowledge
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Long-term context and knowledge retention."
+
+    communications:
+      name: Comms
+      agent_type: communications
+      channel: console
+      reports_to: Crew-Boss
+      active: true
+      description: "Drafts messages and manages communications."
+
+  departments:
+    - name: Home
+      description: "Personal life management — household, meals, and budgeting"
+      manager:
+        name: Home-Manager
+        agent_type: manager
+        channel: console
+        reports_to: Crew-Boss
+        active: true
+      workers:
+        - name: Budget-Tracker
+          agent_type: worker
+          channel: console
+          active: true
+          description: "Tracks household spending and budget goals"
+        - name: Meal-Planner
+          agent_type: worker
+          channel: console
+          active: true
+          description: "Weekly meal plans, grocery lists, recipe suggestions"
+
+    - name: Work
+      description: "Professional tasks — projects, meetings, and communications"
+      manager:
+        name: Work-Manager
+        agent_type: manager
+        channel: console
+        reports_to: Crew-Boss
+        active: true
+      workers:
+        - name: Task-Tracker
+          agent_type: worker
+          channel: console
+          active: true
+          description: "Logs tasks, tracks deadlines, manages project pipeline"
+        - name: Meeting-Prep
+          agent_type: worker
+          channel: console
+          active: true
+          description: "Prepares agendas, talking points, and follow-up actions"
+        - name: Email-Drafter
+          agent_type: worker
+          channel: console
+          active: true
+          description: "Drafts professional emails and follow-ups"

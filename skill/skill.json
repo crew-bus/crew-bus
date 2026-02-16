@@ -1,0 +1,9 @@
+{
+  "name": "crew-bus",
+  "version": "0.1.0",
+  "description": "Agent crew coordination -- hierarchical message routing, human oversight, trust-based autonomy",
+  "author": "Ryan Johnson Contracting",
+  "license": "proprietary",
+  "entry": "SKILL.md",
+  "requires": ["pyyaml"]
+}
