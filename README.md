@@ -40,6 +40,33 @@ python dashboard.py
 
 Open `http://localhost:8080` in your browser. That's it.
 
+## Try These Example Crews
+
+Get started in seconds. Pick a crew, load it, done.
+
+### Family Crew
+For busy families — chores, meals, homework, health, and daily life.
+```bash
+crew-bus load examples/family-crew.yaml
+```
+Includes: Crew Boss (warm big-sister energy), Friend & Family Helper, Health Buddy, Life Assistant. Family Mode with quiet hours 9pm-7am.
+
+### Artist / Passion Crew
+For artists, musicians, writers, and makers of all kinds.
+```bash
+crew-bus load examples/artist-passion-crew.yaml
+```
+Includes: Crew Boss (encouraging friend), Muse (creative prompts + streak tracker), Health Buddy, Growth Coach. Passion Mode with daily creative sparks.
+
+### Teen Crew
+For teens — homework, gaming, music, big ideas, zero lectures.
+```bash
+crew-bus load examples/teen-crew.yaml
+```
+Includes: Crew Boss (chill big-bro energy), Friend & Family Helper, Muse (gaming, music, drawing), Growth Coach (study timer + skill tree). Fun Mode with gamification.
+
+> Want to customize? Copy any example to `configs/my-crew.yaml` and make it yours. Rename Crew Boss to anything you want.
+
 ## Screenshots
 
 [Add screenshots of the circle layout, agent space, team dashboard, and private session]
@@ -102,6 +129,10 @@ crew-bus/
 ├── cli.py              # Command-line interface
 ├── configs/            # Agent hierarchy configs
 │   └── example_stack.yaml # Default configuration (copy and customize)
+├── examples/           # Ready-to-use crew configs
+│   ├── family-crew.yaml        # Family crew (chores, meals, health)
+│   ├── artist-passion-crew.yaml # Creative crew (art, music, writing)
+│   └── teen-crew.yaml          # Teen crew (school, gaming, big ideas)
 ├── templates/          # HTML templates
 ├── test_day2.py        # Core bus tests (38)
 ├── test_day3.py        # Advanced feature tests (61)

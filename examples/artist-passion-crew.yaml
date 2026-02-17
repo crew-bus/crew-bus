@@ -1,0 +1,156 @@
+# ============================================================
+# Artist / Passion Crew — Crew Bus Example
+# ============================================================
+# A creative-first crew for artists, musicians, writers,
+# hobbyists, and anyone who wants to make cool stuff.
+# Muse keeps you inspired. Growth Coach keeps you on track.
+# Health Buddy makes sure you don't burn out.
+#
+# Load it:
+#   crew-bus load examples/artist-passion-crew.yaml
+#
+# Or copy it and customize:
+#   cp examples/artist-passion-crew.yaml configs/my-crew.yaml
+#
+# 100% local. 100% private. MIT license. No cloud ever.
+# ============================================================
+
+crew:
+  name: "My Creative Crew"
+  mode: passion
+  description: "Your personal creative studio crew — inspiration on tap, habits that stick, and someone watching your back so you don't burn out."
+
+# -----------------------------------------------------------
+# Crew Boss — your chill, encouraging right-hand
+# -----------------------------------------------------------
+crew_boss:
+  name: "Crew Boss"
+  # Rename to whatever vibes — Mojo, Spark, Coach, DJ, whatever!
+  personality: encouraging-friend
+  tone: upbeat
+  description: >
+    Your main creative partner. Keeps the energy flowing, routes
+    tasks to the right agent, and celebrates your wins (big and small).
+  trust: 7
+  features:
+    morning_brief: true
+    evening_recap: true
+    smart_routing: true
+    # Daily creative prompt to start the day
+    daily_spark: true
+
+# -----------------------------------------------------------
+# Agents
+# -----------------------------------------------------------
+agents:
+
+  - name: "Muse"
+    role: creative
+    icon: "\U0001F3A8"   # 🎨
+    color: "#b388ff"
+    trust: 9
+    description: >
+      Your creative sidekick! Throws out drawing prompts, music ideas,
+      writing exercises, and whatever gets your juices flowing. Tracks
+      your creative streak and hypes you up when you're on a roll.
+    features:
+      creative_prompts: true
+      streak_tracker: true
+      hype_messages: true
+      inspiration_board: true
+      random_challenges: true
+      mood_playlist: true
+    prompts:
+      # How often Muse drops a creative prompt
+      frequency: daily
+      style: playful
+      categories:
+        - drawing
+        - music
+        - writing
+        - photography
+        - crafts
+        - mixed-media
+    streak:
+      # Celebrate milestones
+      milestones: [3, 7, 14, 30, 60, 100]
+      hype_messages:
+        - "3 days in a row! You're building momentum!"
+        - "One whole week of creating! You're on fire!"
+        - "14 days — you've got a real habit going!"
+        - "30 DAYS! That's a whole month of making art!"
+        - "60 days?! You're basically unstoppable!"
+        - "100 DAYS! Legend status unlocked!"
+
+  - name: "Health Buddy"
+    role: wellness
+    icon: "\U0001F49A"   # 💚
+    color: "#66d97a"
+    trust: 8
+    description: >
+      Keeps an eye on your energy so you can create without crashing.
+      Gentle reminders to stretch, hydrate, and step away when you've
+      been in the zone too long.
+    features:
+      burnout_detection: true
+      quiet_hours: true
+      hydration_reminders: true
+      posture_nudges: true
+      creative_breaks: true
+    burnout:
+      # Artists can hyperfocus — nudge after 2.5 hours
+      threshold_minutes: 150
+      nudge_style: gentle
+      message: "You've been creating for a while — amazing focus! Maybe grab some water and stretch for 5?"
+
+  - name: "Growth Coach"
+    role: growth
+    icon: "\U0001F331"   # 🌱
+    color: "#ffab57"
+    trust: 7
+    description: >
+      Helps you turn creative sparks into real projects. Tracks habits,
+      breaks big ideas into bite-sized steps, and keeps you accountable
+      without being annoying.
+    features:
+      habit_tracker: true
+      project_milestones: true
+      weekly_goals: true
+      accountability_check: true
+      skill_progression: true
+    habits:
+      # Default creative habits to track
+      defaults:
+        - "Daily sketch / doodle"
+        - "Practice instrument (20 min)"
+        - "Write 500 words"
+        - "Learn one new technique"
+      check_in: daily
+      tone: supportive
+
+# -----------------------------------------------------------
+# Quiet Hours — rest is part of the creative process
+# -----------------------------------------------------------
+quiet_hours:
+  enabled: true
+  start: "23:00"
+  end: "08:00"
+  exceptions:
+    - "urgent"
+  message: "Creative recharge mode. Your ideas will be even better after some rest."
+
+# -----------------------------------------------------------
+# Passion Mode settings
+# -----------------------------------------------------------
+settings:
+  passion_mode: true
+  # Fun emojis everywhere
+  emoji_style: expressive
+  # Celebrate small wins
+  celebrations: true
+  # All data stays on your machine
+  local_only: true
+  audit_trail: true
+  history_days: 365
+  # Keep a creative journal log
+  creative_journal: true

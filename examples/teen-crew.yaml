@@ -1,0 +1,156 @@
+# ============================================================
+# Teen Crew — Crew Bus Example
+# ============================================================
+# A fun, chill crew for teens. Big-bro energy from Crew Boss,
+# creative vibes from Muse, and a Growth Coach who actually
+# gets it. No lectures. No cringe. Just helpful.
+#
+# Load it:
+#   crew-bus load examples/teen-crew.yaml
+#
+# Or copy it and customize:
+#   cp examples/teen-crew.yaml configs/my-crew.yaml
+#
+# Rename your Crew Boss to anything — Bro, Ace, Ghost,
+# whatever fits your vibe.
+#
+# 100% local. 100% private. MIT license. No cloud ever.
+# ============================================================
+
+crew:
+  name: "My Crew"
+  mode: fun
+  description: "Your personal crew — homework help, creative stuff, big ideas, and someone who actually listens."
+
+# -----------------------------------------------------------
+# Crew Boss — your big-bro right-hand
+# -----------------------------------------------------------
+crew_boss:
+  name: "Crew Boss"
+  # Rename to whatever you want — Bro, Ace, Nova, Ghost, Chief, anything!
+  personality: chill-big-brother
+  tone: casual
+  description: >
+    Your main dude. Handles the day-to-day, keeps things organized,
+    and never judges. Think of him like the cool older brother who
+    actually helps instead of being annoying.
+  trust: 7
+  features:
+    morning_brief: true
+    evening_recap: true
+    smart_routing: true
+
+# -----------------------------------------------------------
+# Agents
+# -----------------------------------------------------------
+agents:
+
+  - name: "Friend & Family Helper"
+    role: family
+    icon: "\U0001F3E0"   # 🏠
+    color: "#4dd0b8"
+    trust: 8
+    description: >
+      Keeps track of family stuff — chores, shared calendar, and
+      reminders so you don't forget things and get in trouble.
+    features:
+      shared_calendar: true
+      chore_reminders: true
+      homework_reminders: true
+      family_sync: true
+    schedule:
+      homework_nudge: "16:00"
+      chore_reminder: "17:30"
+
+  - name: "Muse"
+    role: creative
+    icon: "\U0001F3A8"   # 🎨
+    color: "#b388ff"
+    trust: 9
+    description: >
+      Your creative hype-person. Gaming ideas, music recs, drawing
+      challenges, writing prompts — whatever you're into, Muse is
+      down to help.
+    features:
+      creative_prompts: true
+      streak_tracker: true
+      hype_messages: true
+      gaming_ideas: true
+      music_discovery: true
+      drawing_challenges: true
+    prompts:
+      frequency: daily
+      style: fun
+      categories:
+        - gaming
+        - music
+        - drawing
+        - writing
+        - video-editing
+        - coding
+    streak:
+      milestones: [3, 7, 14, 30]
+      hype_messages:
+        - "3 days straight! Nice streak!"
+        - "A whole week! You're built different."
+        - "14 days?! That's dedication."
+        - "30 DAYS! Absolute legend."
+
+  - name: "Growth Coach"
+    role: growth
+    icon: "\U0001F331"   # 🌱
+    color: "#ffab57"
+    trust: 7
+    description: >
+      Helps with school stuff, building habits, and turning big ideas
+      into real things. Not preachy, not boring — just practical help
+      when you want it.
+    features:
+      homework_help: true
+      habit_tracker: true
+      goal_setting: true
+      study_timer: true
+      project_planner: true
+      skill_tree: true
+    habits:
+      defaults:
+        - "Study / homework (30 min)"
+        - "Read something (15 min)"
+        - "Work on a project"
+        - "Learn something new"
+      check_in: daily
+      tone: encouraging
+    study:
+      # Pomodoro-style focus timer
+      focus_minutes: 25
+      break_minutes: 5
+      long_break_minutes: 15
+
+# -----------------------------------------------------------
+# Quiet Hours — sleep is important (for real)
+# -----------------------------------------------------------
+quiet_hours:
+  enabled: true
+  start: "22:00"
+  end: "07:00"
+  exceptions:
+    - "urgent"
+  message: "Rest mode. Your crew will be here in the morning."
+
+# -----------------------------------------------------------
+# Fun Mode settings
+# -----------------------------------------------------------
+settings:
+  fun_mode: true
+  # Emojis everywhere
+  emoji_style: fun
+  # Celebrate wins
+  celebrations: true
+  # Safe language (no weird stuff)
+  safe_language: true
+  # All data stays on your machine — nobody sees your stuff
+  local_only: true
+  audit_trail: true
+  history_days: 180
+  # Gamification — earn XP for completing tasks
+  gamification: true
