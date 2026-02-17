@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>crew-bus — Your AI crew. Your hardware. Your rules.</title>
+    <meta name="description" content="Free, open-source AI agent coordination. Run your own crew locally. Certified Installer Marketplace connects tech professionals with clients worldwide.">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;
+            --fg:#e6edf3;--mu:#8b949e;--br:#30363d;
+            --ac:#58a6ff;--green:#2ea043;--gold:#d18616;
+            --purple:#bc8cff;--cyan:#39d0d0;--red:#f85149;
+        }
+        body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+        a{color:var(--ac);text-decoration:none}
+        a:hover{text-decoration:underline}
+        .wrap{max-width:800px;margin:0 auto;padding:0 20px}
+        section{padding:60px 0}
+        /* Nav */
+        nav{position:sticky;top:0;z-index:100;background:rgba(13,17,23,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:12px 0}
+        nav .wrap{display:flex;align-items:center;justify-content:space-between}
+        nav .logo{font-weight:700;font-size:1.1rem;color:var(--fg)}
+        nav .nav-links{display:flex;gap:20px;align-items:center;font-size:.9rem}
+        nav .nav-links a{color:var(--mu)}
+        nav .nav-links a:hover{color:var(--fg);text-decoration:none}
+        /* Hero */
+        .hero{text-align:center;padding:80px 0 30px}
+        .hero h1{font-size:2.4rem;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
+        .hero .tagline{font-size:1.1rem;color:var(--mu);margin-bottom:24px}
+        .hero p{color:var(--mu);font-size:1rem;max-width:540px;margin:0 auto 32px}
+        .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+        .btn{display:inline-flex;align-items:center;padding:12px 28px;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s,transform .2s ease}
+        .btn:hover{opacity:.85;text-decoration:none;transform:translateY(-1px)}
+        .btn-primary{background:var(--fg);color:var(--bg)}
+        .btn-gold{background:var(--gold);color:#000}
+        .btn-green{background:var(--green);color:#fff}
+        .btn-purple{background:var(--purple);color:#000}
+        .btn-outline{background:transparent;border:1px solid var(--br);color:var(--fg)}
+        .btn-outline:hover{border-color:var(--mu)}
+        .gh-link{display:block;text-align:center;margin-top:12px;font-size:.85rem;color:var(--mu)}
+        .gh-link:hover{color:var(--fg)}
+        /* Value prop */
+        .value-prop{text-align:center;padding:24px 0 0;color:var(--mu);font-size:1.1rem;max-width:700px;margin:0 auto}
+        /* Circle */
+        .circle-section{text-align:center;padding-top:36px}
+        .circle-section h2{font-size:1.6rem;margin-bottom:8px}
+        .circle-section .sub{color:var(--mu);margin-bottom:32px}
+        .circle-diagram{position:relative;width:380px;height:300px;margin:0 auto 40px}
+        .c-node{position:absolute;text-align:center;font-size:.8rem;font-weight:600}
+        .c-dot{width:48px;height:48px;border-radius:50%;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;border:2px solid var(--br)}
+        .c-label{color:var(--mu);font-size:.75rem;white-space:nowrap}
+        .c-center{left:50%;top:50%;transform:translate(-50%,-50%)}
+        .c-center .c-dot{width:56px;height:56px;background:var(--ac);border-color:var(--ac)}
+        .c-center .c-label{color:var(--ac);font-size:.8rem}
+        .c-top{left:50%;top:2%;transform:translateX(-50%)}
+        .c-top .c-dot{background:var(--cyan);border-color:var(--cyan)}
+        .c-left{left:0;top:50%;transform:translateY(-50%)}
+        .c-left .c-dot{background:var(--green);border-color:var(--green)}
+        .c-right{right:0;top:50%;transform:translateY(-50%)}
+        .c-right .c-dot{background:var(--gold);border-color:var(--gold)}
+        .c-bottom{left:50%;bottom:2%;transform:translateX(-50%)}
+        .c-bottom .c-dot{background:var(--purple);border-color:var(--purple)}
+        .c-line{position:absolute;background:var(--br);z-index:0}
+        .c-line-v{left:50%;top:60px;width:1px;height:180px;transform:translateX(-50%)}
+        .c-line-h{top:50%;left:68px;width:244px;height:1px;transform:translateY(-50%)}
+        /* Features grid */
+        .wyg-heading{text-align:center;margin-bottom:28px}
+        .wyg-heading h2{font-size:1.6rem;margin-bottom:6px}
+        .wyg-heading .sub{color:var(--mu);font-size:.95rem}
+        .features{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+        .feature{background:var(--bg2);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:20px;transition:transform .2s ease;display:flex;flex-direction:column}
+        .feature:hover{transform:translateY(-2px)}
+        .feature h3{font-size:1rem;margin-bottom:6px}
+        .feature p{color:var(--mu);font-size:.9rem;flex:1}
+        .feature .icon{font-size:1.3rem;margin-bottom:8px}
+        /* Guard */
+        .guard-bridge{text-align:center;color:var(--mu);font-size:.95rem;margin-bottom:16px}
+        .guard-section{background:var(--bg2);border:1px solid var(--br);border-radius:12px;padding:40px;text-align:center}
+        .guard-section h2{font-size:1.6rem;margin-bottom:8px}
+        .guard-section .sub{color:var(--mu);margin-bottom:20px}
+        .guard-perks{display:flex;flex-direction:column;gap:8px;text-align:left;max-width:400px;margin:0 auto 24px}
+        .guard-perks li{list-style:none;color:var(--fg);font-size:.95rem}
+        .guard-perks li::before{content:'✓ ';color:var(--green);font-weight:700}
+        .guard-price{font-size:1.8rem;font-weight:700;color:var(--gold);margin-bottom:4px}
+        .guard-note{color:var(--mu);font-size:.85rem;margin-bottom:20px}
+        /* Installer Marketplace */
+        .marketplace-section{padding:60px 0}
+        .marketplace-section h2{font-size:1.6rem;text-align:center;margin-bottom:8px}
+        .marketplace-section .sub{color:var(--mu);text-align:center;margin-bottom:36px;font-size:.95rem}
+        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
+        .col-card{background:var(--bg2);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:28px}
+        .col-card h3{font-size:1.15rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .col-card ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+        .col-card li{color:var(--mu);font-size:.9rem;padding-left:20px;position:relative}
+        .col-card li::before{content:'→';position:absolute;left:0;color:var(--ac)}
+        .highlight-box{background:linear-gradient(135deg,rgba(46,160,67,.08),rgba(88,166,255,.08));border:1px solid rgba(46,160,67,.25);border-radius:12px;padding:24px;text-align:center;margin-bottom:20px}
+        .highlight-box .big{font-size:1.3rem;font-weight:700;color:var(--green);margin-bottom:4px}
+        .highlight-box p{color:var(--mu);font-size:.9rem}
+        /* Job Board */
+        .job-section{padding:60px 0}
+        .job-section h2{font-size:1.6rem;text-align:center;margin-bottom:8px}
+        .job-section .sub{color:var(--mu);text-align:center;margin-bottom:32px;font-size:.95rem}
+        .job-flow{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:32px;flex-wrap:wrap}
+        .job-step{background:var(--bg2);border:1px solid var(--br);border-radius:10px;padding:16px 20px;text-align:center;min-width:120px}
+        .job-step .step-icon{font-size:1.5rem;margin-bottom:6px}
+        .job-step .step-label{font-size:.85rem;font-weight:600}
+        .job-step .step-desc{font-size:.75rem;color:var(--mu);margin-top:2px}
+        .job-arrow{color:var(--br);font-size:1.4rem;padding:0 4px}
+        .postal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;max-width:500px;margin:0 auto}
+        .postal-tag{background:var(--bg3);border:1px solid var(--br);border-radius:6px;padding:6px 10px;text-align:center;font-size:.8rem;color:var(--mu)}
+        .postal-tag span{display:block;font-weight:600;color:var(--fg);font-size:.85rem}
+        /* Stripe */
+        .stripe-badge{display:inline-flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--br);border-radius:6px;padding:6px 12px;font-size:.85rem;color:var(--mu);margin-top:12px}
+        .stripe-badge svg{width:16px;height:16px}
+        /* Social proof */
+        .social-proof{text-align:center;padding:60px 0 0;font-size:.75rem;color:rgba(255,255,255,0.35);letter-spacing:.5px}
+        /* Footer */
+        footer{border-top:1px solid var(--br);padding:40px 0;text-align:center;color:var(--mu);font-size:.85rem}
+        footer .links{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+        footer .links a{color:var(--mu);display:inline-flex;align-items:center;gap:4px}
+        footer .links a:hover{color:var(--fg)}
+        footer .links .sep{color:var(--br)}
+        footer .tagline{font-style:italic}
+        /* Divider */
+        .section-divider{border:0;border-top:1px solid var(--br);margin:0}
+        /* Animations */
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        .hero{animation:fadeInUp .6s ease-out}
+        .circle-section{animation:fadeInUp .6s ease-out .15s both}
+        .features-section{animation:fadeInUp .6s ease-out .3s both}
+        .guard-wrap{animation:fadeInUp .6s ease-out .45s both}
+        .marketplace-section{animation:fadeInUp .6s ease-out .6s both}
+        .job-section{animation:fadeInUp .6s ease-out .75s both}
+        /* Responsive */
+        @media(max-width:1024px){.circle-diagram{width:340px}.c-line-h{left:56px;width:228px}}
+        @media(max-width:768px){.circle-diagram{width:320px}.c-line-h{left:50px;width:220px}.c-label{font-size:.7rem}.two-col{grid-template-columns:1fr}}
+        @media(max-width:600px){.hero h1{font-size:1.8rem}.features{grid-template-columns:1fr}.circle-diagram{width:280px;height:260px}.c-line-v{top:52px;height:156px}.c-line-h{left:40px;width:200px}.c-label{font-size:.68rem}section{padding:40px 0}.guard-section{padding:28px 20px}.value-prop{font-size:1rem;padding:16px 10px 0}.job-flow{gap:8px}.job-arrow{display:none}.job-step{min-width:100px;padding:12px}}
+        @media(max-width:500px){.cta-row{flex-direction:column;align-items:center}.cta-row .btn{width:100%;max-width:280px;justify-content:center}.circle-diagram{width:260px;height:240px}.c-line-v{top:48px;height:144px}.c-line-h{left:36px;width:188px}}
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="wrap">
+        <div class="logo">crew-bus</div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#marketplace">Installers</a>
+            <a href="#jobs">Job Board</a>
+            <a href="https://github.com/crew-bus/crew-bus">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<div class="wrap">
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>crew-bus</h1>
+        <p class="tagline">Your AI crew. Your hardware. Your rules.</p>
+        <p>Free, open-source coordination for your AI agents. One dashboard. Full hierarchy. Everything runs locally on your machine.</p>
+        <div class="cta-row">
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary">Get Started — Free</a>
+            <a href="/activate" class="btn btn-gold">Activate Guard — $20</a>
+            <a href="#marketplace" class="btn btn-green">Become an Installer</a>
+        </div>
+        <a href="https://github.com/crew-bus/crew-bus" class="gh-link">View source on GitHub →</a>
+    </section>
+
+    <section class="value-prop">
+        <p>Coordinate your AI agents from one dashboard — locally, privately, with full hierarchy control.</p>
+    </section>
+
+    <!-- The Circle -->
+    <section class="circle-section">
+        <h2>Your Crew</h2>
+        <p class="sub">Five core agents. One chief of staff. Full control.</p>
+        <div class="circle-diagram">
+            <div class="c-line c-line-v"></div>
+            <div class="c-line c-line-h"></div>
+            <div class="c-node c-top">
+                <div class="c-dot">◆</div>
+                <div class="c-label">Crew Boss Agent</div>
+            </div>
+            <div class="c-node c-left">
+                <div class="c-dot">💚</div>
+                <div class="c-label">Health &amp; Wellness Agent</div>
+            </div>
+            <div class="c-node c-center">
+                <div class="c-dot">🛡</div>
+                <div class="c-label">Guardian Agent</div>
+            </div>
+            <div class="c-node c-right">
+                <div class="c-dot">💡</div>
+                <div class="c-label">Idea Creation Agent</div>
+            </div>
+            <div class="c-node c-bottom">
+                <div class="c-dot">💰</div>
+                <div class="c-label">Financial Agent</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features-section" id="features">
+        <div class="wyg-heading">
+            <h2>What You Get — Free</h2>
+            <p class="sub">Everything below runs on your machine. No account needed.</p>
+        </div>
+        <div class="features">
+            <div class="feature">
+                <div class="icon">🔧</div>
+                <h3>Trust Score (1-10)</h3>
+                <p>Controls how much Crew Boss handles on its own. 1 = see everything. 10 = full autopilot.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔏</div>
+                <h3>Private Sessions</h3>
+                <p>Talk directly with any agent. Not even Crew Boss sees the content.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🏢</div>
+                <h3>Teams</h3>
+                <p>Add departments with managers and workers. Scale from 5 agents to 50.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔒</div>
+                <h3>Truly Local</h3>
+                <p>Python + SQLite. No cloud, no telemetry, no data leaving your machine. Ever.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔥</div>
+                <h3>Burnout Awareness</h3>
+                <p>When you're running hot, non-urgent messages get held for better timing.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📬</div>
+                <h3>Team Mailbox</h3>
+                <p>Any agent can escalate directly to you. No message gets silenced — ever.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📋</div>
+                <h3>Full Audit Trail</h3>
+                <p>Every message, every decision, every routing event. Logged locally in SQLite.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">⚡</div>
+                <h3>Runs on Anything</h3>
+                <p>Raspberry Pi, laptop, or server. Zero dependencies beyond Python and PyYAML.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Guard Activation -->
+    <section>
+        <p class="guard-bridge">Your crew comes free. Guard unlocks the next level.</p>
+        <div class="guard-wrap">
+            <div class="guard-section">
+                <h2>Guard Activation</h2>
+                <p class="sub">Unlock skill-adding for all your agents</p>
+                <ul class="guard-perks">
+                    <li>Add skills to any agent in your crew</li>
+                    <li>Guard oversees all skill additions</li>
+                    <li>Full audit trail of every change</li>
+                    <li>Works forever — no subscription, no renewal</li>
+                    <li>Validated locally — no phone-home</li>
+                </ul>
+                <div class="guard-price">$20</div>
+                <p class="guard-note">One-time payment. That's it.</p>
+                <a href="/activate" class="btn btn-gold">Activate Guard</a>
+            </div>
+        </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- Installer Marketplace -->
+    <section class="marketplace-section" id="marketplace">
+        <h2>Certified Installer Marketplace</h2>
+        <p class="sub">Find a vetted local CrewBus installer — or become one.</p>
+
+        <div class="two-col">
+            <div class="col-card">
+                <h3>👤 For Clients</h3>
+                <ul>
+                    <li>Search by postal code, ZIP, or area code — any country worldwide</li>
+                    <li>Every installer is KYC-verified with government ID</li>
+                    <li>Video Meet &amp; Greet before you commit — see a real human</li>
+                    <li>Read reviews and ratings from other clients</li>
+                    <li>Post a job and let installers come to you</li>
+                </ul>
+            </div>
+            <div class="col-card">
+                <h3>🔧 For Tech Professionals</h3>
+                <ul>
+                    <li>Turn your skills into income — set up crew-bus for clients near you</li>
+                    <li>First installation permit is free</li>
+                    <li>Free 6-month Guardian activation key on signup</li>
+                    <li>KYC verification badge builds trust with clients</li>
+                    <li>Set your specialties, service radius, and availability</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box">
+            <div class="big">Tech professionals deserve purpose.</div>
+            <p>The job market is shifting. crew-bus gives skilled people a way to earn money doing what they're good at — setting up AI systems for real people, locally, face to face.</p>
+        </div>
+
+        <div style="text-align:center">
+            <a href="/installer" class="btn btn-green">Join as an Installer</a>
+            <a href="/installer" class="btn btn-outline" style="margin-left:8px">Find an Installer</a>
+            <div class="stripe-badge" style="margin:16px auto 0;width:fit-content">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/></svg>
+                Secure payments via Stripe
+            </div>
+        </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- Job Board -->
+    <section class="job-section" id="jobs">
+        <h2>Job Board</h2>
+        <p class="sub">Clients post. Installers claim. Work gets done.</p>
+
+        <div class="job-flow">
+            <div class="job-step">
+                <div class="step-icon">📝</div>
+                <div class="step-label">Post</div>
+                <div class="step-desc">Client posts job</div>
+            </div>
+            <div class="job-arrow">→</div>
+            <div class="job-step">
+                <div class="step-icon">🔍</div>
+                <div class="step-label">Browse</div>
+                <div class="step-desc">Installers search</div>
+            </div>
+            <div class="job-arrow">→</div>
+            <div class="job-step">
+                <div class="step-icon">🎥</div>
+                <div class="step-label">Meet</div>
+                <div class="step-desc">Video call</div>
+            </div>
+            <div class="job-arrow">→</div>
+            <div class="job-step">
+                <div class="step-icon">🤝</div>
+                <div class="step-label">Claim</div>
+                <div class="step-desc">Installer takes job</div>
+            </div>
+            <div class="job-arrow">→</div>
+            <div class="job-step">
+                <div class="step-icon">✅</div>
+                <div class="step-label">Done</div>
+                <div class="step-desc">Setup complete</div>
+            </div>
+        </div>
+
+        <div style="text-align:center;margin-bottom:32px">
+            <h3 style="font-size:1rem;margin-bottom:12px;color:var(--mu)">Works with every country's location format</h3>
+            <div class="postal-grid">
+                <div class="postal-tag"><span>US</span>ZIP</div>
+                <div class="postal-tag"><span>UK</span>Postcode</div>
+                <div class="postal-tag"><span>CA</span>Postal</div>
+                <div class="postal-tag"><span>DE</span>PLZ</div>
+                <div class="postal-tag"><span>JP</span>〒 Code</div>
+                <div class="postal-tag"><span>IN</span>PIN</div>
+                <div class="postal-tag"><span>BR</span>CEP</div>
+                <div class="postal-tag"><span>AU</span>Postcode</div>
+                <div class="postal-tag"><span>FR</span>Code postal</div>
+                <div class="postal-tag"><span>+190</span>countries</div>
+            </div>
+        </div>
+
+        <div style="text-align:center">
+            <a href="/installer" class="btn btn-primary">Open the Job Board</a>
+        </div>
+    </section>
+
+    <!-- Social proof -->
+    <section class="social-proof">
+        <p>Python + SQLite · 185+ tests passing · MIT Licensed · Zero external dependencies</p>
+    </section>
+
+</div>
+
+<footer>
+    <div class="links">
+        <a href="https://github.com/crew-bus/crew-bus">GitHub</a>
+        <span class="sep">·</span>
+        <a href="https://github.com/crew-bus/crew-bus#readme">Docs</a>
+        <span class="sep">·</span>
+        <a href="/installer">Installer Marketplace</a>
+        <span class="sep">·</span>
+        <a href="/activate">Guard Activation</a>
+    </div>
+    <p class="tagline">Built for a clean, soft takeoff — where AI works for everyone.</p>
+    <p>© 2026 crew-bus. MIT License.</p>
+</footer>
+
+</body>
+</html>
