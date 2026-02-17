@@ -1760,6 +1760,900 @@ def _build_html():
 PAGE_HTML = _build_html()
 
 
+# ── Installer Marketplace Page ─────────────────────────────────────
+
+INSTALLER_PAGE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>crew-bus — Certified Installer Marketplace</title>
+<style>
+:root{
+  --bg:#0d1117;--sf:#161b22;--bd:#30363d;
+  --tx:#e6edf3;--mu:#8b949e;--ac:#58a6ff;
+  --gn:#3fb950;--yl:#d29922;--rd:#f85149;
+  --or:#d18616;--pr:#bc8cff;--tl:#39d0d0;
+  --r:12px;--sh:0 2px 12px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--tx);line-height:1.5;
+  min-height:100vh;overflow-x:hidden;
+}
+a{color:var(--ac);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Topbar ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:var(--sf);border-bottom:1px solid var(--bd);
+  padding:10px 20px;display:flex;align-items:center;gap:16px;
+  min-height:48px;
+}
+.topbar .brand{font-weight:700;font-size:1.1rem;color:var(--tx);white-space:nowrap}
+.topbar .brand span{color:var(--ac)}
+.topbar nav{display:flex;gap:8px;flex-wrap:wrap}
+.topbar nav a{
+  padding:5px 14px;border-radius:20px;font-size:.85rem;font-weight:500;
+  color:var(--mu);transition:all .2s;white-space:nowrap;
+}
+.topbar nav a:hover,.topbar nav a.active{
+  background:var(--ac);color:#000;text-decoration:none;
+}
+.topbar .auth-links{margin-left:auto;display:flex;gap:8px;align-items:center}
+.topbar .auth-links a{font-size:.85rem;padding:5px 14px;border-radius:20px;color:var(--mu)}
+.topbar .auth-links a:hover{background:var(--ac);color:#000;text-decoration:none}
+.topbar .auth-links .user-name{color:var(--gn);font-weight:600;font-size:.85rem}
+
+/* ── Containers ── */
+.container{max-width:1100px;margin:0 auto;padding:24px 16px}
+.view{display:none}
+.view.active{display:block}
+
+/* ── Hero Section ── */
+.hero{
+  text-align:center;padding:60px 20px 40px;
+  background:linear-gradient(135deg, var(--sf) 0%, var(--bg) 100%);
+  border-bottom:1px solid var(--bd);
+}
+.hero h1{font-size:2.2rem;margin-bottom:12px;letter-spacing:-0.5px}
+.hero h1 span{color:var(--ac)}
+.hero p{color:var(--mu);font-size:1.05rem;max-width:680px;margin:0 auto 24px}
+.hero .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-block;padding:10px 24px;border-radius:8px;font-size:.95rem;
+  font-weight:600;cursor:pointer;border:none;transition:all .2s;text-decoration:none;
+}
+.btn-primary{background:var(--ac);color:#000}
+.btn-primary:hover{background:#79c0ff;text-decoration:none}
+.btn-green{background:var(--gn);color:#000}
+.btn-green:hover{background:#56d364;text-decoration:none}
+.btn-orange{background:var(--or);color:#000}
+.btn-orange:hover{background:#e3a52a;text-decoration:none}
+.btn-outline{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+.btn-outline:hover{border-color:var(--ac);color:var(--ac);text-decoration:none}
+.btn-sm{padding:6px 16px;font-size:.85rem}
+.btn-block{display:block;width:100%;text-align:center}
+
+/* ── Cards ── */
+.card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:20px;margin-bottom:16px;
+}
+.card h3{margin-bottom:8px}
+
+/* ── Forms ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:.85rem;color:var(--mu);margin-bottom:4px;font-weight:500}
+.form-group input,.form-group select,.form-group textarea{
+  width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;
+  padding:10px 12px;color:var(--tx);font-size:.95rem;font-family:inherit;
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{
+  outline:none;border-color:var(--ac);
+}
+.form-group textarea{min-height:80px;resize:vertical}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.form-row{grid-template-columns:1fr}}
+.form-error{color:var(--rd);font-size:.85rem;margin-top:4px}
+.form-success{color:var(--gn);font-size:.85rem;margin-top:4px}
+
+/* ── Installer Cards (search results) ── */
+.installer-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:20px;display:flex;gap:16px;align-items:flex-start;margin-bottom:12px;
+  transition:border-color .2s;
+}
+.installer-card:hover{border-color:var(--ac)}
+.installer-avatar{
+  width:56px;height:56px;border-radius:50%;background:var(--ac);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.4rem;font-weight:700;color:#000;flex-shrink:0;
+}
+.installer-info{flex:1;min-width:0}
+.installer-info h3{font-size:1.05rem;margin-bottom:2px}
+.installer-info .meta{color:var(--mu);font-size:.85rem;margin-bottom:6px}
+.installer-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.installer-tags .tag{
+  padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:500;
+  background:rgba(88,166,255,.15);color:var(--ac);
+}
+.installer-card .actions{flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+
+/* ── Sections ── */
+.section{padding:40px 0}
+.section h2{font-size:1.5rem;margin-bottom:8px}
+.section .subtitle{color:var(--mu);margin-bottom:24px}
+
+/* ── Search Bar ── */
+.search-bar{
+  display:flex;gap:10px;margin-bottom:24px;
+}
+.search-bar input{
+  flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;
+  padding:12px 16px;color:var(--tx);font-size:1rem;
+}
+.search-bar input:focus{outline:none;border-color:var(--ac)}
+
+/* ── Dashboard Panels ── */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:16px;text-align:center;
+}
+.stat-card .stat-value{font-size:2rem;font-weight:700;color:var(--ac)}
+.stat-card .stat-label{color:var(--mu);font-size:.85rem}
+
+/* ── Table ── */
+.data-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.data-table th{text-align:left;padding:10px;border-bottom:2px solid var(--bd);color:var(--mu);font-weight:600}
+.data-table td{padding:10px;border-bottom:1px solid var(--bd)}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:20px;right:20px;z-index:1000;
+  background:var(--gn);color:#000;padding:12px 20px;border-radius:8px;
+  font-weight:600;font-size:.9rem;
+  transform:translateY(100px);opacity:0;transition:all .3s;
+}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{background:var(--rd);color:#fff}
+
+/* ── Explainer ── */
+.explainer{
+  background:linear-gradient(135deg, rgba(88,166,255,.08), rgba(63,185,80,.05));
+  border:1px solid var(--bd);border-radius:var(--r);
+  padding:24px;margin:24px 0;text-align:center;
+}
+.explainer p{color:var(--mu);max-width:640px;margin:0 auto;font-size:.95rem;line-height:1.7}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .topbar{flex-wrap:wrap;gap:8px}
+  .topbar nav{width:100%;justify-content:center}
+  .topbar .auth-links{width:100%;justify-content:center}
+  .hero h1{font-size:1.6rem}
+  .hero p{font-size:.9rem}
+  .installer-card{flex-direction:column}
+  .installer-card .actions{flex-direction:row;width:100%}
+  .search-bar{flex-direction:column}
+}
+
+/* ── Animations ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .3s ease-out}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="brand">crew-<span>bus</span> Installers</div>
+  <nav>
+    <a href="#" onclick="showView('home')" class="nav-link" data-view="home">Home</a>
+    <a href="#" onclick="showView('find')" class="nav-link" data-view="find">Find an Installer</a>
+    <a href="#" onclick="showView('become')" class="nav-link" data-view="become">Become an Installer</a>
+  </nav>
+  <div class="auth-links" id="auth-links">
+    <a href="#" onclick="showView('login')">Installer Sign In</a>
+  </div>
+</div>
+
+<!-- ==================== HOME VIEW ==================== -->
+<div class="view active" id="view-home">
+  <div class="hero">
+    <h1>crew-<span>bus</span> Certified Installer Marketplace</h1>
+    <p>crew-bus Certified Installers are vetted tech professionals who set up and maintain
+    your AI agent crew on your hardware. In person. Local to you.</p>
+    <div class="cta-row">
+      <a href="#" class="btn btn-green" onclick="showView('become')">Become a Certified Installer</a>
+      <a href="#" class="btn btn-primary" onclick="showView('find')">Find an Installer Near You</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="explainer">
+      <p>Displaced tech workers become Certified crew-bus Installers who physically set up and maintain
+      crew-bus AI agent systems for individuals, organizations, and businesses worldwide.
+      Get your first Permit to Work free. No signup charge.</p>
+    </div>
+
+    <div class="section">
+      <h2>How It Works</h2>
+      <p class="subtitle">Three steps to get started</p>
+      <div class="dash-grid">
+        <div class="stat-card">
+          <div class="stat-value" style="font-size:1.5rem">1</div>
+          <div class="stat-label" style="font-size:1rem;color:var(--tx);margin-top:8px">Sign Up &amp; Verify</div>
+          <p style="color:var(--mu);font-size:.85rem;margin-top:6px">Create your profile, upload government ID for KYC verification</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="font-size:1.5rem">2</div>
+          <div class="stat-label" style="font-size:1rem;color:var(--tx);margin-top:8px">Get Your Free Permit</div>
+          <p style="color:var(--mu);font-size:.85rem;margin-top:6px">Receive one free Permit to Work ($25 value). Additional permits $25 each.</p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="font-size:1.5rem">3</div>
+          <div class="stat-label" style="font-size:1rem;color:var(--tx);margin-top:8px">Start Installing</div>
+          <p style="color:var(--mu);font-size:.85rem;margin-top:6px">Clients find you by location. Set up crew-bus systems locally.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== FIND INSTALLER VIEW ==================== -->
+<div class="view" id="view-find">
+  <div class="container">
+    <div class="section">
+      <h2>Find an Installer Near You</h2>
+      <p class="subtitle">Enter your location to find certified crew-bus installers within a 30-minute drive</p>
+
+      <div class="search-bar">
+        <input type="text" id="search-location" placeholder="Enter address, postal code, or city...">
+        <button class="btn btn-primary" onclick="searchByText()">Search</button>
+        <button class="btn btn-outline" onclick="searchByGeo()">Use My Location</button>
+      </div>
+
+      <div id="search-results"></div>
+      <div id="search-empty" style="display:none" class="card">
+        <p style="text-align:center;color:var(--mu)">No certified installers found in your area yet.
+        Check back soon — our network is growing worldwide.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== BECOME INSTALLER VIEW ==================== -->
+<div class="view" id="view-become">
+  <div class="container">
+    <div class="section">
+      <h2>Become a Certified Installer</h2>
+      <p class="subtitle">Get your first permit free. No signup charge.</p>
+
+      <div class="card fade-in" style="max-width:640px;margin:0 auto">
+        <form id="signup-form" onsubmit="return handleSignup(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Full Name *</label>
+              <input type="text" name="full_name" required>
+            </div>
+            <div class="form-group">
+              <label>Email *</label>
+              <input type="email" name="email" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Password * (min 8 characters)</label>
+              <input type="password" name="password" required minlength="8">
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" name="phone">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Country *</label>
+              <input type="text" name="country" required placeholder="e.g. United States">
+            </div>
+            <div class="form-group">
+              <label>Service Area Location</label>
+              <input type="text" id="signup-address" placeholder="Address or city for service area">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Latitude</label>
+              <input type="number" step="any" name="service_lat" id="signup-lat" placeholder="Auto-detected from address">
+            </div>
+            <div class="form-group">
+              <label>Longitude</label>
+              <input type="number" step="any" name="service_lon" id="signup-lon" placeholder="Auto-detected from address">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Technical Skills / Specialties (comma-separated)</label>
+            <input type="text" name="specialties" placeholder="e.g. Linux, networking, AI/ML, Docker, hardware">
+          </div>
+          <div class="form-group">
+            <label>Government-Issued ID (for KYC verification)</label>
+            <input type="file" id="kyc-file" accept="image/*,.pdf"
+              style="background:var(--bg);padding:8px">
+            <p style="color:var(--mu);font-size:.8rem;margin-top:4px">
+              Your document is hashed locally — we never store the actual file.</p>
+          </div>
+          <div id="signup-error" class="form-error" style="display:none"></div>
+          <div id="signup-success" class="form-success" style="display:none"></div>
+          <button type="submit" class="btn btn-green btn-block" style="margin-top:8px">
+            Sign Up — Get Your Free Permit
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== LOGIN VIEW ==================== -->
+<div class="view" id="view-login">
+  <div class="container">
+    <div class="section">
+      <div class="card fade-in" style="max-width:400px;margin:0 auto">
+        <h2 style="text-align:center;margin-bottom:20px">Installer Sign In</h2>
+        <form id="login-form" onsubmit="return handleLogin(event)">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" required>
+          </div>
+          <div id="login-error" class="form-error" style="display:none"></div>
+          <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+        </form>
+        <p style="text-align:center;margin-top:12px">
+          <a href="#" onclick="showView('reset-password')">Forgot password?</a>
+        </p>
+        <p style="text-align:center;margin-top:8px;color:var(--mu);font-size:.85rem">
+          Don't have an account? <a href="#" onclick="showView('become')">Sign up here</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PASSWORD RESET VIEW ==================== -->
+<div class="view" id="view-reset-password">
+  <div class="container">
+    <div class="section">
+      <div class="card fade-in" style="max-width:400px;margin:0 auto">
+        <h2 style="text-align:center;margin-bottom:20px">Reset Password</h2>
+        <div id="reset-step1">
+          <form onsubmit="return handleResetRequest(event)">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" name="email" required id="reset-email">
+            </div>
+            <div id="reset-error" class="form-error" style="display:none"></div>
+            <button type="submit" class="btn btn-primary btn-block">Send Reset Link</button>
+          </form>
+        </div>
+        <div id="reset-step2" style="display:none">
+          <form onsubmit="return handleResetPassword(event)">
+            <div class="form-group">
+              <label>Reset Token</label>
+              <input type="text" name="token" required id="reset-token">
+            </div>
+            <div class="form-group">
+              <label>New Password (min 8 characters)</label>
+              <input type="password" name="new_password" required minlength="8" id="reset-new-pw">
+            </div>
+            <div id="reset-error2" class="form-error" style="display:none"></div>
+            <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
+          </form>
+        </div>
+        <p style="text-align:center;margin-top:12px">
+          <a href="#" onclick="showView('login')">Back to Sign In</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== INSTALLER DASHBOARD VIEW ==================== -->
+<div class="view" id="view-dashboard">
+  <div class="container">
+    <div class="section">
+      <h2>Installer Dashboard</h2>
+      <p class="subtitle" id="dash-welcome"></p>
+
+      <div class="dash-grid" id="dash-stats"></div>
+
+      <!-- Profile Section -->
+      <div class="card" style="margin-bottom:16px">
+        <h3>Your Profile</h3>
+        <div id="dash-profile"></div>
+      </div>
+
+      <!-- Permits Section -->
+      <div class="card" style="margin-bottom:16px">
+        <h3>Your Permits</h3>
+        <div id="dash-permits"></div>
+        <button class="btn btn-orange btn-sm" style="margin-top:12px"
+          onclick="purchasePermit()">Purchase New Permit — $25</button>
+      </div>
+
+      <!-- Update Profile Section -->
+      <div class="card" style="margin-bottom:16px">
+        <h3>Update Service Area &amp; Specialties</h3>
+        <form onsubmit="return handleProfileUpdate(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" name="phone" id="upd-phone">
+            </div>
+            <div class="form-group">
+              <label>Country</label>
+              <input type="text" name="country" id="upd-country">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Service Latitude</label>
+              <input type="number" step="any" name="service_lat" id="upd-lat">
+            </div>
+            <div class="form-group">
+              <label>Service Longitude</label>
+              <input type="number" step="any" name="service_lon" id="upd-lon">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Specialties (comma-separated)</label>
+            <input type="text" name="specialties" id="upd-specs">
+          </div>
+          <div id="update-error" class="form-error" style="display:none"></div>
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </form>
+      </div>
+
+      <!-- Change Password -->
+      <div class="card">
+        <h3>Change Password</h3>
+        <form onsubmit="return handlePasswordChange(event)">
+          <div class="form-group">
+            <label>Current Password</label>
+            <input type="password" name="old_password" required>
+          </div>
+          <div class="form-group">
+            <label>New Password</label>
+            <input type="password" name="new_password" required minlength="8">
+          </div>
+          <div id="pw-change-error" class="form-error" style="display:none"></div>
+          <button type="submit" class="btn btn-outline btn-sm">Change Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──
+let currentView = 'home';
+let installerSession = null;
+
+// ── View Management ──
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('view-' + name);
+  if (el) el.classList.add('active');
+  currentView = name;
+
+  document.querySelectorAll('.nav-link').forEach(a => {
+    a.classList.toggle('active', a.dataset.view === name);
+  });
+
+  if (name === 'dashboard') loadDashboard();
+}
+
+// ── Toast ──
+function toast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── API Helpers ──
+async function api(url) {
+  const r = await fetch(url, {credentials:'include'});
+  return r.json();
+}
+async function apiPost(url, data) {
+  const r = await fetch(url, {
+    method: 'POST', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  return {status: r.status, data: await r.json()};
+}
+
+// ── KYC File Hashing ──
+async function hashFile(file) {
+  const buf = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── Signup ──
+async function handleSignup(e) {
+  e.preventDefault();
+  const form = e.target;
+  const errEl = document.getElementById('signup-error');
+  const succEl = document.getElementById('signup-success');
+  errEl.style.display = 'none';
+  succEl.style.display = 'none';
+
+  let kycHash = null;
+  const kycFile = document.getElementById('kyc-file').files[0];
+  if (kycFile) {
+    kycHash = await hashFile(kycFile);
+  }
+
+  const specs = form.specialties.value.split(',').map(s => s.trim()).filter(Boolean);
+  const payload = {
+    full_name: form.full_name.value,
+    email: form.email.value,
+    password: form.password.value,
+    phone: form.phone.value || '',
+    country: form.country.value || '',
+    service_lat: form.service_lat.value || null,
+    service_lon: form.service_lon.value || null,
+    specialties: specs,
+    kyc_document_hash: kycHash,
+  };
+
+  const {status, data} = await apiPost('/api/installer/signup', payload);
+  if (status >= 400) {
+    errEl.textContent = data.error || 'Signup failed';
+    errEl.style.display = 'block';
+    return false;
+  }
+
+  succEl.innerHTML = 'Account created! Your free permit key: <strong>' +
+    data.free_permit_key + '</strong><br>Please sign in to access your dashboard.';
+  succEl.style.display = 'block';
+  form.reset();
+  toast('Signup successful!');
+  return false;
+}
+
+// ── Login ──
+async function handleLogin(e) {
+  e.preventDefault();
+  const form = e.target;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  const {status, data} = await apiPost('/api/installer/login', {
+    email: form.email.value,
+    password: form.password.value,
+  });
+  if (status >= 400) {
+    errEl.textContent = data.error || 'Login failed';
+    errEl.style.display = 'block';
+    return false;
+  }
+
+  installerSession = data;
+  updateAuthUI();
+  showView('dashboard');
+  toast('Signed in successfully');
+  return false;
+}
+
+// ── Password Reset ──
+async function handleResetRequest(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('reset-error');
+  errEl.style.display = 'none';
+
+  const {status, data} = await apiPost('/api/installer/password/reset-request', {
+    email: document.getElementById('reset-email').value,
+  });
+
+  // Show step 2 with token input (in production, token comes via email)
+  document.getElementById('reset-step1').style.display = 'none';
+  document.getElementById('reset-step2').style.display = 'block';
+  toast('If that email exists, a reset link has been sent.');
+  if (data._token) {
+    document.getElementById('reset-token').value = data._token;
+  }
+  return false;
+}
+
+async function handleResetPassword(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('reset-error2');
+  errEl.style.display = 'none';
+
+  const {status, data} = await apiPost('/api/installer/password/reset', {
+    token: document.getElementById('reset-token').value,
+    new_password: document.getElementById('reset-new-pw').value,
+  });
+  if (status >= 400) {
+    errEl.textContent = data.error || 'Reset failed';
+    errEl.style.display = 'block';
+    return false;
+  }
+  toast('Password reset successfully!');
+  showView('login');
+  return false;
+}
+
+// ── Auth UI ──
+function updateAuthUI() {
+  const authEl = document.getElementById('auth-links');
+  if (installerSession && installerSession.installer) {
+    const name = installerSession.installer.full_name;
+    authEl.innerHTML =
+      '<span class="user-name">' + name + '</span>' +
+      '<a href="#" onclick="showView(\'dashboard\')">Dashboard</a>' +
+      '<a href="#" onclick="handleLogout()">Sign Out</a>';
+    // Update nav
+    let nav = document.querySelector('.topbar nav');
+    if (!document.querySelector('[data-view=dashboard]')) {
+      const a = document.createElement('a');
+      a.href = '#';
+      a.className = 'nav-link';
+      a.dataset.view = 'dashboard';
+      a.textContent = 'Dashboard';
+      a.onclick = () => showView('dashboard');
+      nav.appendChild(a);
+    }
+  } else {
+    authEl.innerHTML = '<a href="#" onclick="showView(\'login\')">Installer Sign In</a>';
+  }
+}
+
+async function handleLogout() {
+  await apiPost('/api/installer/logout', {});
+  installerSession = null;
+  updateAuthUI();
+  showView('home');
+  toast('Signed out');
+}
+
+// ── Dashboard ──
+async function loadDashboard() {
+  if (!installerSession) {
+    const me = await api('/api/installer/me');
+    if (me.error) { showView('login'); return; }
+    installerSession = {installer: me};
+    updateAuthUI();
+  }
+  const inst = installerSession.installer;
+  document.getElementById('dash-welcome').textContent = 'Welcome, ' + inst.full_name;
+
+  // Load permits
+  const permits = await api('/api/installer/permits');
+  const activePermits = Array.isArray(permits) ? permits.filter(p => !p.activated_at).length : 0;
+  const usedPermits = Array.isArray(permits) ? permits.filter(p => p.activated_at).length : 0;
+
+  document.getElementById('dash-stats').innerHTML =
+    '<div class="stat-card"><div class="stat-value">' + (Array.isArray(permits) ? permits.length : 0) + '</div>' +
+    '<div class="stat-label">Total Permits</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--gn)">' + activePermits + '</div>' +
+    '<div class="stat-label">Available Permits</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--or)">' + usedPermits + '</div>' +
+    '<div class="stat-label">Used Permits</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (inst.kyc_status || 'pending') + '</div>' +
+    '<div class="stat-label">KYC Status</div></div>';
+
+  // Profile
+  let specs = inst.specialties || [];
+  if (typeof specs === 'string') { try { specs = JSON.parse(specs); } catch(e) { specs = []; } }
+  document.getElementById('dash-profile').innerHTML =
+    '<p><strong>Email:</strong> ' + (inst.email||'') + '</p>' +
+    '<p><strong>Phone:</strong> ' + (inst.phone||'—') + '</p>' +
+    '<p><strong>Country:</strong> ' + (inst.country||'—') + '</p>' +
+    '<p><strong>Service Area:</strong> ' + (inst.service_lat ? inst.service_lat+', '+inst.service_lon : 'Not set') + '</p>' +
+    '<p><strong>Specialties:</strong> ' + (specs.length ? specs.join(', ') : 'None set') + '</p>' +
+    '<p><strong>Member Since:</strong> ' + (inst.created_at||'').split('T')[0] + '</p>';
+
+  // Pre-fill update form
+  document.getElementById('upd-phone').value = inst.phone || '';
+  document.getElementById('upd-country').value = inst.country || '';
+  document.getElementById('upd-lat').value = inst.service_lat || '';
+  document.getElementById('upd-lon').value = inst.service_lon || '';
+  document.getElementById('upd-specs').value = specs.join(', ');
+
+  // Permits table
+  if (Array.isArray(permits) && permits.length) {
+    let html = '<table class="data-table"><thead><tr>' +
+      '<th>Permit Key</th><th>Issued</th><th>Status</th><th>Client</th></tr></thead><tbody>';
+    permits.forEach(p => {
+      const status = p.activated_at ? 'Activated' : (p.is_free ? 'Free — Available' : 'Available');
+      html += '<tr><td style="font-family:monospace;font-size:.8rem">' + p.permit_key + '</td>' +
+        '<td>' + (p.issued_at||'').split('T')[0] + '</td>' +
+        '<td>' + status + '</td>' +
+        '<td>' + (p.activated_for_client||'—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('dash-permits').innerHTML = html;
+  } else {
+    document.getElementById('dash-permits').innerHTML = '<p style="color:var(--mu)">No permits yet.</p>';
+  }
+}
+
+// ── Profile Update ──
+async function handleProfileUpdate(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('update-error');
+  errEl.style.display = 'none';
+  const specs = document.getElementById('upd-specs').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const payload = {
+    phone: document.getElementById('upd-phone').value,
+    country: document.getElementById('upd-country').value,
+    service_lat: parseFloat(document.getElementById('upd-lat').value) || null,
+    service_lon: parseFloat(document.getElementById('upd-lon').value) || null,
+    specialties: specs,
+  };
+  const {status, data} = await apiPost('/api/installer/profile/update', payload);
+  if (status >= 400) {
+    errEl.textContent = data.error || 'Update failed';
+    errEl.style.display = 'block';
+    return false;
+  }
+  installerSession.installer = data;
+  loadDashboard();
+  toast('Profile updated');
+  return false;
+}
+
+// ── Password Change ──
+async function handlePasswordChange(e) {
+  e.preventDefault();
+  const form = e.target;
+  const errEl = document.getElementById('pw-change-error');
+  errEl.style.display = 'none';
+  const {status, data} = await apiPost('/api/installer/password/change', {
+    old_password: form.old_password.value,
+    new_password: form.new_password.value,
+  });
+  if (status >= 400) {
+    errEl.textContent = data.error || 'Failed to change password';
+    errEl.style.display = 'block';
+    return false;
+  }
+  form.reset();
+  toast('Password changed');
+  return false;
+}
+
+// ── Permit Purchase ──
+async function purchasePermit() {
+  if (!confirm('Purchase a new Permit to Work for $25?')) return;
+  // In production, this would redirect to Stripe checkout first
+  const {status, data} = await apiPost('/api/installer/permit/purchase', {
+    stripe_payment_id: 'pending_stripe_integration'
+  });
+  if (status >= 400) {
+    toast(data.error || 'Purchase failed', true);
+    return;
+  }
+  toast('New permit issued: ' + data.permit_key);
+  loadDashboard();
+}
+
+// ── Installer Search ──
+async function searchByText() {
+  const query = document.getElementById('search-location').value.trim();
+  if (!query) { toast('Please enter a location', true); return; }
+
+  // Try geocoding with Nominatim (free, no API key needed)
+  try {
+    const geoRes = await fetch('https://nominatim.openstreetmap.org/search?q=' +
+      encodeURIComponent(query) + '&format=json&limit=1');
+    const geoData = await geoRes.json();
+    if (geoData.length === 0) {
+      toast('Location not found. Try a different address or use GPS.', true);
+      return;
+    }
+    doSearch(parseFloat(geoData[0].lat), parseFloat(geoData[0].lon));
+  } catch(e) {
+    toast('Geocoding failed. Try using your GPS location instead.', true);
+  }
+}
+
+function searchByGeo() {
+  if (!navigator.geolocation) {
+    toast('Geolocation not supported by your browser', true);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => doSearch(pos.coords.latitude, pos.coords.longitude),
+    err => toast('Could not get your location: ' + err.message, true)
+  );
+}
+
+async function doSearch(lat, lon) {
+  const results = await api('/api/installer/search?lat=' + lat + '&lon=' + lon);
+  const container = document.getElementById('search-results');
+  const emptyEl = document.getElementById('search-empty');
+
+  if (!results.length) {
+    container.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  container.innerHTML = results.map(inst => {
+    let specs = inst.specialties || [];
+    if (typeof specs === 'string') { try { specs = JSON.parse(specs); } catch(e) { specs = []; } }
+    const initials = inst.full_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+    const memberSince = (inst.created_at||'').split('T')[0];
+    const tagsHtml = specs.map(s => '<span class="tag">' + s + '</span>').join('');
+
+    return '<div class="installer-card fade-in">' +
+      '<div class="installer-avatar">' + initials + '</div>' +
+      '<div class="installer-info">' +
+        '<h3>' + inst.full_name + '</h3>' +
+        '<div class="meta">' + inst.country + ' &middot; ' + inst.distance_km + ' km away &middot; Member since ' + memberSince + '</div>' +
+        '<div class="installer-tags">' + tagsHtml + '</div>' +
+      '</div>' +
+      '<div class="actions">' +
+        '<button class="btn btn-primary btn-sm" onclick="requestInstaller(\'' + inst.installer_id + '\',\'' + inst.full_name + '\')">Request This Installer</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function requestInstaller(installerId, name) {
+  const clientName = prompt('Your name:');
+  if (!clientName) return;
+  const clientEmail = prompt('Your email (so the installer can contact you):');
+  if (!clientEmail) return;
+  const clientNote = prompt('Brief description of what you need:') || '';
+
+  // In production this sends an email to the installer
+  toast('Request sent to ' + name + '! They will contact you at ' + clientEmail);
+}
+
+// ── Init ──
+(async function() {
+  // Check if already logged in
+  try {
+    const me = await api('/api/installer/me');
+    if (!me.error) {
+      installerSession = {installer: me};
+      updateAuthUI();
+    }
+  } catch(e) {}
+
+  // Route based on URL path
+  const path = location.pathname;
+  if (path === '/installer/signup') showView('become');
+  else if (path === '/installer/login') showView('login');
+  else if (path === '/installer/dashboard') showView('dashboard');
+  else if (path === '/installer/find') showView('find');
+  else showView('home');
+})();
+</script>
+</body>
+</html>"""
+
+
 # ── API Helpers ─────────────────────────────────────────────────────
 
 def _json_response(handler, data, status=200):
@@ -1786,6 +2680,39 @@ def _read_json_body(handler):
     if length == 0:
         return {}
     return json.loads(handler.rfile.read(length))
+
+
+def _json_response_with_cookie(handler, data, status=200, cookie_str=""):
+    """JSON response that also sets a cookie."""
+    body = json.dumps(data, default=str).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    if cookie_str:
+        handler.send_header("Set-Cookie", cookie_str)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _get_installer_session(handler):
+    """Extract installer session ID from cookie."""
+    cookie_header = handler.headers.get("Cookie", "")
+    for part in cookie_header.split(";"):
+        part = part.strip()
+        if part.startswith("installer_session="):
+            return part[len("installer_session="):]
+    return None
+
+
+def _safe_float(val):
+    """Convert to float or return None."""
+    if val is None or val == "":
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
 
 
 # ── Data fetchers ──────────────────────────────────────────────────
@@ -2266,6 +3193,53 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "db_path": str(self.db_path)})
 
+        # ── Installer Marketplace GET endpoints ──
+
+        if path == "/api/installer/search":
+            lat = qs.get("lat", [None])[0]
+            lon = qs.get("lon", [None])[0]
+            if lat is None or lon is None:
+                return _json_response(self, {"error": "lat and lon are required"}, 400)
+            try:
+                results = bus.installer_search(
+                    float(lat), float(lon),
+                    radius_km=float(qs.get("radius", [50])[0]),
+                    db_path=self.db_path)
+                return _json_response(self, results)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        m = re.match(r"^/api/installer/profile/([a-f0-9-]+)$", path)
+        if m:
+            profile = bus.installer_get_profile(m.group(1), db_path=self.db_path)
+            return _json_response(self, profile or {"error": "not found"},
+                                  200 if profile else 404)
+
+        if path == "/api/installer/me":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            return _json_response(self, profile)
+
+        if path == "/api/installer/permits":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            permits = bus.installer_get_permits(profile["installer_id"],
+                                                db_path=self.db_path)
+            return _json_response(self, permits)
+
+        # Installer website pages
+        if path in ("/installer", "/installer/signup", "/installer/login",
+                     "/installer/dashboard", "/installer/find"):
+            return _html_response(self, INSTALLER_PAGE_HTML)
+
         _json_response(self, {"error": "not found"}, 404)
 
     def do_POST(self):
@@ -2444,6 +3418,132 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     priority=data.get("priority", "normal"), db_path=self.db_path)
                 return _json_response(self, {"ok": True, "message_id": result["message_id"]}, 201)
             except (PermissionError, ValueError) as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Installer Marketplace POST endpoints ──
+
+        if path == "/api/installer/signup":
+            required = ("full_name", "email", "password")
+            missing = [k for k in required if not data.get(k)]
+            if missing:
+                return _json_response(self, {"error": f"missing: {missing}"}, 400)
+            try:
+                result = bus.installer_signup(
+                    full_name=data["full_name"],
+                    email=data["email"],
+                    password=data["password"],
+                    phone=data.get("phone", ""),
+                    country=data.get("country", ""),
+                    service_lat=_safe_float(data.get("service_lat")),
+                    service_lon=_safe_float(data.get("service_lon")),
+                    specialties=data.get("specialties", []),
+                    kyc_document_hash=data.get("kyc_document_hash"),
+                    db_path=self.db_path,
+                )
+                return _json_response(self, result, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/login":
+            try:
+                result = bus.installer_login(
+                    data.get("email", ""), data.get("password", ""),
+                    db_path=self.db_path)
+                resp = _json_response_with_cookie(
+                    self, result, 200,
+                    f"installer_session={result['session_id']}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800")
+                return resp
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 401)
+
+        if path == "/api/installer/logout":
+            session_id = _get_installer_session(self)
+            if session_id:
+                bus.installer_logout(session_id, db_path=self.db_path)
+            return _json_response(self, {"ok": True})
+
+        if path == "/api/installer/profile/update":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            try:
+                updated = bus.installer_update_profile(
+                    profile["installer_id"], data, db_path=self.db_path)
+                return _json_response(self, updated)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/password/change":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            try:
+                bus.installer_update_password(
+                    profile["installer_id"],
+                    data.get("old_password", ""),
+                    data.get("new_password", ""),
+                    db_path=self.db_path)
+                return _json_response(self, {"ok": True})
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/password/reset-request":
+            email = data.get("email", "")
+            token = bus.installer_request_password_reset(email, db_path=self.db_path)
+            # Always return success to avoid email enumeration
+            return _json_response(self, {
+                "ok": True,
+                "message": "If that email exists, a reset link has been sent.",
+                "_token": token,  # In production, send via email instead
+            })
+
+        if path == "/api/installer/password/reset":
+            try:
+                bus.installer_reset_password(
+                    data.get("token", ""), data.get("new_password", ""),
+                    db_path=self.db_path)
+                return _json_response(self, {"ok": True})
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/permit/purchase":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            try:
+                result = bus.installer_purchase_permit(
+                    profile["installer_id"],
+                    stripe_payment_id=data.get("stripe_payment_id"),
+                    db_path=self.db_path)
+                return _json_response(self, result, 201)
+            except (ValueError, PermissionError) as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/review":
+            required = ("installer_id", "client_name", "client_email", "rating")
+            missing = [k for k in required if not data.get(k)]
+            if missing:
+                return _json_response(self, {"error": f"missing: {missing}"}, 400)
+            try:
+                result = bus.installer_add_review(
+                    installer_id=data["installer_id"],
+                    client_name=data["client_name"],
+                    client_email=data["client_email"],
+                    rating=int(data["rating"]),
+                    review_text=data.get("review_text", ""),
+                    job_date=data.get("job_date"),
+                    db_path=self.db_path)
+                return _json_response(self, result, 201)
+            except ValueError as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
         _json_response(self, {"error": "not found"}, 404)

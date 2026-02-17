@@ -433,6 +433,65 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_techie_standing    ON authorized_techies(kyc_status, standing);
         CREATE INDEX IF NOT EXISTS idx_techie_keys_techie ON techie_keys(techie_id);
         CREATE INDEX IF NOT EXISTS idx_techie_reviews     ON techie_reviews(techie_id);
+
+        -- ========= Certified Installer Marketplace =========
+
+        CREATE TABLE IF NOT EXISTS certified_installers (
+            installer_id        TEXT    PRIMARY KEY,
+            full_name           TEXT    NOT NULL,
+            email               TEXT    NOT NULL UNIQUE,
+            phone               TEXT    NOT NULL DEFAULT '',
+            country             TEXT    NOT NULL DEFAULT '',
+            service_lat         REAL,
+            service_lon         REAL,
+            service_radius_km   REAL    NOT NULL DEFAULT 40.0,
+            specialties         TEXT    NOT NULL DEFAULT '[]',
+            kyc_status          TEXT    NOT NULL DEFAULT 'pending'
+                                CHECK(kyc_status IN ('pending','verified','rejected')),
+            kyc_document_hash   TEXT,
+            password_hash       TEXT,
+            active              INTEGER NOT NULL DEFAULT 1,
+            created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS installer_permits (
+            permit_id           TEXT    PRIMARY KEY,
+            installer_id        TEXT    NOT NULL REFERENCES certified_installers(installer_id),
+            permit_key          TEXT    UNIQUE NOT NULL,
+            issued_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            activated_at        TEXT,
+            activated_for_client TEXT,
+            is_free             INTEGER NOT NULL DEFAULT 0,
+            stripe_payment_id   TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS installer_reviews (
+            review_id           TEXT    PRIMARY KEY,
+            installer_id        TEXT    NOT NULL REFERENCES certified_installers(installer_id),
+            client_name         TEXT    NOT NULL DEFAULT '',
+            client_email        TEXT    NOT NULL DEFAULT '',
+            rating              INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+            review_text         TEXT    NOT NULL DEFAULT '',
+            job_date            TEXT,
+            created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            visible             INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS installer_sessions (
+            session_id          TEXT    PRIMARY KEY,
+            installer_id        TEXT    NOT NULL REFERENCES certified_installers(installer_id),
+            created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            expires_at          TEXT    NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_installer_email      ON certified_installers(email);
+        CREATE INDEX IF NOT EXISTS idx_installer_kyc         ON certified_installers(kyc_status, active);
+        CREATE INDEX IF NOT EXISTS idx_installer_location    ON certified_installers(service_lat, service_lon);
+        CREATE INDEX IF NOT EXISTS idx_installer_permits     ON installer_permits(installer_id);
+        CREATE INDEX IF NOT EXISTS idx_installer_permit_key  ON installer_permits(permit_key);
+        CREATE INDEX IF NOT EXISTS idx_installer_reviews_inst ON installer_reviews(installer_id);
+        CREATE INDEX IF NOT EXISTS idx_installer_sessions    ON installer_sessions(installer_id, expires_at);
     """)
 
     # Seed default routing rules (skip if already populated)
@@ -3506,3 +3565,490 @@ def list_techies(status: str = "verified", standing: str = "good",
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Certified Installer Marketplace
+# ---------------------------------------------------------------------------
+
+import math
+import secrets
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate great-circle distance between two points in km."""
+    R = 6371.0  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _hash_password(password: str) -> str:
+    """Hash a password using SHA-256 with a random salt."""
+    salt = secrets.token_hex(16)
+    h = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return f"{salt}:{h}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    """Verify a password against a stored salt:hash."""
+    if ":" not in stored_hash:
+        return False
+    salt, h = stored_hash.split(":", 1)
+    return hmac.compare_digest(
+        hashlib.sha256((salt + password).encode("utf-8")).hexdigest(), h
+    )
+
+
+def installer_signup(full_name: str, email: str, password: str,
+                     phone: str = "", country: str = "",
+                     service_lat: float = None, service_lon: float = None,
+                     specialties: list = None, kyc_document_hash: str = None,
+                     db_path: Optional[Path] = None) -> dict:
+    """Register a new certified installer and issue one free permit.
+
+    Returns dict with installer_id and free_permit_key.
+    """
+    if not full_name or not full_name.strip():
+        raise ValueError("full_name is required")
+    if not email or not email.strip():
+        raise ValueError("email is required")
+    if not password or len(password) < 8:
+        raise ValueError("password must be at least 8 characters")
+
+    installer_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    pw_hash = _hash_password(password)
+    specs = json.dumps(specialties or [])
+
+    conn = get_conn(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO certified_installers "
+            "(installer_id, full_name, email, phone, country, "
+            " service_lat, service_lon, specialties, kyc_document_hash, "
+            " password_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (installer_id, full_name.strip(), email.strip().lower(),
+             phone.strip(), country.strip(),
+             service_lat, service_lon, specs,
+             kyc_document_hash, pw_hash, now, now),
+        )
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise ValueError(f"An installer with email '{email}' already exists")
+
+    # Issue one free permit
+    permit_id = str(uuid.uuid4())
+    permit_key = f"PERMIT-{secrets.token_hex(12).upper()}"
+    conn.execute(
+        "INSERT INTO installer_permits "
+        "(permit_id, installer_id, permit_key, issued_at, is_free) "
+        "VALUES (?, ?, ?, ?, 1)",
+        (permit_id, installer_id, permit_key, now),
+    )
+
+    conn.commit()
+    conn.close()
+    return {
+        "installer_id": installer_id,
+        "full_name": full_name.strip(),
+        "email": email.strip().lower(),
+        "kyc_status": "pending",
+        "free_permit_key": permit_key,
+    }
+
+
+def installer_login(email: str, password: str,
+                    db_path: Optional[Path] = None) -> dict:
+    """Authenticate an installer and create a session.
+
+    Returns dict with session_id and installer profile.
+    """
+    if not email or not password:
+        raise ValueError("email and password are required")
+
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM certified_installers WHERE email=?",
+        (email.strip().lower(),),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Invalid email or password")
+    if not row["password_hash"] or not _verify_password(password, row["password_hash"]):
+        conn.close()
+        raise ValueError("Invalid email or password")
+    if not row["active"]:
+        conn.close()
+        raise ValueError("Account is deactivated")
+
+    session_id = secrets.token_hex(32)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=7)
+    conn.execute(
+        "INSERT INTO installer_sessions (session_id, installer_id, created_at, expires_at) "
+        "VALUES (?, ?, ?, ?)",
+        (session_id, row["installer_id"],
+         now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+         expires.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    conn.commit()
+    conn.close()
+
+    profile = dict(row)
+    profile.pop("password_hash", None)
+    return {"session_id": session_id, "installer": profile}
+
+
+def installer_get_session(session_id: str,
+                          db_path: Optional[Path] = None) -> Optional[dict]:
+    """Validate a session and return the installer profile, or None."""
+    if not session_id:
+        return None
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    row = conn.execute(
+        "SELECT s.installer_id, s.expires_at FROM installer_sessions s "
+        "WHERE s.session_id=? AND s.expires_at > ?",
+        (session_id, now),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    inst = conn.execute(
+        "SELECT * FROM certified_installers WHERE installer_id=?",
+        (row["installer_id"],),
+    ).fetchone()
+    conn.close()
+    if not inst:
+        return None
+    profile = dict(inst)
+    profile.pop("password_hash", None)
+    return profile
+
+
+def installer_logout(session_id: str, db_path: Optional[Path] = None) -> bool:
+    """Delete a session. Returns True if a session was removed."""
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "DELETE FROM installer_sessions WHERE session_id=?", (session_id,)
+    )
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
+def installer_update_password(installer_id: str, old_password: str,
+                              new_password: str,
+                              db_path: Optional[Path] = None) -> bool:
+    """Change an installer's password. Returns True on success."""
+    if not new_password or len(new_password) < 8:
+        raise ValueError("New password must be at least 8 characters")
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT password_hash FROM certified_installers WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Installer not found")
+    if not _verify_password(old_password, row["password_hash"]):
+        conn.close()
+        raise ValueError("Current password is incorrect")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "UPDATE certified_installers SET password_hash=?, updated_at=? "
+        "WHERE installer_id=?",
+        (_hash_password(new_password), now, installer_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def installer_request_password_reset(email: str,
+                                     db_path: Optional[Path] = None) -> Optional[str]:
+    """Generate a password reset token for an installer.
+
+    Returns the reset token (to be emailed), or None if email not found.
+    """
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT installer_id FROM certified_installers WHERE email=?",
+        (email.strip().lower(),),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    # Use a session with a short TTL as the reset token
+    token = secrets.token_hex(32)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(hours=1)
+    conn.execute(
+        "INSERT INTO installer_sessions (session_id, installer_id, created_at, expires_at) "
+        "VALUES (?, ?, ?, ?)",
+        (f"reset:{token}", row["installer_id"],
+         now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+         expires.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    conn.commit()
+    conn.close()
+    return token
+
+
+def installer_reset_password(token: str, new_password: str,
+                             db_path: Optional[Path] = None) -> bool:
+    """Reset password using a reset token. Returns True on success."""
+    if not new_password or len(new_password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    row = conn.execute(
+        "SELECT installer_id FROM installer_sessions "
+        "WHERE session_id=? AND expires_at > ?",
+        (f"reset:{token}", now),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Invalid or expired reset token")
+    conn.execute(
+        "UPDATE certified_installers SET password_hash=?, updated_at=? "
+        "WHERE installer_id=?",
+        (_hash_password(new_password), now, row["installer_id"]),
+    )
+    conn.execute(
+        "DELETE FROM installer_sessions WHERE session_id=?",
+        (f"reset:{token}",),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def installer_update_profile(installer_id: str, updates: dict,
+                             db_path: Optional[Path] = None) -> dict:
+    """Update installer profile fields (phone, country, service area, specialties).
+
+    Returns the updated profile.
+    """
+    allowed = {"phone", "country", "service_lat", "service_lon",
+               "service_radius_km", "specialties"}
+    filtered = {k: v for k, v in updates.items() if k in allowed}
+    if not filtered:
+        raise ValueError("No valid fields to update")
+    if "specialties" in filtered and isinstance(filtered["specialties"], list):
+        filtered["specialties"] = json.dumps(filtered["specialties"])
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    filtered["updated_at"] = now
+    set_clause = ", ".join(f"{k}=?" for k in filtered)
+    vals = list(filtered.values()) + [installer_id]
+
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        f"UPDATE certified_installers SET {set_clause} WHERE installer_id=?",
+        vals,
+    )
+    if cur.rowcount == 0:
+        conn.close()
+        raise ValueError("Installer not found")
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM certified_installers WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    conn.close()
+    profile = dict(row)
+    profile.pop("password_hash", None)
+    return profile
+
+
+def installer_get_profile(installer_id: str,
+                          db_path: Optional[Path] = None) -> Optional[dict]:
+    """Get public installer profile."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT installer_id, full_name, email, phone, country, "
+        "service_lat, service_lon, service_radius_km, specialties, "
+        "kyc_status, active, created_at "
+        "FROM certified_installers WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    try:
+        d["specialties"] = json.loads(d["specialties"])
+    except (json.JSONDecodeError, TypeError):
+        d["specialties"] = []
+    return d
+
+
+def installer_search(lat: float, lon: float, radius_km: float = 50.0,
+                     db_path: Optional[Path] = None) -> list:
+    """Find active, verified installers within radius of given coordinates.
+
+    Uses Haversine formula for distance calculation.
+    Returns list of installer dicts sorted by distance.
+    """
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT installer_id, full_name, country, specialties, "
+        "service_lat, service_lon, service_radius_km, created_at "
+        "FROM certified_installers "
+        "WHERE kyc_status='verified' AND active=1 "
+        "AND service_lat IS NOT NULL AND service_lon IS NOT NULL",
+    ).fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        dist = _haversine_km(lat, lon, r["service_lat"], r["service_lon"])
+        # Include if within the search radius OR within the installer's service radius
+        if dist <= max(radius_km, r["service_radius_km"]):
+            d = dict(r)
+            d["distance_km"] = round(dist, 1)
+            try:
+                d["specialties"] = json.loads(d["specialties"])
+            except (json.JSONDecodeError, TypeError):
+                d["specialties"] = []
+            results.append(d)
+
+    results.sort(key=lambda x: x["distance_km"])
+    return results
+
+
+def installer_purchase_permit(installer_id: str,
+                              stripe_payment_id: str = None,
+                              db_path: Optional[Path] = None) -> dict:
+    """Issue a new permit to an installer after payment.
+
+    Returns dict with permit_id and permit_key.
+    """
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT installer_id, kyc_status, active FROM certified_installers "
+        "WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Installer not found")
+    if not row["active"]:
+        conn.close()
+        raise PermissionError("Installer account is deactivated")
+
+    permit_id = str(uuid.uuid4())
+    permit_key = f"PERMIT-{secrets.token_hex(12).upper()}"
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Check if this is the first permit (should be free)
+    existing = conn.execute(
+        "SELECT COUNT(*) FROM installer_permits WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()[0]
+    is_free = 1 if existing == 0 else 0
+
+    conn.execute(
+        "INSERT INTO installer_permits "
+        "(permit_id, installer_id, permit_key, issued_at, is_free, stripe_payment_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (permit_id, installer_id, permit_key, now, is_free,
+         stripe_payment_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"permit_id": permit_id, "permit_key": permit_key,
+            "is_free": bool(is_free), "issued_at": now}
+
+
+def installer_get_permits(installer_id: str,
+                          db_path: Optional[Path] = None) -> list:
+    """Get all permits for an installer."""
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT * FROM installer_permits WHERE installer_id=? ORDER BY issued_at DESC",
+        (installer_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def installer_activate_permit(permit_key: str, client_identifier: str,
+                              db_path: Optional[Path] = None) -> dict:
+    """Activate a permit for a specific client."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT permit_id, installer_id, activated_at FROM installer_permits "
+        "WHERE permit_key=?",
+        (permit_key,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError(f"Permit key '{permit_key}' not found")
+    if row["activated_at"]:
+        conn.close()
+        raise ValueError("This permit has already been activated")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "UPDATE installer_permits SET activated_at=?, activated_for_client=? "
+        "WHERE permit_key=?",
+        (now, client_identifier, permit_key),
+    )
+    conn.commit()
+    conn.close()
+    return {"permit_key": permit_key, "activated_at": now,
+            "activated_for_client": client_identifier}
+
+
+def installer_add_review(installer_id: str, client_name: str,
+                         client_email: str, rating: int,
+                         review_text: str = "", job_date: str = None,
+                         db_path: Optional[Path] = None) -> dict:
+    """Submit a review for an installer. Stored but not visible yet."""
+    if rating < 1 or rating > 5:
+        raise ValueError("Rating must be between 1 and 5")
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT installer_id FROM certified_installers WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Installer not found")
+
+    review_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO installer_reviews "
+        "(review_id, installer_id, client_name, client_email, rating, "
+        " review_text, job_date, created_at, visible) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        (review_id, installer_id, client_name, client_email,
+         rating, review_text, job_date, now),
+    )
+    conn.commit()
+    conn.close()
+    return {"review_id": review_id, "rating": rating, "visible": False}
+
+
+def installer_verify_kyc(installer_id: str,
+                         db_path: Optional[Path] = None) -> dict:
+    """Mark an installer as KYC verified."""
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cur = conn.execute(
+        "UPDATE certified_installers SET kyc_status='verified', updated_at=? "
+        "WHERE installer_id=?",
+        (now, installer_id),
+    )
+    if cur.rowcount == 0:
+        conn.close()
+        raise ValueError("Installer not found")
+    conn.commit()
+    conn.close()
+    return {"installer_id": installer_id, "kyc_status": "verified"}
