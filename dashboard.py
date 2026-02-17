@@ -702,6 +702,126 @@ tr.override td{background:rgba(210,153,34,.08)}
   .compose-row{flex-direction:column;align-items:stretch}
   .compose-row select,.compose-row .compose-priority,.compose-send{width:100%}
 }
+
+/* ── Wizard (Agent Creation) ── */
+.wizard-overlay{
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  z-index:300;background:rgba(0,0,0,.6);align-items:center;
+  justify-content:center;padding:16px;
+}
+.wizard-overlay.open{display:flex}
+.wizard-panel{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  width:100%;max-width:520px;max-height:90vh;overflow-y:auto;
+  padding:24px 20px;box-shadow:var(--sh);
+  animation:wizardIn .2s ease;
+}
+@keyframes wizardIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.wizard-panel h2{font-size:1.1rem;margin-bottom:4px}
+.wizard-panel .wizard-sub{font-size:.8rem;color:var(--mu);margin-bottom:16px}
+.wizard-steps{
+  display:flex;gap:4px;margin-bottom:20px;
+}
+.wizard-step{
+  flex:1;height:4px;border-radius:2px;background:var(--bd);
+  transition:background .3s;
+}
+.wizard-step.done{background:var(--gn)}
+.wizard-step.active{background:var(--ac)}
+.wizard-body{min-height:160px}
+.wizard-footer{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:20px;gap:8px;
+}
+.wiz-btn{
+  padding:8px 20px;border-radius:8px;font-size:.85rem;font-weight:600;
+  cursor:pointer;border:1px solid var(--bd);background:transparent;
+  color:var(--tx);transition:all .2s;min-height:40px;
+}
+.wiz-btn:hover{background:var(--bd)}
+.wiz-btn.primary{background:var(--ac);color:#000;border-color:var(--ac)}
+.wiz-btn.primary:hover{opacity:.85}
+.wiz-btn.success{background:var(--gn);color:#000;border-color:var(--gn)}
+.wiz-btn.success:hover{opacity:.85}
+.wiz-btn:disabled{opacity:.4;cursor:not-allowed}
+.wiz-input{
+  width:100%;background:var(--bg);border:1px solid var(--bd);
+  border-radius:8px;padding:10px 12px;color:var(--tx);
+  font-size:.9rem;font-family:inherit;margin-bottom:10px;
+  transition:border-color .2s;
+}
+.wiz-input:focus{outline:none;border-color:var(--ac)}
+.wiz-input::placeholder{color:var(--mu)}
+.wiz-label{font-size:.75rem;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.04em;display:block;margin-bottom:4px}
+.wiz-template-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wiz-tpl-card{
+  background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);
+  padding:12px;cursor:pointer;transition:all .2s;
+}
+.wiz-tpl-card:hover{border-color:var(--ac)}
+.wiz-tpl-card.selected{border-color:var(--ac);background:#0d1f3c}
+.wiz-tpl-name{font-weight:600;font-size:.85rem;margin-bottom:2px}
+.wiz-tpl-desc{font-size:.72rem;color:var(--mu)}
+.wiz-tpl-count{font-size:.68rem;color:var(--ac);margin-top:2px}
+.wiz-worker-row{
+  display:flex;gap:8px;align-items:center;margin-bottom:8px;
+}
+.wiz-worker-row .wiz-input{margin-bottom:0;flex:1}
+.wiz-remove-btn{
+  background:none;border:1px solid var(--bd);border-radius:6px;
+  color:var(--rd);cursor:pointer;padding:6px 10px;font-size:.8rem;
+  min-width:32px;height:38px;display:flex;align-items:center;
+  justify-content:center;transition:all .2s;flex-shrink:0;
+}
+.wiz-remove-btn:hover{background:rgba(248,81,73,.12);border-color:var(--rd)}
+.wiz-add-btn{
+  background:none;border:1px dashed var(--bd);border-radius:8px;
+  color:var(--ac);cursor:pointer;padding:8px;font-size:.85rem;
+  width:100%;text-align:center;margin-top:4px;transition:all .2s;
+}
+.wiz-add-btn:hover{border-color:var(--ac);background:rgba(88,166,255,.06)}
+.wiz-tree{
+  background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);
+  padding:16px;margin-bottom:8px;
+}
+.wiz-tree-boss{font-size:.8rem;color:var(--mu);margin-bottom:4px}
+.wiz-tree-mgr{font-weight:600;font-size:.95rem;color:var(--ac);
+  padding:6px 0;border-bottom:1px solid var(--bd);margin-bottom:6px}
+.wiz-tree-worker{padding:4px 0 4px 20px;font-size:.85rem;color:var(--tx);
+  border-left:2px solid var(--bd);margin-left:8px}
+.wiz-tree-worker::before{content:'';display:inline-block;width:12px;
+  border-bottom:1px solid var(--bd);margin-right:8px;vertical-align:middle}
+.wiz-error{color:var(--rd);font-size:.8rem;margin-top:8px;display:none}
+.wiz-error.show{display:block}
+.wiz-success{
+  text-align:center;padding:24px 16px;
+}
+.wiz-success-icon{font-size:2.5rem;margin-bottom:12px;display:block}
+.wiz-success h3{color:var(--gn);margin-bottom:4px}
+.wiz-success p{color:var(--mu);font-size:.85rem}
+
+/* ── Team detail management buttons ── */
+.team-mgmt-bar{
+  display:flex;gap:8px;justify-content:center;margin-top:16px;padding:0 8px;flex-wrap:wrap;
+}
+.team-mgmt-btn{
+  padding:6px 14px;border-radius:8px;font-size:.8rem;
+  border:1px solid var(--bd);background:transparent;color:var(--ac);
+  cursor:pointer;transition:all .2s;min-height:36px;
+}
+.team-mgmt-btn:hover{background:var(--bd)}
+.team-mgmt-btn.danger{color:var(--rd);border-color:var(--bd)}
+.team-mgmt-btn.danger:hover{background:rgba(248,81,73,.12);border-color:var(--rd)}
+.inline-form{
+  background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);
+  padding:12px;margin-top:12px;
+}
+.inline-form .wiz-input{margin-bottom:8px}
+.inline-form-actions{display:flex;gap:8px;justify-content:flex-end}
+@media(max-width:600px){
+  .wiz-template-grid{grid-template-columns:1fr}
+}
 """
 
 # ── JS ──────────────────────────────────────────────────────────────
@@ -1046,26 +1166,14 @@ function descFor(type){
     'wellness':'Watches your health, energy, and work-life balance. Tracks patterns and suggests breaks before burnout hits.',
     'strategy':'Your idea generator. Learns what you care about and brings tailored opportunities, suggestions, and creative sparks.',
     'financial':'Quiet financial awareness. Tracks spending patterns, flags anything unusual, reminds about bills and deadlines.',
-    'help':'Welcome to crew-bus — your personal AI crew.\\n\\n' +
-      '🔷 Crew Boss — Your AI chief of staff. Manages everything, talks to you directly.\\n' +
-      '🛡️ Guard — Silent protector. Watches for threats and scams.\\n' +
-      '💚 Wellness — Monitors your wellbeing. You can talk privately with any agent using the 🔒 button.\\n' +
-      '💡 Ideas — Brainstorms, strategizes, explores possibilities.\\n' +
-      '💰 Wallet — Tracks finances and spending.\\n\\n' +
-      'Teams — Add teams for work, household, or anything you need. Each team has a manager and workers.\\n\\n' +
-      'Trust Score — Controls how much Crew Boss does on their own (1 = messenger, 10 = full chief of staff).\\n' +
-      'Burnout — When high, Crew Boss holds non-urgent messages for better timing.\\n\\n' +
-      'Privacy — The 🔒 button starts a private conversation. No other agent can see the content.\\n' +
-      'Team Mailbox — Any agent can send urgent messages directly to you, even if their manager ignores it.\\n\\n' +
-      'crew-bus is free, open source, and runs on your hardware. Your data never leaves your machine.',
+    'help':'Your guide to crew-bus. Create teams, add agents, and manage your crew hierarchy.\\n\\n' +
+      'Click the ? button or + Add Team to open the Agent Creation Wizard.',
   };
   return d[type]||'An agent in your crew.';
 }
 
 async function openHelpAgent(){
-  if(agentsData.length===0) agentsData=await api('/api/agents');
-  var help=agentsData.find(function(a){return a.agent_type==='help';});
-  if(help) openAgentSpace(help.id);
+  openWizard();
 }
 
 function renderChat(messages){
@@ -1120,9 +1228,8 @@ async function loadTeams(){
   });
 }
 
-function openTemplatePicker(){document.getElementById('template-modal').classList.add('open')}
-function closeTemplatePicker(){document.getElementById('template-modal').classList.remove('open')}
-async function createTeam(name){await apiPost('/api/teams',{template:name});closeTemplatePicker();loadTeams()}
+function openTemplatePicker(){openWizard()}
+function closeTemplatePicker(){closeWizard()}
 
 // ══════════ TEAM DASHBOARD (FIX 1) ══════════
 
@@ -1172,11 +1279,47 @@ async function openTeamDash(teamId){
   // Worker bubbles
   html+='<div class="team-workers">';
   workers.forEach(function(w){
-    html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
-      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
+    var isTerminated=w.status==='terminated'||!w.active;
+    html+='<div class="team-worker-bubble'+(isTerminated?' terminated':'')+'" onclick="openAgentSpace('+w.id+')">'+
+      '<div class="team-worker-circle"'+(isTerminated?' style="opacity:.4"':'')+'>\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
       '<span class="team-worker-label">'+esc(w.name)+'</span></div>';
   });
   html+='</div>';
+
+  // Management bar
+  if(mgr){
+    var mgrNameEsc=esc(mgr.name).replace(/'/g,"\\'");
+    html+='<div class="team-mgmt-bar">'+
+      '<button class="team-mgmt-btn" onclick="showAddWorkerForm('+teamId+',\''+mgrNameEsc+'\')">+ Add Worker</button></div>';
+
+    // Add worker inline form (hidden by default)
+    html+='<div class="inline-form" id="team-add-worker-form" style="display:none;max-width:400px;margin:12px auto 0">'+
+      '<label class="wiz-label">Worker Name</label>'+
+      '<input class="wiz-input" id="new-worker-name" placeholder="e.g. Analytics-Bot">'+
+      '<label class="wiz-label">Description</label>'+
+      '<input class="wiz-input" id="new-worker-desc" placeholder="What does this worker do?">'+
+      '<div class="inline-form-actions">'+
+      '<button class="wiz-btn" onclick="document.getElementById(\'team-add-worker-form\').style.display=\'none\'">Cancel</button>'+
+      '<button class="wiz-btn primary" onclick="submitAddWorker('+teamId+',\''+mgrNameEsc+'\')">Create</button></div>'+
+      '<div id="add-worker-msg" style="font-size:.8rem;margin-top:6px"></div></div>';
+
+    // Worker detail cards with edit/deactivate
+    html+='<div style="max-width:400px;margin:16px auto 0">';
+    var activeWorkers=workers.filter(function(w){return w.status!=='terminated'&&w.active});
+    if(activeWorkers.length>0){
+      html+='<h3 style="font-size:.85rem;color:var(--mu);margin-bottom:8px">Manage Workers</h3>';
+      activeWorkers.forEach(function(w){
+        html+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:8px">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+          '<strong style="font-size:.85rem">'+esc(w.name)+'</strong>'+
+          '<button class="team-mgmt-btn danger" style="padding:3px 10px;font-size:.72rem" onclick="deactivateWorker('+teamId+','+w.id+',\''+esc(w.name).replace(/'/g,"\\'")+'\')">Deactivate</button></div>'+
+          '<textarea class="wiz-input" id="edit-desc-'+w.id+'" rows="2" style="margin-bottom:4px;resize:vertical;min-height:40px">'+esc(w.description||'')+'</textarea>'+
+          '<div style="display:flex;align-items:center;gap:8px"><button class="team-mgmt-btn" style="padding:3px 10px;font-size:.72rem" onclick="editAgentDesc('+w.id+')">Save Description</button>'+
+          '<span id="edit-desc-msg-'+w.id+'" style="font-size:.75rem"></span></div></div>';
+      });
+    }
+    html+='</div>';
+  }
 
   // Mailbox section
   html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
@@ -1530,6 +1673,273 @@ async function doChatPoll(){
   }catch(e){}
 }
 
+// ══════════ WIZARD: Agent Creation ══════════
+
+var wizardState={step:0,templates:[],selected:null,teamName:'',teamDesc:'',
+  mgrName:'',mgrDesc:'',workers:[]};
+
+function openWizard(){
+  wizardState={step:0,templates:[],selected:null,teamName:'',teamDesc:'',
+    mgrName:'',mgrDesc:'',workers:[]};
+  document.getElementById('wizard-overlay').classList.add('open');
+  loadWizardTemplates();
+}
+function closeWizard(){
+  document.getElementById('wizard-overlay').classList.remove('open');
+}
+
+async function loadWizardTemplates(){
+  try{wizardState.templates=await api('/api/help/templates');}catch(e){wizardState.templates=[];}
+  renderWizard();
+}
+
+function renderWizard(){
+  var body=document.getElementById('wizard-body');
+  var footer=document.getElementById('wizard-footer');
+  var steps=document.querySelectorAll('.wizard-step');
+  steps.forEach(function(s,i){
+    s.className='wizard-step'+(i<wizardState.step?' done':'')+(i===wizardState.step?' active':'');
+  });
+  document.getElementById('wizard-error').className='wiz-error';
+  document.getElementById('wizard-error').textContent='';
+
+  if(wizardState.step===0) renderStep0(body,footer);
+  else if(wizardState.step===1) renderStep1(body,footer);
+  else if(wizardState.step===2) renderStep2(body,footer);
+  else if(wizardState.step===3) renderStep3(body,footer);
+  else if(wizardState.step===4) renderStepSuccess(body,footer);
+}
+
+function renderStep0(body,footer){
+  var html='<h3 style="margin-bottom:12px">Choose a Template</h3>';
+  html+='<div class="wiz-template-grid">';
+  wizardState.templates.forEach(function(t){
+    var sel=wizardState.selected===t.id?' selected':'';
+    var cnt=t.id==='custom'?'Start fresh':(1+t.workers.length)+' agents';
+    html+='<div class="wiz-tpl-card'+sel+'" onclick="selectTemplate(\''+t.id+'\')">'+
+      '<div class="wiz-tpl-name">'+esc(t.name)+'</div>'+
+      '<div class="wiz-tpl-desc">'+esc(t.description)+'</div>'+
+      '<div class="wiz-tpl-count">'+cnt+'</div></div>';
+  });
+  html+='</div>';
+  body.innerHTML=html;
+  footer.innerHTML='<button class="wiz-btn" onclick="closeWizard()">Cancel</button>'+
+    '<button class="wiz-btn primary" onclick="wizardNext()" '+(wizardState.selected?'':' disabled')+'>Next</button>';
+}
+
+function selectTemplate(id){
+  wizardState.selected=id;
+  var tpl=wizardState.templates.find(function(t){return t.id===id});
+  if(tpl){
+    wizardState.teamName=tpl.name||'';
+    wizardState.teamDesc=tpl.description||'';
+    wizardState.mgrName=tpl.manager.name||'';
+    wizardState.mgrDesc=tpl.manager.description||'';
+    wizardState.workers=(tpl.workers||[]).map(function(w){return{name:w.name||'',description:w.description||''}});
+  }
+  renderWizard();
+}
+
+function renderStep1(body,footer){
+  body.innerHTML=
+    '<label class="wiz-label">Team Name</label>'+
+    '<input class="wiz-input" id="wiz-team-name" value="'+esc(wizardState.teamName)+'" placeholder="e.g. Marketing Team">'+
+    '<label class="wiz-label">Team Description</label>'+
+    '<input class="wiz-input" id="wiz-team-desc" value="'+esc(wizardState.teamDesc)+'" placeholder="What does this team do?">'+
+    '<label class="wiz-label">Manager Name</label>'+
+    '<input class="wiz-input" id="wiz-mgr-name" value="'+esc(wizardState.mgrName)+'" placeholder="e.g. Marketing-Lead">'+
+    '<label class="wiz-label">Manager Description</label>'+
+    '<input class="wiz-input" id="wiz-mgr-desc" value="'+esc(wizardState.mgrDesc)+'" placeholder="What does the manager do?">';
+  footer.innerHTML='<button class="wiz-btn" onclick="wizardBack()">Back</button>'+
+    '<button class="wiz-btn primary" onclick="wizardNext()">Next</button>';
+}
+
+function renderStep2(body,footer){
+  var html='<h3 style="margin-bottom:12px">Workers</h3>';
+  wizardState.workers.forEach(function(w,i){
+    html+='<div class="wiz-worker-row">'+
+      '<input class="wiz-input" placeholder="Worker name" value="'+esc(w.name)+'" oninput="wizardState.workers['+i+'].name=this.value">'+
+      '<input class="wiz-input" placeholder="Description" value="'+esc(w.description)+'" oninput="wizardState.workers['+i+'].description=this.value">'+
+      '<button class="wiz-remove-btn" onclick="removeWizWorker('+i+')" title="Remove">&times;</button></div>';
+  });
+  if(wizardState.workers.length<10){
+    html+='<button class="wiz-add-btn" onclick="addWizWorker()">+ Add Worker</button>';
+  }
+  html+='<p style="color:var(--mu);font-size:.75rem;margin-top:8px">'+wizardState.workers.length+'/10 workers</p>';
+  body.innerHTML=html;
+  footer.innerHTML='<button class="wiz-btn" onclick="wizardBack()">Back</button>'+
+    '<button class="wiz-btn primary" onclick="wizardNext()">Review</button>';
+}
+
+function addWizWorker(){
+  if(wizardState.workers.length>=10)return;
+  wizardState.workers.push({name:'',description:''});
+  renderWizard();
+}
+function removeWizWorker(i){
+  wizardState.workers.splice(i,1);
+  renderWizard();
+}
+
+function renderStep3(body,footer){
+  var html='<h3 style="margin-bottom:12px">Review</h3><div class="wiz-tree">';
+  html+='<div class="wiz-tree-boss">Crew Boss</div>';
+  html+='<div class="wiz-tree-mgr">'+esc(wizardState.mgrName||'(unnamed manager)')+'</div>';
+  if(wizardState.workers.length===0){
+    html+='<div style="color:var(--mu);font-size:.85rem;padding:4px 0 4px 20px">No workers (you can add them later)</div>';
+  }
+  wizardState.workers.forEach(function(w){
+    html+='<div class="wiz-tree-worker">'+esc(w.name||'(unnamed)')+'</div>';
+  });
+  html+='</div>';
+  html+='<div style="font-size:.85rem;color:var(--mu)"><strong>Team:</strong> '+esc(wizardState.teamName)+'</div>';
+  if(wizardState.teamDesc)html+='<div style="font-size:.8rem;color:var(--mu)">'+esc(wizardState.teamDesc)+'</div>';
+  body.innerHTML=html;
+  footer.innerHTML='<button class="wiz-btn" onclick="wizardBack()">Back</button>'+
+    '<button class="wiz-btn success" id="wiz-create-btn" onclick="wizardCreate()">Create Team</button>';
+}
+
+function renderStepSuccess(body,footer){
+  body.innerHTML='<div class="wiz-success">'+
+    '<span class="wiz-success-icon">&#10003;</span>'+
+    '<h3>Team Created</h3>'+
+    '<p>'+esc(wizardState.teamName)+' is ready with '+
+    (1+wizardState.workers.length)+' agent'+(wizardState.workers.length!==0?'s':'')+'.</p></div>';
+  footer.innerHTML='<button class="wiz-btn primary" onclick="closeWizard();loadTeams();showView(\'crew\')">Done</button>';
+}
+
+function saveWizStep1(){
+  var n=document.getElementById('wiz-team-name');
+  var d=document.getElementById('wiz-team-desc');
+  var mn=document.getElementById('wiz-mgr-name');
+  var md=document.getElementById('wiz-mgr-desc');
+  if(n)wizardState.teamName=n.value;
+  if(d)wizardState.teamDesc=d.value;
+  if(mn)wizardState.mgrName=mn.value;
+  if(md)wizardState.mgrDesc=md.value;
+}
+
+function wizardNext(){
+  var errEl=document.getElementById('wizard-error');
+  errEl.className='wiz-error';errEl.textContent='';
+
+  if(wizardState.step===0){
+    if(!wizardState.selected){showWizError('Please select a template.');return;}
+    wizardState.step=1;
+  }else if(wizardState.step===1){
+    saveWizStep1();
+    if(!wizardState.teamName.trim()){showWizError('Team name is required.');return;}
+    if(!wizardState.mgrName.trim()){showWizError('Manager name is required.');return;}
+    wizardState.step=2;
+  }else if(wizardState.step===2){
+    for(var i=0;i<wizardState.workers.length;i++){
+      if(wizardState.workers[i].name&&!wizardState.workers[i].name.trim()){
+        showWizError('Worker '+(i+1)+' has an empty name. Remove it or fill in a name.');return;
+      }
+    }
+    // Remove workers with no name
+    wizardState.workers=wizardState.workers.filter(function(w){return w.name&&w.name.trim()});
+    wizardState.step=3;
+  }
+  renderWizard();
+}
+
+function wizardBack(){
+  if(wizardState.step===1){saveWizStep1();}
+  if(wizardState.step>0)wizardState.step--;
+  renderWizard();
+}
+
+function showWizError(msg){
+  var el=document.getElementById('wizard-error');
+  el.textContent=msg;el.className='wiz-error show';
+}
+
+async function wizardCreate(){
+  var btn=document.getElementById('wiz-create-btn');
+  if(btn){btn.disabled=true;btn.textContent='Creating...';}
+  var data={
+    team_name:wizardState.teamName.trim(),
+    description:wizardState.teamDesc.trim(),
+    manager_name:wizardState.mgrName.trim(),
+    manager_description:wizardState.mgrDesc.trim(),
+    workers:wizardState.workers.filter(function(w){return w.name&&w.name.trim()}).map(function(w){
+      return{name:w.name.trim(),description:(w.description||'').trim()};
+    })
+  };
+  try{
+    var res=await apiPost('/api/help/create-team',data);
+    if(res&&res.ok){
+      wizardState.step=4;
+      renderWizard();
+    }else{
+      showWizError(res.error||'Failed to create team.');
+      if(btn){btn.disabled=false;btn.textContent='Create Team';}
+    }
+  }catch(e){
+    showWizError('Network error. Please try again.');
+    if(btn){btn.disabled=false;btn.textContent='Create Team';}
+  }
+}
+
+// ══════════ TEAM DETAIL: Management ══════════
+
+function showAddWorkerForm(teamId,mgrName){
+  var el=document.getElementById('team-add-worker-form');
+  if(el){el.style.display=el.style.display==='none'?'block':'none';return;}
+}
+
+async function submitAddWorker(teamId,mgrName){
+  var nameEl=document.getElementById('new-worker-name');
+  var descEl=document.getElementById('new-worker-desc');
+  var msgEl=document.getElementById('add-worker-msg');
+  if(!nameEl||!nameEl.value.trim()){if(msgEl){msgEl.textContent='Name is required.';msgEl.style.color='var(--rd)';}return;}
+  if(msgEl){msgEl.textContent='Creating...';msgEl.style.color='var(--mu)';}
+  try{
+    var res=await apiPost('/api/help/create-agent',{
+      name:nameEl.value.trim(),
+      agent_type:'worker',
+      parent_name:mgrName,
+      description:(descEl?descEl.value.trim():''),
+      channel:'console'
+    });
+    if(res&&res.ok){
+      if(msgEl){msgEl.textContent='Worker created!';msgEl.style.color='var(--gn)';}
+      setTimeout(function(){openTeamDash(teamId)},600);
+    }else{
+      if(msgEl){msgEl.textContent=res.error||'Failed.';msgEl.style.color='var(--rd)';}
+    }
+  }catch(e){
+    if(msgEl){msgEl.textContent='Network error.';msgEl.style.color='var(--rd)';}
+  }
+}
+
+async function deactivateWorker(teamId,agentId,agentName){
+  if(!confirm('Deactivate '+agentName+'? This will terminate the agent.'))return;
+  try{
+    var res=await apiPost('/api/agent/'+agentId+'/deactivate',{});
+    if(res&&res.ok){openTeamDash(teamId);}
+    else{alert(res.error||'Failed to deactivate agent.');}
+  }catch(e){alert('Network error.');}
+}
+
+async function editAgentDesc(agentId){
+  var el=document.getElementById('edit-desc-'+agentId);
+  if(!el)return;
+  var newDesc=el.value.trim();
+  try{
+    var res=await apiPost('/api/agent/'+agentId+'/description',{description:newDesc});
+    if(res&&res.ok){
+      var msg=document.getElementById('edit-desc-msg-'+agentId);
+      if(msg){msg.textContent='Saved!';msg.style.color='var(--gn)';setTimeout(function(){msg.textContent=''},1500);}
+    }
+  }catch(e){}
+}
+
+async function apiDelete(path){
+  return(await fetch(path,{method:'DELETE',headers:{'Content-Type':'application/json'}})).json();
+}
+
 // ── Boot ──
 document.addEventListener('DOMContentLoaded',function(){showView('crew');startRefresh();loadComposeAgents()});
 """
@@ -1723,20 +2133,20 @@ def _build_html():
 <div class="legacy-container team-dash" id="team-dash-content"></div>
 </div>
 
-<!-- Template picker -->
-<div class="modal-overlay" id="template-modal">
-  <div class="modal-sheet">
-    <div class="handle"></div>
-    <h3>Add a Team</h3>
-    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">\U0001f3e2</span><div><div class="template-name">Business</div><div class="template-desc">Strategy, Sales, Operations + Workers</div></div></div>
-    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">\U0001f3d7\ufe0f</span><div><div class="template-name">New Department</div><div class="template-desc">Manager + Workers</div></div></div>
-    <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">\U0001f4bc</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Client Follow-up</div></div></div>
-    <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">\U0001f4b0</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content Creator, Sales Tracker</div></div></div>
-    <div class="template-card" onclick="createTeam('school')"><span class="template-icon">\U0001f4da</span><div><div class="template-name">School</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
-    <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">\U0001f3b8</span><div><div class="template-name">Passion Project</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
-    <div class="template-card" onclick="createTeam('household')"><span class="template-icon">\U0001f3e0</span><div><div class="template-name">Household</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
-    <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents</div></div></div>
-    <button class="btn" onclick="closeTemplatePicker()" style="width:100%;margin-top:8px">Cancel</button>
+<!-- Agent Creation Wizard -->
+<div class="wizard-overlay" id="wizard-overlay" onclick="if(event.target===this)closeWizard()">
+  <div class="wizard-panel">
+    <h2>Create a Team</h2>
+    <p class="wizard-sub">Your guide to crew-bus. Build teams, add agents, manage your crew.</p>
+    <div class="wizard-steps">
+      <div class="wizard-step active"></div>
+      <div class="wizard-step"></div>
+      <div class="wizard-step"></div>
+      <div class="wizard-step"></div>
+    </div>
+    <div class="wizard-body" id="wizard-body"></div>
+    <div class="wiz-error" id="wizard-error"></div>
+    <div class="wizard-footer" id="wizard-footer"></div>
   </div>
 </div>
 
@@ -2018,6 +2428,293 @@ def _get_team_agents(db_path, team_id):
         conn.close()
 
 
+def _load_team_templates():
+    """Load team templates from configs/team_templates.json."""
+    tpl_path = Path(__file__).parent / "configs" / "team_templates.json"
+    if tpl_path.is_file():
+        with open(tpl_path) as f:
+            return json.load(f)
+    return []
+
+
+# ── Agent name / team validation ──────────────────────────────────
+
+_AGENT_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9-]*$')
+_RESERVED_TYPES = {"human", "right_hand", "security"}
+_MAX_AGENTS = 50
+
+
+def _validate_agent_name(name):
+    """Return error string or None if valid."""
+    if not name or not name.strip():
+        return "Agent name is required."
+    name = name.strip()
+    if len(name) > 60:
+        return "Agent name must be 60 characters or fewer."
+    if not _AGENT_NAME_RE.match(name):
+        return "Agent name can only contain letters, numbers, and hyphens, and must start with a letter or number."
+    return None
+
+
+def _check_agent_limit(conn):
+    """Return error string if agent limit exceeded, else None."""
+    count = conn.execute("SELECT COUNT(*) FROM agents WHERE active=1").fetchone()[0]
+    if count >= _MAX_AGENTS:
+        return f"Cannot create more agents. Limit is {_MAX_AGENTS} active agents."
+    return None
+
+
+def _check_unique_name(conn, name):
+    """Return error string if name already taken, else None."""
+    exists = conn.execute("SELECT id FROM agents WHERE name=?", (name,)).fetchone()
+    if exists:
+        return f"An agent named '{name}' already exists."
+    return None
+
+
+def _check_unique_team_name(conn, team_name):
+    """Return error string if a team with this manager-name pattern already exists."""
+    # Teams are identified by their manager, so check for manager named <Team>-Lead or similar
+    # But we also check team_name as a concept — no two managers should share the derived team name
+    managers = conn.execute("SELECT name FROM agents WHERE agent_type='manager' AND active=1").fetchall()
+    for mgr in managers:
+        existing_team = mgr["name"].replace("-Manager", "").replace("-Lead", "").replace("Manager", "").replace("Lead", "").strip()
+        if existing_team.lower() == team_name.strip().lower():
+            return f"A team named '{team_name}' already exists."
+    return None
+
+
+def _get_templates(db_path):
+    """Return list of team templates."""
+    return _load_team_templates()
+
+
+def _create_team_from_wizard(db_path, data):
+    """Create a full team (manager + workers) from wizard data.
+
+    Expects:
+        team_name: str
+        description: str
+        manager_name: str
+        manager_description: str
+        workers: [{name, description}, ...]
+    """
+    team_name = (data.get("team_name") or "").strip()
+    manager_name = (data.get("manager_name") or "").strip()
+    manager_desc = (data.get("manager_description") or "").strip()
+    workers = data.get("workers") or []
+
+    if not team_name:
+        return {"ok": False, "error": "Team name is required."}
+    if not manager_name:
+        return {"ok": False, "error": "Manager name is required."}
+
+    err = _validate_agent_name(manager_name)
+    if err:
+        return {"ok": False, "error": f"Manager name: {err}"}
+
+    for i, w in enumerate(workers):
+        wn = (w.get("name") or "").strip()
+        if not wn:
+            return {"ok": False, "error": f"Worker {i+1}: name is required."}
+        err = _validate_agent_name(wn)
+        if err:
+            return {"ok": False, "error": f"Worker '{wn}': {err}"}
+
+    if len(workers) > 10:
+        return {"ok": False, "error": "Maximum 10 workers per team."}
+
+    conn = bus.get_conn(db_path)
+    try:
+        # Check agent limit
+        err = _check_agent_limit(conn)
+        if err:
+            return {"ok": False, "error": err}
+
+        # Check uniqueness
+        err = _check_unique_name(conn, manager_name)
+        if err:
+            return {"ok": False, "error": err}
+
+        for w in workers:
+            wn = w["name"].strip()
+            err = _check_unique_name(conn, wn)
+            if err:
+                return {"ok": False, "error": err}
+
+        # Also check no duplicate names within the request itself
+        all_names = [manager_name] + [w["name"].strip() for w in workers]
+        if len(set(n.lower() for n in all_names)) != len(all_names):
+            return {"ok": False, "error": "Duplicate agent names in request."}
+
+        # Check reserved types won't be used (agent_type is set by us, not user, so this is safe)
+        # Find the right_hand agent (Crew Boss) as parent for manager
+        rh = conn.execute("SELECT id, name FROM agents WHERE agent_type='right_hand' LIMIT 1").fetchone()
+        if not rh:
+            return {"ok": False, "error": "No Crew Boss found. Initialize crew-bus first (load a config)."}
+
+        # Create manager
+        mgr_id = bus._upsert_agent(conn, {
+            "name": manager_name,
+            "agent_type": "manager",
+            "channel": "console",
+            "description": manager_desc,
+            "parent": rh["name"],
+            "active": True,
+        })
+
+        # Create workers
+        created_workers = []
+        for w in workers:
+            wn = w["name"].strip()
+            wd = (w.get("description") or "").strip()
+            wid = bus._upsert_agent(conn, {
+                "name": wn,
+                "agent_type": "worker",
+                "channel": "console",
+                "description": wd,
+                "parent": manager_name,
+                "active": True,
+            })
+            created_workers.append({"id": wid, "name": wn, "description": wd})
+
+        # Audit
+        bus._audit(conn, "team_created", mgr_id, {
+            "team_name": team_name,
+            "manager": manager_name,
+            "workers": [w["name"] for w in created_workers],
+        })
+        conn.commit()
+
+        return {
+            "ok": True,
+            "team_name": team_name,
+            "manager": {"id": mgr_id, "name": manager_name, "description": manager_desc},
+            "workers": created_workers,
+            "agent_count": 1 + len(created_workers),
+        }
+    finally:
+        conn.close()
+
+
+def _create_single_agent(db_path, data):
+    """Create a single agent with parent validation.
+
+    Expects:
+        name: str
+        agent_type: str (worker or specialist)
+        parent_name: str
+        description: str
+        channel: str (optional, default console)
+    """
+    name = (data.get("name") or "").strip()
+    agent_type = (data.get("agent_type") or "worker").strip()
+    parent_name = (data.get("parent_name") or "").strip()
+    description = (data.get("description") or "").strip()
+    channel = (data.get("channel") or "console").strip()
+
+    if not name:
+        return {"ok": False, "error": "Agent name is required."}
+
+    err = _validate_agent_name(name)
+    if err:
+        return {"ok": False, "error": err}
+
+    if agent_type in _RESERVED_TYPES:
+        return {"ok": False, "error": f"Cannot create agents with reserved type '{agent_type}'."}
+
+    if agent_type not in ("worker", "specialist", "manager"):
+        return {"ok": False, "error": f"Invalid agent type '{agent_type}'. Use 'worker', 'specialist', or 'manager'."}
+
+    if not parent_name:
+        return {"ok": False, "error": "Parent agent name is required."}
+
+    conn = bus.get_conn(db_path)
+    try:
+        err = _check_agent_limit(conn)
+        if err:
+            return {"ok": False, "error": err}
+
+        err = _check_unique_name(conn, name)
+        if err:
+            return {"ok": False, "error": err}
+
+        parent = conn.execute("SELECT * FROM agents WHERE name=?", (parent_name,)).fetchone()
+        if not parent:
+            return {"ok": False, "error": f"Parent agent '{parent_name}' not found."}
+
+        # Validate parent type
+        if agent_type == "manager" and parent["agent_type"] != "right_hand":
+            return {"ok": False, "error": "Manager agents must report to Crew Boss (right_hand)."}
+        if agent_type in ("worker", "specialist") and parent["agent_type"] not in ("manager", "right_hand"):
+            return {"ok": False, "error": "Worker/specialist agents must report to a manager or Crew Boss."}
+
+        agent_id = bus._upsert_agent(conn, {
+            "name": name,
+            "agent_type": agent_type,
+            "channel": channel,
+            "description": description,
+            "parent": parent_name,
+            "active": True,
+        })
+
+        bus._audit(conn, "agent_created", agent_id, {
+            "name": name, "agent_type": agent_type,
+            "parent": parent_name,
+        })
+        conn.commit()
+
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+        return {"ok": True, "agent": dict(agent)}
+    finally:
+        conn.close()
+
+
+def _deactivate_agent(db_path, agent_id):
+    """Deactivate an agent (set active=0, status=terminated). Keep DB row for audit."""
+    conn = bus.get_conn(db_path)
+    try:
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+        if not agent:
+            return {"ok": False, "error": "Agent not found."}
+
+        if agent["agent_type"] in ("human", "right_hand", "security"):
+            return {"ok": False, "error": f"Cannot deactivate {agent['agent_type']} agent."}
+
+        if agent["agent_type"] == "help":
+            return {"ok": False, "error": "Cannot deactivate the Help agent."}
+
+        conn.execute(
+            "UPDATE agents SET active=0, status='terminated', "
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+            (agent_id,),
+        )
+        bus._audit(conn, "agent_deactivated_wizard", agent_id, {
+            "name": agent["name"], "agent_type": agent["agent_type"],
+        })
+        conn.commit()
+        return {"ok": True, "agent_id": agent_id, "name": agent["name"]}
+    finally:
+        conn.close()
+
+
+def _update_agent_description(db_path, agent_id, description):
+    """Update an agent's description."""
+    conn = bus.get_conn(db_path)
+    try:
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+        if not agent:
+            return {"ok": False, "error": "Agent not found."}
+        conn.execute(
+            "UPDATE agents SET description=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+            (description, agent_id),
+        )
+        conn.commit()
+        return {"ok": True, "agent_id": agent_id}
+    finally:
+        conn.close()
+
+
 def _create_team(db_path, template):
     return {"ok": True, "template": template, "message": f"Team from '{template}' template queued for setup."}
 
@@ -2167,9 +2864,20 @@ class CrewBusHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+
+        m = re.match(r"^/api/agent/(\d+)$", path)
+        if m:
+            result = _deactivate_agent(self.db_path, int(m.group(1)))
+            return _json_response(self, result, 200 if result.get("ok") else 400)
+
+        _json_response(self, {"error": "not found"}, 404)
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -2206,6 +2914,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/compose/agents":
             return _json_response(self, _get_compose_agents(self.db_path))
+
+        if path == "/api/help/templates":
+            return _json_response(self, _get_templates(self.db_path))
 
         if path == "/api/teams":
             return _json_response(self, _get_teams(self.db_path))
@@ -2421,6 +3132,25 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": "need from_agent_id, subject, body"}, 400)
             result = bus.send_to_team_mailbox(agent_id, subject, body, severity=severity, db_path=self.db_path)
             return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        if path == "/api/help/create-team":
+            result = _create_team_from_wizard(self.db_path, data)
+            return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        if path == "/api/help/create-agent":
+            result = _create_single_agent(self.db_path, data)
+            return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        m = re.match(r"^/api/agent/(\d+)/description$", path)
+        if m:
+            desc = (data.get("description") or "").strip()
+            result = _update_agent_description(self.db_path, int(m.group(1)), desc)
+            return _json_response(self, result, 200 if result.get("ok") else 400)
+
+        m = re.match(r"^/api/agent/(\d+)/deactivate$", path)
+        if m:
+            result = _deactivate_agent(self.db_path, int(m.group(1)))
+            return _json_response(self, result, 200 if result.get("ok") else 400)
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)

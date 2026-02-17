@@ -1,0 +1,88 @@
+[
+  {
+    "id": "marketing",
+    "name": "Marketing Team",
+    "description": "Social media, content, and outreach",
+    "manager": {
+      "name": "Marketing-Lead",
+      "description": "Manages marketing team and reports to Crew Boss. Coordinates content strategy, social media campaigns, and outreach initiatives."
+    },
+    "workers": [
+      {
+        "name": "Content-Writer",
+        "description": "Writes blog posts, social media content, newsletters, and marketing copy."
+      },
+      {
+        "name": "Social-Monitor",
+        "description": "Tracks social media engagement, monitors brand mentions, and reports on audience growth."
+      }
+    ]
+  },
+  {
+    "id": "sales",
+    "name": "Sales Team",
+    "description": "Lead tracking, follow-ups, proposals",
+    "manager": {
+      "name": "Sales-Lead",
+      "description": "Manages sales pipeline and reports to Crew Boss. Oversees lead qualification, deal tracking, and revenue targets."
+    },
+    "workers": [
+      {
+        "name": "Lead-Tracker",
+        "description": "Monitors incoming leads, qualifies prospects, and maintains the sales pipeline."
+      },
+      {
+        "name": "Proposal-Writer",
+        "description": "Drafts proposals, quotes, and follow-up communications for sales opportunities."
+      }
+    ]
+  },
+  {
+    "id": "research",
+    "name": "Research Team",
+    "description": "Market research, competitor analysis, reports",
+    "manager": {
+      "name": "Research-Lead",
+      "description": "Manages research operations and reports to Crew Boss. Directs market intelligence gathering and competitive analysis."
+    },
+    "workers": [
+      {
+        "name": "Web-Researcher",
+        "description": "Conducts web research, gathers market data, and monitors industry trends."
+      },
+      {
+        "name": "Report-Writer",
+        "description": "Compiles research findings into structured reports with actionable insights."
+      }
+    ]
+  },
+  {
+    "id": "operations",
+    "name": "Operations Team",
+    "description": "Scheduling, logistics, inventory",
+    "manager": {
+      "name": "Ops-Lead",
+      "description": "Manages daily operations and reports to Crew Boss. Coordinates scheduling, logistics, and resource allocation."
+    },
+    "workers": [
+      {
+        "name": "Scheduler",
+        "description": "Manages calendars, appointments, deadlines, and coordinates timing across teams."
+      },
+      {
+        "name": "Inventory-Bot",
+        "description": "Tracks inventory levels, monitors stock, and flags reorder needs."
+      }
+    ]
+  },
+  {
+    "id": "custom",
+    "name": "Custom Team",
+    "description": "Build from scratch",
+    "manager": {
+      "name": "",
+      "description": ""
+    },
+    "workers": []
+  }
+]

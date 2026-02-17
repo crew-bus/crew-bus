@@ -767,7 +767,7 @@ def _load_v2_hierarchy(config: dict, config_path: str,
         "agent_type": "help",
         "channel": "console",
         "parent": rh_def["name"],
-        "description": "Your guide to crew-bus. Ask me anything about how your crew works.",
+        "description": "Your guide to crew-bus. Create teams, add agents, and manage your crew hierarchy.",
     })
     created.append("Help")
 
@@ -912,7 +912,7 @@ def _load_v1_hierarchy(config: dict, config_path: str,
             "agent_type": "help",
             "channel": "console",
             "parent": rh["name"],
-            "description": "Your guide to crew-bus. Ask me anything about how your crew works.",
+            "description": "Your guide to crew-bus. Create teams, add agents, and manage your crew hierarchy.",
         })
         created.append("Help")
 
