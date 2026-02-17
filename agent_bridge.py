@@ -412,5 +412,88 @@ class CrewBridge:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── Instruction (strategy-type agents only) ────────────────────
+
+    def start_lesson(self, topic: str, category: str = "general") -> dict:
+        """Start an instruction session for the human. Strategy agents only.
+
+        Args:
+            topic: What to teach (e.g. "Docker basics", "Soldering").
+            category: Topic category (tech, business, health, creative,
+                      trades, life_skills, general, other).
+
+        Returns:
+            Dict with session info on success, or error dict.
+        """
+        if self.agent_type != "strategy":
+            return {"ok": False, "error": f"Only strategy agents can start lessons. You are '{self.agent_type}'."}
+
+        try:
+            # Find the human
+            conn = bus.get_conn(self.db_path)
+            try:
+                human = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+
+            if not human:
+                return {"ok": False, "error": "No human agent found"}
+
+            from instructor import Instructor
+
+            session = bus.start_instruction_session(
+                human["id"], self.agent_id, topic,
+                category=category, db_path=self.db_path,
+            )
+
+            inst = Instructor(human["id"], self.agent_id,
+                              db_path=self.db_path)
+            steps = inst.generate_lesson_plan(topic, category=category)
+
+            for step_data in steps:
+                bus.add_instruction_step(
+                    session_id=session["id"],
+                    step_number=step_data["step_number"],
+                    title=step_data["title"],
+                    content=step_data["content"],
+                    step_type=step_data["step_type"],
+                    db_path=self.db_path,
+                )
+
+            full_session = bus.get_instruction_session(
+                session["id"], db_path=self.db_path)
+            return {"ok": True, "session": full_session}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_active_lesson(self) -> dict:
+        """Get the currently active instruction session.
+
+        Returns:
+            Dict with session info, or empty dict if no active session.
+        """
+        try:
+            conn = bus.get_conn(self.db_path)
+            try:
+                human = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+
+            if not human:
+                return {}
+
+            sessions = bus.list_instruction_sessions(
+                human["id"], status="active", db_path=self.db_path)
+            if sessions:
+                return bus.get_instruction_session(
+                    sessions[0]["id"], db_path=self.db_path) or {}
+            return {}
+        except Exception:
+            return {}
+
     def __repr__(self):
         return f"CrewBridge(agent_name={self.agent_name!r}, agent_id={self.agent_id})"

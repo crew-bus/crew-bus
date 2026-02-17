@@ -62,6 +62,7 @@ from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
+import instructor
 
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
@@ -703,6 +704,209 @@ tr.override td{background:rgba(210,153,34,.08)}
   .compose-row select,.compose-row .compose-priority,.compose-send{width:100%}
 }
 
+/* ── Agent Space Tabs (Chat/Learn) ── */
+.as-tabs{
+  display:flex;gap:0;background:var(--sf);border-bottom:1px solid var(--bd);
+  flex-shrink:0;padding:0 16px;
+}
+.as-tab{
+  padding:10px 20px;font-size:.85rem;font-weight:600;
+  border:none;background:transparent;color:var(--mu);
+  cursor:pointer;border-bottom:2px solid transparent;
+  transition:all .2s;min-height:42px;
+}
+.as-tab:hover{color:var(--tx)}
+.as-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.as-tab-gear{
+  margin-left:auto;background:none;border:none;color:var(--mu);
+  font-size:1.1rem;cursor:pointer;padding:8px;transition:color .2s;
+}
+.as-tab-gear:hover{color:var(--tx)}
+
+/* ── Learn Tab ── */
+.learn-start{text-align:center;padding:24px 16px}
+.learn-topic-input{
+  width:100%;background:var(--bg);border:1px solid var(--bd);
+  border-radius:var(--r);padding:14px 16px;color:var(--tx);
+  font-size:1rem;font-family:inherit;margin-bottom:12px;
+  transition:border-color .2s;
+}
+.learn-topic-input:focus{outline:none;border-color:var(--ac)}
+.learn-topic-input::placeholder{color:var(--mu)}
+.learn-cat-row{
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:16px;
+}
+.learn-cat-pill{
+  padding:6px 14px;border-radius:20px;font-size:.78rem;
+  border:1px solid var(--bd);background:transparent;color:var(--mu);
+  cursor:pointer;transition:all .2s;min-height:32px;
+}
+.learn-cat-pill:hover,.learn-cat-pill.active{
+  color:var(--tx);background:var(--bd);border-color:var(--mu);
+}
+.learn-go-btn{
+  background:var(--ac);color:#000;border:none;border-radius:var(--r);
+  padding:12px 32px;font-size:1rem;font-weight:700;cursor:pointer;
+  min-height:48px;transition:opacity .2s;
+}
+.learn-go-btn:hover{opacity:.85}
+.learn-go-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Session view */
+.learn-session-header{
+  padding:12px 16px;background:var(--sf);border:1px solid var(--bd);
+  border-radius:var(--r);margin-bottom:12px;
+}
+.learn-session-topic{font-weight:700;font-size:1.1rem;margin-bottom:8px}
+.learn-progress-bar{
+  height:6px;background:var(--bd);border-radius:3px;overflow:hidden;
+  margin-bottom:4px;
+}
+.learn-progress-fill{
+  height:100%;background:var(--ac);border-radius:3px;
+  transition:width .4s ease;
+}
+.learn-progress-text{font-size:.7rem;color:var(--mu);text-align:right}
+
+/* Step card */
+.learn-step-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:16px;margin-bottom:12px;
+}
+.learn-step-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:12px;
+}
+.learn-step-num{
+  font-size:.75rem;color:var(--ac);font-weight:600;
+  background:rgba(88,166,255,.1);padding:3px 10px;border-radius:12px;
+}
+.learn-step-type{
+  font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;
+  padding:3px 10px;border-radius:12px;font-weight:600;
+}
+.learn-step-type-explain{color:var(--ac);background:rgba(88,166,255,.1)}
+.learn-step-type-demonstrate{color:var(--pr);background:rgba(188,140,255,.1)}
+.learn-step-type-practice{color:var(--gn);background:rgba(63,185,80,.1)}
+.learn-step-type-quiz{color:var(--or);background:rgba(209,134,22,.1)}
+.learn-step-type-checkpoint{color:var(--tl);background:rgba(57,208,208,.1)}
+.learn-step-title{font-weight:700;font-size:1rem;margin-bottom:10px}
+.learn-step-content{
+  font-size:.88rem;color:var(--tx);line-height:1.7;
+}
+.learn-step-content h2{font-size:1rem;margin:12px 0 8px;color:var(--tx)}
+.learn-step-content h3{font-size:.9rem;margin:10px 0 6px;color:var(--ac)}
+.learn-step-content pre{
+  background:var(--bg);border:1px solid var(--bd);border-radius:8px;
+  padding:12px;overflow-x:auto;font-size:.82rem;line-height:1.5;
+  margin:8px 0;
+}
+.learn-step-content code{
+  background:var(--bg);padding:2px 6px;border-radius:4px;font-size:.82rem;
+}
+.learn-step-content pre code{background:none;padding:0}
+.learn-step-content ul,.learn-step-content ol{padding-left:20px;margin:6px 0}
+.learn-step-content li{margin:3px 0}
+.learn-step-content blockquote{
+  border-left:3px solid var(--ac);padding-left:12px;color:var(--mu);
+  margin:8px 0;
+}
+.learn-step-content strong{color:var(--tx)}
+.learn-step-content table{
+  width:100%;border-collapse:collapse;margin:8px 0;font-size:.82rem;
+}
+.learn-step-content table th,.learn-step-content table td{
+  padding:6px 10px;border:1px solid var(--bd);text-align:left;
+}
+.learn-step-content table th{background:var(--bg);font-weight:600}
+
+/* Step actions */
+.learn-step-actions{
+  display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;
+}
+.learn-btn{
+  padding:10px 20px;border-radius:8px;font-size:.85rem;font-weight:600;
+  cursor:pointer;border:1px solid var(--bd);background:var(--sf);
+  color:var(--tx);transition:all .2s;min-height:42px;
+}
+.learn-btn:hover{background:var(--bd)}
+.learn-btn-primary{background:var(--ac);color:#000;border-color:var(--ac)}
+.learn-btn-primary:hover{opacity:.85}
+.learn-btn-success{background:var(--gn);color:#000;border-color:var(--gn)}
+.learn-btn-success:hover{opacity:.85}
+.learn-btn-danger{border-color:var(--rd);color:var(--rd)}
+.learn-btn-danger:hover{background:rgba(248,81,73,.12)}
+.learn-response-area{
+  width:100%;background:var(--bg);border:1px solid var(--bd);
+  border-radius:8px;padding:12px;color:var(--tx);font-family:inherit;
+  font-size:.9rem;resize:vertical;min-height:80px;margin-top:10px;
+}
+.learn-response-area:focus{outline:none;border-color:var(--ac)}
+.learn-confidence-wrap{margin-top:10px}
+.learn-confidence-label{font-size:.8rem;color:var(--mu);margin-bottom:6px}
+.learn-confidence-val{
+  text-align:center;font-size:1.8rem;font-weight:700;color:var(--ac);
+}
+.learn-confidence-slider{
+  width:100%;accent-color:var(--ac);cursor:pointer;
+}
+
+/* History cards */
+.learn-history-header{
+  font-size:.85rem;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.04em;margin:20px 0 8px;font-weight:600;
+}
+.learn-history-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;
+  align-items:center;
+}
+.learn-history-topic{font-weight:600;font-size:.85rem}
+.learn-history-meta{font-size:.72rem;color:var(--mu);margin-top:2px}
+.learn-history-score{
+  font-size:.8rem;font-weight:700;padding:4px 10px;
+  border-radius:12px;white-space:nowrap;
+}
+
+/* Settings panel */
+.learn-settings{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:16px;margin-bottom:16px;
+}
+.learn-settings h3{font-size:.9rem;margin-bottom:12px;color:var(--ac)}
+.learn-setting-row{margin-bottom:14px}
+.learn-setting-label{
+  font-size:.75rem;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:4px;
+}
+.learn-setting-select{
+  width:100%;background:var(--bg);border:1px solid var(--bd);
+  border-radius:8px;padding:8px 10px;color:var(--tx);
+  font-size:.85rem;appearance:auto;
+}
+.learn-tags-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.learn-tag{
+  background:var(--bd);color:var(--tx);padding:4px 10px;
+  border-radius:14px;font-size:.78rem;display:inline-flex;
+  align-items:center;gap:4px;
+}
+.learn-tag-remove{
+  background:none;border:none;color:var(--mu);cursor:pointer;
+  font-size:.9rem;padding:0 2px;
+}
+.learn-tag-remove:hover{color:var(--rd)}
+.learn-tag-input{
+  background:var(--bg);border:1px solid var(--bd);border-radius:8px;
+  padding:6px 10px;color:var(--tx);font-size:.82rem;flex:1;min-width:120px;
+}
+.learn-tag-input:focus{outline:none;border-color:var(--ac)}
+.learn-save-btn{
+  background:var(--ac);color:#000;border:none;border-radius:8px;
+  padding:8px 20px;font-size:.85rem;font-weight:600;cursor:pointer;
+  margin-top:8px;min-height:38px;
+}
+.learn-save-btn:hover{opacity:.85}
+
 /* ── Wizard (Agent Creation) ── */
 .wizard-overlay{
   display:none;position:fixed;top:0;left:0;width:100%;height:100%;
@@ -1055,6 +1259,27 @@ async function openAgentSpace(agentId){
   if(sendBtn)sendBtn.style.color=color;
 
   renderChat(chat||[]);
+
+  // Show tabs only for strategy agent
+  var tabsEl=document.getElementById('as-tabs');
+  var chatBody=document.getElementById('as-body-chat');
+  var learnBody=document.getElementById('as-body-learn');
+  var gearBtn=document.getElementById('learn-gear-btn');
+  if(agent.agent_type==='strategy'){
+    tabsEl.style.display='flex';
+    // Reset to chat tab
+    document.querySelectorAll('.as-tab').forEach(function(t){
+      t.classList.toggle('active',t.dataset.tab==='chat');
+    });
+    chatBody.style.display='block';
+    learnBody.style.display='none';
+    if(gearBtn)gearBtn.style.display='none';
+  }else{
+    tabsEl.style.display='none';
+    chatBody.style.display='block';
+    learnBody.style.display='none';
+    if(gearBtn)gearBtn.style.display='none';
+  }
 
   // Check if there's an active private session with this agent
   checkPrivateStatus(agentId);
@@ -1940,6 +2165,450 @@ async function apiDelete(path){
   return(await fetch(path,{method:'DELETE',headers:{'Content-Type':'application/json'}})).json();
 }
 
+// ══════════ LEARN TAB (Instruction Mode) ══════════
+
+let learnCategory='general';
+let learnSettingsOpen=false;
+let activeLearnSession=null;
+
+function switchAsTab(tab){
+  document.querySelectorAll('.as-tab').forEach(function(t){
+    t.classList.toggle('active',t.dataset.tab===tab);
+  });
+  var chatBody=document.getElementById('as-body-chat');
+  var learnBody=document.getElementById('as-body-learn');
+  var gearBtn=document.getElementById('learn-gear-btn');
+  if(tab==='learn'){
+    chatBody.style.display='none';
+    learnBody.style.display='block';
+    if(gearBtn)gearBtn.style.display='block';
+    loadLearnTab();
+  }else{
+    chatBody.style.display='block';
+    learnBody.style.display='none';
+    if(gearBtn)gearBtn.style.display='none';
+  }
+}
+
+async function loadLearnTab(){
+  var el=document.getElementById('learn-content');
+  if(!el)return;
+  el.innerHTML='<p style="color:var(--mu);text-align:center;padding:24px">Loading...</p>';
+  try{
+    var active=await api('/api/instruct/active');
+    if(active&&active.id){
+      activeLearnSession=active;
+      renderActiveSession(active);
+      return;
+    }
+  }catch(e){}
+  activeLearnSession=null;
+  renderLearnStart();
+}
+
+function renderLearnStart(){
+  var el=document.getElementById('learn-content');
+  var cats=['tech','business','health','creative','trades','life_skills','other'];
+  var html='<div class="learn-start">';
+  html+='<h3 style="margin-bottom:16px;color:var(--tx)">What do you want to learn?</h3>';
+  html+='<input class="learn-topic-input" id="learn-topic" placeholder="e.g. How to use Git for version control" onkeydown="if(event.key===\'Enter\')startLesson()">';
+  html+='<div class="learn-cat-row">';
+  cats.forEach(function(c){
+    var label=c.replace('_',' ');
+    label=label.charAt(0).toUpperCase()+label.slice(1);
+    html+='<button class="learn-cat-pill'+(c===learnCategory?' active':'')+'" onclick="selectLearnCat(\''+c+'\',this)">'+label+'</button>';
+  });
+  html+='</div>';
+  html+='<button class="learn-go-btn" onclick="startLesson()">Teach Me</button>';
+  html+='</div>';
+
+  // Load history
+  html+='<div id="learn-history-area"></div>';
+  el.innerHTML=html;
+  loadLearnHistory();
+}
+
+function selectLearnCat(cat,btn){
+  learnCategory=cat;
+  document.querySelectorAll('.learn-cat-pill').forEach(function(p){p.classList.remove('active')});
+  btn.classList.add('active');
+}
+
+async function startLesson(){
+  var input=document.getElementById('learn-topic');
+  if(!input||!input.value.trim())return;
+  var topic=input.value.trim();
+  var btn=document.querySelector('.learn-go-btn');
+  if(btn){btn.disabled=true;btn.textContent='Starting...';}
+  try{
+    var session=await apiPost('/api/instruct/start',{topic:topic,category:learnCategory});
+    if(session&&session.id){
+      activeLearnSession=session;
+      renderActiveSession(session);
+    }else{
+      if(btn){btn.disabled=false;btn.textContent='Teach Me';}
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Teach Me';}
+  }
+}
+
+function renderActiveSession(session){
+  var el=document.getElementById('learn-content');
+  if(!el)return;
+  var steps=session.steps||[];
+  var completed=steps.filter(function(s){return s.completed});
+  var total=steps.length;
+  var pct=total>0?Math.round((completed.length/total)*100):0;
+
+  // Find current (first incomplete) step
+  var current=steps.find(function(s){return !s.completed});
+
+  var html='<div class="learn-session-header">';
+  html+='<div class="learn-session-topic">'+esc(session.topic)+'</div>';
+  html+='<div class="learn-progress-bar"><div class="learn-progress-fill" style="width:'+pct+'%"></div></div>';
+  html+='<div class="learn-progress-text">'+completed.length+' / '+total+' steps ('+pct+'%)</div>';
+  html+='</div>';
+
+  if(current){
+    html+=renderStepCard(current,session);
+  }else{
+    // All steps done — show completion
+    html+='<div style="text-align:center;padding:24px">';
+    html+='<div style="font-size:2rem;margin-bottom:8px">&#10003;</div>';
+    html+='<h3 style="margin-bottom:12px">All Steps Completed!</h3>';
+    html+='<textarea class="learn-response-area" id="learn-feedback" placeholder="How was this session? Any feedback..."></textarea>';
+    html+='<div class="learn-step-actions" style="justify-content:center;margin-top:12px">';
+    html+='<button class="learn-btn learn-btn-success" onclick="completeSession('+session.id+')">Complete Session</button>';
+    html+='</div></div>';
+  }
+
+  // Session controls
+  html+='<div style="display:flex;gap:8px;justify-content:center;margin-top:16px">';
+  html+='<button class="learn-btn learn-btn-danger" onclick="endSessionEarly('+session.id+')">I\'m Done</button>';
+  html+='</div>';
+
+  el.innerHTML=html;
+  // Render markdown in step content
+  renderLearnMarkdown();
+}
+
+function renderStepCard(step,session){
+  var typeClass='learn-step-type-'+step.step_type;
+  var html='<div class="learn-step-card">';
+  html+='<div class="learn-step-header">';
+  html+='<span class="learn-step-num">Step '+step.step_number+'</span>';
+  html+='<span class="learn-step-type '+typeClass+'">'+esc(step.step_type)+'</span>';
+  html+='</div>';
+  html+='<div class="learn-step-title">'+esc(step.title)+'</div>';
+  html+='<div class="learn-step-content" id="learn-step-md">'+esc(step.content)+'</div>';
+
+  // Actions based on step type
+  html+='<div class="learn-step-actions">';
+  if(step.step_type==='explain'){
+    html+='<button class="learn-btn learn-btn-primary" onclick="completeStep('+step.id+',null,null)">Got It</button>';
+    html+='<button class="learn-btn" onclick="completeStep('+step.id+',\'Need more explanation\',2)">Explain More</button>';
+  }else if(step.step_type==='demonstrate'){
+    html+='<button class="learn-btn learn-btn-primary" onclick="completeStep('+step.id+',null,null)">Got It</button>';
+    html+='<button class="learn-btn" onclick="completeStep('+step.id+',\'Need to see it again\',2)">Show Me Again</button>';
+  }else if(step.step_type==='practice'){
+    html+='<textarea class="learn-response-area" id="learn-practice-response" placeholder="Describe what you did and what happened..."></textarea>';
+    html+='<button class="learn-btn learn-btn-success" onclick="submitPractice('+step.id+')">Check My Work</button>';
+  }else if(step.step_type==='quiz'){
+    html+='<textarea class="learn-response-area" id="learn-quiz-response" placeholder="Your answer..."></textarea>';
+    html+='<button class="learn-btn learn-btn-primary" onclick="submitQuiz('+step.id+')">Submit</button>';
+  }else if(step.step_type==='checkpoint'){
+    html+='<div class="learn-confidence-wrap">';
+    html+='<div class="learn-confidence-label">How confident do you feel?</div>';
+    html+='<div class="learn-confidence-val" id="learn-conf-val">3</div>';
+    html+='<input type="range" class="learn-confidence-slider" id="learn-conf-slider" min="1" max="5" value="3" oninput="document.getElementById(\'learn-conf-val\').textContent=this.value">';
+    html+='</div>';
+    html+='<button class="learn-btn learn-btn-primary" onclick="submitCheckpoint('+step.id+')">Continue</button>';
+  }
+  html+='</div></div>';
+  return html;
+}
+
+async function completeStep(stepId,response,confidence){
+  var data={};
+  if(response)data.response=response;
+  if(confidence!==null&&confidence!==undefined)data.confidence=confidence;
+  await apiPost('/api/instruct/step/'+stepId+'/complete',data);
+  // Reload session
+  if(activeLearnSession){
+    var session=await api('/api/instruct/session/'+activeLearnSession.id);
+    if(session&&session.id){
+      activeLearnSession=session;
+      renderActiveSession(session);
+    }
+  }
+}
+
+async function submitPractice(stepId){
+  var el=document.getElementById('learn-practice-response');
+  var text=el?el.value.trim():'';
+  await completeStep(stepId,text||'Completed practice',3);
+}
+
+async function submitQuiz(stepId){
+  var el=document.getElementById('learn-quiz-response');
+  var text=el?el.value.trim():'';
+  await completeStep(stepId,text||'Submitted answer',3);
+}
+
+async function submitCheckpoint(stepId){
+  var slider=document.getElementById('learn-conf-slider');
+  var conf=slider?parseInt(slider.value):3;
+  await completeStep(stepId,'Checkpoint confidence: '+conf,conf);
+}
+
+async function completeSession(sessionId){
+  var el=document.getElementById('learn-feedback');
+  var feedback=el?el.value.trim():'';
+  await apiPost('/api/instruct/session/'+sessionId+'/complete',{feedback:feedback||null});
+  activeLearnSession=null;
+  renderLearnStart();
+}
+
+async function endSessionEarly(sessionId){
+  await apiPost('/api/instruct/session/'+sessionId+'/complete',{feedback:'Ended early'});
+  activeLearnSession=null;
+  renderLearnStart();
+}
+
+async function loadLearnHistory(){
+  var area=document.getElementById('learn-history-area');
+  if(!area)return;
+  try{
+    var history=await api('/api/instruct/history');
+    if(!history||history.length===0){
+      area.innerHTML='';
+      return;
+    }
+    var html='<div class="learn-history-header">Past Sessions</div>';
+    history.forEach(function(h){
+      var conf=h.avg_confidence?parseFloat(h.avg_confidence):0;
+      var confColor=conf>=4?'var(--gn)':conf>=3?'var(--yl)':'var(--rd)';
+      var confBg=conf>=4?'rgba(63,185,80,.12)':conf>=3?'rgba(210,153,34,.12)':'rgba(248,81,73,.12)';
+      html+='<div class="learn-history-card">';
+      html+='<div><div class="learn-history-topic">'+esc(h.topic)+'</div>';
+      html+='<div class="learn-history-meta">'+esc(h.category)+' &middot; '+h.steps_completed+'/'+h.steps_total+' steps &middot; '+timeAgo(h.completed_at)+'</div></div>';
+      if(conf>0){
+        html+='<div class="learn-history-score" style="color:'+confColor+';background:'+confBg+'">'+conf.toFixed(1)+'/5</div>';
+      }
+      html+='</div>';
+    });
+    area.innerHTML=html;
+  }catch(e){area.innerHTML='';}
+}
+
+function toggleLearnSettings(){
+  learnSettingsOpen=!learnSettingsOpen;
+  var panel=document.getElementById('learn-settings-panel');
+  if(learnSettingsOpen){
+    panel.style.display='block';
+    loadLearnSettings();
+  }else{
+    panel.style.display='none';
+  }
+}
+
+async function loadLearnSettings(){
+  var panel=document.getElementById('learn-settings-panel');
+  if(!panel)return;
+  panel.innerHTML='<p style="color:var(--mu);text-align:center">Loading...</p>';
+  try{
+    var profile=await api('/api/learning-profile');
+    renderLearnSettings(profile);
+  }catch(e){
+    panel.innerHTML='<p style="color:var(--rd)">Failed to load profile</p>';
+  }
+}
+
+function renderLearnSettings(profile){
+  var panel=document.getElementById('learn-settings-panel');
+  if(!panel)return;
+  var styles=['visual','auditory','reading','kinesthetic','adaptive'];
+  var paces=['slow','moderate','fast'];
+  var details=['high_detail','balanced','concise','just_steps'];
+
+  var html='<div class="learn-settings">';
+  html+='<h3>Learning Profile</h3>';
+
+  html+='<div class="learn-setting-row"><div class="learn-setting-label">Learning Style</div>';
+  html+='<select class="learn-setting-select" id="lp-style">';
+  styles.forEach(function(s){
+    var label=s.charAt(0).toUpperCase()+s.slice(1);
+    if(s==='adaptive')label='Let the system adapt';
+    html+='<option value="'+s+'"'+(profile.learning_style===s?' selected':'')+'>'+label+'</option>';
+  });
+  html+='</select></div>';
+
+  html+='<div class="learn-setting-row"><div class="learn-setting-label">Pace</div>';
+  html+='<select class="learn-setting-select" id="lp-pace">';
+  paces.forEach(function(p){
+    html+='<option value="'+p+'"'+(profile.pace===p?' selected':'')+'>'+p.charAt(0).toUpperCase()+p.slice(1)+'</option>';
+  });
+  html+='</select></div>';
+
+  html+='<div class="learn-setting-row"><div class="learn-setting-label">Detail Level</div>';
+  html+='<select class="learn-setting-select" id="lp-detail">';
+  details.forEach(function(d){
+    var label=d.replace('_',' ');label=label.charAt(0).toUpperCase()+label.slice(1);
+    html+='<option value="'+d+'"'+(profile.detail_level===d?' selected':'')+'>'+label+'</option>';
+  });
+  html+='</select></div>';
+
+  // Known skills tags
+  html+='<div class="learn-setting-row"><div class="learn-setting-label">Known Skills</div>';
+  html+='<div class="learn-tags-wrap" id="lp-skills-tags">';
+  (profile.known_skills||[]).forEach(function(s){
+    html+='<span class="learn-tag">'+esc(s)+'<button class="learn-tag-remove" onclick="removeLearnTag(\'skills\',\''+esc(s).replace(/'/g,"\\'")+'\')">x</button></span>';
+  });
+  html+='<input class="learn-tag-input" id="lp-skills-input" placeholder="Add skill..." onkeydown="if(event.key===\'Enter\'){addLearnTag(\'skills\');event.preventDefault()}">';
+  html+='</div></div>';
+
+  // Interests tags
+  html+='<div class="learn-setting-row"><div class="learn-setting-label">Interests</div>';
+  html+='<div class="learn-tags-wrap" id="lp-interests-tags">';
+  (profile.interests||[]).forEach(function(s){
+    html+='<span class="learn-tag">'+esc(s)+'<button class="learn-tag-remove" onclick="removeLearnTag(\'interests\',\''+esc(s).replace(/'/g,"\\'")+'\')">x</button></span>';
+  });
+  html+='<input class="learn-tag-input" id="lp-interests-input" placeholder="Add interest..." onkeydown="if(event.key===\'Enter\'){addLearnTag(\'interests\');event.preventDefault()}">';
+  html+='</div></div>';
+
+  // Disabilities / accessibility
+  html+='<div class="learn-setting-row"><div class="learn-setting-label">Accessibility Needs</div>';
+  html+='<textarea class="learn-response-area" id="lp-disabilities" placeholder="Any accessibility needs or learning accommodations..." style="min-height:60px">'+(profile.disabilities&&profile.disabilities.length?profile.disabilities.join(', '):'')+'</textarea>';
+  html+='</div>';
+
+  html+='<button class="learn-save-btn" onclick="saveLearnProfile()">Save Profile</button>';
+  html+='<span id="lp-save-msg" style="margin-left:10px;font-size:.8rem"></span>';
+  html+='</div>';
+  panel.innerHTML=html;
+}
+
+var _learnProfileCache=null;
+async function ensureLearnProfileCache(){
+  if(!_learnProfileCache){
+    _learnProfileCache=await api('/api/learning-profile');
+  }
+  return _learnProfileCache;
+}
+
+async function addLearnTag(field){
+  var input=document.getElementById('lp-'+field+'-input');
+  if(!input||!input.value.trim())return;
+  var val=input.value.trim();
+  input.value='';
+  var profile=await ensureLearnProfileCache();
+  var arr=profile[field==='skills'?'known_skills':'interests']||[];
+  if(arr.indexOf(val)===-1)arr.push(val);
+  var update={};
+  update[field==='skills'?'known_skills':'interests']=arr;
+  _learnProfileCache=await apiPost('/api/learning-profile',update);
+  renderLearnSettings(_learnProfileCache);
+}
+
+async function removeLearnTag(field,val){
+  var profile=await ensureLearnProfileCache();
+  var key=field==='skills'?'known_skills':'interests';
+  var arr=(profile[key]||[]).filter(function(s){return s!==val});
+  var update={};update[key]=arr;
+  _learnProfileCache=await apiPost('/api/learning-profile',update);
+  renderLearnSettings(_learnProfileCache);
+}
+
+async function saveLearnProfile(){
+  var update={};
+  var styleEl=document.getElementById('lp-style');
+  var paceEl=document.getElementById('lp-pace');
+  var detailEl=document.getElementById('lp-detail');
+  var disEl=document.getElementById('lp-disabilities');
+  if(styleEl)update.learning_style=styleEl.value;
+  if(paceEl)update.pace=paceEl.value;
+  if(detailEl)update.detail_level=detailEl.value;
+  if(disEl){
+    var text=disEl.value.trim();
+    update.disabilities=text?text.split(',').map(function(s){return s.trim()}).filter(Boolean):[];
+  }
+  _learnProfileCache=await apiPost('/api/learning-profile',update);
+  var msg=document.getElementById('lp-save-msg');
+  if(msg){msg.textContent='Saved!';msg.style.color='var(--gn)';setTimeout(function(){msg.textContent=''},2000);}
+}
+
+function renderLearnMarkdown(){
+  var el=document.getElementById('learn-step-md');
+  if(!el)return;
+  var raw=el.textContent||el.innerText||'';
+  el.innerHTML=simpleMarkdown(raw);
+}
+
+function simpleMarkdown(text){
+  // Very basic markdown renderer — no external libs
+  var lines=text.split('\n');
+  var html='';var inPre=false;var inList=false;var listType='';
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    // Code blocks
+    if(line.trim().indexOf('```')===0){
+      if(inPre){html+='</code></pre>';inPre=false;}
+      else{html+='<pre><code>';inPre=true;}
+      continue;
+    }
+    if(inPre){html+=esc(line)+'\n';continue;}
+    // Close list if not a list item
+    if(inList&&!/^\s*[-*\d]/.test(line)&&line.trim()!==''){
+      html+='</'+(listType==='ol'?'ol':'ul')+'>';inList=false;
+    }
+    // Headers
+    if(/^### /.test(line)){html+='<h3>'+inlineMarkdown(line.slice(4))+'</h3>';continue;}
+    if(/^## /.test(line)){html+='<h2>'+inlineMarkdown(line.slice(3))+'</h2>';continue;}
+    if(/^# /.test(line)){html+='<h2>'+inlineMarkdown(line.slice(2))+'</h2>';continue;}
+    // Blockquote
+    if(/^> /.test(line)){html+='<blockquote>'+inlineMarkdown(line.slice(2))+'</blockquote>';continue;}
+    // Unordered list
+    if(/^\s*[-*] /.test(line)){
+      if(!inList){html+='<ul>';inList=true;listType='ul';}
+      html+='<li>'+inlineMarkdown(line.replace(/^\s*[-*] /,''))+'</li>';continue;
+    }
+    // Ordered list
+    if(/^\s*\d+\.\s/.test(line)){
+      if(!inList){html+='<ol>';inList=true;listType='ol';}
+      html+='<li>'+inlineMarkdown(line.replace(/^\s*\d+\.\s/,''))+'</li>';continue;
+    }
+    // Table
+    if(/^\|/.test(line)&&/\|$/.test(line.trim())){
+      // Check if it's a separator row
+      if(/^\|[\s-:|]+\|$/.test(line.trim()))continue;
+      var cells=line.split('|').filter(function(c){return c.trim()!==''});
+      var isHeader=i+1<lines.length&&/^\|[\s-:|]+\|$/.test(lines[i+1].trim());
+      var tag=isHeader?'th':'td';
+      html+='<table><tr>';
+      cells.forEach(function(c){html+='<'+tag+'>'+inlineMarkdown(c.trim())+'</'+tag+'>';});
+      html+='</tr></table>';
+      continue;
+    }
+    // Empty line
+    if(line.trim()===''){html+='<br>';continue;}
+    // Normal paragraph
+    html+='<p>'+inlineMarkdown(line)+'</p>';
+  }
+  if(inPre)html+='</code></pre>';
+  if(inList)html+='</'+(listType==='ol'?'ol':'ul')+'>';
+  return html;
+}
+
+function inlineMarkdown(text){
+  // Bold
+  text=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  // Italic
+  text=text.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  // Code
+  text=text.replace(/`([^`]+)`/g,'<code>$1</code>');
+  return text;
+}
+
 // ── Boot ──
 document.addEventListener('DOMContentLoaded',function(){showView('crew');startRefresh();loadComposeAgents()});
 """
@@ -2073,7 +2742,13 @@ def _build_html():
     <span class="as-dot dot-green" id="as-status-dot"></span>
     <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Toggle private session">\U0001f512</button>
   </div>
-  <div class="as-body">
+  <!-- Strategy agent tabs (Chat / Learn) -->
+  <div class="as-tabs" id="as-tabs" style="display:none">
+    <button class="as-tab active" data-tab="chat" onclick="switchAsTab('chat')">Chat</button>
+    <button class="as-tab" data-tab="learn" onclick="switchAsTab('learn')">Learn</button>
+    <button class="as-tab-gear" id="learn-gear-btn" onclick="toggleLearnSettings()" title="Learning Profile" style="display:none">&#9881;</button>
+  </div>
+  <div class="as-body" id="as-body-chat">
     <div class="as-intro" id="as-intro"></div>
     <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
     <div id="as-skills-section" style="margin-bottom:12px"></div>
@@ -2085,6 +2760,11 @@ def _build_html():
         <button class="chat-send" id="chat-send-btn" onclick="sendChat()">Send</button>
       </div>
     </div>
+  </div>
+  <!-- Learn tab body (only for strategy agent) -->
+  <div class="as-body" id="as-body-learn" style="display:none">
+    <div id="learn-settings-panel" style="display:none"></div>
+    <div id="learn-content"></div>
   </div>
 </div>
 
@@ -2202,6 +2882,51 @@ def _read_json_body(handler):
 
 def _period_to_hours(period):
     return {"today": 24, "3days": 72, "week": 168, "month": 720}.get(period, 24)
+
+
+def _get_human_id(db_path):
+    """Get the human agent's ID."""
+    conn = bus.get_conn(db_path)
+    try:
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        return human["id"] if human else None
+    finally:
+        conn.close()
+
+
+def _get_strategy_agent_id(db_path):
+    """Get the strategy (Ideas) agent's ID."""
+    conn = bus.get_conn(db_path)
+    try:
+        agent = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='strategy' AND status='active' LIMIT 1"
+        ).fetchone()
+        return agent["id"] if agent else None
+    finally:
+        conn.close()
+
+
+def _start_instruction(db_path, human_id, agent_id, topic, category):
+    """Start a new instruction session with generated lesson plan."""
+    session = bus.start_instruction_session(
+        human_id, agent_id, topic, category=category, db_path=db_path)
+
+    inst = instructor.Instructor(human_id, agent_id, db_path=db_path)
+    steps = inst.generate_lesson_plan(topic, category=category)
+
+    for step_data in steps:
+        bus.add_instruction_step(
+            session_id=session["id"],
+            step_number=step_data["step_number"],
+            title=step_data["title"],
+            content=step_data["content"],
+            step_type=step_data["step_type"],
+            db_path=db_path,
+        )
+
+    return bus.get_instruction_session(session["id"], db_path=db_path)
 
 
 def _get_stats(db_path):
@@ -2972,6 +3697,34 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 self.db_path, limit=int(qs.get("limit", [200])[0]),
                 agent_name=qs.get("agent", [None])[0]))
 
+        # ── Learning / Instruction endpoints ──
+        if path == "/api/learning-profile":
+            hid = _get_human_id(self.db_path)
+            if not hid:
+                return _json_response(self, {"error": "no human agent"}, 500)
+            return _json_response(self, bus.get_learning_profile(hid, db_path=self.db_path))
+
+        if path == "/api/instruct/active":
+            hid = _get_human_id(self.db_path)
+            if not hid:
+                return _json_response(self, {"error": "no human agent"}, 500)
+            sessions = bus.list_instruction_sessions(hid, status="active", db_path=self.db_path)
+            if sessions:
+                session = bus.get_instruction_session(sessions[0]["id"], db_path=self.db_path)
+                return _json_response(self, session or {})
+            return _json_response(self, {})
+
+        m = re.match(r"^/api/instruct/session/(\d+)$", path)
+        if m:
+            session = bus.get_instruction_session(int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, session or {"error": "not found"}, 200 if session else 404)
+
+        if path == "/api/instruct/history":
+            hid = _get_human_id(self.db_path)
+            if not hid:
+                return _json_response(self, {"error": "no human agent"}, 500)
+            return _json_response(self, bus.get_instruction_history(hid, db_path=self.db_path))
+
         if path == "/api/health":
             return _json_response(self, {"status": "ok",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -3154,6 +3907,66 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)
+
+        # ── Learning / Instruction POST endpoints ──
+        if path == "/api/learning-profile":
+            hid = _get_human_id(self.db_path)
+            if not hid:
+                return _json_response(self, {"error": "no human agent"}, 500)
+            result = bus.update_learning_profile(hid, data, db_path=self.db_path)
+            return _json_response(self, result)
+
+        if path == "/api/instruct/start":
+            hid = _get_human_id(self.db_path)
+            if not hid:
+                return _json_response(self, {"error": "no human agent"}, 500)
+            topic = data.get("topic", "").strip()
+            if not topic:
+                return _json_response(self, {"error": "need topic"}, 400)
+            category = data.get("category", "general")
+            # Find the strategy agent (Ideas)
+            agent_id = _get_strategy_agent_id(self.db_path)
+            if not agent_id:
+                return _json_response(self, {"error": "no Ideas agent found"}, 500)
+            result = _start_instruction(self.db_path, hid, agent_id, topic, category)
+            return _json_response(self, result, 201)
+
+        m = re.match(r"^/api/instruct/step/(\d+)/complete$", path)
+        if m:
+            step_id = int(m.group(1))
+            response = data.get("response")
+            confidence = data.get("confidence")
+            if confidence is not None:
+                confidence = int(confidence)
+            result = bus.complete_instruction_step(
+                step_id, human_response=response, confidence=confidence,
+                db_path=self.db_path)
+            # Adaptive step insertion based on confidence
+            if confidence is not None:
+                step = result
+                session = bus.get_instruction_session(
+                    step["session_id"], db_path=self.db_path)
+                if session:
+                    hid = session["human_id"]
+                    agent_id = session["agent_id"]
+                    inst = instructor.Instructor(hid, agent_id, db_path=self.db_path)
+                    inst.adapt_next_step(step["session_id"], confidence)
+            return _json_response(self, result)
+
+        m = re.match(r"^/api/instruct/session/(\d+)/complete$", path)
+        if m:
+            session_id = int(m.group(1))
+            feedback = data.get("feedback")
+            result = bus.complete_instruction_session(
+                session_id, human_feedback=feedback, db_path=self.db_path)
+            # Generate summary and store knowledge
+            session = bus.get_instruction_session(session_id, db_path=self.db_path)
+            if session:
+                inst = instructor.Instructor(
+                    session["human_id"], session["agent_id"],
+                    db_path=self.db_path)
+                inst.summarize_session(session_id)
+            return _json_response(self, result)
 
         if path == "/api/message":
             required = ("from_agent", "to_agent", "message_type", "subject", "body")

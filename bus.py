@@ -408,8 +408,69 @@ def init_db(db_path: Optional[Path] = None) -> None:
             FOREIGN KEY (techie_id) REFERENCES authorized_techies(techie_id)
         );
 
+        -- ========= Learning / Instruction =========
+
+        CREATE TABLE IF NOT EXISTS learning_profile (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            human_id        INTEGER NOT NULL REFERENCES agents(id),
+            learning_style  TEXT NOT NULL DEFAULT 'adaptive'
+                            CHECK(learning_style IN ('visual','auditory','reading','kinesthetic','adaptive')),
+            expertise_level TEXT NOT NULL DEFAULT 'general'
+                            CHECK(expertise_level IN ('beginner','intermediate','advanced','expert','general')),
+            pace            TEXT NOT NULL DEFAULT 'moderate'
+                            CHECK(pace IN ('slow','moderate','fast')),
+            detail_level    TEXT NOT NULL DEFAULT 'balanced'
+                            CHECK(detail_level IN ('high_detail','balanced','concise','just_steps')),
+            known_skills    TEXT NOT NULL DEFAULT '[]',
+            interests       TEXT NOT NULL DEFAULT '[]',
+            struggles       TEXT NOT NULL DEFAULT '[]',
+            disabilities    TEXT NOT NULL DEFAULT '[]',
+            language        TEXT NOT NULL DEFAULT 'en',
+            preferred_examples TEXT NOT NULL DEFAULT 'practical',
+            feedback_history TEXT NOT NULL DEFAULT '[]',
+            sessions_completed INTEGER NOT NULL DEFAULT 0,
+            updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            UNIQUE(human_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS instruction_sessions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            human_id        INTEGER NOT NULL REFERENCES agents(id),
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            topic           TEXT NOT NULL,
+            category        TEXT NOT NULL DEFAULT 'general',
+            difficulty      TEXT NOT NULL DEFAULT 'beginner'
+                            CHECK(difficulty IN ('beginner','intermediate','advanced','expert')),
+            steps_total     INTEGER NOT NULL DEFAULT 0,
+            steps_completed INTEGER NOT NULL DEFAULT 0,
+            status          TEXT NOT NULL DEFAULT 'active'
+                            CHECK(status IN ('active','paused','completed','abandoned')),
+            notes           TEXT NOT NULL DEFAULT '',
+            human_feedback  TEXT,
+            started_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            completed_at    TEXT,
+            updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS instruction_steps (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id      INTEGER NOT NULL REFERENCES instruction_sessions(id),
+            step_number     INTEGER NOT NULL,
+            title           TEXT NOT NULL,
+            content         TEXT NOT NULL,
+            step_type       TEXT NOT NULL DEFAULT 'explain'
+                            CHECK(step_type IN ('explain','demonstrate','practice','quiz','checkpoint')),
+            completed       INTEGER NOT NULL DEFAULT 0,
+            human_response  TEXT,
+            confidence      INTEGER CHECK(confidence BETWEEN 1 AND 5),
+            completed_at    TEXT
+        );
+
         -- ========= Indexes =========
 
+        CREATE INDEX IF NOT EXISTS idx_learning_profile ON learning_profile(human_id);
+        CREATE INDEX IF NOT EXISTS idx_instruction_sessions ON instruction_sessions(human_id, status);
+        CREATE INDEX IF NOT EXISTS idx_instruction_steps ON instruction_steps(session_id, step_number);
         CREATE INDEX IF NOT EXISTS idx_messages_to      ON messages(to_agent_id, status);
         CREATE INDEX IF NOT EXISTS idx_messages_from    ON messages(from_agent_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_audit_agent      ON audit_log(agent_id, timestamp);
@@ -3503,6 +3564,261 @@ def list_techies(status: str = "verified", standing: str = "good",
         "SELECT * FROM authorized_techies WHERE kyc_status=? AND standing=? "
         "ORDER BY rating_avg DESC",
         (status, standing),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Learning Profile & Instruction Sessions
+# ---------------------------------------------------------------------------
+
+def get_learning_profile(human_id: int, db_path: Optional[Path] = None) -> dict:
+    """Get or create the human's learning profile."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM learning_profile WHERE human_id=?", (human_id,)
+    ).fetchone()
+    if row:
+        result = dict(row)
+        for field in ("known_skills", "interests", "struggles", "disabilities", "feedback_history"):
+            result[field] = json.loads(result[field])
+        conn.close()
+        return result
+
+    # Create default profile
+    conn.execute(
+        "INSERT INTO learning_profile (human_id) VALUES (?)", (human_id,)
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM learning_profile WHERE human_id=?", (human_id,)
+    ).fetchone()
+    conn.close()
+    result = dict(row)
+    for field in ("known_skills", "interests", "struggles", "disabilities", "feedback_history"):
+        result[field] = json.loads(result[field])
+    return result
+
+
+def update_learning_profile(human_id: int, updates: dict,
+                            db_path: Optional[Path] = None) -> dict:
+    """Update learning profile fields. Updates is a dict of field:value pairs."""
+    # Ensure profile exists
+    get_learning_profile(human_id, db_path=db_path)
+
+    allowed_fields = {
+        "learning_style", "expertise_level", "pace", "detail_level",
+        "known_skills", "interests", "struggles", "disabilities",
+        "language", "preferred_examples", "feedback_history", "sessions_completed",
+    }
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for key, val in updates.items():
+        if key not in allowed_fields:
+            continue
+        if isinstance(val, (list, dict)):
+            val = json.dumps(val)
+        conn.execute(
+            f"UPDATE learning_profile SET {key}=?, updated_at=? WHERE human_id=?",
+            (val, now, human_id),
+        )
+    conn.commit()
+    conn.close()
+    return get_learning_profile(human_id, db_path=db_path)
+
+
+def start_instruction_session(human_id: int, agent_id: int, topic: str,
+                              category: str = "general",
+                              db_path: Optional[Path] = None) -> dict:
+    """Create a new instruction session. Returns session dict."""
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "INSERT INTO instruction_sessions (human_id, agent_id, topic, category) "
+        "VALUES (?, ?, ?, ?)",
+        (human_id, agent_id, topic, category),
+    )
+    session_id = cur.lastrowid
+    _audit(conn, "instruction_session_started", agent_id, {
+        "session_id": session_id, "topic": topic, "category": category,
+    })
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM instruction_sessions WHERE id=?", (session_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def add_instruction_step(session_id: int, step_number: int, title: str,
+                         content: str, step_type: str = "explain",
+                         db_path: Optional[Path] = None) -> dict:
+    """Add a step to an instruction session."""
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "INSERT INTO instruction_steps (session_id, step_number, title, content, step_type) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (session_id, step_number, title, content, step_type),
+    )
+    step_id = cur.lastrowid
+    # Update total step count
+    conn.execute(
+        "UPDATE instruction_sessions SET steps_total = "
+        "(SELECT COUNT(*) FROM instruction_steps WHERE session_id=?), "
+        "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+        "WHERE id=?",
+        (session_id, session_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM instruction_steps WHERE id=?", (step_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def complete_instruction_step(step_id: int, human_response: Optional[str] = None,
+                              confidence: Optional[int] = None,
+                              db_path: Optional[Path] = None) -> dict:
+    """Mark a step as completed with optional feedback."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = get_conn(db_path)
+    conn.execute(
+        "UPDATE instruction_steps SET completed=1, human_response=?, confidence=?, "
+        "completed_at=? WHERE id=?",
+        (human_response, confidence, now, step_id),
+    )
+    # Get session_id to update counts
+    step = conn.execute(
+        "SELECT session_id FROM instruction_steps WHERE id=?", (step_id,)
+    ).fetchone()
+    if step:
+        conn.execute(
+            "UPDATE instruction_sessions SET steps_completed = "
+            "(SELECT COUNT(*) FROM instruction_steps WHERE session_id=? AND completed=1), "
+            "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+            "WHERE id=?",
+            (step["session_id"], step["session_id"]),
+        )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM instruction_steps WHERE id=?", (step_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_instruction_session(session_id: int,
+                            db_path: Optional[Path] = None) -> Optional[dict]:
+    """Get session with all its steps."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM instruction_sessions WHERE id=?", (session_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    session = dict(row)
+    steps = conn.execute(
+        "SELECT * FROM instruction_steps WHERE session_id=? ORDER BY step_number",
+        (session_id,),
+    ).fetchall()
+    session["steps"] = [dict(s) for s in steps]
+    conn.close()
+    return session
+
+
+def list_instruction_sessions(human_id: int, status: Optional[str] = None,
+                              db_path: Optional[Path] = None) -> list:
+    """List instruction sessions, optionally filtered by status."""
+    conn = get_conn(db_path)
+    if status:
+        rows = conn.execute(
+            "SELECT * FROM instruction_sessions WHERE human_id=? AND status=? "
+            "ORDER BY updated_at DESC",
+            (human_id, status),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM instruction_sessions WHERE human_id=? "
+            "ORDER BY updated_at DESC",
+            (human_id,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def complete_instruction_session(session_id: int,
+                                 human_feedback: Optional[str] = None,
+                                 db_path: Optional[Path] = None) -> dict:
+    """Mark session as completed, update learning profile stats."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = get_conn(db_path)
+    conn.execute(
+        "UPDATE instruction_sessions SET status='completed', human_feedback=?, "
+        "completed_at=?, updated_at=? WHERE id=?",
+        (human_feedback, now, now, session_id),
+    )
+
+    # Get session info for profile update
+    session = conn.execute(
+        "SELECT * FROM instruction_sessions WHERE id=?", (session_id,)
+    ).fetchone()
+    if session:
+        human_id = session["human_id"]
+        # Increment sessions_completed in learning_profile
+        conn.execute(
+            "UPDATE learning_profile SET sessions_completed = sessions_completed + 1, "
+            "updated_at=? WHERE human_id=?",
+            (now, human_id),
+        )
+
+        # Add feedback to history
+        profile = conn.execute(
+            "SELECT feedback_history FROM learning_profile WHERE human_id=?",
+            (human_id,),
+        ).fetchone()
+        if profile:
+            history = json.loads(profile["feedback_history"])
+            history.append({
+                "session_id": session_id,
+                "topic": session["topic"],
+                "feedback": human_feedback,
+                "completed_at": now,
+            })
+            # Keep last 50 entries
+            history = history[-50:]
+            conn.execute(
+                "UPDATE learning_profile SET feedback_history=? WHERE human_id=?",
+                (json.dumps(history), human_id),
+            )
+
+        _audit(conn, "instruction_session_completed", session["agent_id"], {
+            "session_id": session_id,
+            "topic": session["topic"],
+            "steps_completed": session["steps_completed"],
+        })
+
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM instruction_sessions WHERE id=?", (session_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_instruction_history(human_id: int, limit: int = 20,
+                            db_path: Optional[Path] = None) -> list:
+    """Get completed sessions for the human -- used to understand what they already know."""
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT s.*, "
+        "(SELECT ROUND(AVG(st.confidence), 1) FROM instruction_steps st "
+        " WHERE st.session_id=s.id AND st.confidence IS NOT NULL) AS avg_confidence "
+        "FROM instruction_sessions s "
+        "WHERE s.human_id=? AND s.status='completed' "
+        "ORDER BY s.completed_at DESC LIMIT ?",
+        (human_id, limit),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
