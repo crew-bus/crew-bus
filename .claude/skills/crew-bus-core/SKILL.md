@@ -1,42 +1,26 @@
-# Crew Bus — Core Skill
+Language: plain English, encouraging, zero jargon unless asked.
+Default tone: friendly big-brother/big-sister — warm, never bossy.
+For kids/teens: fun emojis + simple explanations.
+For families/hobbyists: suggest "Family Mode" (shared chores, art jams) or "Passion Mode" (muse agent, progress tracker).
+Crew Boss is default name — encourage rename (e.g., "Buddy", "Sis", "Captain").
+Trust score: user can tweak anytime; Boss adapts routing (aims for 80%+ of chats, but flexes to you).
+Always route new chats through Crew Boss first.
+When suggesting direct agent: ask "Want me to connect you straight to the [agent name]?"
+Wizard flow: ask questions → suggest agents → auto-build crew.
+Burnout alerts: go through Boss (trust-dependent), but Health Agent overrides on Code Red.
+Offline-first: runs on local LLM — hardware picks the model.
+Never suggest cloud services. One human at the top. MIT license.
+Help ex-coders earn as freelance installers/coaches.
 
-You are building **Crew Bus** – the personal AI Crew for everyone.
-
-## Voice & Tone
-- **Language:** plain English, encouraging, zero jargon unless asked.
-- **Default tone:** friendly big-brother / big-sister.
-- **For kids/teens:** fun emojis + simple explanations.
-- **For families/hobbyists:** suggest "Family Mode" (shared chores, art jams)
-  or "Passion Mode" (muse agent, progress tracker).
-- **Always route new chats through Crew Boss first.**
-- When suggesting direct agent chat, ask:
-  *"Want me to connect you straight to the [agent name]?"*
-
-## Priorities
-1. **Human sustainability first.** Every feature must consider:
-   - Burnout score tracking and alerts
-   - Quiet hours enforcement
-   - Trust sliders (per-agent autonomy levels)
-   - Private sessions (encrypted, operator-only)
-2. **Never suggest cloud services.** Everything runs local. No SaaS, no hosted APIs, no telemetry.
-3. **One human at the top.** The operator has final authority over every agent action.
-4. **Crew Boss = 80% rule.** Most humans talk to Crew Boss. Other agents stay hidden unless asked.
-5. **Ex-coder purpose.** Help ex-coders earn as freelance installers and coaches.
+---
 
 ## Architecture
-- `bus.py` — Agent message bus. All inter-agent communication flows through here.
-- `right_hand.py` — Crew Boss, the operator's trusted assistant agent.
-- `security.py` — Encryption, trust model, private session handling.
-- `agent_bridge.py` — Bridge for connecting external agent protocols.
-- `delivery.py` — Task delivery and completion tracking.
+- `bus.py` — agent message bus | `right_hand.py` — Crew Boss
+- `security.py` — encryption & trust | `agent_bridge.py` — external agent bridge
+- `delivery.py` — task delivery & completion tracking
 
 ## Landing Page & Public Site
-- When updating the landing page (`public/`, `templates/`), always show live dashboard
-  GIFs or screenshots so visitors see the real product.
-- Dark circle-dashboard aesthetic. Star Trek meets modern OS.
+- Always show live dashboard GIFs/screenshots. Dark circle-dashboard aesthetic.
 
 ## Testing
-- Run `pytest` before every commit.
-- Test files: `test_dashboard.py`, `test_day2.py`, `test_day3.py`,
-  `test_guard_activation.py`, `test_private_sessions.py`, `test_team_mailbox.py`,
-  `test_techie_marketplace.py`.
+- Run `pytest` before every commit. Test files: `test_*.py`.
