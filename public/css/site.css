@@ -365,6 +365,28 @@ img { max-width: 100%; }
     box-shadow: 0 0 40px rgba(100, 181, 246, 0.5), 0 0 80px rgba(100, 181, 246, 0.2), 0 0 120px rgba(100, 181, 246, 0.08);
 }
 
+/* --- Hero Demo GIF Placeholder --- */
+.hero-demo {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.demo-gif {
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 60px rgba(233, 69, 96, 0.06);
+    display: block;
+}
+
+.demo-caption {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* --- Feature Grid --- */
 .feature-grid {
     display: grid;
