@@ -48,9 +48,12 @@ FREE AND OPEN SOURCE — crew-bus is free infrastructure for the world.
 Security Guard module available separately (paid activation key).
 """
 
+import hashlib
 import json
+import os
 import random
 import re
+import secrets
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
@@ -62,6 +65,18 @@ from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
+
+# Stripe integration — optional, only required for public deployment
+try:
+    import stripe
+    STRIPE_AVAILABLE = True
+except ImportError:
+    STRIPE_AVAILABLE = False
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_GUARD_PRICE_ID = os.environ.get("STRIPE_GUARD_PRICE_ID", "")
+SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
@@ -2158,6 +2173,103 @@ def _get_audit_api(db_path, limit=200, agent_name=None):
 
 # ── Request Handler ─────────────────────────────────────────────────
 
+# ── Stripe Checkout Helpers ──────────────────────────────────────────
+
+def _generate_activation_key():
+    """Generate a unique Guard activation key."""
+    raw = secrets.token_hex(16)
+    return f"GUARD-{raw[:8].upper()}-{raw[8:16].upper()}-{raw[16:24].upper()}-{raw[24:].upper()}"
+
+
+def _stripe_create_guard_checkout(handler):
+    """Create a Stripe Checkout session for Guard activation."""
+    if not STRIPE_AVAILABLE:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+    if not STRIPE_SECRET_KEY:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+
+    stripe.api_key = STRIPE_SECRET_KEY
+    try:
+        checkout_params = {
+            "mode": "payment",
+            "success_url": f"{SITE_URL}/activate/success.html?session_id={{CHECKOUT_SESSION_ID}}",
+            "cancel_url": f"{SITE_URL}/activate",
+            "line_items": [],
+        }
+        if STRIPE_GUARD_PRICE_ID:
+            checkout_params["line_items"].append({
+                "price": STRIPE_GUARD_PRICE_ID,
+                "quantity": 1,
+            })
+        else:
+            checkout_params["line_items"].append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": "crew-bus Security Guard",
+                        "description": "Lifetime activation — anomaly detection, threat monitoring, automatic escalation",
+                    },
+                    "unit_amount": 2000,
+                },
+                "quantity": 1,
+            })
+
+        session = stripe.checkout.Session.create(**checkout_params)
+        return _json_response(handler, {"url": session.url})
+    except Exception as e:
+        return _json_response(handler, {"error": str(e)}, 500)
+
+
+def _stripe_verify_session(handler, session_id):
+    """Verify a completed Stripe Checkout session and return activation key."""
+    if not session_id:
+        return _json_response(handler, {"error": "missing session_id"}, 400)
+    if not STRIPE_AVAILABLE or not STRIPE_SECRET_KEY:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+
+    stripe.api_key = STRIPE_SECRET_KEY
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        if session.payment_status == "paid":
+            key = _generate_activation_key()
+            # Activate guard in the database
+            bus.activate_guard(key, db_path=handler.db_path)
+            return _json_response(handler, {"activation_key": key, "status": "paid"})
+        return _json_response(handler, {"error": "payment not completed", "status": session.payment_status}, 402)
+    except Exception as e:
+        return _json_response(handler, {"error": str(e)}, 500)
+
+
+def _stripe_webhook(handler):
+    """Handle Stripe webhook events (payment confirmations, etc.)."""
+    if not STRIPE_AVAILABLE:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+
+    content_length = int(handler.headers.get("Content-Length", 0))
+    payload = handler.rfile.read(content_length)
+    sig_header = handler.headers.get("Stripe-Signature", "")
+
+    if STRIPE_WEBHOOK_SECRET:
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        except (ValueError, stripe.error.SignatureVerificationError):
+            return _json_response(handler, {"error": "invalid signature"}, 400)
+    else:
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            return _json_response(handler, {"error": "invalid JSON"}, 400)
+
+    if event.get("type") == "checkout.session.completed":
+        session = event["data"]["object"]
+        if session.get("payment_status") == "paid":
+            key = _generate_activation_key()
+            bus.activate_guard(key, db_path=handler.db_path)
+            # In production: send activation key via email to session customer_email
+
+    return _json_response(handler, {"received": True})
+
+
 class CrewBusHandler(BaseHTTPRequestHandler):
     db_path = DEFAULT_DB
 
@@ -2265,6 +2377,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             return _json_response(self, {"status": "ok",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "db_path": str(self.db_path)})
+
+        # Stripe checkout session verification — returns activation key
+        if path == "/api/checkout/verify":
+            session_id = qs.get("session_id", [None])[0]
+            return _stripe_verify_session(self, session_id)
 
         _json_response(self, {"error": "not found"}, 404)
 
@@ -2445,6 +2562,14 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"ok": True, "message_id": result["message_id"]}, 201)
             except (PermissionError, ValueError) as e:
                 return _json_response(self, {"error": str(e)}, 400)
+
+        # Stripe checkout — create session for Guard activation ($20)
+        if path == "/api/checkout/guard":
+            return _stripe_create_guard_checkout(self)
+
+        # Stripe webhook — handle payment events
+        if path == "/api/stripe/webhook":
+            return _stripe_webhook(self)
 
         _json_response(self, {"error": "not found"}, 404)
 

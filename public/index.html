@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>crew-bus — Your AI Crew, One Message Bus</title>
+    <meta name="description" content="crew-bus is the free, open-source message bus that organizes your AI agents into a crew with a chain of command. One human, one Crew Boss, five core agents.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/img/favicon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://crew-bus.dev">
+    <meta property="og:title" content="crew-bus — Your AI Crew, One Message Bus">
+    <meta property="og:description" content="Free, open-source message bus that organizes your AI agents into a crew with a chain of command.">
+    <meta property="og:image" content="https://crew-bus.dev/img/og-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="crew-bus — Your AI Crew, One Message Bus">
+    <meta name="twitter:description" content="Free, open-source message bus that organizes your AI agents into a crew with a chain of command.">
+    <meta name="twitter:image" content="https://crew-bus.dev/img/og-card.png">
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "crew-bus",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS, Windows",
+        "offers": [
+            {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "USD",
+                "description": "Core message bus — free and open source forever"
+            },
+            {
+                "@type": "Offer",
+                "price": "20.00",
+                "priceCurrency": "USD",
+                "description": "Security Guard module — one-time activation"
+            }
+        ],
+        "description": "Open-source message bus that organizes AI agents into a crew with a chain of command. Trust-based autonomy, burnout awareness, and quiet hours built in.",
+        "url": "https://crew-bus.dev",
+        "downloadUrl": "https://github.com/crew-bus/crew-bus",
+        "softwareVersion": "1.0",
+        "author": {
+            "@type": "Organization",
+            "name": "crew-bus"
+        }
+    }
+    </script>
+
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand">
+            <span class="nav-logo">&#9632;</span> crew-bus
+        </a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="navLinks">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#guard">Guard</a>
+            <a href="/installer">Installers</a>
+            <a href="/jobs">Job Board</a>
+            <a href="#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<header class="hero">
+    <div class="container">
+        <div class="hero-content">
+            <h1 class="hero-title">Your AI Crew.<br><span class="highlight">One Message Bus.</span></h1>
+            <p class="hero-sub">
+                Free, open-source infrastructure that organizes your AI agents into a crew
+                with a chain of command. Trust-based autonomy. Burnout awareness. Quiet hours.
+                One human at the top — always.
+            </p>
+            <div class="hero-actions">
+                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary btn-lg">
+                    Install Free
+                </a>
+                <a href="#how-it-works" class="btn btn-outline btn-lg">
+                    See How It Works
+                </a>
+            </div>
+            <p class="hero-note">pip install crew-bus &middot; MIT License &middot; No cloud required</p>
+        </div>
+
+        <!-- Agent Circle Diagram -->
+        <div class="hero-visual">
+            <div class="circle-diagram">
+                <div class="circle-center">
+                    <div class="circle-node node-boss">
+                        <span class="node-icon">&#9733;</span>
+                        <span class="node-label">Crew Boss</span>
+                    </div>
+                </div>
+                <div class="circle-ring">
+                    <div class="circle-node node-guard" style="--angle: 0deg;">
+                        <span class="node-icon">&#9681;</span>
+                        <span class="node-label">Guard</span>
+                    </div>
+                    <div class="circle-node node-wellness" style="--angle: 72deg;">
+                        <span class="node-icon">&#9829;</span>
+                        <span class="node-label">Wellness</span>
+                    </div>
+                    <div class="circle-node node-ideas" style="--angle: 144deg;">
+                        <span class="node-icon">&#9733;</span>
+                        <span class="node-label">Ideas</span>
+                    </div>
+                    <div class="circle-node node-wallet" style="--angle: 216deg;">
+                        <span class="node-icon">&#9670;</span>
+                        <span class="node-label">Wallet</span>
+                    </div>
+                    <div class="circle-node node-legal" style="--angle: 288deg;">
+                        <span class="node-icon">&#9878;</span>
+                        <span class="node-label">Legal</span>
+                    </div>
+                </div>
+                <div class="circle-human">
+                    <span class="node-icon">&#9673;</span>
+                    <span class="node-label">You</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- ============================================================
+     FEATURE CARDS (8)
+     ============================================================ -->
+<section class="section" id="features">
+    <div class="container">
+        <h2 class="section-title">What crew-bus does</h2>
+        <p class="section-sub">Everything you need to run a crew of AI agents — and stay in control.</p>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">&#9733;</div>
+                <h3>Crew Boss</h3>
+                <p>AI chief of staff that routes messages, filters noise, and learns your preferences. Trust slider from 1 (observer) to 10 (full autonomy).</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9681;</div>
+                <h3>Chain of Command</h3>
+                <p>Enforced hierarchy: You &rarr; Crew Boss &rarr; Core Agents &rarr; Departments. No agent bypasses the chain unless you allow it.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9829;</div>
+                <h3>Burnout Awareness</h3>
+                <p>Built-in burnout score (1-10). When you're running hot, non-urgent messages get queued. Your crew protects your energy.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9790;</div>
+                <h3>Quiet Hours</h3>
+                <p>Set your off hours. Only critical messages get through. Everything else waits for morning. Timezone-aware.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9993;</div>
+                <h3>Multi-Channel Delivery</h3>
+                <p>Telegram, Email, Signal, or console. Each agent gets its own channel. Plug in whatever you use.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9878;</div>
+                <h3>Morning Briefings</h3>
+                <p>Wake up to a compiled brief from your Crew Boss. Key decisions, overnight activity, and what needs your attention today.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128274;</div>
+                <h3>Private Sessions</h3>
+                <p>1-on-1 encrypted conversations with any agent. Crew Boss logs the occurrence but never sees the content.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9879;</div>
+                <h3>Team Mailbox</h3>
+                <p>Any agent can escalate to the team mailbox when the chain of command isn't enough. Code red alerts go straight to you.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     HOW IT WORKS — 3 Steps
+     ============================================================ -->
+<section class="section section-dark" id="how-it-works">
+    <div class="container">
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-sub">Three steps. Five minutes. Your crew is running.</p>
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Install</h3>
+                <div class="step-terminal">
+                    <div class="terminal-bar">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                    </div>
+                    <code>pip install crew-bus</code>
+                </div>
+                <p>One command. No cloud accounts. No API keys. Runs on your machine.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Configure</h3>
+                <div class="step-terminal">
+                    <div class="terminal-bar">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                    </div>
+                    <code>crew-bus init</code>
+                </div>
+                <p>Answer a few questions. Name your crew. Set your quiet hours. Pick your channels.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Run</h3>
+                <div class="step-terminal">
+                    <div class="terminal-bar">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                    </div>
+                    <code>crew-bus dashboard</code>
+                </div>
+                <p>Open localhost:8080. Your circle dashboard is live. Five agents, one Crew Boss, and you at the top.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     TERMINAL DEMO
+     ============================================================ -->
+<section class="section">
+    <div class="container container-narrow">
+        <h2 class="section-title">The Dashboard</h2>
+        <p class="section-sub">A command center you can see at a glance. Dark theme. Circle layout. Every agent visible.</p>
+        <div class="demo-terminal">
+            <div class="terminal-bar">
+                <span class="terminal-dot red"></span>
+                <span class="terminal-dot yellow"></span>
+                <span class="terminal-dot green"></span>
+                <span class="terminal-title">crew-bus dashboard — localhost:8080</span>
+            </div>
+            <div class="demo-screen">
+                <div class="demo-sidebar">
+                    <div class="demo-brand">CREW-BUS</div>
+                    <div class="demo-nav-item active">&#9632; Overview</div>
+                    <div class="demo-nav-item">&#9679; Agents</div>
+                    <div class="demo-nav-item">&#9993; Messages</div>
+                    <div class="demo-nav-item">&#9881; Decisions</div>
+                    <div class="demo-nav-item">&#9788; Briefings</div>
+                </div>
+                <div class="demo-main">
+                    <div class="demo-stats">
+                        <div class="demo-stat"><span class="demo-stat-val">3</span><span class="demo-stat-label">Trust</span></div>
+                        <div class="demo-stat"><span class="demo-stat-val">2</span><span class="demo-stat-label">Burnout</span></div>
+                        <div class="demo-stat"><span class="demo-stat-val">5</span><span class="demo-stat-label">Agents</span></div>
+                        <div class="demo-stat"><span class="demo-stat-val">47</span><span class="demo-stat-label">Messages</span></div>
+                    </div>
+                    <div class="demo-circle">
+                        <div class="demo-agent demo-boss">Crew Boss</div>
+                        <div class="demo-agent demo-g">Guard</div>
+                        <div class="demo-agent demo-w">Wellness</div>
+                        <div class="demo-agent demo-i">Ideas</div>
+                        <div class="demo-agent demo-wa">Wallet</div>
+                        <div class="demo-agent demo-l">Legal</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     GUARD ACTIVATION
+     ============================================================ -->
+<section class="section section-dark" id="guard">
+    <div class="container">
+        <div class="guard-split">
+            <div class="guard-info">
+                <h2 class="section-title text-left">Security Guard</h2>
+                <p class="guard-desc">
+                    The core bus is free forever. The Security Guard module adds real-time
+                    anomaly detection, threat monitoring, and escalation protocols.
+                </p>
+                <ul class="guard-features">
+                    <li>Anomaly detection — unusual message volume, timing, patterns</li>
+                    <li>Threat monitoring — mutiny, financial, reputation, legal, digital</li>
+                    <li>Automatic escalation to Crew Boss and to you</li>
+                    <li>Message volume thresholds per agent role</li>
+                    <li>Security event logging and audit trail</li>
+                </ul>
+                <div class="guard-price">
+                    <span class="price">$20</span>
+                    <span class="price-note">one-time &middot; lifetime activation</span>
+                </div>
+                <a href="/activate" class="btn btn-primary btn-lg">Activate Guard</a>
+            </div>
+            <div class="guard-visual">
+                <div class="guard-shield">
+                    <span class="shield-icon">&#9681;</span>
+                    <div class="shield-pulse"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     INSTALLER MARKETPLACE SECTION
+     ============================================================ -->
+<section class="section" id="installers">
+    <div class="container">
+        <h2 class="section-title">Installer Marketplace</h2>
+        <p class="section-sub">
+            Don't want to set it up yourself? Find a verified installer in your area.
+            Every installer is KYC-verified and rated by the community.
+        </p>
+        <div class="installer-preview">
+            <div class="installer-card-preview">
+                <div class="installer-avatar">&#9673;</div>
+                <div class="installer-info">
+                    <strong>Verified Installer</strong>
+                    <span class="installer-badge">&#10003; KYC Verified</span>
+                    <span class="installer-stars">&#9733;&#9733;&#9733;&#9733;&#9733; 4.9</span>
+                    <span class="installer-spec">Full crew setup &middot; Custom configs &middot; Training</span>
+                </div>
+            </div>
+            <div class="installer-card-preview">
+                <div class="installer-avatar">&#9673;</div>
+                <div class="installer-info">
+                    <strong>Verified Installer</strong>
+                    <span class="installer-badge">&#10003; KYC Verified</span>
+                    <span class="installer-stars">&#9733;&#9733;&#9733;&#9733;&#9734; 4.6</span>
+                    <span class="installer-spec">Agent tuning &middot; Channel integration &middot; Security audit</span>
+                </div>
+            </div>
+        </div>
+        <div class="installer-actions">
+            <a href="/installer" class="btn btn-primary">Find an Installer</a>
+            <a href="/installer/signup" class="btn btn-outline">Become an Installer</a>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     JOB BOARD SECTION
+     ============================================================ -->
+<section class="section section-dark" id="jobs">
+    <div class="container">
+        <h2 class="section-title">Job Board</h2>
+        <p class="section-sub">
+            Post a job. Get matched with a verified installer. Track progress from open to complete.
+        </p>
+        <div class="job-flow">
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#9998;</div>
+                <h4>Post</h4>
+                <p>Describe what you need. Set your budget and urgency.</p>
+            </div>
+            <div class="job-flow-arrow">&rarr;</div>
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#9745;</div>
+                <h4>Match</h4>
+                <p>Verified installers in your area see the job and claim it.</p>
+            </div>
+            <div class="job-flow-arrow">&rarr;</div>
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#9873;</div>
+                <h4>Meet</h4>
+                <p>Video meet &amp; greet before committing. Build trust first.</p>
+            </div>
+            <div class="job-flow-arrow">&rarr;</div>
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#10003;</div>
+                <h4>Done</h4>
+                <p>Installer completes the work. Rate and review.</p>
+            </div>
+        </div>
+        <div class="job-actions">
+            <a href="/jobs/post" class="btn btn-primary">Post a Job</a>
+            <a href="/jobs" class="btn btn-outline">Browse Jobs</a>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     GLOBAL POSTAL CODE GRID
+     ============================================================ -->
+<section class="section" id="coverage">
+    <div class="container">
+        <h2 class="section-title">Global Coverage</h2>
+        <p class="section-sub">Installers and jobs indexed by postal code. Find crew help anywhere in the world.</p>
+        <div class="postal-grid">
+            <div class="postal-region">
+                <h4>North America</h4>
+                <div class="postal-codes">
+                    <span class="postal-tag">US ZIP</span>
+                    <span class="postal-tag">CA Postal</span>
+                    <span class="postal-tag">MX CP</span>
+                </div>
+            </div>
+            <div class="postal-region">
+                <h4>Europe</h4>
+                <div class="postal-codes">
+                    <span class="postal-tag">UK Postcode</span>
+                    <span class="postal-tag">DE PLZ</span>
+                    <span class="postal-tag">FR Code Postal</span>
+                    <span class="postal-tag">NL Postcode</span>
+                </div>
+            </div>
+            <div class="postal-region">
+                <h4>Asia-Pacific</h4>
+                <div class="postal-codes">
+                    <span class="postal-tag">JP Postal</span>
+                    <span class="postal-tag">AU Postcode</span>
+                    <span class="postal-tag">IN PIN</span>
+                    <span class="postal-tag">SG Postal</span>
+                </div>
+            </div>
+            <div class="postal-region">
+                <h4>Rest of World</h4>
+                <div class="postal-codes">
+                    <span class="postal-tag">BR CEP</span>
+                    <span class="postal-tag">ZA Postal</span>
+                    <span class="postal-tag">NG Postal</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     PRICING
+     ============================================================ -->
+<section class="section section-dark" id="pricing">
+    <div class="container">
+        <h2 class="section-title">Pricing</h2>
+        <p class="section-sub">The bus is free. Security is cheap. Installers earn their keep.</p>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <h3>Core</h3>
+                <div class="pricing-amount">Free</div>
+                <p class="pricing-note">forever &middot; MIT License</p>
+                <ul class="pricing-features">
+                    <li>Full message bus</li>
+                    <li>Crew Boss + 5 core agents</li>
+                    <li>Trust-based autonomy</li>
+                    <li>Burnout awareness</li>
+                    <li>Quiet hours</li>
+                    <li>Multi-channel delivery</li>
+                    <li>Dashboard UI</li>
+                    <li>CLI tools</li>
+                </ul>
+                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-outline btn-block">Install</a>
+            </div>
+            <div class="pricing-card pricing-featured">
+                <div class="pricing-badge">Most Popular</div>
+                <h3>Guard</h3>
+                <div class="pricing-amount">$20</div>
+                <p class="pricing-note">one-time &middot; lifetime</p>
+                <ul class="pricing-features">
+                    <li>Everything in Core</li>
+                    <li>Anomaly detection</li>
+                    <li>Threat monitoring</li>
+                    <li>Automatic escalation</li>
+                    <li>Security event logging</li>
+                    <li>Role-based thresholds</li>
+                </ul>
+                <a href="/activate" class="btn btn-primary btn-block">Activate Guard</a>
+            </div>
+            <div class="pricing-card">
+                <h3>Installer Permit</h3>
+                <div class="pricing-amount">$25</div>
+                <p class="pricing-note">per permit &middot; first one free</p>
+                <ul class="pricing-features">
+                    <li>Marketplace listing</li>
+                    <li>KYC verification</li>
+                    <li>Job board access</li>
+                    <li>Video meet &amp; greet</li>
+                    <li>Community reviews</li>
+                    <li>6 months free Guardian key messaging</li>
+                </ul>
+                <a href="/installer/signup" class="btn btn-outline btn-block">Become an Installer</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     STRIPE BADGE
+     ============================================================ -->
+<section class="section">
+    <div class="container container-narrow text-center">
+        <p class="stripe-badge">
+            <span class="stripe-icon">&#9889;</span>
+            Payments secured by <strong>Stripe</strong>. We never see your card details.
+        </p>
+    </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>crew-bus</h4>
+                <p class="footer-desc">Free, open-source AI crew infrastructure.<br>One human at the top — always.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="/activate">Guard Activation</a></li>
+                    <li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Marketplace</h4>
+                <ul>
+                    <li><a href="/installer">Find an Installer</a></li>
+                    <li><a href="/installer/signup">Become an Installer</a></li>
+                    <li><a href="/jobs">Job Board</a></li>
+                    <li><a href="/jobs/post">Post a Job</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="/privacy">Privacy Policy</a></li>
+                    <li><a href="/terms">Terms of Service</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 crew-bus. MIT License. Built for humans who run AI crews.</p>
+        </div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+</body>
+</html>

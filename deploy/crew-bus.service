@@ -1,0 +1,28 @@
+[Unit]
+Description=crew-bus Dashboard Server
+After=network.target
+
+[Service]
+Type=simple
+User=crewbus
+Group=crewbus
+WorkingDirectory=/opt/crew-bus
+ExecStart=/opt/crew-bus/venv/bin/python dashboard.py --port 8080
+Restart=always
+RestartSec=5
+
+# Environment variables
+EnvironmentFile=/opt/crew-bus/.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/crew-bus
+
+# Logging
+StandardOutput=append:/var/log/crew-bus/dashboard.log
+StandardError=append:/var/log/crew-bus/dashboard.log
+
+[Install]
+WantedBy=multi-user.target
