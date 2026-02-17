@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Installer Dashboard — crew-bus</title>
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/marketplace.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/installer/dashboard.html" class="active">Dashboard</a>
+            <a href="/installer">Marketplace</a>
+            <a href="/jobs">Job Board</a>
+            <a href="#" id="logoutLink">Log Out</a>
+        </div>
+    </div>
+</nav>
+
+<header class="page-header" style="padding-bottom: 1rem;">
+    <div class="container">
+        <div class="dash-header">
+            <div>
+                <h1 id="dashName">Installer Dashboard</h1>
+                <p class="page-sub" id="dashStatus">Loading...</p>
+            </div>
+            <div class="dash-badges">
+                <span class="badge badge-success" id="kycBadge" style="display:none">&#10003; KYC Verified</span>
+                <span class="badge badge-warning" id="kycPending" style="display:none">KYC Pending</span>
+            </div>
+        </div>
+    </div>
+</header>
+
+<section class="section" style="padding-top: 1rem;">
+    <div class="container">
+
+        <!-- Dashboard Tabs -->
+        <div class="dash-tabs">
+            <button class="dash-tab active" data-tab="overview">Overview</button>
+            <button class="dash-tab" data-tab="profile">My Profile</button>
+            <button class="dash-tab" data-tab="permits">Permits</button>
+            <button class="dash-tab" data-tab="jobs">My Jobs</button>
+            <button class="dash-tab" data-tab="reviews">Reviews</button>
+            <button class="dash-tab" data-tab="meetings">Meet & Greets</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div class="dash-panel active" id="tab-overview">
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="statRating">--</div>
+                    <div class="stat-label">Rating</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statJobs">0</div>
+                    <div class="stat-label">Jobs Completed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statPermits">0</div>
+                    <div class="stat-label">Active Permits</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statReviews">0</div>
+                    <div class="stat-label">Reviews</div>
+                </div>
+            </div>
+            <div class="dash-section">
+                <h3>Recent Activity</h3>
+                <div id="activityFeed" class="activity-feed">
+                    <p class="empty-text">No recent activity.</p>
+                </div>
+            </div>
+            <div class="dash-section">
+                <h3>Open Jobs in Your Area</h3>
+                <div id="nearbyJobs" class="job-list">
+                    <p class="empty-text">No open jobs nearby. Check back later.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Tab -->
+        <div class="dash-panel" id="tab-profile">
+            <form id="profileForm" class="form-card">
+                <h3>Edit Profile</h3>
+                <div class="form-group">
+                    <label for="profName">Display Name</label>
+                    <input type="text" id="profName" name="display_name">
+                </div>
+                <div class="form-group">
+                    <label for="profBio">Bio</label>
+                    <textarea id="profBio" name="bio" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="profSpecialties">Specialties</label>
+                    <div class="checkbox-grid compact">
+                        <label class="checkbox-card"><input type="checkbox" name="specialties" value="full_crew"><span class="checkbox-label">Full Crew Setup</span></label>
+                        <label class="checkbox-card"><input type="checkbox" name="specialties" value="custom_config"><span class="checkbox-label">Custom Configs</span></label>
+                        <label class="checkbox-card"><input type="checkbox" name="specialties" value="training"><span class="checkbox-label">Training</span></label>
+                        <label class="checkbox-card"><input type="checkbox" name="specialties" value="security_audit"><span class="checkbox-label">Security Audit</span></label>
+                        <label class="checkbox-card"><input type="checkbox" name="specialties" value="channel_integration"><span class="checkbox-label">Channel Integration</span></label>
+                        <label class="checkbox-card"><input type="checkbox" name="specialties" value="agent_tuning"><span class="checkbox-label">Agent Tuning</span></label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="profPostal">Postal Code</label>
+                        <input type="text" id="profPostal" name="postal_code">
+                    </div>
+                    <div class="form-group">
+                        <label for="profRadius">Service Radius</label>
+                        <select id="profRadius" name="service_radius">
+                            <option value="10">10 km</option>
+                            <option value="25">25 km</option>
+                            <option value="50">50 km</option>
+                            <option value="100">100 km</option>
+                            <option value="remote">Remote only</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Profile</button>
+            </form>
+        </div>
+
+        <!-- Permits Tab -->
+        <div class="dash-panel" id="tab-permits">
+            <div class="dash-section">
+                <div class="section-header">
+                    <h3>My Permits</h3>
+                    <button class="btn btn-primary btn-sm" id="buyPermit">Buy Permit ($25)</button>
+                </div>
+                <div id="permitList" class="permit-list">
+                    <p class="empty-text">No permits yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jobs Tab -->
+        <div class="dash-panel" id="tab-jobs">
+            <div class="dash-section">
+                <h3>My Jobs</h3>
+                <div class="job-filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="claimed">Claimed</button>
+                    <button class="filter-btn" data-filter="in_progress">In Progress</button>
+                    <button class="filter-btn" data-filter="completed">Completed</button>
+                </div>
+                <div id="myJobs" class="job-list">
+                    <p class="empty-text">No jobs yet. Browse the <a href="/jobs">job board</a> to find work.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reviews Tab -->
+        <div class="dash-panel" id="tab-reviews">
+            <div class="dash-section">
+                <h3>My Reviews</h3>
+                <div id="reviewList" class="review-list">
+                    <p class="empty-text">No reviews yet. Complete jobs to earn reviews.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Meetings Tab -->
+        <div class="dash-panel" id="tab-meetings">
+            <div class="dash-section">
+                <h3>Meet & Greet Requests</h3>
+                <div id="meetingList" class="meeting-list">
+                    <p class="empty-text">No meeting requests yet.</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+<script src="/js/installer-dashboard.js"></script>
+</body>
+</html>

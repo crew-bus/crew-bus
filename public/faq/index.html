@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FAQ — crew-bus</title>
+    <meta name="description" content="Frequently asked questions about crew-bus. How it works, pricing, security, privacy, and marketplace.">
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/legal.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#features">Features</a>
+            <a href="/installer">Installers</a>
+            <a href="/jobs">Job Board</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<main class="legal-page">
+    <div class="container container-narrow">
+        <h1>Frequently Asked Questions</h1>
+
+        <h2>General</h2>
+
+        <details open>
+            <summary>What is crew-bus?</summary>
+            <p>crew-bus is a free, open-source message bus that organizes your AI agents into a crew with a chain of command. It puts one human at the top with an AI Chief of Staff (Crew Boss) managing all other agents.</p>
+        </details>
+
+        <details>
+            <summary>How is crew-bus different from other agent frameworks?</summary>
+            <p>Most agent frameworks focus on agent-to-agent communication. crew-bus focuses on <strong>human-agent</strong> communication. The hierarchy is enforced — agents can't bypass the chain of command. Burnout awareness, quiet hours, and trust-based autonomy are built into the core, not bolted on.</p>
+        </details>
+
+        <details>
+            <summary>What agents come built-in?</summary>
+            <p>Five core agents: <strong>Crew Boss</strong> (AI Chief of Staff), <strong>Guard</strong> (Security), <strong>Wellness</strong> (Burnout monitoring), <strong>Ideas</strong> (Strategy), and <strong>Wallet</strong> (Financial). You can add unlimited agents and departments via YAML config.</p>
+        </details>
+
+        <details>
+            <summary>Do I need cloud accounts or API keys?</summary>
+            <p>No. crew-bus runs entirely on your machine. SQLite database, no cloud dependency. The only external calls are optional delivery channels (Telegram, email) and Stripe for payments.</p>
+        </details>
+
+        <h2>Trust & Autonomy</h2>
+
+        <details>
+            <summary>How does the trust system work?</summary>
+            <p>Trust is a score from 1-10 that you set via slider. At trust 1, the Crew Boss asks you about everything. At trust 10, it handles most decisions autonomously and only escalates critical or unprecedented situations. The Crew Boss earns trust by making good decisions — you approve or override, and it learns.</p>
+        </details>
+
+        <details>
+            <summary>Can agents override my decisions?</summary>
+            <p>No. The hierarchy is enforced at the routing level. No agent can bypass the chain of command unless you explicitly allow it (via escalation safety bypass for emergency situations). You are always the final authority.</p>
+        </details>
+
+        <h2>Security & Privacy</h2>
+
+        <details>
+            <summary>What does the Security Guard module do?</summary>
+            <p>The Guard scans agent behavior for anomalies — unusual message volume, routing violations, mutiny attempts, timing irregularities. It monitors six threat domains (digital, financial, reputation, legal, physical, mutiny) and automatically escalates to the Crew Boss.</p>
+        </details>
+
+        <details>
+            <summary>Are private sessions really private?</summary>
+            <p>Yes. When you start a private session with an agent, the content is never logged. The Crew Boss logs the occurrence (that a session happened) but never sees the content. This is enforced at the database level.</p>
+        </details>
+
+        <details>
+            <summary>Where is my data stored?</summary>
+            <p>Locally. SQLite file on your machine. No telemetry. No cloud sync. No data leaves your machine unless you explicitly configure external delivery channels.</p>
+        </details>
+
+        <h2>Installer Marketplace</h2>
+
+        <details>
+            <summary>What is the installer marketplace?</summary>
+            <p>It connects people who want crew-bus set up with verified professionals who do the setup. Installers are KYC-verified, rated by the community, and searchable by postal code.</p>
+        </details>
+
+        <details>
+            <summary>How does KYC verification work?</summary>
+            <p>Installers upload a government ID. The photo is SHA-256 hashed on the client side — the raw image never leaves the device and is never stored. Only the hash is used for verification.</p>
+        </details>
+
+        <details>
+            <summary>What does an installer permit include?</summary>
+            <p>Marketplace listing, job board access, video meet & greet capability, community reviews, and 6 months of free Guardian key messaging. First permit is free. Additional permits are $25 each.</p>
+        </details>
+
+        <h2>Pricing</h2>
+
+        <details>
+            <summary>Is the core really free?</summary>
+            <p>Yes. MIT License. Free forever. No trial periods, no feature gates, no usage limits. The full message bus and all core features.</p>
+        </details>
+
+        <details>
+            <summary>Are there subscriptions?</summary>
+            <p>No. Guard activation is a one-time $20 payment. Installer permits are $25 each (first free). No recurring charges.</p>
+        </details>
+
+        <h2>Technical</h2>
+
+        <details>
+            <summary>What are the system requirements?</summary>
+            <p>Python 3.9+. No other dependencies for the core. SQLite is built into Python. The dashboard runs on port 8080. Works on Linux, macOS, and Windows.</p>
+        </details>
+
+        <details>
+            <summary>Can I deploy it on a server?</summary>
+            <p>Yes. We provide Nginx configs, systemd service files, and a one-command setup script for Hetzner. Any Linux server works. See the <code>deploy/</code> directory in the repo.</p>
+        </details>
+
+        <details>
+            <summary>Can I use my own LLM/AI provider?</summary>
+            <p>crew-bus is the message bus, not the AI. It coordinates agents — you bring your own AI. Agents can use any LLM, API, or local model. The bus just routes messages between them and you.</p>
+        </details>
+    </div>
+</main>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+</body>
+</html>
