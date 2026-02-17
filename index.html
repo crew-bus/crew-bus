@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>crew-bus — Your AI crew. Your hardware. Your rules.</title>
+<meta name="description" content="Free, open-source coordination system for managing multiple AI agents from a single dashboard. No cloud. No subscriptions. No data leaving your machine.">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="crew-bus — Your AI crew. Your hardware. Your rules.">
+<meta property="og:description" content="Free, open-source coordination system for managing multiple AI agents from a single dashboard. No cloud. No subscriptions.">
+<meta property="og:url" content="https://crew-bus.com">
+<meta property="og:site_name" content="crew-bus">
+<meta property="og:image" content="https://crew-bus.com/og-image.png">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="crew-bus — Your AI crew. Your hardware. Your rules.">
+<meta name="twitter:description" content="Free, open-source AI agent coordination. No cloud. No subscriptions.">
+<meta name="twitter:image" content="https://crew-bus.com/og-image.png">
+
+<!-- Favicon (inline SVG) -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%231a1a2e'/><circle cx='50' cy='50' r='10' fill='%23e94560'/><circle cx='50' cy='22' r='6' fill='%2300b894'/><circle cx='76' cy='40' r='6' fill='%23fdcb6e'/><circle cx='66' cy='72' r='6' fill='%2374b9ff'/><circle cx='34' cy='72' r='6' fill='%23f39c12'/><circle cx='24' cy='40' r='6' fill='%236c5ce7'/><line x1='50' y1='50' x2='50' y2='22' stroke='%232d3748' stroke-width='1.5'/><line x1='50' y1='50' x2='76' y2='40' stroke='%232d3748' stroke-width='1.5'/><line x1='50' y1='50' x2='66' y2='72' stroke='%232d3748' stroke-width='1.5'/><line x1='50' y1='50' x2='34' y2='72' stroke='%232d3748' stroke-width='1.5'/><line x1='50' y1='50' x2='24' y2='40' stroke='%232d3748' stroke-width='1.5'/></svg>">
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "crew-bus",
+  "description": "Free, open-source coordination system for managing multiple AI agents from a single dashboard.",
+  "url": "https://crew-bus.com",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Linux, macOS, Windows",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "license": "https://opensource.org/licenses/MIT",
+  "softwareRequirements": "Python 3.8+"
+}
+</script>
+
+<!-- Analytics (Plausible — uncomment when domain is live) -->
+<!-- <script defer data-domain="crew-bus.com" src="https://plausible.io/js/script.js"></script> -->
+
+<style>
+/* ======== Reset & Base ======== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #1a1a2e;
+  --bg-deep:   #0d1025;
+  --bg-card:   #16213e;
+  --bg-card2:  #1b2a4a;
+  --accent:    #0f3460;
+  --highlight: #e94560;
+  --success:   #00b894;
+  --warning:   #fdcb6e;
+  --danger:    #d63031;
+  --info:      #74b9ff;
+  --text:      #ffffff;
+  --text-dim:  #a0aec0;
+  --text-muted:#6b7280;
+  --border:    #2d3748;
+  --radius:    8px;
+}
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+a { color: var(--info); text-decoration: none; }
+a:hover { color: var(--highlight); }
+
+/* ======== Utilities ======== */
+.container { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+.text-dim { color: var(--text-dim); }
+.text-muted { color: var(--text-muted); }
+.text-center { text-align: center; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+
+/* ======== Nav ======== */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(13, 16, 37, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.8rem 0;
+}
+.nav .container {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-brand {
+  font-size: 1.25rem; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.nav-brand svg { width: 28px; height: 28px; }
+.nav-links { display: flex; gap: 1.5rem; list-style: none; }
+.nav-links a { color: var(--text-dim); font-size: 0.9rem; transition: color 0.2s; }
+.nav-links a:hover { color: var(--text); }
+.nav-cta {
+  background: var(--highlight); color: #fff; padding: 0.45rem 1.1rem;
+  border-radius: var(--radius); font-size: 0.85rem; font-weight: 600;
+  transition: opacity 0.2s;
+}
+.nav-cta:hover { opacity: 0.85; color: #fff; }
+
+/* ======== Hero ======== */
+.hero {
+  padding: 10rem 0 5rem;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, rgba(15,52,96,0.4) 0%, transparent 70%);
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.hero h1 span { color: var(--highlight); }
+.hero .subtitle {
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  color: var(--text-dim);
+  max-width: 600px; margin: 1.2rem auto 0;
+}
+.hero-actions {
+  margin-top: 2.2rem;
+  display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.75rem 1.6rem; border-radius: var(--radius);
+  font-size: 1rem; font-weight: 600; border: none; cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-primary { background: var(--highlight); color: #fff; }
+.btn-primary:hover { color: #fff; opacity: 0.9; }
+.btn-outline {
+  background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover { color: var(--text); border-color: var(--text-dim); }
+.hero-stats {
+  margin-top: 3rem;
+  display: flex; gap: 2.5rem; justify-content: center; flex-wrap: wrap;
+}
+.hero-stat { text-align: center; }
+.hero-stat strong { display: block; font-size: 1.5rem; color: var(--highlight); }
+.hero-stat small { color: var(--text-muted); font-size: 0.82rem; }
+
+/* ======== Section ======== */
+section { padding: 5rem 0; }
+section:nth-child(even) { background: var(--bg-deep); }
+.section-label {
+  text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.75rem;
+  color: var(--highlight); font-weight: 700; margin-bottom: 0.5rem;
+}
+.section-title {
+  font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 700;
+  line-height: 1.2; margin-bottom: 0.6rem;
+}
+.section-sub {
+  color: var(--text-dim); max-width: 580px; font-size: 1rem;
+}
+.section-sub.centered { margin: 0 auto; }
+
+/* ======== How It Works ======== */
+.steps {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 2rem; margin-top: 3rem;
+}
+.step {
+  text-align: center; padding: 2rem 1.5rem;
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border);
+  position: relative;
+}
+.step-number {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--highlight); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1.25rem; font-weight: 800; margin-bottom: 1rem;
+}
+.step h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.step p { color: var(--text-dim); font-size: 0.9rem; }
+.step-arrow {
+  display: none;
+  position: absolute; right: -1.3rem; top: 50%;
+  transform: translateY(-50%); color: var(--text-muted); font-size: 1.5rem;
+}
+
+/* ======== Terminal Demo ======== */
+.terminal {
+  background: #0c0c14;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 680px;
+  margin: 2.5rem auto 0;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.88rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.terminal-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0.6rem 1rem;
+  background: #161622;
+  border-bottom: 1px solid var(--border);
+}
+.terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+.terminal-dot.r { background: #ff5f57; }
+.terminal-dot.y { background: #febc2e; }
+.terminal-dot.g { background: #28c840; }
+.terminal-bar span {
+  flex: 1; text-align: center; color: var(--text-muted); font-size: 0.75rem;
+}
+.terminal-body { padding: 1.2rem 1.4rem; line-height: 1.7; }
+.terminal-body .prompt { color: var(--success); }
+.terminal-body .cmd { color: var(--text); }
+.terminal-body .comment { color: var(--text-muted); }
+.terminal-body .output { color: var(--text-dim); }
+.terminal-body .hl { color: var(--highlight); }
+.terminal-body .info { color: var(--info); }
+
+/* ======== Features Grid ======== */
+.features {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem; margin-top: 3rem;
+}
+.feature {
+  padding: 1.8rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.25s;
+}
+.feature:hover { border-color: var(--highlight); }
+.feature-icon {
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; margin-bottom: 1rem;
+}
+.feature h3 { font-size: 1rem; margin-bottom: 0.4rem; }
+.feature p { color: var(--text-dim); font-size: 0.88rem; }
+
+/* ======== Architecture ======== */
+.arch-diagram {
+  margin: 3rem auto 0;
+  max-width: 500px;
+  text-align: center;
+}
+.arch-row {
+  display: flex; justify-content: center; gap: 1rem;
+  margin-bottom: 0.4rem; flex-wrap: wrap;
+}
+.arch-node {
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem; font-weight: 600;
+  border: 1px solid var(--border);
+}
+.arch-node.human { background: var(--accent); border-color: var(--info); }
+.arch-node.boss { background: #4a1942; border-color: var(--highlight); }
+.arch-node.agent { background: var(--bg-card); }
+.arch-connector {
+  color: var(--text-muted); font-size: 1.2rem;
+  margin: 0.2rem 0;
+}
+
+/* ======== Circle Preview ======== */
+.circle-preview {
+  position: relative;
+  width: 300px; height: 300px;
+  margin: 3rem auto 0;
+}
+.circle-agent {
+  position: absolute;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.65rem; font-weight: 700;
+  text-align: center; line-height: 1.2;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  transform: translate(-50%, -50%);
+}
+.circle-agent.boss {
+  width: 72px; height: 72px;
+  background: #4a1942; border-color: var(--highlight);
+  font-size: 0.7rem;
+  left: 50%; top: 50%;
+}
+.circle-agent.guard { left: 15%; top: 38%; border-color: #6c5ce7; }
+.circle-agent.wellness { left: 50%; top: 8%; border-color: var(--success); }
+.circle-agent.ideas { left: 85%; top: 38%; border-color: var(--warning); }
+.circle-agent.wallet { left: 70%; top: 82%; border-color: #f39c12; }
+.circle-agent.help { left: 30%; top: 82%; border-color: var(--info); }
+.circle-line {
+  position: absolute;
+  background: var(--border);
+  transform-origin: 0 0;
+}
+
+/* ======== Privacy ======== */
+.privacy-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem; margin-top: 3rem;
+}
+.privacy-item {
+  display: flex; gap: 1rem; align-items: flex-start;
+  padding: 1.5rem;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.privacy-icon {
+  flex-shrink: 0; width: 40px; height: 40px;
+  border-radius: 8px; background: rgba(0,184,148,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+}
+.privacy-item h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+.privacy-item p { color: var(--text-dim); font-size: 0.85rem; }
+
+/* ======== CTA ======== */
+.cta-section {
+  padding: 5rem 0;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 100%, rgba(233,69,96,0.12) 0%, transparent 70%);
+}
+.cta-section h2 {
+  font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 700;
+}
+.cta-section p {
+  color: var(--text-dim); margin: 0.8rem auto 2rem;
+  max-width: 480px;
+}
+
+/* ======== Footer ======== */
+.footer {
+  padding: 2.5rem 0;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+.footer-links {
+  display: flex; gap: 1.5rem; justify-content: center;
+  list-style: none; margin-bottom: 1rem;
+}
+.footer-links a { color: var(--text-dim); }
+.footer-links a:hover { color: var(--text); }
+
+/* ======== Responsive ======== */
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .steps { grid-template-columns: 1fr; }
+  .features { grid-template-columns: 1fr; }
+  .privacy-grid { grid-template-columns: 1fr; }
+  .hero { padding: 7rem 0 3rem; }
+  .hero-stats { gap: 1.5rem; }
+  section { padding: 3.5rem 0; }
+}
+@media (min-width: 769px) {
+  .step-arrow { display: block; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== Nav ====== -->
+<nav class="nav">
+  <div class="container">
+    <a href="#" class="nav-brand">
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" rx="16" fill="#1a1a2e"/>
+        <circle cx="50" cy="50" r="10" fill="#e94560"/>
+        <circle cx="50" cy="22" r="6" fill="#00b894"/>
+        <circle cx="76" cy="40" r="6" fill="#fdcb6e"/>
+        <circle cx="66" cy="72" r="6" fill="#74b9ff"/>
+        <circle cx="34" cy="72" r="6" fill="#f39c12"/>
+        <circle cx="24" cy="40" r="6" fill="#6c5ce7"/>
+        <line x1="50" y1="50" x2="50" y2="22" stroke="#2d3748" stroke-width="1.5"/>
+        <line x1="50" y1="50" x2="76" y2="40" stroke="#2d3748" stroke-width="1.5"/>
+        <line x1="50" y1="50" x2="66" y2="72" stroke="#2d3748" stroke-width="1.5"/>
+        <line x1="50" y1="50" x2="34" y2="72" stroke="#2d3748" stroke-width="1.5"/>
+        <line x1="50" y1="50" x2="24" y2="40" stroke="#2d3748" stroke-width="1.5"/>
+      </svg>
+      crew-bus
+    </a>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+    </ul>
+    <a href="https://github.com/crew-bus/crew-bus" class="nav-cta">GitHub</a>
+  </div>
+</nav>
+
+<!-- ====== Hero ====== -->
+<header class="hero">
+  <div class="container">
+    <h1>Your AI crew.<br><span>Your hardware. Your rules.</span></h1>
+    <p class="subtitle">Free, open-source coordination for multiple AI agents. One dashboard. No cloud. No subscriptions. No data leaves your machine.</p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn btn-primary">Get Started</a>
+      <a href="https://github.com/crew-bus/crew-bus" class="btn btn-outline">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><strong>5</strong><small>Core Agents</small></div>
+      <div class="hero-stat"><strong>234+</strong><small>Tests Passing</small></div>
+      <div class="hero-stat"><strong>0</strong><small>Cloud Dependencies</small></div>
+      <div class="hero-stat"><strong>MIT</strong><small>License</small></div>
+    </div>
+  </div>
+</header>
+
+<!-- ====== How It Works ====== -->
+<section id="how-it-works">
+  <div class="container text-center">
+    <p class="section-label">How It Works</p>
+    <h2 class="section-title">Three commands. That's it.</h2>
+    <p class="section-sub centered">Clone, install, run. Your crew is online in under a minute.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <span class="step-arrow">&#8594;</span>
+        <h3>Clone the repo</h3>
+        <p>Pull the code from GitHub. Everything is in one directory &mdash; no scattered config files.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <span class="step-arrow">&#8594;</span>
+        <h3>Install PyYAML</h3>
+        <p>One dependency. <code>pip install pyyaml</code>. No frameworks, no Docker, no cloud accounts.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>Launch the dashboard</h3>
+        <p><code>python dashboard.py</code> &mdash; open <code>localhost:8080</code> and your crew is live.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== Terminal Demo ====== -->
+<section id="quickstart">
+  <div class="container text-center">
+    <p class="section-label">Quick Start</p>
+    <h2 class="section-title">Up and running in 30 seconds</h2>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot r"></div>
+        <div class="terminal-dot y"></div>
+        <div class="terminal-dot g"></div>
+        <span>~/projects</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">$</span> <span class="cmd">git clone https://github.com/crew-bus/crew-bus.git</span></div>
+        <div class="output">Cloning into 'crew-bus'... done.</div>
+        <br>
+        <div><span class="prompt">$</span> <span class="cmd">cd crew-bus && pip install pyyaml</span></div>
+        <div class="output">Successfully installed PyYAML-6.0.1</div>
+        <br>
+        <div><span class="prompt">$</span> <span class="cmd">python dashboard.py</span></div>
+        <div class="output"><span class="hl">crew-bus</span> Command Center starting...</div>
+        <div class="output">&#9632; Crew Boss <span class="info">(trust: 5)</span> .... online</div>
+        <div class="output">&#9632; Guard ................... online</div>
+        <div class="output">&#9632; Wellness ................ online</div>
+        <div class="output">&#9632; Ideas ................... online</div>
+        <div class="output">&#9632; Wallet .................. online</div>
+        <br>
+        <div class="output">Dashboard live at <span class="info">http://localhost:8080</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== Features ====== -->
+<section id="features">
+  <div class="container">
+    <div class="text-center">
+      <p class="section-label">Features</p>
+      <h2 class="section-title">Everything you need. Nothing you don't.</h2>
+      <p class="section-sub centered">Built for people who want AI that works for them &mdash; privately, locally, simply.</p>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(233,69,96,0.15);">&#9733;</div>
+        <h3>5 Core Agents</h3>
+        <p>Crew Boss, Guard, Wellness, Ideas, and Wallet. Pre-configured and ready to coordinate.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(0,184,148,0.15);">&#9881;</div>
+        <h3>Trust Score (1-10)</h3>
+        <p>Set it to 1 and see everything. Set it to 10 and get a morning brief. You control the autonomy.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(253,203,110,0.15);">&#9829;</div>
+        <h3>Burnout Awareness</h3>
+        <p>When you're running hot, non-urgent messages are held for better timing. Your crew respects your energy.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(116,185,255,0.15);">&#128274;</div>
+        <h3>Private Sessions</h3>
+        <p>Talk directly with any agent. Not even Crew Boss sees the content. Private means private.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(108,92,231,0.15);">&#9776;</div>
+        <h3>Teams &amp; Hierarchy</h3>
+        <p>Add departments with managers and workers. Scale from 5 agents to 50. Build your org chart.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(243,156,18,0.15);">&#128276;</div>
+        <h3>Team Mailbox</h3>
+        <p>Any agent can escalate directly to you if something critical is being ignored. No message gets silenced.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(214,48,49,0.15);">&#9673;</div>
+        <h3>Visual Dashboard</h3>
+        <p>Clean circle layout with status dots. Mobile-first design. See your entire crew at a glance.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(0,206,209,0.15);">&#128196;</div>
+        <h3>Full Audit Trail</h3>
+        <p>Every message, every decision, every routing event. Logged locally in SQLite. Nothing hidden.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background: rgba(255,255,255,0.08);">&#9889;</div>
+        <h3>Runs on Anything</h3>
+        <p>Python + SQLite. Works on a Raspberry Pi, a laptop, or a server. No Docker. No cloud. Just run it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== Architecture ====== -->
+<section id="architecture">
+  <div class="container text-center">
+    <p class="section-label">Architecture</p>
+    <h2 class="section-title">One human. One crew. Full control.</h2>
+    <p class="section-sub centered">Messages flow through the bus. Routing rules enforce hierarchy. Trust score governs autonomy.</p>
+
+    <div class="circle-preview">
+      <svg viewBox="0 0 300 300" width="300" height="300" style="position:absolute;top:0;left:0;" xmlns="http://www.w3.org/2000/svg">
+        <line x1="150" y1="150" x2="45" y2="114" stroke="#2d3748" stroke-width="1"/>
+        <line x1="150" y1="150" x2="150" y2="24" stroke="#2d3748" stroke-width="1"/>
+        <line x1="150" y1="150" x2="255" y2="114" stroke="#2d3748" stroke-width="1"/>
+        <line x1="150" y1="150" x2="210" y2="246" stroke="#2d3748" stroke-width="1"/>
+        <line x1="150" y1="150" x2="90" y2="246" stroke="#2d3748" stroke-width="1"/>
+      </svg>
+      <div class="circle-agent boss">Crew<br>Boss</div>
+      <div class="circle-agent guard">Guard</div>
+      <div class="circle-agent wellness">Wellness</div>
+      <div class="circle-agent ideas">Ideas</div>
+      <div class="circle-agent wallet">Wallet</div>
+      <div class="circle-agent help">Help</div>
+    </div>
+
+    <div class="arch-diagram" style="margin-top: 4rem;">
+      <div class="arch-row"><div class="arch-node human">You</div></div>
+      <div class="arch-connector">&#8597;</div>
+      <div class="arch-row"><div class="arch-node boss">Crew Boss (trust: 1-10)</div></div>
+      <div class="arch-connector">&#8597;</div>
+      <div class="arch-row">
+        <div class="arch-node agent">Guard</div>
+        <div class="arch-node agent">Wellness</div>
+        <div class="arch-node agent">Ideas</div>
+        <div class="arch-node agent">Wallet</div>
+      </div>
+      <div class="arch-connector">&#8597;</div>
+      <div class="arch-row">
+        <div class="arch-node agent">Team Managers</div>
+      </div>
+      <div class="arch-connector">&#8597;</div>
+      <div class="arch-row">
+        <div class="arch-node agent">Workers</div>
+        <div class="arch-node agent">Workers</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== Privacy ====== -->
+<section id="privacy">
+  <div class="container">
+    <div class="text-center">
+      <p class="section-label">Privacy</p>
+      <h2 class="section-title">Privacy is real, not performative.</h2>
+      <p class="section-sub centered">Everything stays on your machine. Period.</p>
+    </div>
+    <div class="privacy-grid">
+      <div class="privacy-item">
+        <div class="privacy-icon">&#128274;</div>
+        <div>
+          <h3>Truly private sessions</h3>
+          <p>Crew Boss logs that a session happened but never sees the content. Your private conversations stay private.</p>
+        </div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">&#128233;</div>
+        <div>
+          <h3>Sealed mailbox</h3>
+          <p>Team mailbox logs that a message was sent but never the content. Metadata only.</p>
+        </div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">&#127968;</div>
+        <div>
+          <h3>Fully local</h3>
+          <p>No cloud, no telemetry, no phone-home. Your agents run where you tell them to.</p>
+        </div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-icon">&#128451;</div>
+        <div>
+          <h3>You own your data</h3>
+          <p>It's a SQLite file on your machine. Back it up, delete it, move it &mdash; your choice.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== CTA ====== -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Ready to run your own crew?</h2>
+    <p>Free forever. MIT licensed. Three commands to launch.</p>
+    <div class="hero-actions">
+      <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Get crew-bus on GitHub
+      </a>
+      <a href="#quickstart" class="btn btn-outline">See Quick Start</a>
+    </div>
+  </div>
+</section>
+
+<!-- ====== Footer ====== -->
+<footer class="footer">
+  <div class="container">
+    <ul class="footer-links">
+      <li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li>
+      <li><a href="https://github.com/crew-bus/crew-bus/issues">Issues</a></li>
+      <li><a href="https://github.com/crew-bus/crew-bus/blob/main/LICENSE">MIT License</a></li>
+    </ul>
+    <p>crew-bus &mdash; free infrastructure for the world.</p>
+    <p class="mt-1">Built by one person in a few days. That's the point.</p>
+  </div>
+</footer>
+
+</body>
+</html>
