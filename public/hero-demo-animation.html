@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crew Bus — 15-Second Hero Demo</title>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg: #1a1a2e;
+    --bg-dark: #12122a;
+    --bg-card: #16213e;
+    --highlight: #e94560;
+    --text: #ffffff;
+    --text-dim: #a0aec0;
+    --text-muted: #6b7280;
+    --border: #2d3748;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ===== SCENE CONTAINER ===== */
+.scene {
+    position: relative;
+    width: 900px;
+    height: 560px;
+    overflow: hidden;
+}
+
+/* ===== BACKGROUND AMBIENT GLOW ===== */
+.ambient {
+    position: absolute;
+    top: 50%;
+    left: 35%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(233,69,96,0.06) 0%, rgba(233,69,96,0) 70%);
+    opacity: 0;
+    animation: ambientIn 2s ease 0.5s forwards;
+}
+
+@keyframes ambientIn {
+    to { opacity: 1; }
+}
+
+/* ===== CIRCLE DIAGRAM ===== */
+.diagram {
+    position: absolute;
+    top: 50%;
+    left: 35%;
+    transform: translate(-50%, -50%);
+    width: 440px;
+    height: 440px;
+}
+
+/* ===== CONNECTION LINES ===== */
+.connection-line {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: 0 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.03));
+    opacity: 0;
+    z-index: 0;
+}
+
+.line-family  { width: 160px; transform: rotate(-90deg); animation: lineIn 0.4s ease 3.0s forwards; background: linear-gradient(90deg, rgba(77,208,184,0.3), rgba(77,208,184,0.03)); }
+.line-muse    { width: 160px; transform: rotate(-18deg); animation: lineIn 0.4s ease 3.5s forwards; background: linear-gradient(90deg, rgba(179,136,255,0.3), rgba(179,136,255,0.03)); }
+.line-health  { width: 160px; transform: rotate(54deg);  animation: lineIn 0.4s ease 4.0s forwards; background: linear-gradient(90deg, rgba(102,217,122,0.3), rgba(102,217,122,0.03)); }
+.line-growth  { width: 160px; transform: rotate(126deg); animation: lineIn 0.4s ease 4.5s forwards; background: linear-gradient(90deg, rgba(255,171,87,0.3), rgba(255,171,87,0.03)); }
+.line-life    { width: 160px; transform: rotate(198deg); animation: lineIn 0.4s ease 5.0s forwards; background: linear-gradient(90deg, rgba(100,181,246,0.3), rgba(100,181,246,0.03)); }
+
+@keyframes lineIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ===== CREW BOSS — CENTER ===== */
+.boss {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: rgba(12, 14, 22, 0.95);
+    border: 3px solid rgba(255, 255, 255, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    z-index: 10;
+    opacity: 0;
+    animation: bossIn 1.2s ease 1s forwards;
+    box-shadow:
+        0 0 40px rgba(255,255,255,0.25),
+        0 0 80px rgba(255,255,255,0.1),
+        0 0 120px rgba(255,255,255,0.04),
+        inset 0 0 30px rgba(255,255,255,0.04);
+}
+
+@keyframes bossIn {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    60% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.boss-icon { font-size: 2rem; line-height: 1; }
+.boss-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #fff;
+}
+
+/* Boss pulse glow after entry */
+.boss::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15);
+    opacity: 0;
+    animation: bossPulse 2s ease-in-out 2.5s infinite;
+}
+
+@keyframes bossPulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.15); opacity: 0; }
+}
+
+/* ===== AGENT NODES ===== */
+.agent {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: rgba(12, 14, 22, 0.9);
+    border: 2.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    z-index: 5;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+}
+
+.agent-icon { font-size: 1.5rem; line-height: 1; }
+.agent-label {
+    font-size: 0.45rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255,255,255,0.9);
+    text-align: center;
+    line-height: 1.3;
+    max-width: 85%;
+}
+
+/* Per-agent positioning & colors */
+.agent-family {
+    margin-top: -160px;
+    width: 120px;
+    height: 120px;
+    border-color: #4dd0b8;
+    animation: agentIn 0.8s ease 3.0s forwards;
+    box-shadow: 0 0 25px rgba(77,208,184,0.3), 0 0 60px rgba(77,208,184,0.1);
+}
+.agent-family .agent-label { font-size: 0.4rem; letter-spacing: 0.5px; }
+
+.agent-muse {
+    margin-top: -49px;
+    margin-left: 152px;
+    border-color: #b388ff;
+    animation: agentIn 0.8s ease 3.5s forwards;
+    box-shadow: 0 0 25px rgba(179,136,255,0.3), 0 0 60px rgba(179,136,255,0.1);
+}
+
+.agent-health {
+    margin-top: 82px;
+    margin-left: 94px;
+    border-color: #66d97a;
+    animation: agentIn 0.8s ease 4.0s forwards;
+    box-shadow: 0 0 25px rgba(102,217,122,0.3), 0 0 60px rgba(102,217,122,0.1);
+}
+
+.agent-growth {
+    margin-top: 82px;
+    margin-left: -94px;
+    border-color: #ffab57;
+    animation: agentIn 0.8s ease 4.5s forwards;
+    box-shadow: 0 0 25px rgba(255,171,87,0.3), 0 0 60px rgba(255,171,87,0.1);
+}
+
+.agent-life {
+    margin-top: -49px;
+    margin-left: -152px;
+    border-color: #64b5f6;
+    animation: agentIn 0.8s ease 5.0s forwards;
+    box-shadow: 0 0 25px rgba(100,181,246,0.3), 0 0 60px rgba(100,181,246,0.1);
+}
+
+@keyframes agentIn {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+    70% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Synchronized breathe after all agents appear */
+.agent-family  { animation: agentIn 0.8s ease 3.0s forwards, breatheTeal   2.5s ease-in-out 6.5s infinite; }
+.agent-muse    { animation: agentIn 0.8s ease 3.5s forwards, breathePurple 2.5s ease-in-out 6.8s infinite; }
+.agent-health  { animation: agentIn 0.8s ease 4.0s forwards, breatheGreen  2.5s ease-in-out 7.1s infinite; }
+.agent-growth  { animation: agentIn 0.8s ease 4.5s forwards, breatheOrange 2.5s ease-in-out 7.4s infinite; }
+.agent-life    { animation: agentIn 0.8s ease 5.0s forwards, breatheBlue   2.5s ease-in-out 7.7s infinite; }
+
+@keyframes breatheTeal {
+    0%, 100% { box-shadow: 0 0 25px rgba(77,208,184,0.3), 0 0 60px rgba(77,208,184,0.1); }
+    50% { box-shadow: 0 0 40px rgba(77,208,184,0.5), 0 0 80px rgba(77,208,184,0.2), 0 0 120px rgba(77,208,184,0.08); }
+}
+@keyframes breathePurple {
+    0%, 100% { box-shadow: 0 0 25px rgba(179,136,255,0.3), 0 0 60px rgba(179,136,255,0.1); }
+    50% { box-shadow: 0 0 40px rgba(179,136,255,0.5), 0 0 80px rgba(179,136,255,0.2), 0 0 120px rgba(179,136,255,0.08); }
+}
+@keyframes breatheGreen {
+    0%, 100% { box-shadow: 0 0 25px rgba(102,217,122,0.3), 0 0 60px rgba(102,217,122,0.1); }
+    50% { box-shadow: 0 0 40px rgba(102,217,122,0.5), 0 0 80px rgba(102,217,122,0.2), 0 0 120px rgba(102,217,122,0.08); }
+}
+@keyframes breatheOrange {
+    0%, 100% { box-shadow: 0 0 25px rgba(255,171,87,0.3), 0 0 60px rgba(255,171,87,0.1); }
+    50% { box-shadow: 0 0 40px rgba(255,171,87,0.5), 0 0 80px rgba(255,171,87,0.2), 0 0 120px rgba(255,171,87,0.08); }
+}
+@keyframes breatheBlue {
+    0%, 100% { box-shadow: 0 0 25px rgba(100,181,246,0.3), 0 0 60px rgba(100,181,246,0.1); }
+    50% { box-shadow: 0 0 40px rgba(100,181,246,0.5), 0 0 80px rgba(100,181,246,0.2), 0 0 120px rgba(100,181,246,0.08); }
+}
+
+/* Boss breathe glow */
+.boss {
+    animation: bossIn 1.2s ease 1s forwards, bossGlow 3s ease-in-out 6.5s infinite;
+}
+
+@keyframes bossGlow {
+    0%, 100% {
+        box-shadow:
+            0 0 40px rgba(255,255,255,0.25),
+            0 0 80px rgba(255,255,255,0.1),
+            0 0 120px rgba(255,255,255,0.04),
+            inset 0 0 30px rgba(255,255,255,0.04);
+    }
+    50% {
+        box-shadow:
+            0 0 50px rgba(255,255,255,0.4),
+            0 0 100px rgba(255,255,255,0.15),
+            0 0 140px rgba(255,255,255,0.06),
+            inset 0 0 35px rgba(255,255,255,0.06);
+    }
+}
+
+/* ===== CHAT PANEL ===== */
+.chat-panel {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%) translateX(50px);
+    width: 300px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    opacity: 0;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 1px rgba(255,255,255,0.1);
+    animation: chatSlideIn 0.8s ease 8s forwards;
+}
+
+@keyframes chatSlideIn {
+    0% { opacity: 0; transform: translateY(-50%) translateX(50px); }
+    100% { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* Chat header */
+.chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(12,14,22,0.5);
+}
+
+.chat-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(12,14,22,0.95);
+    border: 2px solid rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    box-shadow: 0 0 15px rgba(255,255,255,0.15);
+}
+
+.chat-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.chat-status {
+    font-size: 0.65rem;
+    color: #00b894;
+}
+
+.chat-online-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #00b894;
+    display: inline-block;
+    margin-right: 4px;
+    animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Chat body */
+.chat-body {
+    padding: 16px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-bubble {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px 12px 12px 4px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text);
+    max-width: 90%;
+    opacity: 0;
+}
+
+.chat-typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px;
+    opacity: 0;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.typing-dot:nth-child(1) { animation: typingBounce 1.2s ease-in-out infinite 0s; }
+.typing-dot:nth-child(2) { animation: typingBounce 1.2s ease-in-out infinite 0.2s; }
+.typing-dot:nth-child(3) { animation: typingBounce 1.2s ease-in-out infinite 0.4s; }
+
+@keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-5px); opacity: 1; }
+}
+
+/* Chat input */
+.chat-input {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+}
+
+.chat-input-field {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: inherit;
+}
+
+.chat-send-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--highlight);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #fff;
+    opacity: 0;
+    animation: fadeIn 0.5s ease 13.5s forwards;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+/* Cursor blink in input */
+.chat-input-field::after {
+    content: '|';
+    animation: cursorBlink 1s step-end infinite;
+    color: var(--text-muted);
+}
+
+@keyframes cursorBlink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* ===== FLOATING PARTICLES ===== */
+.particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    animation: particleFloat linear infinite;
+    opacity: 0;
+}
+
+@keyframes particleFloat {
+    0% { transform: translateY(0) translateX(0); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.6; }
+    100% { transform: translateY(-200px) translateX(30px); opacity: 0; }
+}
+
+/* ===== BOTTOM BRANDING ===== */
+.branding {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    animation: fadeIn 1s ease 6s forwards;
+}
+
+.branding-logo {
+    color: var(--highlight);
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.branding-tagline {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+/* ===== PROGRESS BAR ===== */
+.progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--highlight), rgba(233,69,96,0.5));
+    width: 0;
+    animation: progressFill 15s linear 0s forwards;
+}
+
+@keyframes progressFill {
+    to { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="scene">
+    <!-- Ambient background glow -->
+    <div class="ambient"></div>
+
+    <!-- Floating particles -->
+    <div class="particle" style="left:15%; top:60%; animation-delay:2s; animation-duration:8s;"></div>
+    <div class="particle" style="left:25%; top:75%; animation-delay:4s; animation-duration:10s;"></div>
+    <div class="particle" style="left:45%; top:80%; animation-delay:3s; animation-duration:7s;"></div>
+    <div class="particle" style="left:55%; top:65%; animation-delay:5s; animation-duration:9s;"></div>
+    <div class="particle" style="left:35%; top:70%; animation-delay:6s; animation-duration:11s;"></div>
+    <div class="particle" style="left:20%; top:50%; animation-delay:7s; animation-duration:8s;"></div>
+    <div class="particle" style="left:50%; top:55%; animation-delay:4.5s; animation-duration:9.5s;"></div>
+    <div class="particle" style="left:40%; top:85%; animation-delay:3.5s; animation-duration:7.5s;"></div>
+
+    <!-- Circle Diagram -->
+    <div class="diagram">
+        <!-- Connection lines -->
+        <div class="connection-line line-family"></div>
+        <div class="connection-line line-muse"></div>
+        <div class="connection-line line-health"></div>
+        <div class="connection-line line-growth"></div>
+        <div class="connection-line line-life"></div>
+
+        <!-- Crew Boss (center) -->
+        <div class="boss">
+            <span class="boss-icon">&#10025;</span>
+            <span class="boss-label">Crew Boss</span>
+        </div>
+
+        <!-- Agent: Friend & Family Helper (top, 0deg) -->
+        <div class="agent agent-family">
+            <span class="agent-icon">&#127968;</span>
+            <span class="agent-label">Friend &amp; Family Helper</span>
+        </div>
+
+        <!-- Agent: Muse (72deg — upper right) -->
+        <div class="agent agent-muse">
+            <span class="agent-icon">&#127912;</span>
+            <span class="agent-label">Muse</span>
+        </div>
+
+        <!-- Agent: Health Buddy (144deg — lower right) -->
+        <div class="agent agent-health">
+            <span class="agent-icon">&#128154;</span>
+            <span class="agent-label">Health Buddy</span>
+        </div>
+
+        <!-- Agent: Growth Coach (216deg — lower left) -->
+        <div class="agent agent-growth">
+            <span class="agent-icon">&#127793;</span>
+            <span class="agent-label">Growth Coach</span>
+        </div>
+
+        <!-- Agent: Life Assistant (288deg — upper left) -->
+        <div class="agent agent-life">
+            <span class="agent-icon">&#9889;</span>
+            <span class="agent-label">Life Assistant</span>
+        </div>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel">
+        <div class="chat-header">
+            <div class="chat-avatar">&#10025;</div>
+            <div>
+                <div class="chat-name">Crew Boss</div>
+                <div class="chat-status"><span class="chat-online-dot"></span>Online</div>
+            </div>
+        </div>
+        <div class="chat-body">
+            <div class="chat-typing-indicator" id="typingIndicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+            <div class="chat-bubble" id="chatMessage"></div>
+        </div>
+        <div class="chat-input">
+            <div class="chat-input-field" id="chatInput">Type a message...</div>
+            <button class="chat-send-btn">&#9654;</button>
+        </div>
+    </div>
+
+    <!-- Bottom branding -->
+    <div class="branding">
+        <span class="branding-logo">&#9632; crew-bus</span>
+        <span class="branding-tagline">&middot; your friendly AI crew</span>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-bar"></div>
+</div>
+
+<script>
+// ===== CHAT TYPING ANIMATION =====
+const message = "Hey! I'm right here with you \u{1F60A} What's on your mind today?";
+const typingIndicator = document.getElementById('typingIndicator');
+const chatMessage = document.getElementById('chatMessage');
+const chatInput = document.getElementById('chatInput');
+
+// Phase 1: Show typing indicator at 9s
+setTimeout(() => {
+    typingIndicator.style.opacity = '1';
+    typingIndicator.style.transition = 'opacity 0.3s';
+}, 9000);
+
+// Phase 2: Start typing message at 10.5s
+setTimeout(() => {
+    typingIndicator.style.opacity = '0';
+    chatMessage.style.opacity = '1';
+    chatMessage.style.transition = 'opacity 0.3s';
+
+    let i = 0;
+    const typeInterval = setInterval(() => {
+        if (i < message.length) {
+            chatMessage.textContent = message.substring(0, i + 1);
+            i++;
+        } else {
+            clearInterval(typeInterval);
+        }
+    }, 55); // ~55ms per char = ~2.5s for full message
+}, 10500);
+
+// Phase 3: Activate input cursor at 13.5s
+setTimeout(() => {
+    chatInput.innerHTML = '<span style="color:var(--text-dim);">|</span>';
+    setInterval(() => {
+        const cursor = chatInput.querySelector('span');
+        if (cursor) cursor.style.opacity = cursor.style.opacity === '0' ? '1' : '0';
+    }, 530);
+}, 13500);
+</script>
+
+</body>
+</html>
