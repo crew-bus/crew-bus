@@ -706,6 +706,93 @@ check("Diana has 1 meet request", len(diana_reqs) == 1)
 
 
 # ---------------------------------------------------------------------------
+# 34. Stripe integration — config and validation
+# ---------------------------------------------------------------------------
+section("34. Stripe integration — config and validation")
+
+# _stripe_secret_key reads from env
+original_env = os.environ.get("STRIPE_SECRET_KEY")
+os.environ.pop("STRIPE_SECRET_KEY", None)
+check("no key returns None", bus._stripe_secret_key() is None)
+
+# stripe_create_checkout_session fails without key
+try:
+    bus.stripe_create_checkout_session(
+        ALICE_ID, "https://example.com/success", "https://example.com/cancel",
+        db_path=TEST_DB)
+    check("no key raises ValueError", False)
+except ValueError as e:
+    check("no key raises ValueError", "STRIPE_SECRET_KEY" in str(e))
+
+# stripe_create_checkout_session validates installer
+os.environ["STRIPE_SECRET_KEY"] = "sk_test_fake_key_for_testing"
+try:
+    bus.stripe_create_checkout_session(
+        "nonexistent-id", "https://example.com/success", "https://example.com/cancel",
+        db_path=TEST_DB)
+    check("bad installer raises ValueError", False)
+except ValueError as e:
+    check("bad installer raises ValueError", "not found" in str(e))
+
+# stripe_fulfill_permit fails without valid session
+# (will fail at Stripe API call since key is fake, that's expected)
+try:
+    bus.stripe_fulfill_permit("cs_fake_session_id", db_path=TEST_DB)
+    check("fake session fails", False)
+except ValueError as e:
+    check("fake session raises ValueError", True)
+
+# PERMIT_PRICE_CENTS is $25
+check("permit price is $25 (2500 cents)", bus.PERMIT_PRICE_CENTS == 2500)
+
+# Restore env
+if original_env:
+    os.environ["STRIPE_SECRET_KEY"] = original_env
+else:
+    os.environ.pop("STRIPE_SECRET_KEY", None)
+
+
+# ---------------------------------------------------------------------------
+# 35. Stripe webhook event construction
+# ---------------------------------------------------------------------------
+section("35. Stripe webhook signature verification")
+
+import hmac as hmac_mod
+import hashlib as hl_mod
+
+webhook_secret = "whsec_test_secret_123"
+test_payload = json.dumps({"type": "checkout.session.completed", "data": {"object": {"id": "cs_test"}}}).encode()
+timestamp = "1234567890"
+signed_payload = f"{timestamp}.{test_payload.decode()}"
+expected_sig = hmac_mod.new(
+    webhook_secret.encode(), signed_payload.encode(), hl_mod.sha256
+).hexdigest()
+sig_header = f"t={timestamp},v1={expected_sig}"
+
+# Valid signature should parse
+try:
+    event = bus.stripe_construct_webhook_event(test_payload, sig_header, webhook_secret)
+    check("valid webhook parses", event["type"] == "checkout.session.completed")
+except ValueError:
+    check("valid webhook parses", False, "should not raise")
+
+# Invalid signature should fail
+try:
+    bus.stripe_construct_webhook_event(test_payload, "t=123,v1=bad_signature", webhook_secret)
+    check("bad signature fails", False)
+except ValueError as e:
+    check("bad signature rejected", "verification failed" in str(e))
+
+# Missing secret should fail
+try:
+    os.environ.pop("STRIPE_WEBHOOK_SECRET", None)
+    bus.stripe_construct_webhook_event(test_payload, sig_header)
+    check("no secret fails", False)
+except ValueError as e:
+    check("no secret raises ValueError", "STRIPE_WEBHOOK_SECRET" in str(e))
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

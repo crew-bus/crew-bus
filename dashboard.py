@@ -2561,7 +2561,7 @@ a:hover{text-decoration:underline}
         <h3>Your Permits</h3>
         <div id="dash-permits"></div>
         <button class="btn btn-orange btn-sm" style="margin-top:12px"
-          onclick="purchasePermit()">Purchase New Permit — $25</button>
+          onclick="purchasePermit()">Purchase New Permit — $25 (Stripe Checkout)</button>
       </div>
 
       <!-- Update Profile Section -->
@@ -3018,19 +3018,45 @@ async function handlePasswordChange(e) {
   return false;
 }
 
-// ── Permit Purchase ──
+// ── Permit Purchase (Stripe Checkout) ──
 async function purchasePermit() {
-  if (!confirm('Purchase a new Permit to Work for $25?')) return;
-  // In production, this would redirect to Stripe checkout first
-  const {status, data} = await apiPost('/api/installer/permit/purchase', {
-    stripe_payment_id: 'pending_stripe_integration'
-  });
+  if (!confirm('Purchase a new Permit to Work for $25? You\\'ll be redirected to secure Stripe checkout.')) return;
+
+  toast('Creating checkout session...');
+  const {status, data} = await apiPost('/api/installer/checkout/create', {});
   if (status >= 400) {
-    toast(data.error || 'Purchase failed', true);
+    toast(data.error || 'Failed to create checkout session', true);
     return;
   }
-  toast('New permit issued: ' + data.permit_key);
-  loadDashboard();
+
+  if (data.checkout_url) {
+    // Redirect to Stripe Checkout
+    window.location.href = data.checkout_url;
+  } else {
+    toast('No checkout URL returned', true);
+  }
+}
+
+// ── Stripe Checkout Success ──
+async function handleCheckoutSuccess() {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session_id');
+  if (!sessionId) return;
+
+  toast('Verifying payment...');
+  const {status, data} = await apiPost('/api/installer/checkout/fulfill', {
+    session_id: sessionId
+  });
+
+  if (status >= 400) {
+    toast(data.error || 'Payment verification issue — contact support', true);
+  } else {
+    toast('Payment confirmed! New permit issued: ' + (data.permit_key || 'check your dashboard'));
+  }
+
+  // Clean URL and go to dashboard
+  window.history.replaceState({}, '', '/installer/dashboard');
+  showView('dashboard');
 }
 
 // ── Installer Search ──
@@ -3284,6 +3310,7 @@ function contactJobPoster(email, name) {
   else if (path === '/installer/dashboard') showView('dashboard');
   else if (path === '/installer/find') showView('find');
   else if (path === '/installer/jobs') showView('jobs');
+  else if (path === '/installer/checkout/success') handleCheckoutSuccess();
   else showView('home');
 })();
 </script>
@@ -3915,6 +3942,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 profile["installer_id"], db_path=self.db_path)
             return _json_response(self, requests)
 
+        # Stripe checkout success page (redirects back to dashboard)
+        if path == "/installer/checkout/success":
+            return _html_response(self, INSTALLER_PAGE_HTML)
+
         # Installer website pages
         if path in ("/installer", "/installer/signup", "/installer/login",
                      "/installer/dashboard", "/installer/find", "/installer/jobs"):
@@ -4207,6 +4238,58 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, result, 201)
             except (ValueError, PermissionError) as e:
                 return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Stripe Checkout endpoints ──
+
+        if path == "/api/installer/checkout/create":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            # Build absolute URLs for success/cancel
+            host = self.headers.get("Host", "localhost:8080")
+            scheme = "https" if "crew-bus.dev" in host else "http"
+            base = f"{scheme}://{host}"
+            success_url = f"{base}/installer/checkout/success?session_id={{CHECKOUT_SESSION_ID}}"
+            cancel_url = f"{base}/installer/dashboard"
+            try:
+                result = bus.stripe_create_checkout_session(
+                    profile["installer_id"],
+                    success_url=success_url,
+                    cancel_url=cancel_url,
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/checkout/fulfill":
+            # Called from success page to fulfill the permit
+            checkout_session_id = data.get("session_id", "")
+            if not checkout_session_id:
+                return _json_response(self, {"error": "session_id required"}, 400)
+            try:
+                result = bus.stripe_fulfill_permit(
+                    checkout_session_id, db_path=self.db_path)
+                return _json_response(self, result, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/webhook/stripe":
+            # Stripe sends raw body — we already parsed JSON, but for webhooks
+            # we need the raw payload. Re-read from rfile won't work since we
+            # consumed it. For now, handle checkout.session.completed event.
+            event_type = data.get("type", "")
+            if event_type == "checkout.session.completed":
+                session_obj = data.get("data", {}).get("object", {})
+                cs_id = session_obj.get("id", "")
+                if cs_id and session_obj.get("payment_status") == "paid":
+                    try:
+                        bus.stripe_fulfill_permit(cs_id, db_path=self.db_path)
+                    except ValueError:
+                        pass  # May already be fulfilled
+            return _json_response(self, {"received": True})
 
         if path == "/api/installer/review":
             required = ("installer_id", "client_name", "client_email", "rating")

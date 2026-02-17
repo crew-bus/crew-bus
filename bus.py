@@ -3642,7 +3642,11 @@ def list_techies(status: str = "verified", standing: str = "good",
 # ---------------------------------------------------------------------------
 
 import math
+import os
 import secrets
+import urllib.parse
+import urllib.request
+import urllib.error
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate great-circle distance between two points in km."""
@@ -4437,3 +4441,193 @@ def installer_get_meet_requests(installer_id: str,
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Stripe Integration — $25 Permit Checkout
+# ---------------------------------------------------------------------------
+
+STRIPE_API_BASE = "https://api.stripe.com/v1"
+PERMIT_PRICE_CENTS = 2500  # $25.00
+
+
+def _stripe_secret_key() -> Optional[str]:
+    """Get Stripe secret key from environment variable."""
+    return os.environ.get("STRIPE_SECRET_KEY")
+
+
+def _stripe_api_call(endpoint: str, params: dict = None,
+                     method: str = "POST") -> dict:
+    """Make a Stripe API call using urllib (no external dependencies).
+
+    Returns parsed JSON response. Raises ValueError on API errors.
+    """
+    sk = _stripe_secret_key()
+    if not sk:
+        raise ValueError("STRIPE_SECRET_KEY environment variable not set")
+
+    url = f"{STRIPE_API_BASE}/{endpoint}"
+    data = urllib.parse.urlencode(params or {}).encode("utf-8") if params else None
+
+    req = urllib.request.Request(url, data=data, method=method)
+    # Stripe uses HTTP Basic Auth with secret key as username
+    auth = base64.b64encode(f"{sk}:".encode("utf-8")).decode("utf-8")
+    req.add_header("Authorization", f"Basic {auth}")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8")
+        try:
+            err = json.loads(body)
+            msg = err.get("error", {}).get("message", body)
+        except (json.JSONDecodeError, KeyError):
+            msg = body
+        raise ValueError(f"Stripe API error: {msg}")
+
+
+def stripe_create_checkout_session(installer_id: str,
+                                   success_url: str,
+                                   cancel_url: str,
+                                   db_path: Optional[Path] = None) -> dict:
+    """Create a Stripe Checkout Session for a $25 permit purchase.
+
+    Returns dict with session_id and checkout_url.
+    The installer is redirected to checkout_url to complete payment.
+    """
+    # Verify installer exists and is active
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT installer_id, full_name, email, active "
+        "FROM certified_installers WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise ValueError("Installer not found")
+    if not row["active"]:
+        raise ValueError("Installer account is deactivated")
+
+    # Stripe Checkout Session params (using form-encoded nested params)
+    params = {
+        "mode": "payment",
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "customer_email": row["email"],
+        "line_items[0][price_data][currency]": "usd",
+        "line_items[0][price_data][product_data][name]": "crew-bus Permit to Work",
+        "line_items[0][price_data][product_data][description]":
+            "One-time permit to perform a crew-bus installation for a client. "
+            "Activatable for a single client engagement.",
+        "line_items[0][price_data][unit_amount]": str(PERMIT_PRICE_CENTS),
+        "line_items[0][quantity]": "1",
+        "metadata[installer_id]": installer_id,
+        "metadata[type]": "permit_purchase",
+    }
+
+    result = _stripe_api_call("checkout/sessions", params)
+
+    return {
+        "session_id": result["id"],
+        "checkout_url": result["url"],
+    }
+
+
+def stripe_verify_session(session_id: str) -> dict:
+    """Retrieve a Stripe Checkout Session to verify payment status.
+
+    Returns the session object with payment status.
+    """
+    result = _stripe_api_call(
+        f"checkout/sessions/{session_id}", method="GET", params={})
+    return result
+
+
+def stripe_fulfill_permit(session_id: str,
+                          db_path: Optional[Path] = None) -> dict:
+    """Verify payment and issue permit after successful Stripe checkout.
+
+    Called from the success URL callback or webhook.
+    Returns the new permit details.
+    """
+    session = stripe_verify_session(session_id)
+
+    if session.get("payment_status") != "paid":
+        raise ValueError(
+            f"Payment not completed (status: {session.get('payment_status')})")
+
+    installer_id = session.get("metadata", {}).get("installer_id")
+    if not installer_id:
+        raise ValueError("No installer_id in session metadata")
+
+    # Check if this session was already fulfilled (idempotency)
+    conn = get_conn(db_path)
+    existing = conn.execute(
+        "SELECT permit_id FROM installer_permits WHERE stripe_payment_id=?",
+        (session_id,),
+    ).fetchone()
+    if existing:
+        conn.close()
+        # Already fulfilled — return existing permit
+        permit = conn.execute(
+            "SELECT * FROM installer_permits WHERE stripe_payment_id=?",
+            (session_id,),
+        ).fetchone()
+        # Re-fetch since we closed conn
+        conn = get_conn(db_path)
+        permit = conn.execute(
+            "SELECT * FROM installer_permits WHERE stripe_payment_id=?",
+            (session_id,),
+        ).fetchone()
+        conn.close()
+        return dict(permit) if permit else {"already_fulfilled": True}
+
+    conn.close()
+
+    # Issue the permit
+    result = installer_purchase_permit(
+        installer_id,
+        stripe_payment_id=session_id,
+        db_path=db_path,
+    )
+    return result
+
+
+def stripe_construct_webhook_event(payload: bytes, sig_header: str,
+                                   webhook_secret: str = None) -> dict:
+    """Verify and parse a Stripe webhook event.
+
+    Uses STRIPE_WEBHOOK_SECRET env var if webhook_secret not provided.
+    Returns the parsed event dict.
+    """
+    secret = webhook_secret or os.environ.get("STRIPE_WEBHOOK_SECRET")
+    if not secret:
+        raise ValueError("STRIPE_WEBHOOK_SECRET not set")
+
+    # Stripe signature verification
+    # Format: t=timestamp,v1=signature
+    parts = {}
+    for item in sig_header.split(","):
+        key, val = item.split("=", 1)
+        parts[key] = val
+
+    timestamp = parts.get("t", "")
+    signature = parts.get("v1", "")
+
+    if not timestamp or not signature:
+        raise ValueError("Invalid Stripe signature header")
+
+    # Construct the signed payload
+    signed_payload = f"{timestamp}.{payload.decode('utf-8')}"
+    expected = hmac.new(
+        secret.encode("utf-8"),
+        signed_payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected, signature):
+        raise ValueError("Stripe webhook signature verification failed")
+
+    return json.loads(payload)
