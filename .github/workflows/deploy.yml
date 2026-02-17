@@ -1,0 +1,23 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          script: |
+            cd /opt/crew-bus
+            git pull origin main
+            /opt/crew-bus/venv/bin/pip install -r requirements.txt
+            sudo systemctl restart crew-bus
+            sleep 2
+            curl -sf http://localhost:8080/ > /dev/null && echo "Deploy OK" || echo "Deploy FAILED"
