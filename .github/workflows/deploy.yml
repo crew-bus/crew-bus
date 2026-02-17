@@ -15,6 +15,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           password: ${{ secrets.DEPLOY_PASSWORD }}
           script: |
+            git config --global --add safe.directory /opt/crew-bus
             cd /opt/crew-bus
             git pull origin main
             /opt/crew-bus/venv/bin/pip install -r requirements.txt
