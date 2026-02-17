@@ -32,7 +32,7 @@ import yaml
 DB_PATH = Path(__file__).parent / "crew_bus.db"
 
 # Guard activation verification key (signing key lives on crew-bus.dev server)
-GUARD_ACTIVATION_VERIFY_KEY = "PLACEHOLDER_REPLACE_BEFORE_LAUNCH"
+GUARD_ACTIVATION_VERIFY_KEY = "38cd1c83d599dcd7c8eb1fad1a494436939b7462c3b93c11d3f1f0eb280a0b26"
 
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
