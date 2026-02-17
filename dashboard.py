@@ -656,6 +656,52 @@ tr.override td{background:rgba(210,153,34,.08)}
 .mailbox-btn:hover{background:var(--ac);color:#000}
 .mailbox-unread{font-weight:700}
 .mailbox-read{opacity:.6}
+
+/* ── Compose bar ── */
+.compose-bar{
+  position:sticky;bottom:0;z-index:80;
+  background:var(--sf);border-top:1px solid var(--bd);
+  padding:12px 16px;
+}
+.compose-row{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+.compose-row select,.compose-row .compose-priority{
+  background:var(--bg);color:var(--tx);border:1px solid var(--bd);
+  border-radius:6px;padding:6px 10px;font-size:.8rem;
+  min-height:36px;appearance:auto;
+}
+.compose-subject{
+  width:100%;margin-top:8px;background:var(--bg);color:var(--tx);
+  border:1px solid var(--bd);border-radius:6px;padding:8px 10px;
+  font-size:.85rem;font-family:inherit;
+}
+.compose-body{
+  width:100%;margin-top:6px;background:var(--bg);color:var(--tx);
+  border:1px solid var(--bd);border-radius:6px;padding:8px 10px;
+  font-size:.85rem;font-family:inherit;resize:vertical;
+  min-height:2.4em;transition:min-height .2s;
+}
+.compose-body:focus{min-height:4.8em}
+.compose-send{
+  background:var(--ac);color:#000;border:none;border-radius:6px;
+  padding:6px 18px;font-size:.85rem;font-weight:600;cursor:pointer;
+  min-height:36px;white-space:nowrap;
+}
+.compose-send:hover{opacity:.85}
+.compose-send:disabled{opacity:.5;cursor:not-allowed}
+.compose-toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:var(--gn);color:#000;padding:8px 20px;border-radius:8px;
+  font-size:.85rem;font-weight:600;z-index:100;
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.compose-toast.show{opacity:1}
+.compose-toast.error{background:var(--rd);color:#fff}
+@media(max-width:600px){
+  .compose-row{flex-direction:column;align-items:stretch}
+  .compose-row select,.compose-row .compose-priority,.compose-send{width:100%}
+}
 """
 
 # ── JS ──────────────────────────────────────────────────────────────
@@ -895,6 +941,9 @@ async function openAgentSpace(agentId){
 
   // Load Guard activation status and skills for this agent
   loadGuardAndSkills(agentId, agent.agent_type);
+
+  // Start chat auto-refresh polling
+  startChatPoll();
 }
 
 // ══════════ GUARD ACTIVATION + SKILLS ══════════
@@ -1032,6 +1081,7 @@ function renderChat(messages){
 }
 
 function closeAgentSpace(){
+  stopChatPoll();
   var space=document.getElementById('agent-space');
   space.classList.add('closing');
   setTimeout(function(){space.classList.remove('open','closing')},200);
@@ -1328,9 +1378,7 @@ async function sendChat(){
     }else{
       await apiPost('/api/agent/'+agentId+'/chat',{text:text});
     }
-    // Re-fetch full chat to include server-generated ack
-    var chat=await api('/api/agent/'+agentId+'/chat');
-    renderChat(chat);
+    // Real agent responses arrive asynchronously via bus — chat auto-refresh will pick them up
   }catch(e){
     // If fetch failed, at least the optimistic message is visible
     console.error('sendChat error:',e);
@@ -1402,8 +1450,88 @@ function replyFromMailbox(event,agentId){
   setTimeout(function(){togglePrivateSession()},500);
 }
 
+// ── Compose bar ──
+async function loadComposeAgents(){
+  try{
+    var agents=await api('/api/compose/agents');
+    var sel=document.getElementById('compose-agent');
+    if(!sel)return;
+    sel.innerHTML='<option value="">To...</option>';
+    agents.forEach(function(a){
+      var opt=document.createElement('option');
+      opt.value=a.name;
+      opt.textContent=a.display||a.name;
+      sel.appendChild(opt);
+    });
+  }catch(e){console.error('loadComposeAgents:',e);}
+}
+
+function composeToast(msg,isError){
+  var el=document.getElementById('compose-toast');
+  if(!el)return;
+  el.textContent=msg;
+  el.className='compose-toast'+(isError?' error':'')+' show';
+  setTimeout(function(){el.classList.remove('show')},2500);
+}
+
+async function composeSend(){
+  var agent=document.getElementById('compose-agent').value;
+  var type=document.getElementById('compose-type').value;
+  var subject=document.getElementById('compose-subject').value.trim();
+  var body=document.getElementById('compose-body').value.trim();
+  var priority=document.getElementById('compose-priority').value;
+  if(!agent){composeToast('Select a recipient','error');return;}
+  if(!subject){composeToast('Enter a subject','error');return;}
+  var btn=document.getElementById('compose-send-btn');
+  btn.disabled=true;
+  try{
+    var res=await apiPost('/api/compose',{
+      to_agent:agent,message_type:type,subject:subject,body:body,priority:priority
+    });
+    if(res.ok){
+      composeToast('Sent to '+agent);
+      document.getElementById('compose-subject').value='';
+      document.getElementById('compose-body').value='';
+      startRefresh();
+    }else{
+      composeToast(res.error||'Send failed',true);
+    }
+  }catch(e){composeToast('Network error',true);}
+  finally{btn.disabled=false;}
+}
+
+// ── Chat auto-refresh ──
+var chatPollTimer=null;
+var chatPollCount=0;
+
+function startChatPoll(){
+  stopChatPoll();
+  chatPollCount=0;
+  doChatPoll();
+  chatPollTimer=setInterval(doChatPoll,5000);
+}
+
+function stopChatPoll(){
+  if(chatPollTimer){clearInterval(chatPollTimer);chatPollTimer=null;}
+}
+
+async function doChatPoll(){
+  var space=document.getElementById('agent-space');
+  if(!space||!space.classList.contains('open')){stopChatPoll();return;}
+  var agentId=space.dataset.agentId;
+  if(!agentId)return;
+  try{
+    var chat=await api('/api/agent/'+agentId+'/chat');
+    var wrap=document.getElementById('as-chat-msgs');
+    if(!wrap)return;
+    var oldCount=wrap.children.length;
+    renderChat(chat);
+    if(chat.length>oldCount){wrap.scrollTop=wrap.scrollHeight;}
+  }catch(e){}
+}
+
 // ── Boot ──
-document.addEventListener('DOMContentLoaded',function(){showView('crew');startRefresh()});
+document.addEventListener('DOMContentLoaded',function(){showView('crew');startRefresh();loadComposeAgents()});
 """
 
 # ── HTML ────────────────────────────────────────────────────────────
@@ -1488,6 +1616,27 @@ def _build_html():
   </div>
 </div>
 </div>
+<!-- ══════════ COMPOSE BAR ══════════ -->
+<div class="compose-bar" id="compose-bar">
+  <div class="compose-row">
+    <select id="compose-agent"><option value="">To...</option></select>
+    <select id="compose-type">
+      <option value="task">Task</option>
+      <option value="report">Report</option>
+      <option value="alert">Alert</option>
+      <option value="idea">Idea</option>
+    </select>
+    <select id="compose-priority" class="compose-priority">
+      <option value="normal">Normal</option>
+      <option value="high">High</option>
+      <option value="critical">Critical</option>
+    </select>
+    <button class="compose-send" id="compose-send-btn" onclick="composeSend()">Send</button>
+  </div>
+  <input class="compose-subject" id="compose-subject" placeholder="Subject">
+  <textarea class="compose-body" id="compose-body" placeholder="Message body (optional)" rows="2"></textarea>
+</div>
+<div class="compose-toast" id="compose-toast"></div>
 </div>
 
 <!-- FIX 3: Trust/Burnout popup (replaces old bottom-sheet sliders) -->
@@ -1770,7 +1919,6 @@ def _send_chat(db_path, agent_id, text):
         agent = conn.execute("SELECT id, agent_type FROM agents WHERE id=?", (agent_id,)).fetchone()
         if not agent:
             return {"ok": False, "error": "agent not found"}
-        agent_type = agent["agent_type"]
     finally:
         conn.close()
     try:
@@ -1780,20 +1928,59 @@ def _send_chat(db_path, agent_id, text):
             body=text, priority="normal", db_path=db_path)
     except (PermissionError, ValueError) as e:
         return {"ok": False, "error": str(e)}
+    return {"ok": True, "message_id": result["message_id"]}
 
-    # Generate acknowledgment from agent back to human
-    ack_text = random.choice(AGENT_ACKS.get(agent_type, AGENT_ACKS["_default"]))
+
+def _compose_message(db_path, to_name, message_type, subject, body, priority):
+    """Send a message from the human to any agent by name."""
     conn = bus.get_conn(db_path)
     try:
-        cur = conn.execute(
-            "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority) "
-            "VALUES (?, ?, 'report', 'Acknowledgment', ?, 'normal')",
-            (agent_id, human["id"], ack_text))
-        ack_id = cur.lastrowid
-        conn.commit()
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        agent = conn.execute(
+            "SELECT id, name, status FROM agents WHERE name=? AND status='active'",
+            (to_name,)
+        ).fetchone()
+        if not human:
+            return {"ok": False, "error": "no human agent"}
+        if not agent:
+            return {"ok": False, "error": f"agent '{to_name}' not found or not active"}
     finally:
         conn.close()
-    return {"ok": True, "message_id": result["message_id"], "ack_id": ack_id}
+
+    try:
+        result = bus.send_message(
+            from_id=human["id"], to_id=agent["id"],
+            message_type=message_type, subject=subject,
+            body=body, priority=priority, db_path=db_path)
+        return {"ok": True, "message_id": result["message_id"], "to": to_name}
+    except (PermissionError, ValueError) as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _get_compose_agents(db_path):
+    """Return active, messageable agents for the compose dropdown."""
+    conn = bus.get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, name, agent_type, status FROM agents "
+            "WHERE status='active' AND agent_type NOT IN ('human', 'help') "
+            "ORDER BY name"
+        ).fetchall()
+    finally:
+        conn.close()
+    agents = []
+    for r in rows:
+        if "Flint" in r["name"]:
+            continue
+        agents.append({
+            "id": r["id"],
+            "name": r["name"],
+            "type": r["agent_type"],
+            "display": PERSONAL_NAMES.get(r["agent_type"], r["name"]),
+        })
+    return agents
 
 
 def _get_teams(db_path):
@@ -2017,6 +2204,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             status = _get_private_session_status(self.db_path, int(m.group(1)))
             return _json_response(self, status or {})
 
+        if path == "/api/compose/agents":
+            return _json_response(self, _get_compose_agents(self.db_path))
+
         if path == "/api/teams":
             return _json_response(self, _get_teams(self.db_path))
 
@@ -2158,6 +2348,17 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"ok": True, "decision_id": int(m.group(1)), "action": "overridden"})
             except ValueError as e:
                 return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/compose":
+            result = _compose_message(
+                self.db_path,
+                data.get("to_agent", ""),
+                data.get("message_type", "task"),
+                data.get("subject", ""),
+                data.get("body", ""),
+                data.get("priority", "normal"),
+            )
+            return _json_response(self, result, 201 if result.get("ok") else 400)
 
         m = re.match(r"^/api/agent/(\d+)/chat$", path)
         if m:
