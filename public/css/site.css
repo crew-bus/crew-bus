@@ -230,8 +230,8 @@ img { max-width: 100%; }
 
 .circle-diagram {
     position: relative;
-    width: 340px;
-    height: 340px;
+    width: 400px;
+    height: 400px;
 }
 
 .circle-center {
@@ -253,8 +253,8 @@ img { max-width: 100%; }
     background: var(--bg-card);
     border: 2px solid #58a6ff;
     border-radius: 50%;
-    width: 90px;
-    height: 90px;
+    width: 100px;
+    height: 100px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -264,14 +264,15 @@ img { max-width: 100%; }
 
 .node-icon { font-size: 1.3rem; }
 .node-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.node-sublabel { font-size: 0.55rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: -2px; }
 
 .circle-ring .circle-node {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 70px;
-    height: 70px;
-    margin: -35px 0 0 -35px;
+    width: 88px;
+    height: 88px;
+    margin: -44px 0 0 -44px;
     background: var(--bg-card);
     border: 2px solid var(--border);
     border-radius: 50%;
@@ -279,7 +280,8 @@ img { max-width: 100%; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transform: rotate(var(--angle)) translateY(-130px) rotate(calc(-1 * var(--angle)));
+    gap: 0.1rem;
+    transform: rotate(var(--angle)) translateY(-150px) rotate(calc(-1 * var(--angle)));
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
@@ -293,21 +295,6 @@ img { max-width: 100%; }
 .node-ideas { border-color: #d18616 !important; }
 .node-wallet { border-color: #bc8cff !important; }
 .node-legal { border-color: #74b9ff !important; }
-
-.circle-human {
-    position: absolute;
-    bottom: -30px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.2rem;
-    color: var(--highlight);
-    font-weight: 700;
-}
-
-.circle-human .node-icon { font-size: 1.5rem; }
 
 /* --- Feature Grid --- */
 .feature-grid {
@@ -968,14 +955,14 @@ img { max-width: 100%; }
     .hero-sub { max-width: 100%; margin-left: auto; margin-right: auto; }
     .hero-actions { justify-content: center; }
 
-    .circle-diagram { width: 280px; height: 280px; }
+    .circle-diagram { width: 320px; height: 320px; }
     .circle-ring .circle-node {
-        width: 60px;
-        height: 60px;
-        margin: -30px 0 0 -30px;
-        transform: rotate(var(--angle)) translateY(-105px) rotate(calc(-1 * var(--angle)));
+        width: 72px;
+        height: 72px;
+        margin: -36px 0 0 -36px;
+        transform: rotate(var(--angle)) translateY(-120px) rotate(calc(-1 * var(--angle)));
     }
-    .node-boss { width: 76px; height: 76px; }
+    .node-boss { width: 84px; height: 84px; }
 
     .feature-grid { grid-template-columns: repeat(2, 1fr); }
     .steps { grid-template-columns: 1fr; gap: 2.5rem; }
