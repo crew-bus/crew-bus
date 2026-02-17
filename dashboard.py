@@ -65,6 +65,7 @@ from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
+import agent_worker
 
 # Stripe integration — optional, only required for public deployment
 try:
@@ -2859,13 +2860,19 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
 
 def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     server = create_server(port=port, db_path=db_path, config=config, host=host)
+    actual_db = server.RequestHandlerClass.db_path
     print(f"crew-bus dashboard running on http://{host}:{port}")
-    print(f"Database: {server.RequestHandlerClass.db_path}")
+    print(f"Database: {actual_db}")
+
+    # Start the AI agent worker (Ollama-powered responses)
+    agent_worker.start_worker(db_path=actual_db)
+
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down.")
+        agent_worker.stop_worker()
         server.shutdown()
 
 
