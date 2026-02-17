@@ -2041,19 +2041,19 @@ a:hover{text-decoration:underline}
 <div class="view active" id="view-home">
 
   <div class="urgency-bar">
-    300,000+ tech workers laid off in the last 18 months. You're one of them. This is how you fight back.
+    Skilled engineers are already building independent installer businesses worldwide. Your city needs one.
   </div>
 
   <div class="hero">
-    <div class="hero-tagline">Built for the people tech left behind</div>
-    <h1>You Got Laid Off. <span>You Didn't Get Worse.</span></h1>
-    <p>The industry cut you. Not because you weren't good enough — because a spreadsheet said so.
-    Your hands still know Linux. Your brain still debugs at 2 AM. Your skills didn't
-    expire when your badge stopped working.</p>
+    <div class="hero-tagline">Your skills. Your business. Your terms.</div>
+    <h1>Build Something <span>That's Actually Yours.</span></h1>
+    <p>You're an engineer who knows how to make systems work. Linux, networking, hardware, AI —
+    that's valuable. Incredibly valuable. And right now there's a massive global demand
+    for people who can walk into a business and set up AI agent infrastructure on real hardware.</p>
     <div class="hero-bold">
-      crew-bus needs people like you — right now, in every city on Earth — to physically
-      set up AI agent systems for businesses and families who can't do it themselves.
-      This is real work. Technical work. Your kind of work. And it pays.
+      Become a Certified crew-bus Installer. Work for yourself. Set your own rates.
+      Pick your own clients. Build a book of business in your own city
+      that nobody can outsource, automate, or take away from you.
     </div>
     <div class="cta-row">
       <a href="#" class="btn btn-glow" onclick="showView('become')">Get Certified Free — Start Today</a>
@@ -2072,18 +2072,18 @@ a:hover{text-decoration:underline}
   <div class="container">
 
     <div class="quote-card fade-in">
-      Twelve years writing backend systems. Then one Thursday Slack message and I'm
-      "no longer with the company." Applied to 300+ jobs. Got ghosted by 290 of them.
-      My wife found crew-bus. I signed up as an installer on a Tuesday — had my first client
-      on Thursday. A dentist's office that wanted AI agents on their local server but had
-      zero idea where to start. That was three months ago. I now have 11 recurring clients
-      and I haven't opened LinkedIn since.
-      <div class="quote-attr">— Former backend engineer, Austin TX. Laid off March 2025.</div>
+      Twelve years writing backend systems. I was good at it — but I always wanted to
+      run my own thing. When I saw crew-bus installers I signed up on a Tuesday and had
+      my first client on Thursday. A dentist's office that wanted AI agents on their
+      local server but had zero idea where to start. That was three months ago.
+      I now have 11 recurring clients, I set my own hours, and I'm making more per hour
+      than I ever did as a salaried engineer. Should have done this years ago.
+      <div class="quote-attr">— Backend engineer turned installer, Austin TX</div>
     </div>
 
     <div class="section">
-      <h2 style="font-size:1.8rem">Why Laid-Off Engineers Are Signing Up</h2>
-      <p class="subtitle">You already have the skills. We just need you to show up.</p>
+      <h2 style="font-size:1.8rem">Why Engineers Are Going Independent</h2>
+      <p class="subtitle">You already have the skills. This is the fastest way to monetize them — on your own terms.</p>
 
       <div class="why-grid">
         <div class="why-card">
@@ -2095,38 +2095,39 @@ a:hover{text-decoration:underline}
         </div>
         <div class="why-card">
           <div class="why-icon">&#x1F3AF;</div>
-          <h3>No Leetcode. No Whiteboard. Just Real Work.</h3>
-          <p>You know Linux. You know networking. You can set up Docker in your sleep.
-          Clients don't care about your GitHub contribution graph —
+          <h3>Your Real Skills Are the Product</h3>
+          <p>Linux. Networking. Docker. Hardware. The stuff you actually love doing.
+          Clients don't care about algorithm puzzles —
           they care that someone competent shows up and makes the thing work.
           That's you.</p>
         </div>
         <div class="why-card">
           <div class="why-icon">&#x1F30D;</div>
-          <h3>Nobody From Bangalore Is Undercutting You</h3>
-          <p>This is physical, local, in-person work. When a law firm in Denver needs
+          <h3>Local Work That Can't Be Outsourced</h3>
+          <p>This is physical, in-person work. When a law firm in Denver needs
           their crew-bus system set up, they need someone in Denver.
-          Your city is your market. Your neighborhood is your territory.</p>
+          Your city is your market. Your neighborhood is your territory.
+          That's a competitive advantage that only grows over time.</p>
         </div>
         <div class="why-card">
           <div class="why-icon">&#x1F680;</div>
           <h3>Every Install Becomes a Relationship</h3>
           <p>crew-bus systems need updates, new agents, maintenance.
-          You're not doing one-off gigs — you're building a book of recurring clients
-          who call you first. That's how consulting firms work. Now it's how you work.</p>
+          You're not chasing one-off gigs — you're building a book of recurring clients
+          who call you by name. That's how real consulting practices work. And now it's yours.</p>
         </div>
         <div class="why-card">
           <div class="why-icon">&#x1F6E1;&#xFE0F;</div>
           <h3>Certification Is Your Moat</h3>
-          <p>KYC verification means clients trust you in their homes and offices with their data.
-          Most random people off Craigslist can't say that. Your certification is a
-          competitive advantage that compounds — the longer you're in, the harder you are to replace.</p>
+          <p>KYC-verified, professionally certified. Clients trust you in their homes and offices
+          because you've been vetted. That trust compounds — the longer you're in, the stronger
+          your reputation, the more referrals you get. Early movers own their territory.</p>
         </div>
         <div class="why-card">
           <div class="why-icon">&#x26A1;</div>
           <h3>Live in Minutes, Not Months</h3>
-          <p>No boot camp. No certificate program. No 6-round interview process that ghosts you.
-          You sign up, verify your ID, get your free permit, and you're listed.
+          <p>No boot camp. No certificate program. No 6-month ramp.
+          Sign up, verify your ID, get your free permit, and you're listed.
           There are people in your city right now who need this done. They just can't find you yet.</p>
         </div>
       </div>
@@ -2172,34 +2173,34 @@ a:hover{text-decoration:underline}
 
     <div class="explainer" style="margin:32px 0">
       <p style="font-size:1.15rem;color:var(--tx);font-weight:700;margin-bottom:10px">
-        Tech companies are cutting engineers. But the world is hiring them.</p>
-      <p>There are millions of people, businesses, and organizations who want AI agent systems
-      running on their own hardware — and they don't know how to set it up.
-      They need someone who's done this before. Someone who speaks their language.
-      Someone who can drive to their office and make it work. That's a laid-off engineer.
-      That's you.</p>
+        The AI revolution needs boots on the ground. That's the opportunity.</p>
+      <p>Millions of people, businesses, and organizations want AI agent systems
+      running on their own hardware — and they have no idea how to set it up.
+      They need someone technical. Someone local. Someone who can walk in,
+      configure the system, and be there when they need help.
+      If you can do that, you can build a business around it starting this week.</p>
     </div>
 
     <div class="quote-card fade-in">
-      SRE for 8 years. Got "restructured out." Spent 4 months applying for jobs that
-      want 10 years of experience in tools that are 3 years old. I was losing my mind.
-      Then someone in a Discord mentioned crew-bus installers. I signed up, did my first
-      install for a law firm on a Friday. By Monday they'd referred me to two more
-      offices. I'm booked out through next month. My wife says I'm smiling again.
-      <div class="quote-attr">— Former SRE, Toronto ON. Laid off November 2024.</div>
+      SRE for 8 years. I always talked about going independent but never pulled
+      the trigger. Then someone in a Discord mentioned crew-bus installers.
+      I signed up, did my first install for a law firm on a Friday. By Monday
+      they'd referred me to two more offices. I'm booked out through next month
+      and I'm finally building something that's mine. Best decision I've made in a decade.
+      <div class="quote-attr">— Independent installer, Toronto ON. Former SRE.</div>
     </div>
 
     <div style="text-align:center;padding:48px 0">
-      <h2 style="font-size:1.8rem;margin-bottom:8px">You Know How to Do This.</h2>
+      <h2 style="font-size:1.8rem;margin-bottom:8px">You Already Know How to Do This.</h2>
       <p style="color:var(--mu);margin-bottom:24px;font-size:1.1rem;max-width:560px;display:inline-block">
-        The only thing standing between you and your next paycheck is a 5-minute signup form.
-        Not a recruiter. Not an ATS. Not a hiring committee that takes 8 weeks to ghost you.</p>
+        The only thing between you and your own technical consulting business
+        is a 5-minute signup form. No gatekeepers. No permission needed. Just your skills and a market that's wide open.</p>
       <br>
       <a href="#" class="btn btn-glow" onclick="showView('become')" style="font-size:1.15rem;padding:18px 48px">
-        Get Certified — Start Earning Again
+        Get Certified — Build Your Business
       </a>
       <p style="color:var(--mu);font-size:.85rem;margin-top:14px">
-        Free signup. Free first permit. No credit card. No catch. Just work that uses your brain.</p>
+        Free signup. Free first permit. No credit card. No catch. Just real work that uses your brain.</p>
     </div>
 
   </div>
@@ -2239,11 +2240,11 @@ a:hover{text-decoration:underline}
   <div class="container">
     <div class="section">
       <div style="text-align:center;margin-bottom:32px">
-        <h2 style="font-size:1.8rem;margin-bottom:8px">Let's Get You Back to Work</h2>
+        <h2 style="font-size:1.8rem;margin-bottom:8px">Let's Build Your Installer Business</h2>
         <p style="color:var(--mu);max-width:560px;margin:0 auto 8px;font-size:1.05rem">
-          5 minutes from now you'll have a Permit to Work and people in your city
+          5 minutes from now you'll have a Permit to Work and clients in your city
           will be able to find you when they need a crew-bus system set up.
-          No interview. No recruiter. Just you and your skills, back in action.</p>
+          Your skills, your schedule, your business.</p>
         <div class="income-banner" style="margin:16px auto">
           <span>Your first permit:</span>
           <span class="amount">FREE</span>
