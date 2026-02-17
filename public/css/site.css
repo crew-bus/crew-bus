@@ -230,8 +230,8 @@ img { max-width: 100%; }
 
 .circle-diagram {
     position: relative;
-    width: 400px;
-    height: 400px;
+    width: 520px;
+    height: 520px;
 }
 
 .circle-center {
@@ -253,8 +253,8 @@ img { max-width: 100%; }
     background: var(--bg-card);
     border: 2px solid #58a6ff;
     border-radius: 50%;
-    width: 100px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -262,17 +262,17 @@ img { max-width: 100%; }
     box-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
 }
 
-.node-icon { font-size: 1.3rem; }
-.node-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-.node-sublabel { font-size: 0.55rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: -2px; }
+.node-icon { font-size: 1.5rem; }
+.node-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.node-sublabel { font-size: 0.65rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: -2px; }
 
 .circle-ring .circle-node {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 88px;
-    height: 88px;
-    margin: -44px 0 0 -44px;
+    width: 110px;
+    height: 110px;
+    margin: -55px 0 0 -55px;
     background: var(--bg-card);
     border: 2px solid var(--border);
     border-radius: 50%;
@@ -281,7 +281,7 @@ img { max-width: 100%; }
     align-items: center;
     justify-content: center;
     gap: 0.1rem;
-    transform: rotate(var(--angle)) translateY(-150px) rotate(calc(-1 * var(--angle)));
+    transform: rotate(var(--angle)) translateY(-190px) rotate(calc(-1 * var(--angle)));
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
@@ -955,14 +955,14 @@ img { max-width: 100%; }
     .hero-sub { max-width: 100%; margin-left: auto; margin-right: auto; }
     .hero-actions { justify-content: center; }
 
-    .circle-diagram { width: 320px; height: 320px; }
+    .circle-diagram { width: 400px; height: 400px; }
     .circle-ring .circle-node {
-        width: 72px;
-        height: 72px;
-        margin: -36px 0 0 -36px;
-        transform: rotate(var(--angle)) translateY(-120px) rotate(calc(-1 * var(--angle)));
+        width: 90px;
+        height: 90px;
+        margin: -45px 0 0 -45px;
+        transform: rotate(var(--angle)) translateY(-155px) rotate(calc(-1 * var(--angle)));
     }
-    .node-boss { width: 84px; height: 84px; }
+    .node-boss { width: 100px; height: 100px; }
 
     .feature-grid { grid-template-columns: repeat(2, 1fr); }
     .steps { grid-template-columns: 1fr; gap: 2.5rem; }
