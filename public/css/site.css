@@ -365,21 +365,15 @@ img { max-width: 100%; }
     box-shadow: 0 0 40px rgba(100, 181, 246, 0.5), 0 0 80px rgba(100, 181, 246, 0.2), 0 0 120px rgba(100, 181, 246, 0.08);
 }
 
-/* --- Hero Demo GIF / Video Thumbnail --- */
+/* --- Hero Demo Animation --- */
 .hero-demo {
-    max-width: 520px;
+    max-width: 620px;
     margin: 0 auto;
-    cursor: pointer;
-    transition: transform 0.3s ease;
 }
 
-.hero-demo:hover {
-    transform: scale(1.02);
-}
-
-.demo-gif {
+.demo-iframe {
     width: 100%;
-    height: auto;
+    height: 380px;
     border-radius: var(--radius-lg);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow:
@@ -387,15 +381,7 @@ img { max-width: 100%; }
         0 0 80px rgba(233, 69, 96, 0.06),
         0 0 1px rgba(255, 255, 255, 0.1);
     display: block;
-    transition: box-shadow 0.3s ease, border-color 0.3s ease;
-}
-
-.hero-demo:hover .demo-gif {
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow:
-        0 16px 50px rgba(0, 0, 0, 0.6),
-        0 0 100px rgba(233, 69, 96, 0.1),
-        0 0 2px rgba(255, 255, 255, 0.15);
+    background: var(--bg);
 }
 
 .demo-caption {
@@ -403,11 +389,6 @@ img { max-width: 100%; }
     font-size: 0.9rem;
     color: var(--text-muted);
     font-style: italic;
-    transition: color 0.3s ease;
-}
-
-.hero-demo:hover .demo-caption {
-    color: var(--text-dim);
 }
 
 /* --- Feature Grid --- */
