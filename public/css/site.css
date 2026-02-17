@@ -314,10 +314,12 @@ img { max-width: 100%; }
     width: 195px !important;
     height: 195px !important;
     margin: -97.5px 0 0 -97.5px !important;
-    padding: 1.5rem !important;
+    padding: 1.8rem !important;
     border-color: #4dd0b8 !important;
     box-shadow: 0 0 25px rgba(77, 208, 184, 0.3), 0 0 60px rgba(77, 208, 184, 0.1), 0 0 90px rgba(77, 208, 184, 0.04);
 }
+.node-family .node-icon { font-size: 2.2rem !important; }
+.node-family .node-label { font-size: 0.58rem !important; letter-spacing: 0.5px !important; }
 .node-family:hover {
     border-color: #6eecd4 !important;
     box-shadow: 0 0 40px rgba(77, 208, 184, 0.5), 0 0 80px rgba(77, 208, 184, 0.2), 0 0 120px rgba(77, 208, 184, 0.08);
