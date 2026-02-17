@@ -27,7 +27,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Union
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
@@ -138,7 +138,7 @@ class CrewBridge:
 
     # ── Inbox ──────────────────────────────────────────────────────
 
-    def check_inbox(self, unread_only: bool = True) -> list[dict]:
+    def check_inbox(self, unread_only: bool = True) -> List[dict]:
         """Return messages addressed to this agent.
 
         Args:
@@ -180,7 +180,7 @@ class CrewBridge:
         except Exception as e:
             return []
 
-    def get_tasks(self) -> list[dict]:
+    def get_tasks(self) -> List[dict]:
         """Return only unread task-type messages.
 
         Returns:
@@ -239,7 +239,7 @@ class CrewBridge:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    def search_knowledge(self, query: str, category: Optional[str] = None) -> list[dict]:
+    def search_knowledge(self, query: str, category: Optional[str] = None) -> List[dict]:
         """Search the knowledge base.
 
         Args:
@@ -359,7 +359,7 @@ class CrewBridge:
 
     # ── Internal ────────────────────────────────────────────────────
 
-    def _get_parent_id(self) -> int | dict:
+    def _get_parent_id(self) -> Union[int, dict]:
         """Resolve this agent's parent ID.
 
         Returns agent_id int or error dict.
@@ -368,7 +368,7 @@ class CrewBridge:
             return self.parent_agent_id
         return {"ok": False, "error": f"Agent '{self.agent_name}' has no parent in hierarchy"}
 
-    def _get_right_hand_id(self) -> int | dict:
+    def _get_right_hand_id(self) -> Union[int, dict]:
         """Find the Crew Boss agent in the hierarchy.
 
         Returns agent_id int or error dict.
