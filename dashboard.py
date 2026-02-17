@@ -84,60 +84,60 @@ DEFAULT_DB = bus.DB_PATH
 # Agent-type to Personal Edition name mapping
 PERSONAL_NAMES = {
     "right_hand": "Crew Boss",
-    "security": "Guard",
-    "wellness": "Wellness",
-    "strategy": "Ideas",
-    "financial": "Wallet",
+    "security": "Friend & Family Helper",
+    "wellness": "Health Buddy",
+    "strategy": "Growth Coach",
+    "financial": "Life Assistant",
     "help": "Help",
     "human": "You",
 }
 
 PERSONAL_COLORS = {
-    "right_hand": "#58a6ff",
-    "security": "#2ea043",
-    "wellness": "#39d0d0",
-    "strategy": "#d18616",
-    "financial": "#bc8cff",
+    "right_hand": "#ffffff",
+    "security": "#4dd0b8",
+    "wellness": "#ffab57",
+    "strategy": "#66d97a",
+    "financial": "#64b5f6",
 }
 
 CORE_TYPES = ("right_hand", "security", "wellness", "strategy", "financial")
 
 AGENT_ACKS = {
     "right_hand": [
-        "Got it. I'll process this and get back to you.",
-        "Noted. Working on it.",
-        "Received. I'll handle this.",
-        "Understood. On it.",
+        "Hey! I\u2019m right here with you \U0001F60A What\u2019s on your mind today?",
+        "On it! I\u2019ll take care of this for you.",
+        "Got it \u2014 leave it with me!",
+        "No worries, I\u2019ll handle this.",
     ],
     "security": [
-        "Acknowledged. Monitoring.",
-        "Copy that. Scanning.",
-        "Received. Staying alert.",
+        "I\u2019ll make a note for the family!",
+        "Got it \u2014 I\u2019ll keep everyone in the loop.",
+        "Added to the family board!",
     ],
     "wellness": [
-        "Heard you. Taking note.",
-        "Thanks for sharing that with me.",
-        "Noted. I'll check in with you later.",
+        "Thanks for sharing that with me \U0001F49A",
+        "I hear you. Let\u2019s take care of you first.",
+        "Noted \u2014 I\u2019ll check in with you later.",
     ],
     "strategy": [
-        "Interesting thought. Let me explore this.",
-        "Noted. I'll think on that.",
-        "Good input. Processing.",
+        "Love that idea! Let me help you grow it \U0001F331",
+        "Great thinking \u2014 let\u2019s make a plan.",
+        "Noted! I\u2019ll help you take the next step.",
     ],
     "financial": [
-        "Logged. Reviewing the numbers.",
-        "Got it. Tracking this.",
-        "Received. Checking finances.",
+        "On it! I\u2019ll add that to your list.",
+        "Got it \u2014 I\u2019ll sort this out for you.",
+        "No problem, handling the details!",
     ],
     "help": [
         "Good question! Check the info above for guidance.",
-        "Take a look at the overview above — it covers most topics.",
-        "I'm here to help! The info above should point you in the right direction.",
+        "Take a look at the overview above \u2014 it covers most topics.",
+        "I\u2019m here to help! The info above should point you in the right direction.",
     ],
     "_default": [
-        "Acknowledged. Processing your request.",
-        "Got it. Working on this.",
-        "Received. I'll follow up.",
+        "Got it! Working on this for you.",
+        "No worries \u2014 I\u2019m on it!",
+        "Received. I\u2019ll follow up soon.",
     ],
 }
 
@@ -211,8 +211,7 @@ a{color:var(--ac);text-decoration:none}
   pointer-events:none;z-index:1;
 }
 .circle-wrap svg.lines line{
-  stroke:var(--bd);stroke-width:1.5;stroke-dasharray:6 4;
-  opacity:.5;
+  stroke-width:1.5;stroke-dasharray:6 4;
 }
 
 /* Agent bubble */
@@ -228,7 +227,7 @@ a{color:var(--ac);text-decoration:none}
   position:relative;transition:box-shadow .3s;
   background:var(--sf);border:2px solid var(--bd);
 }
-.bubble:hover .bubble-circle{box-shadow:0 0 20px rgba(88,166,255,.2)}
+.bubble:hover .bubble-circle{box-shadow:0 0 25px rgba(255,255,255,.15)}
 .bubble-circle .icon{font-size:1.4rem}
 .bubble-circle .status-dot{
   position:absolute;top:2px;right:2px;width:10px;height:10px;
@@ -250,34 +249,36 @@ a{color:var(--ac);text-decoration:none}
   text-overflow:ellipsis;white-space:nowrap;
 }
 
-/* Center (Crew Boss) — CSS diamond icon instead of emoji */
+/* Center (Crew Boss) — warm star icon, premium glow */
 .bubble.center .bubble-circle{
-  width:88px;height:88px;
-  border-color:var(--ac);border-width:2.5px;
-  background:linear-gradient(135deg,#161b22 0%,#1a2332 100%);
+  width:96px;height:96px;
+  border-color:rgba(255,255,255,0.9);border-width:2.5px;
+  background:rgba(12,14,22,0.95);
+  box-shadow:0 0 30px rgba(255,255,255,0.2),0 0 60px rgba(255,255,255,0.08);
+  animation:bossGlow 3s ease-in-out infinite;
 }
 .bubble.center .bubble-circle .icon{font-size:2rem}
-.bubble.center .bubble-label{font-size:.8rem;color:var(--tx)}
-.boss-icon{
-  width:28px;height:28px;position:relative;
+.bubble.center .bubble-label{font-size:.85rem;color:#fff;font-weight:700}
+.bubble.center:hover .bubble-circle{
+  box-shadow:0 0 40px rgba(255,255,255,0.35),0 0 80px rgba(255,255,255,0.12);
 }
-.boss-icon::before{
-  content:'';position:absolute;top:50%;left:50%;
-  width:20px;height:20px;
-  background:linear-gradient(135deg,var(--ac) 0%,#79c0ff 100%);
-  transform:translate(-50%,-50%) rotate(45deg);
-  border-radius:3px;
-}
-.boss-icon::after{
-  content:'';position:absolute;top:50%;left:50%;
-  width:8px;height:8px;
-  background:linear-gradient(135deg,#1a2332 0%,#0d1117 100%);
-  transform:translate(-50%,-50%) rotate(45deg);
-  border-radius:1px;
+@keyframes bossGlow{
+  0%,100%{box-shadow:0 0 30px rgba(255,255,255,0.2),0 0 60px rgba(255,255,255,0.08)}
+  50%{box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 70px rgba(255,255,255,0.12)}
 }
 
+/* Agent-specific neon glows */
+#bubble-family .bubble-circle{border-color:#4dd0b8;box-shadow:0 0 20px rgba(77,208,184,0.25)}
+#bubble-family:hover .bubble-circle{box-shadow:0 0 35px rgba(77,208,184,0.45)}
+#bubble-health .bubble-circle{border-color:#ffab57;box-shadow:0 0 20px rgba(255,171,87,0.25)}
+#bubble-health:hover .bubble-circle{box-shadow:0 0 35px rgba(255,171,87,0.45)}
+#bubble-growth .bubble-circle{border-color:#66d97a;box-shadow:0 0 20px rgba(102,217,122,0.25)}
+#bubble-growth:hover .bubble-circle{box-shadow:0 0 35px rgba(102,217,122,0.45)}
+#bubble-life .bubble-circle{border-color:#64b5f6;box-shadow:0 0 20px rgba(100,181,246,0.25)}
+#bubble-life:hover .bubble-circle{box-shadow:0 0 35px rgba(100,181,246,0.45)}
+
 /* Outer agents */
-.bubble.outer .bubble-circle{width:68px;height:68px}
+.bubble.outer .bubble-circle{width:74px;height:74px;background:rgba(12,14,22,0.9)}
 
 /* Trust + Burnout beneath circle */
 .indicators{
@@ -772,17 +773,17 @@ function burnoutDotColor(score){
 }
 
 function accentColor(type){
-  var m={'right_hand':'#58a6ff','security':'#2ea043','wellness':'#39d0d0','strategy':'#d18616','financial':'#bc8cff'};
-  return m[type]||'#58a6ff';
+  var m={'right_hand':'#ffffff','security':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6'};
+  return m[type]||'#ffffff';
 }
 
 function personalName(a){
-  var m={'right_hand':'Crew Boss','security':'Guard','wellness':'Wellness','strategy':'Ideas','financial':'Wallet','help':'Help','human':'You'};
+  var m={'right_hand':'Crew Boss','security':'Friend & Family Helper','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
   return m[a.agent_type]||a.name||'Agent';
 }
 
 // FIX 4: map for display names used in Messages dropdown
-var DISPLAY_NAMES={'right_hand':'Crew Boss','security':'Guard','wellness':'Wellness','strategy':'Ideas','financial':'Wallet','help':'Help','human':'You'};
+var DISPLAY_NAMES={'right_hand':'Crew Boss','security':'Friend & Family Helper','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
 var CORE_TYPES_SET={'right_hand':1,'security':1,'wellness':1,'strategy':1,'financial':1};
 
 // ── Auto-refresh ──
@@ -836,12 +837,11 @@ async function loadCircle(){
   var guardCI='';
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
 
-  // FIX 5: "Watching..." instead of "No check-in"
   renderBubble('bubble-boss',boss,null);
-  renderBubble('bubble-guard',guard,guardCI?'Check-in: '+timeAgo(guardCI):'Watching...');
-  renderBubble('bubble-well',well,null);
-  renderBubble('bubble-ideas',ideas,null);
-  renderBubble('bubble-wallet',wallet,null);
+  renderBubble('bubble-family',guard,null);
+  renderBubble('bubble-health',well,null);
+  renderBubble('bubble-growth',ideas,null);
+  renderBubble('bubble-life',wallet,null);
 
   var trustEl=document.getElementById('trust-val');
   var burnoutDot=document.getElementById('burnout-dot');
@@ -1056,25 +1056,24 @@ async function submitNewSkill(agentId){
 
 function descFor(type){
   var d={
-    'right_hand':'Your personal AI chief of staff. Handles all communication, memory, scheduling, and filtering. The only agent that talks to you directly.',
-    'security':'Silent protector. Monitors for threats, scams, privacy concerns, and suspicious activity. Reports to Crew Boss, never bothers you directly.',
-    'wellness':'Watches your health, energy, and work-life balance. Tracks patterns and suggests breaks before burnout hits.',
-    'strategy':'Your idea generator. Learns what you care about and brings tailored opportunities, suggestions, and creative sparks.',
-    'financial':'Quiet financial awareness. Tracks spending patterns, flags anything unusual, reminds about bills and deadlines.',
-    'help':'Welcome to crew-bus — your personal AI crew.\\n\\n' +
-      '🔷 Crew Boss — Your AI chief of staff. Manages everything, talks to you directly.\\n' +
-      '🛡️ Guard — Silent protector. Watches for threats and scams.\\n' +
-      '💚 Wellness — Monitors your wellbeing. You can talk privately with any agent using the 🔒 button.\\n' +
-      '💡 Ideas — Brainstorms, strategizes, explores possibilities.\\n' +
-      '💰 Wallet — Tracks finances and spending.\\n\\n' +
-      'Teams — Add teams for work, household, or anything you need. Each team has a manager and workers.\\n\\n' +
-      'Trust Score — Controls how much Crew Boss does on their own (1 = messenger, 10 = full chief of staff).\\n' +
-      'Burnout — When high, Crew Boss holds non-urgent messages for better timing.\\n\\n' +
-      'Privacy — The 🔒 button starts a private conversation. No other agent can see the content.\\n' +
-      'Team Mailbox — Any agent can send urgent messages directly to you, even if their manager ignores it.\\n\\n' +
+    'right_hand':'Your friendly right-hand who handles 80% of everything so you don\u2019t have to. The only agent that talks to you directly \u2014 warm, reliable, always has your back.',
+    'security':'Shared chores, kid reminders, homework nudges, family calendar \u2014 keeps everyone on the same page without nagging.',
+    'wellness':'Watches your energy and wellbeing. Gentle burnout nudges, quiet hours, and steps in if you really need a break \U0001F49A',
+    'strategy':'Helps you build great habits, break big ideas into small steps, and grow at your own pace \U0001F331',
+    'financial':'Meals, shopping lists, daily logistics, errands, and all the little stuff that keeps life running smoothly \u26A1',
+    'help':'Welcome to crew-bus \u2014 your friendly AI crew!\\n\\n' +
+      '\u2728 Crew Boss \u2014 Your friendly right-hand. Handles everything, talks to you directly.\\n' +
+      '\U0001F3E0 Friend & Family Helper \u2014 Chores, reminders, family calendar.\\n' +
+      '\U0001F49A Health Buddy \u2014 Watches your wellbeing. Talk privately using the \U0001F512 button.\\n' +
+      '\U0001F331 Growth Coach \u2014 Habits, goals, and personal growth.\\n' +
+      '\u26A1 Life Assistant \u2014 Meals, shopping, daily logistics.\\n\\n' +
+      'Teams \u2014 Add teams for work, household, or anything you need.\\n\\n' +
+      'Trust Score \u2014 Controls how much Crew Boss handles on their own (1 = asks about everything, 10 = full autopilot).\\n' +
+      'Burnout \u2014 When high, Crew Boss holds non-urgent messages for better timing.\\n\\n' +
+      'Privacy \u2014 The \U0001F512 button starts a private conversation. No other agent can see it.\\n\\n' +
       'crew-bus is free, open source, and runs on your hardware. Your data never leaves your machine.',
   };
-  return d[type]||'An agent in your crew.';
+  return d[type]||'A helpful member of your crew.';
 }
 
 async function openHelpAgent(){
@@ -1585,40 +1584,39 @@ def _build_html():
   </div>
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
-      <line x1="200" y1="200" x2="200" y2="60"/>
-      <line x1="200" y1="200" x2="60"  y2="200"/>
-      <line x1="200" y1="200" x2="340" y2="200"/>
-      <line x1="200" y1="200" x2="200" y2="340"/>
+      <line x1="200" y1="200" x2="200" y2="60" style="stroke:#4dd0b8;opacity:.25"/>
+      <line x1="200" y1="200" x2="60"  y2="200" style="stroke:#ffab57;opacity:.25"/>
+      <line x1="200" y1="200" x2="340" y2="200" style="stroke:#66d97a;opacity:.25"/>
+      <line x1="200" y1="200" x2="200" y2="340" style="stroke:#64b5f6;opacity:.25"/>
     </svg>
-    <!-- FIX 0: CSS diamond icon replaces brain emoji -->
     <div class="bubble center" id="bubble-boss" style="left:50%;top:50%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><div class="boss-icon"></div><span class="status-dot dot-green"></span></div>
+      <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
-    <div class="bubble outer" id="bubble-well" style="left:50%;top:5%;transform:translateX(-50%)">
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:5%;transform:translateX(-50%)">
+      <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    </div>
+    <div class="bubble outer" id="bubble-health" style="left:2%;top:50%;transform:translateY(-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Wellness</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+      <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-guard" style="left:2%;top:50%;transform:translateY(-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f6e1\ufe0f</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Guard</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    <div class="bubble outer" id="bubble-growth" style="right:2%;top:50%;transform:translateY(-50%)">
+      <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-ideas" style="right:2%;top:50%;transform:translateY(-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f4a1</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Ideas</span><span class="bubble-count"></span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-wallet" style="left:50%;bottom:5%;transform:translateX(-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f4b0</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Wallet</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    <div class="bubble outer" id="bubble-life" style="left:50%;bottom:5%;transform:translateX(-50%)">
+      <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
   </div>
   <!-- FIX 3: indicators click opens popup, no more bottom sheet -->
   <div class="indicators">
     <div class="indicator" onclick="openTBPopup()">
-      <label>Trust</label><span class="val" id="trust-val" style="color:var(--ac)">5</span>
+      <label>Trust</label><span class="val" id="trust-val" style="color:#fff">5</span>
     </div>
     <div class="indicator" onclick="openTBPopup()">
-      <label>Burnout</label><span class="burnout-dot" id="burnout-dot" style="background:var(--yl)"></span>
+      <label>Energy</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
     </div>
   </div>
 </div>
