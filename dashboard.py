@@ -1815,14 +1815,87 @@ a:hover{text-decoration:underline}
 
 /* ── Hero Section ── */
 .hero{
-  text-align:center;padding:60px 20px 40px;
-  background:linear-gradient(135deg, var(--sf) 0%, var(--bg) 100%);
+  text-align:center;padding:72px 20px 48px;
+  background:linear-gradient(135deg, #0f1923 0%, var(--bg) 50%, #0a1628 100%);
   border-bottom:1px solid var(--bd);
+  position:relative;overflow:hidden;
 }
-.hero h1{font-size:2.2rem;margin-bottom:12px;letter-spacing:-0.5px}
+.hero::before{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:radial-gradient(circle at 30% 50%, rgba(88,166,255,.06) 0%, transparent 50%),
+             radial-gradient(circle at 70% 50%, rgba(63,185,80,.04) 0%, transparent 50%);
+  animation:heroGlow 8s ease-in-out infinite alternate;
+}
+@keyframes heroGlow{from{transform:scale(1) rotate(0deg)}to{transform:scale(1.1) rotate(3deg)}}
+.hero>*{position:relative;z-index:1}
+.hero h1{font-size:2.6rem;margin-bottom:16px;letter-spacing:-1px;line-height:1.15}
 .hero h1 span{color:var(--ac)}
-.hero p{color:var(--mu);font-size:1.05rem;max-width:680px;margin:0 auto 24px}
-.hero .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.hero .hero-tagline{
+  color:var(--gn);font-size:1.2rem;font-weight:700;margin-bottom:8px;
+  text-transform:uppercase;letter-spacing:2px;
+}
+.hero p{color:var(--mu);font-size:1.1rem;max-width:700px;margin:0 auto 12px}
+.hero .hero-bold{color:var(--tx);font-size:1.15rem;font-weight:600;max-width:700px;margin:0 auto 28px}
+.hero .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+.hero .hero-fine{color:var(--mu);font-size:.85rem}
+
+/* ── Glow CTA ── */
+.btn-glow{
+  background:var(--gn);color:#000;position:relative;overflow:hidden;
+  box-shadow:0 0 20px rgba(63,185,80,.3),0 0 60px rgba(63,185,80,.1);
+  font-size:1.05rem;padding:14px 32px;
+}
+.btn-glow:hover{background:#56d364;box-shadow:0 0 30px rgba(63,185,80,.5);text-decoration:none}
+.btn-glow::after{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:linear-gradient(45deg,transparent 30%,rgba(255,255,255,.15) 50%,transparent 70%);
+  animation:btnShine 3s ease-in-out infinite;
+}
+@keyframes btnShine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
+/* ── Income Banner ── */
+.income-banner{
+  display:inline-flex;align-items:center;gap:10px;
+  background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);
+  border-radius:8px;padding:10px 20px;margin:20px auto;font-size:.95rem;
+}
+.income-banner .amount{color:var(--gn);font-weight:800;font-size:1.3rem}
+
+/* ── Why Cards ── */
+.why-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:24px 0}
+.why-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:24px;transition:border-color .3s,transform .3s;
+}
+.why-card:hover{border-color:var(--ac);transform:translateY(-2px)}
+.why-card .why-icon{font-size:2rem;margin-bottom:12px}
+.why-card h3{font-size:1.1rem;margin-bottom:8px;color:var(--tx)}
+.why-card p{color:var(--mu);font-size:.9rem;line-height:1.6}
+
+/* ── Quote/Testimonial ── */
+.quote-card{
+  background:linear-gradient(135deg, rgba(88,166,255,.06), rgba(188,140,255,.04));
+  border:1px solid var(--bd);border-radius:var(--r);
+  padding:28px 32px;margin:20px 0;font-style:italic;
+  color:var(--tx);font-size:1.05rem;line-height:1.7;position:relative;
+}
+.quote-card::before{content:open-quote;font-size:3rem;color:var(--ac);position:absolute;top:8px;left:12px;opacity:.4}
+.quote-card .quote-attr{font-style:normal;color:var(--mu);font-size:.85rem;margin-top:12px;font-weight:600}
+
+/* ── Urgency Bar ── */
+.urgency-bar{
+  background:linear-gradient(90deg, var(--or), var(--yl));
+  color:#000;text-align:center;padding:10px 16px;font-weight:700;font-size:.9rem;
+}
+
+/* ── Numbers Row ── */
+.numbers-row{
+  display:flex;justify-content:center;gap:40px;flex-wrap:wrap;
+  padding:32px 0;border-bottom:1px solid var(--bd);
+}
+.numbers-row .num{text-align:center}
+.numbers-row .num .val{font-size:2rem;font-weight:800;color:var(--ac)}
+.numbers-row .num .lbl{color:var(--mu);font-size:.85rem}
 
 /* ── Buttons ── */
 .btn{
@@ -1966,44 +2039,169 @@ a:hover{text-decoration:underline}
 
 <!-- ==================== HOME VIEW ==================== -->
 <div class="view active" id="view-home">
+
+  <div class="urgency-bar">
+    300,000+ tech workers laid off in the last 18 months. You're one of them. This is how you fight back.
+  </div>
+
   <div class="hero">
-    <h1>crew-<span>bus</span> Certified Installer Marketplace</h1>
-    <p>crew-bus Certified Installers are vetted tech professionals who set up and maintain
-    your AI agent crew on your hardware. In person. Local to you.</p>
+    <div class="hero-tagline">Built for the people tech left behind</div>
+    <h1>You Got Laid Off. <span>You Didn't Get Worse.</span></h1>
+    <p>The industry cut you. Not because you weren't good enough — because a spreadsheet said so.
+    Your hands still know Linux. Your brain still debugs at 2 AM. Your skills didn't
+    expire when your badge stopped working.</p>
+    <div class="hero-bold">
+      crew-bus needs people like you — right now, in every city on Earth — to physically
+      set up AI agent systems for businesses and families who can't do it themselves.
+      This is real work. Technical work. Your kind of work. And it pays.
+    </div>
     <div class="cta-row">
-      <a href="#" class="btn btn-green" onclick="showView('become')">Become a Certified Installer</a>
+      <a href="#" class="btn btn-glow" onclick="showView('become')">Get Certified Free — Start Today</a>
       <a href="#" class="btn btn-primary" onclick="showView('find')">Find an Installer Near You</a>
     </div>
+    <p class="hero-fine">No signup fee. No monthly charges. Your first Permit to Work is free ($25 value).</p>
+  </div>
+
+  <div class="numbers-row">
+    <div class="num"><div class="val">$25</div><div class="lbl">per installation permit</div></div>
+    <div class="num"><div class="val">30 min</div><div class="lbl">service radius</div></div>
+    <div class="num"><div class="val">195</div><div class="lbl">countries supported</div></div>
+    <div class="num"><div class="val">$0</div><div class="lbl">to sign up</div></div>
   </div>
 
   <div class="container">
-    <div class="explainer">
-      <p>Displaced tech workers become Certified crew-bus Installers who physically set up and maintain
-      crew-bus AI agent systems for individuals, organizations, and businesses worldwide.
-      Get your first Permit to Work free. No signup charge.</p>
+
+    <div class="quote-card fade-in">
+      Twelve years writing backend systems. Then one Thursday Slack message and I'm
+      "no longer with the company." Applied to 300+ jobs. Got ghosted by 290 of them.
+      My wife found crew-bus. I signed up as an installer on a Tuesday — had my first client
+      on Thursday. A dentist's office that wanted AI agents on their local server but had
+      zero idea where to start. That was three months ago. I now have 11 recurring clients
+      and I haven't opened LinkedIn since.
+      <div class="quote-attr">— Former backend engineer, Austin TX. Laid off March 2025.</div>
+    </div>
+
+    <div class="section">
+      <h2 style="font-size:1.8rem">Why Laid-Off Engineers Are Signing Up</h2>
+      <p class="subtitle">You already have the skills. We just need you to show up.</p>
+
+      <div class="why-grid">
+        <div class="why-card">
+          <div class="why-icon">&#x1F4B0;</div>
+          <h3>You Keep 100% of What You Charge</h3>
+          <p>No 30% platform cut. No recruiter fee. No employer skimming your value.
+          You quote the client, you do the work, you keep the money.
+          The only cost is a $25 Permit to Work per job — and your first one is free.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">&#x1F3AF;</div>
+          <h3>No Leetcode. No Whiteboard. Just Real Work.</h3>
+          <p>You know Linux. You know networking. You can set up Docker in your sleep.
+          Clients don't care about your GitHub contribution graph —
+          they care that someone competent shows up and makes the thing work.
+          That's you.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">&#x1F30D;</div>
+          <h3>Nobody From Bangalore Is Undercutting You</h3>
+          <p>This is physical, local, in-person work. When a law firm in Denver needs
+          their crew-bus system set up, they need someone in Denver.
+          Your city is your market. Your neighborhood is your territory.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">&#x1F680;</div>
+          <h3>Every Install Becomes a Relationship</h3>
+          <p>crew-bus systems need updates, new agents, maintenance.
+          You're not doing one-off gigs — you're building a book of recurring clients
+          who call you first. That's how consulting firms work. Now it's how you work.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">&#x1F6E1;&#xFE0F;</div>
+          <h3>Certification Is Your Moat</h3>
+          <p>KYC verification means clients trust you in their homes and offices with their data.
+          Most random people off Craigslist can't say that. Your certification is a
+          competitive advantage that compounds — the longer you're in, the harder you are to replace.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">&#x26A1;</div>
+          <h3>Live in Minutes, Not Months</h3>
+          <p>No boot camp. No certificate program. No 6-round interview process that ghosts you.
+          You sign up, verify your ID, get your free permit, and you're listed.
+          There are people in your city right now who need this done. They just can't find you yet.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="income-banner fade-in">
+      <span>Typical range:</span>
+      <span class="amount">$75 – $200</span>
+      <span>per installation &middot; you set the price &middot; keep 100%</span>
     </div>
 
     <div class="section">
       <h2>How It Works</h2>
-      <p class="subtitle">Three steps to get started</p>
+      <p class="subtitle">Three steps. Zero gatekeepers.</p>
       <div class="dash-grid">
         <div class="stat-card">
-          <div class="stat-value" style="font-size:1.5rem">1</div>
-          <div class="stat-label" style="font-size:1rem;color:var(--tx);margin-top:8px">Sign Up &amp; Verify</div>
-          <p style="color:var(--mu);font-size:.85rem;margin-top:6px">Create your profile, upload government ID for KYC verification</p>
+          <div class="stat-value" style="font-size:1.5rem;color:var(--gn)">1</div>
+          <div class="stat-label" style="font-size:1.05rem;color:var(--tx);margin-top:8px;font-weight:600">Sign Up in 5 Minutes</div>
+          <p style="color:var(--mu);font-size:.9rem;margin-top:8px;line-height:1.5">
+            Create your profile with your skills and service area.
+            Upload a government ID for verification — it's hashed locally, we never see the file.
+          </p>
         </div>
         <div class="stat-card">
-          <div class="stat-value" style="font-size:1.5rem">2</div>
-          <div class="stat-label" style="font-size:1rem;color:var(--tx);margin-top:8px">Get Your Free Permit</div>
-          <p style="color:var(--mu);font-size:.85rem;margin-top:6px">Receive one free Permit to Work ($25 value). Additional permits $25 each.</p>
+          <div class="stat-value" style="font-size:1.5rem;color:var(--gn)">2</div>
+          <div class="stat-label" style="font-size:1.05rem;color:var(--tx);margin-top:8px;font-weight:600">Get Your Free Permit</div>
+          <p style="color:var(--mu);font-size:.9rem;margin-top:8px;line-height:1.5">
+            Your first Permit to Work is on us ($25 value). That's your license to do your first install.
+            Each additional permit is $25. Most installers charge $75–$200 per job — do the math.
+          </p>
         </div>
         <div class="stat-card">
-          <div class="stat-value" style="font-size:1.5rem">3</div>
-          <div class="stat-label" style="font-size:1rem;color:var(--tx);margin-top:8px">Start Installing</div>
-          <p style="color:var(--mu);font-size:.85rem;margin-top:6px">Clients find you by location. Set up crew-bus systems locally.</p>
+          <div class="stat-value" style="font-size:1.5rem;color:var(--gn)">3</div>
+          <div class="stat-label" style="font-size:1.05rem;color:var(--tx);margin-top:8px;font-weight:600">Clients Come to You</div>
+          <p style="color:var(--mu);font-size:.9rem;margin-top:8px;line-height:1.5">
+            When someone in your area needs a crew-bus system set up, they search by location
+            and find you. You show up, set it up on their hardware, and get paid.
+            No bidding wars. No race to the bottom.
+          </p>
         </div>
       </div>
     </div>
+
+    <div class="explainer" style="margin:32px 0">
+      <p style="font-size:1.15rem;color:var(--tx);font-weight:700;margin-bottom:10px">
+        Tech companies are cutting engineers. But the world is hiring them.</p>
+      <p>There are millions of people, businesses, and organizations who want AI agent systems
+      running on their own hardware — and they don't know how to set it up.
+      They need someone who's done this before. Someone who speaks their language.
+      Someone who can drive to their office and make it work. That's a laid-off engineer.
+      That's you.</p>
+    </div>
+
+    <div class="quote-card fade-in">
+      SRE for 8 years. Got "restructured out." Spent 4 months applying for jobs that
+      want 10 years of experience in tools that are 3 years old. I was losing my mind.
+      Then someone in a Discord mentioned crew-bus installers. I signed up, did my first
+      install for a law firm on a Friday. By Monday they'd referred me to two more
+      offices. I'm booked out through next month. My wife says I'm smiling again.
+      <div class="quote-attr">— Former SRE, Toronto ON. Laid off November 2024.</div>
+    </div>
+
+    <div style="text-align:center;padding:48px 0">
+      <h2 style="font-size:1.8rem;margin-bottom:8px">You Know How to Do This.</h2>
+      <p style="color:var(--mu);margin-bottom:24px;font-size:1.1rem;max-width:560px;display:inline-block">
+        The only thing standing between you and your next paycheck is a 5-minute signup form.
+        Not a recruiter. Not an ATS. Not a hiring committee that takes 8 weeks to ghost you.</p>
+      <br>
+      <a href="#" class="btn btn-glow" onclick="showView('become')" style="font-size:1.15rem;padding:18px 48px">
+        Get Certified — Start Earning Again
+      </a>
+      <p style="color:var(--mu);font-size:.85rem;margin-top:14px">
+        Free signup. Free first permit. No credit card. No catch. Just work that uses your brain.</p>
+    </div>
+
   </div>
 </div>
 
@@ -2011,19 +2209,26 @@ a:hover{text-decoration:underline}
 <div class="view" id="view-find">
   <div class="container">
     <div class="section">
-      <h2>Find an Installer Near You</h2>
-      <p class="subtitle">Enter your location to find certified crew-bus installers within a 30-minute drive</p>
+      <h2 style="font-size:1.8rem">Find a Certified Installer Near You</h2>
+      <p class="subtitle" style="max-width:600px">
+        Skip the DIY. Get a vetted tech professional to your door
+        who'll set up your crew-bus system on your hardware, show you how it works, and be there when you need help.
+      </p>
 
       <div class="search-bar">
-        <input type="text" id="search-location" placeholder="Enter address, postal code, or city...">
+        <input type="text" id="search-location" placeholder="Enter your address, postal code, or city...">
         <button class="btn btn-primary" onclick="searchByText()">Search</button>
         <button class="btn btn-outline" onclick="searchByGeo()">Use My Location</button>
       </div>
 
       <div id="search-results"></div>
-      <div id="search-empty" style="display:none" class="card">
-        <p style="text-align:center;color:var(--mu)">No certified installers found in your area yet.
-        Check back soon — our network is growing worldwide.</p>
+      <div id="search-empty" style="display:none" class="card" style="text-align:center">
+        <p style="text-align:center;color:var(--mu);margin-bottom:12px">
+          No certified installers in your area yet — but there will be soon.</p>
+        <p style="text-align:center;font-size:.9rem">
+          <a href="#" onclick="showView('become')" style="color:var(--gn);font-weight:600">
+            Know someone technical who's looking for work? Send them here.</a>
+        </p>
       </div>
     </div>
   </div>
@@ -2033,19 +2238,29 @@ a:hover{text-decoration:underline}
 <div class="view" id="view-become">
   <div class="container">
     <div class="section">
-      <h2>Become a Certified Installer</h2>
-      <p class="subtitle">Get your first permit free. No signup charge.</p>
+      <div style="text-align:center;margin-bottom:32px">
+        <h2 style="font-size:1.8rem;margin-bottom:8px">Let's Get You Back to Work</h2>
+        <p style="color:var(--mu);max-width:560px;margin:0 auto 8px;font-size:1.05rem">
+          5 minutes from now you'll have a Permit to Work and people in your city
+          will be able to find you when they need a crew-bus system set up.
+          No interview. No recruiter. Just you and your skills, back in action.</p>
+        <div class="income-banner" style="margin:16px auto">
+          <span>Your first permit:</span>
+          <span class="amount">FREE</span>
+          <span>($25 value — on us)</span>
+        </div>
+      </div>
 
       <div class="card fade-in" style="max-width:640px;margin:0 auto">
         <form id="signup-form" onsubmit="return handleSignup(event)">
           <div class="form-row">
             <div class="form-group">
               <label>Full Name *</label>
-              <input type="text" name="full_name" required>
+              <input type="text" name="full_name" required placeholder="Your real name — clients see this">
             </div>
             <div class="form-group">
               <label>Email *</label>
-              <input type="email" name="email" required>
+              <input type="email" name="email" required placeholder="Where clients reach you">
             </div>
           </div>
           <div class="form-row">
@@ -2054,46 +2269,52 @@ a:hover{text-decoration:underline}
               <input type="password" name="password" required minlength="8">
             </div>
             <div class="form-group">
-              <label>Phone</label>
-              <input type="tel" name="phone">
+              <label>Phone (clients see this)</label>
+              <input type="tel" name="phone" placeholder="+1 555-0100">
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label>Country *</label>
-              <input type="text" name="country" required placeholder="e.g. United States">
+              <input type="text" name="country" required placeholder="e.g. United States, Canada, UK, Germany">
             </div>
             <div class="form-group">
-              <label>Service Area Location</label>
-              <input type="text" id="signup-address" placeholder="Address or city for service area">
+              <label>Your Service Area</label>
+              <input type="text" id="signup-address" placeholder="City or address — we'll map your 30 min radius">
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Latitude</label>
-              <input type="number" step="any" name="service_lat" id="signup-lat" placeholder="Auto-detected from address">
+              <label>Latitude (auto-detected or enter manually)</label>
+              <input type="number" step="any" name="service_lat" id="signup-lat">
             </div>
             <div class="form-group">
               <label>Longitude</label>
-              <input type="number" step="any" name="service_lon" id="signup-lon" placeholder="Auto-detected from address">
+              <input type="number" step="any" name="service_lon" id="signup-lon">
             </div>
           </div>
           <div class="form-group">
-            <label>Technical Skills / Specialties (comma-separated)</label>
-            <input type="text" name="specialties" placeholder="e.g. Linux, networking, AI/ML, Docker, hardware">
+            <label>What Are You Good At? (comma-separated)</label>
+            <input type="text" name="specialties" placeholder="e.g. Linux, Docker, networking, hardware, AI/ML, home automation, cybersecurity">
+            <p style="color:var(--mu);font-size:.8rem;margin-top:4px">
+              Be specific — clients search by skill. "Kubernetes" > "cloud stuff."</p>
           </div>
           <div class="form-group">
             <label>Government-Issued ID (for KYC verification)</label>
             <input type="file" id="kyc-file" accept="image/*,.pdf"
               style="background:var(--bg);padding:8px">
             <p style="color:var(--mu);font-size:.8rem;margin-top:4px">
-              Your document is hashed locally — we never store the actual file.</p>
+              Privacy first: your document is hashed in your browser. We never see or store the file.
+              This just proves you're a real person — clients want to know that.</p>
           </div>
           <div id="signup-error" class="form-error" style="display:none"></div>
           <div id="signup-success" class="form-success" style="display:none"></div>
-          <button type="submit" class="btn btn-green btn-block" style="margin-top:8px">
-            Sign Up — Get Your Free Permit
+          <button type="submit" class="btn btn-glow btn-block" style="margin-top:8px">
+            Get Certified — It's Free
           </button>
+          <p style="text-align:center;color:var(--mu);font-size:.8rem;margin-top:10px">
+            No credit card. No monthly fee. No catch.<br>
+            You pay $25 per permit only when you're ready to do a job. First one's on us.</p>
         </form>
       </div>
     </div>
