@@ -21,3 +21,8 @@ _tmp_*
 configs/ryan_stack.yaml
 crew_bus.db-shm
 crew_bus.db-wal
+
+# WhatsApp bridge
+whatsapp-bridge/
+.wwebjs_auth/
+.wwebjs_cache/
