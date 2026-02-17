@@ -1,0 +1,130 @@
+# ============================================================
+# Family Crew — Crew Bus Example
+# ============================================================
+# A warm, organized crew for busy families.
+# Crew Boss acts like a helpful big sister who keeps everyone
+# on track without being bossy.
+#
+# Load it:
+#   crew-bus load examples/family-crew.yaml
+#
+# Or copy it and customize:
+#   cp examples/family-crew.yaml configs/my-crew.yaml
+#
+# 100% local. 100% private. MIT license. No cloud ever.
+# ============================================================
+
+crew:
+  name: "Our Family Crew"
+  mode: family
+  description: "Your friendly family HQ — chores, meals, homework, health, and daily life, all in one place."
+
+# -----------------------------------------------------------
+# Crew Boss — your warm, reliable right-hand
+# -----------------------------------------------------------
+crew_boss:
+  name: "Crew Boss"
+  # Rename to whatever feels right — Buddy, Sis, Captain, Mom-Bot, anything!
+  personality: warm-big-sister
+  tone: friendly
+  description: >
+    Your main point of contact. Handles 80% of daily stuff so you
+    don't have to juggle everything alone. Keeps things light, stays
+    organized, and always has your back.
+  trust: 8
+  # Trust 8 = Crew Boss handles most things autonomously.
+  # Lower to 5 if you want to approve more decisions.
+  # Set to 10 for full autopilot (morning brief only).
+  features:
+    morning_brief: true
+    evening_recap: true
+    smart_routing: true
+
+# -----------------------------------------------------------
+# Agents
+# -----------------------------------------------------------
+agents:
+
+  - name: "Friend & Family Helper"
+    role: family
+    icon: "\U0001F3E0"   # 🏠
+    color: "#4dd0b8"
+    trust: 9
+    description: >
+      Shared chores, kid reminders, homework nudges, family calendar.
+      Keeps everyone on the same page without nagging.
+    features:
+      shared_calendar: true
+      chore_rotation: true
+      homework_reminders: true
+      grocery_sync: true
+      family_announcements: true
+    schedule:
+      # Gentle morning reminder at 7:30am
+      morning_nudge: "07:30"
+      # Evening wrap-up at 8pm
+      evening_checkin: "20:00"
+
+  - name: "Health Buddy"
+    role: wellness
+    icon: "\U0001F49A"   # 💚
+    color: "#66d97a"
+    trust: 8
+    description: >
+      Watches energy levels for the whole family. Gentle burnout
+      nudges, screen-time awareness, and quiet hours so everyone
+      gets the rest they need.
+    features:
+      burnout_detection: true
+      quiet_hours: true
+      hydration_reminders: true
+      screen_time_awareness: true
+      family_wellness_score: true
+    burnout:
+      # If anyone's been going hard for 3+ hours, suggest a break
+      threshold_minutes: 180
+      nudge_style: gentle
+      message: "Hey, looks like someone could use a breather. How about a 10-minute break?"
+
+  - name: "Life Assistant"
+    role: daily
+    icon: "\u26A1"       # ⚡
+    color: "#64b5f6"
+    trust: 8
+    description: >
+      Meals, shopping lists, daily logistics, errands, and all the
+      little stuff that keeps a household running.
+    features:
+      meal_planning: true
+      shopping_lists: true
+      errand_tracking: true
+      weather_aware: true
+      daily_schedule: true
+
+# -----------------------------------------------------------
+# Quiet Hours — the whole crew goes silent
+# -----------------------------------------------------------
+quiet_hours:
+  enabled: true
+  start: "21:00"
+  end: "07:00"
+  exceptions:
+    - "urgent"
+    - "safety"
+  message: "Quiet hours active. Non-urgent messages will wait until morning."
+
+# -----------------------------------------------------------
+# Family Mode settings
+# -----------------------------------------------------------
+settings:
+  family_mode: true
+  # Kid-safe language filtering
+  safe_language: true
+  # Show friendly emojis in responses
+  emoji_style: warm
+  # All data stays on your machine
+  local_only: true
+  # Log everything for transparency
+  audit_trail: true
+  # How many days to keep message history
+  history_days: 90
