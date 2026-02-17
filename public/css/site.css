@@ -416,8 +416,8 @@ img { max-width: 100%; }
 }
 .hd-line-family  { width: 108px; transform: rotate(-90deg);  animation: hdFadeIn 0.4s ease 3.0s forwards; background: linear-gradient(90deg, rgba(77,208,184,0.3), rgba(77,208,184,0.03)); }
 .hd-line-muse    { width: 108px; transform: rotate(-18deg);  animation: hdFadeIn 0.4s ease 3.5s forwards; background: linear-gradient(90deg, rgba(179,136,255,0.3), rgba(179,136,255,0.03)); }
-.hd-line-health  { width: 108px; transform: rotate(54deg);   animation: hdFadeIn 0.4s ease 4.0s forwards; background: linear-gradient(90deg, rgba(102,217,122,0.3), rgba(102,217,122,0.03)); }
-.hd-line-growth  { width: 108px; transform: rotate(126deg);  animation: hdFadeIn 0.4s ease 4.5s forwards; background: linear-gradient(90deg, rgba(255,171,87,0.3), rgba(255,171,87,0.03)); }
+.hd-line-health  { width: 120px; transform: rotate(62deg);   animation: hdFadeIn 0.4s ease 4.0s forwards; background: linear-gradient(90deg, rgba(102,217,122,0.3), rgba(102,217,122,0.03)); }
+.hd-line-growth  { width: 120px; transform: rotate(118deg);  animation: hdFadeIn 0.4s ease 4.5s forwards; background: linear-gradient(90deg, rgba(255,171,87,0.3), rgba(255,171,87,0.03)); }
 .hd-line-life    { width: 108px; transform: rotate(198deg);  animation: hdFadeIn 0.4s ease 5.0s forwards; background: linear-gradient(90deg, rgba(100,181,246,0.3), rgba(100,181,246,0.03)); }
 
 @keyframes hdFadeIn { to { opacity: 1; } }
@@ -487,13 +487,13 @@ img { max-width: 100%; }
     box-shadow: 0 0 20px rgba(179,136,255,0.3), 0 0 45px rgba(179,136,255,0.1);
 }
 .hd-health {
-    margin-top: 56px; margin-left: 64px;
+    margin-top: 85px; margin-left: 64px;
     border-color: #66d97a;
     animation: hdAgentIn 0.8s ease 4.0s forwards, hdBreatheGreen 2.5s ease-in-out 7.1s infinite;
     box-shadow: 0 0 20px rgba(102,217,122,0.3), 0 0 45px rgba(102,217,122,0.1);
 }
 .hd-growth {
-    margin-top: 56px; margin-left: -64px;
+    margin-top: 85px; margin-left: -64px;
     border-color: #ffab57;
     animation: hdAgentIn 0.8s ease 4.5s forwards, hdBreatheOrange 2.5s ease-in-out 7.4s infinite;
     box-shadow: 0 0 20px rgba(255,171,87,0.3), 0 0 45px rgba(255,171,87,0.1);
