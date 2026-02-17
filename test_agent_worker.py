@@ -92,13 +92,14 @@ def test_process_queued_messages_mock():
     ).fetchone()
     assert original["status"] == "delivered"
 
-    # Verify: reply message exists from agent to human
+    # Verify: reply message exists from agent to human (inserted directly, status=delivered)
     replies = conn.execute(
         "SELECT * FROM messages WHERE from_agent_id=2 AND to_agent_id=1"
     ).fetchall()
     conn.close()
     assert len(replies) >= 1
     assert "great" in replies[-1]["body"].lower()
+    assert replies[-1]["status"] == "delivered"
 
 
 def test_worker_start_stop():
