@@ -2017,6 +2017,42 @@ a:hover{text-decoration:underline}
   .search-bar{flex-direction:column}
 }
 
+/* ── Job Board Cards ── */
+.job-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:20px;margin-bottom:12px;transition:border-color .2s;
+}
+.job-card:hover{border-color:var(--ac)}
+.job-card h3{font-size:1.05rem;margin-bottom:6px}
+.job-card .job-meta{color:var(--mu);font-size:.85rem;margin-bottom:8px}
+.job-card .job-desc{color:var(--tx);font-size:.9rem;line-height:1.5;margin-bottom:12px}
+.job-card .priority-badge{
+  display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;
+  background:rgba(209,134,22,.2);color:var(--or);
+}
+.job-card .standard-badge{
+  display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;
+  background:rgba(88,166,255,.15);color:var(--ac);
+}
+
+/* ── Vetted Badge ── */
+.vetted-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(63,185,80,.15);color:var(--gn);
+  padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;
+}
+
+/* ── Meet & Greet Button ── */
+.btn-meet{
+  background:rgba(57,208,208,.15);color:var(--tl);border:1px solid rgba(57,208,208,.3);
+}
+.btn-meet:hover{background:rgba(57,208,208,.25);text-decoration:none}
+
+/* ── Status Badges ── */
+.status-open{color:var(--gn)}
+.status-claimed{color:var(--or)}
+.status-complete{color:var(--ac)}
+
 /* ── Animations ── */
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .3s ease-out}
@@ -2030,6 +2066,7 @@ a:hover{text-decoration:underline}
   <nav>
     <a href="#" onclick="showView('home')" class="nav-link" data-view="home">Home</a>
     <a href="#" onclick="showView('find')" class="nav-link" data-view="find">Find an Installer</a>
+    <a href="#" onclick="showView('jobs')" class="nav-link" data-view="jobs">Job Board</a>
     <a href="#" onclick="showView('become')" class="nav-link" data-view="become">Become an Installer</a>
   </nav>
   <div class="auth-links" id="auth-links">
@@ -2212,25 +2249,43 @@ a:hover{text-decoration:underline}
 <div class="view" id="view-find">
   <div class="container">
     <div class="section">
-      <h2 style="font-size:1.8rem">Find a Certified Installer Near You</h2>
-      <p class="subtitle" style="max-width:600px">
-        Skip the DIY. Get a vetted tech professional to your door
-        who'll set up your crew-bus system on your hardware, show you how it works, and be there when you need help.
-      </p>
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="display:inline-block;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);border-radius:24px;padding:6px 18px;margin-bottom:16px">
+          <span style="color:var(--gn);font-weight:700;font-size:.9rem;letter-spacing:1px">KYC VERIFIED &bull; ID CHECKED &bull; VETTED</span>
+        </div>
+        <h2 style="font-size:2rem;margin-bottom:8px">Find a Vetted Local <span style="color:var(--ac)">CrewBus</span> Installer</h2>
+        <p class="subtitle" style="max-width:640px;margin:0 auto">
+          Every installer on this platform has been identity-verified through KYC.
+          Real people, real skills, verified ID. Enter your postal code, ZIP code, area code, or any regional
+          location code used in your country — we support all 195 countries.</p>
+      </div>
 
-      <div class="search-bar">
-        <input type="text" id="search-location" placeholder="Enter your address, postal code, or city...">
-        <button class="btn btn-primary" onclick="searchByText()">Search</button>
-        <button class="btn btn-outline" onclick="searchByGeo()">Use My Location</button>
+      <div class="card" style="max-width:700px;margin:0 auto 24px">
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <input type="text" id="search-location" placeholder="Enter postal code, ZIP, area code, city, or address..."
+            style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:14px 16px;color:var(--tx);font-size:1rem">
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="searchByText()" style="flex:1;min-width:120px">Search by Location</button>
+          <button class="btn btn-outline" onclick="searchByGeo()" style="flex:1;min-width:120px">Use My GPS Location</button>
+        </div>
+        <p style="color:var(--mu);font-size:.8rem;margin-top:10px;text-align:center">
+          Works worldwide: US ZIP codes, UK postcodes, Canadian postal codes, German PLZ,
+          Japanese postal codes, Australian postcodes, Indian PIN codes, Brazilian CEP, and every other format.
+        </p>
       </div>
 
       <div id="search-results"></div>
       <div id="search-empty" style="display:none" class="card" style="text-align:center">
         <p style="text-align:center;color:var(--mu);margin-bottom:12px">
           No certified installers in your area yet — but there will be soon.</p>
-        <p style="text-align:center;font-size:.9rem">
+        <p style="text-align:center;font-size:.9rem;margin-bottom:12px">
           <a href="#" onclick="showView('become')" style="color:var(--gn);font-weight:600">
             Know someone technical who's looking for work? Send them here.</a>
+        </p>
+        <p style="text-align:center;font-size:.9rem">
+          Or <a href="#" onclick="showView('jobs')" style="color:var(--ac);font-weight:600">
+          post a job on the board</a> and let installers come to you.
         </p>
       </div>
     </div>
@@ -2282,9 +2337,16 @@ a:hover{text-decoration:underline}
               <input type="text" name="country" required placeholder="e.g. United States, Canada, UK, Germany">
             </div>
             <div class="form-group">
-              <label>Your Service Area</label>
-              <input type="text" id="signup-address" placeholder="City or address — we'll map your 30 min radius">
+              <label>Postal / ZIP / Area Code *</label>
+              <input type="text" name="postal_code" required placeholder="e.g. 10001, SW1A 1AA, M5V 2T6, 10115, 100-0001">
+              <p style="color:var(--mu);font-size:.75rem;margin-top:2px">
+                Your local code so clients in your area can find you.
+                US ZIP, UK postcode, Canadian postal code, German PLZ, Indian PIN, any format.</p>
             </div>
+          </div>
+          <div class="form-group">
+            <label>Your Service Area</label>
+            <input type="text" id="signup-address" placeholder="City or address — we'll map your 30 min radius">
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -2320,6 +2382,93 @@ a:hover{text-decoration:underline}
             You get a free Permit to Work + a free 6-month Guardian unlock to master the platform.
             Additional permits $25 each when you're ready to take jobs.</p>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== JOB BOARD VIEW ==================== -->
+<div class="view" id="view-jobs">
+  <div class="container">
+    <div class="section">
+      <div style="text-align:center;margin-bottom:32px">
+        <h2 style="font-size:2rem;margin-bottom:8px">CrewBus <span style="color:var(--ac)">Job Board</span></h2>
+        <p class="subtitle" style="max-width:640px;margin:0 auto">
+          Need a crew-bus system installed? Post your job here.
+          Local vetted installers in your area will see it and can claim it.
+          Enter your location using any format — postal code, ZIP, area code, or address.
+        </p>
+      </div>
+
+      <!-- Post a Job -->
+      <div class="card fade-in" style="max-width:700px;margin:0 auto 32px">
+        <h3 style="margin-bottom:16px">Post a Job</h3>
+        <form id="post-job-form" onsubmit="return handlePostJob(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Your Name *</label>
+              <input type="text" name="client_name" required placeholder="How installers will address you">
+            </div>
+            <div class="form-group">
+              <label>Your Email *</label>
+              <input type="email" name="client_email" required placeholder="Installer contacts you here">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Phone (optional)</label>
+              <input type="tel" name="client_phone" placeholder="+1 555-0100">
+            </div>
+            <div class="form-group">
+              <label>Postal / ZIP / Area Code *</label>
+              <input type="text" name="postal_code" required placeholder="e.g. 10001, SW1A 1AA, 100-0001">
+              <p style="color:var(--mu);font-size:.75rem;margin-top:2px">
+                US ZIP, UK postcode, Canadian postal code, German PLZ, Indian PIN, Brazilian CEP, Japanese postal code — any country, any format.</p>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Country</label>
+              <input type="text" name="country" placeholder="e.g. United States, UK, Canada">
+            </div>
+            <div class="form-group">
+              <label>Urgency</label>
+              <select name="urgency" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--tx);font-size:.95rem">
+                <option value="standard">Standard</option>
+                <option value="priority">Priority — I need this ASAP</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Job Title *</label>
+            <input type="text" name="title" required placeholder="e.g. crew-bus setup for dental office, 3 workstations on Ubuntu server">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea name="description" placeholder="What do you need? Describe your setup, hardware, and any specific requirements. The more detail, the better match you'll get."></textarea>
+          </div>
+          <div id="job-post-error" class="form-error" style="display:none"></div>
+          <div id="job-post-success" class="form-success" style="display:none"></div>
+          <button type="submit" class="btn btn-glow btn-block" style="margin-top:8px">
+            Post Job — Free
+          </button>
+        </form>
+      </div>
+
+      <!-- Browse Jobs (for installers) -->
+      <div style="border-top:1px solid var(--bd);padding-top:32px">
+        <h3 style="margin-bottom:16px;text-align:center">Browse Open Jobs Near You</h3>
+        <div class="card" style="max-width:700px;margin:0 auto 24px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input type="text" id="job-search-code" placeholder="Your postal/ZIP/area code..."
+              style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;color:var(--tx);font-size:1rem">
+            <button class="btn btn-primary" onclick="searchJobs()">Find Jobs</button>
+          </div>
+        </div>
+        <div id="job-results"></div>
+        <div id="job-empty" style="display:none" class="card" style="text-align:center">
+          <p style="text-align:center;color:var(--mu)">No open jobs in your area yet. Check back soon!</p>
+        </div>
       </div>
     </div>
   </div>
@@ -2429,6 +2578,10 @@ a:hover{text-decoration:underline}
               <input type="text" name="country" id="upd-country">
             </div>
           </div>
+          <div class="form-group">
+            <label>Postal / ZIP / Area Code</label>
+            <input type="text" name="postal_code" id="upd-postal" placeholder="Your local location code (any format)">
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label>Service Latitude</label>
@@ -2448,9 +2601,23 @@ a:hover{text-decoration:underline}
         </form>
       </div>
 
+      <!-- Claimed Jobs Section -->
+      <div class="card" style="margin-bottom:16px">
+        <h3>My Claimed Jobs</h3>
+        <div id="dash-jobs"></div>
+      </div>
+
+      <!-- Meet & Greet Requests -->
+      <div class="card" style="margin-bottom:16px">
+        <h3>Meet &amp; Greet Requests</h3>
+        <p style="color:var(--mu);font-size:.85rem;margin-bottom:12px">
+          Clients want a quick face-to-face video call to verify you're human before committing.
+          Accept and share your FaceTime, Zoom, or Google Meet link.</p>
+        <div id="dash-meets"></div>
+      </div>
+
       <!-- Change Password -->
       <div class="card">
-        <h3>Change Password</h3>
         <form onsubmit="return handlePasswordChange(event)">
           <div class="form-group">
             <label>Current Password</label>
@@ -2541,6 +2708,7 @@ async function handleSignup(e) {
     password: form.password.value,
     phone: form.phone.value || '',
     country: form.country.value || '',
+    postal_code: form.postal_code.value || '',
     service_lat: form.service_lat.value || null,
     service_lon: form.service_lon.value || null,
     specialties: specs,
@@ -2697,6 +2865,7 @@ async function loadDashboard() {
     '<p><strong>Email:</strong> ' + (inst.email||'') + '</p>' +
     '<p><strong>Phone:</strong> ' + (inst.phone||'—') + '</p>' +
     '<p><strong>Country:</strong> ' + (inst.country||'—') + '</p>' +
+    '<p><strong>Postal/ZIP Code:</strong> ' + (inst.postal_code||'Not set') + '</p>' +
     '<p><strong>Service Area:</strong> ' + (inst.service_lat ? inst.service_lat+', '+inst.service_lon : 'Not set') + '</p>' +
     '<p><strong>Specialties:</strong> ' + (specs.length ? specs.join(', ') : 'None set') + '</p>' +
     '<p><strong>Member Since:</strong> ' + (inst.created_at||'').split('T')[0] + '</p>';
@@ -2704,6 +2873,7 @@ async function loadDashboard() {
   // Pre-fill update form
   document.getElementById('upd-phone').value = inst.phone || '';
   document.getElementById('upd-country').value = inst.country || '';
+  document.getElementById('upd-postal').value = inst.postal_code || '';
   document.getElementById('upd-lat').value = inst.service_lat || '';
   document.getElementById('upd-lon').value = inst.service_lon || '';
   document.getElementById('upd-specs').value = specs.join(', ');
@@ -2724,7 +2894,83 @@ async function loadDashboard() {
   } else {
     document.getElementById('dash-permits').innerHTML = '<p style="color:var(--mu)">No permits yet.</p>';
   }
+
+  // Load claimed jobs
+  try {
+    const jobs = await api('/api/installer/jobs/mine');
+    const jobsEl = document.getElementById('dash-jobs');
+    if (Array.isArray(jobs) && jobs.length) {
+      jobsEl.innerHTML = jobs.map(j => {
+        const statusColors = {claimed:'var(--or)',scheduled:'var(--ac)',in_progress:'var(--yl)',complete:'var(--gn)'};
+        const statusColor = statusColors[j.status] || 'var(--mu)';
+        return '<div class="job-card" style="margin-bottom:8px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center">' +
+            '<h3 style="font-size:.95rem">' + j.title + '</h3>' +
+            '<span style="color:' + statusColor + ';font-weight:600;font-size:.85rem;text-transform:uppercase">' + j.status + '</span>' +
+          '</div>' +
+          '<div class="job-meta">' + j.client_name + ' &middot; ' + (j.postal_code||'') + (j.country ? ', '+j.country : '') + '</div>' +
+          (j.status === 'claimed' ? '<div style="margin-top:8px;display:flex;gap:6px">' +
+            '<button class="btn btn-primary btn-sm" onclick="updateJobStatus(\\''+j.job_id+'\\',\\'scheduled\\')">Mark Scheduled</button>' +
+            '<button class="btn btn-outline btn-sm" onclick="updateJobStatus(\\''+j.job_id+'\\',\\'in_progress\\')">Start Work</button></div>' : '') +
+          (j.status === 'scheduled' ? '<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="updateJobStatus(\\''+j.job_id+'\\',\\'in_progress\\')">Start Work</button>' : '') +
+          (j.status === 'in_progress' ? '<button class="btn btn-green btn-sm" style="margin-top:8px" onclick="updateJobStatus(\\''+j.job_id+'\\',\\'complete\\')">Mark Complete</button>' : '') +
+        '</div>';
+      }).join('');
+    } else {
+      jobsEl.innerHTML = '<p style="color:var(--mu)">No claimed jobs yet. <a href="#" onclick="showView(\\'jobs\\')">Browse the job board</a></p>';
+    }
+  } catch(e) {}
+
+  // Load meet & greet requests
+  try {
+    const meets = await api('/api/installer/meet/requests');
+    const meetsEl = document.getElementById('dash-meets');
+    if (Array.isArray(meets) && meets.length) {
+      meetsEl.innerHTML = meets.map(m => {
+        const isPending = m.status === 'pending';
+        return '<div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid ' +
+          (isPending ? 'var(--or)' : m.status === 'accepted' ? 'var(--gn)' : 'var(--mu)') + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center">' +
+            '<strong>' + m.client_name + '</strong>' +
+            '<span style="color:var(--mu);font-size:.8rem">' + (m.created_at||'').split('T')[0] + '</span>' +
+          '</div>' +
+          '<div style="color:var(--mu);font-size:.85rem">' + m.client_email +
+            (m.proposed_time ? ' &middot; Proposed: ' + m.proposed_time : '') + '</div>' +
+          (isPending ? '<div style="margin-top:8px;display:flex;gap:6px">' +
+            '<button class="btn btn-green btn-sm" onclick="respondMeet(\\''+m.request_id+'\\',true)">Accept &amp; Send Link</button>' +
+            '<button class="btn btn-outline btn-sm" onclick="respondMeet(\\''+m.request_id+'\\',false)">Decline</button></div>' : '') +
+          (m.status === 'accepted' && m.meeting_link ? '<div style="margin-top:6px;font-size:.85rem">Link: <a href="' + m.meeting_link + '" target="_blank">' + m.meeting_link + '</a></div>' : '') +
+        '</div>';
+      }).join('');
+    } else {
+      meetsEl.innerHTML = '<p style="color:var(--mu)">No meet &amp; greet requests yet.</p>';
+    }
+  } catch(e) {}
 }
+
+async function updateJobStatus(jobId, status) {
+  const {status: s, data} = await apiPost('/api/installer/job/status', {
+    job_id: jobId, status: status
+  });
+  if (s >= 400) { toast(data.error || 'Failed to update', true); return; }
+  toast('Job status updated to: ' + status);
+  loadDashboard();
+}
+
+async function respondMeet(requestId, accept) {
+  let meetingLink = null;
+  if (accept) {
+    meetingLink = prompt('Paste your video call link (FaceTime, Zoom, Google Meet, etc.):');
+    if (!meetingLink) return;
+  }
+  const {status, data} = await apiPost('/api/installer/meet/respond', {
+    request_id: requestId,
+    accept: accept,
+    meeting_link: meetingLink,
+  });
+  if (status >= 400) { toast(data.error || 'Failed to respond', true); return; }
+  toast(accept ? 'Meet & greet accepted! Link sent to client.' : 'Request declined.');
+  loadDashboard();
 
 // ── Profile Update ──
 async function handleProfileUpdate(e) {
@@ -2735,6 +2981,7 @@ async function handleProfileUpdate(e) {
   const payload = {
     phone: document.getElementById('upd-phone').value,
     country: document.getElementById('upd-country').value,
+    postal_code: document.getElementById('upd-postal').value,
     service_lat: parseFloat(document.getElementById('upd-lat').value) || null,
     service_lon: parseFloat(document.getElementById('upd-lon').value) || null,
     specialties: specs,
@@ -2835,16 +3082,18 @@ async function doSearch(lat, lon) {
     const initials = inst.full_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
     const memberSince = (inst.created_at||'').split('T')[0];
     const tagsHtml = specs.map(s => '<span class="tag">' + s + '</span>').join('');
+    const postalInfo = inst.postal_code ? ' &middot; ' + inst.postal_code : '';
 
     return '<div class="installer-card fade-in">' +
       '<div class="installer-avatar">' + initials + '</div>' +
       '<div class="installer-info">' +
-        '<h3>' + inst.full_name + '</h3>' +
-        '<div class="meta">' + inst.country + ' &middot; ' + inst.distance_km + ' km away &middot; Member since ' + memberSince + '</div>' +
+        '<h3>' + inst.full_name + ' <span class="vetted-badge">&#x2713; KYC Vetted</span></h3>' +
+        '<div class="meta">' + inst.country + postalInfo + ' &middot; ' + inst.distance_km + ' km away &middot; Since ' + memberSince + '</div>' +
         '<div class="installer-tags">' + tagsHtml + '</div>' +
       '</div>' +
       '<div class="actions">' +
         '<button class="btn btn-primary btn-sm" onclick="requestInstaller(\'' + inst.installer_id + '\',\'' + inst.full_name + '\')">Request This Installer</button>' +
+        '<button class="btn btn-meet btn-sm" onclick="requestMeetGreet(\'' + inst.installer_id + '\',\'' + inst.full_name + '\')">Video Meet &amp; Greet</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -2859,6 +3108,162 @@ function requestInstaller(installerId, name) {
 
   // In production this sends an email to the installer
   toast('Request sent to ' + name + '! They will contact you at ' + clientEmail);
+}
+
+// ── Video Meet & Greet ──
+async function requestMeetGreet(installerId, installerName) {
+  const clientName = prompt('Your name (the installer will see this):');
+  if (!clientName) return;
+  const clientEmail = prompt('Your email:');
+  if (!clientEmail) return;
+  const proposedTime = prompt('Preferred date/time for a quick video call (e.g. "Tomorrow 3pm EST", "Friday 10am"):') || '';
+
+  const {status, data} = await apiPost('/api/installer/meet/request', {
+    installer_id: installerId,
+    client_name: clientName,
+    client_email: clientEmail,
+    proposed_time: proposedTime || null,
+  });
+  if (status >= 400) {
+    toast(data.error || 'Failed to send meet request', true);
+    return;
+  }
+  toast('Meet & Greet request sent to ' + installerName + '! They\\'ll respond with a video call link.');
+}
+
+// ── Job Board ──
+async function handlePostJob(e) {
+  e.preventDefault();
+  const form = e.target;
+  const errEl = document.getElementById('job-post-error');
+  const succEl = document.getElementById('job-post-success');
+  errEl.style.display = 'none';
+  succEl.style.display = 'none';
+
+  // Geocode the postal code for lat/lon
+  let jobLat = null, jobLon = null;
+  const postalCode = form.postal_code.value.trim();
+  const country = form.country.value.trim();
+  if (postalCode) {
+    try {
+      const geoQuery = postalCode + (country ? ', ' + country : '');
+      const geoRes = await fetch('https://nominatim.openstreetmap.org/search?q=' +
+        encodeURIComponent(geoQuery) + '&format=json&limit=1');
+      const geoData = await geoRes.json();
+      if (geoData.length > 0) {
+        jobLat = parseFloat(geoData[0].lat);
+        jobLon = parseFloat(geoData[0].lon);
+      }
+    } catch(e) { /* geocoding optional */ }
+  }
+
+  const payload = {
+    client_name: form.client_name.value,
+    client_email: form.client_email.value,
+    client_phone: form.client_phone.value || '',
+    postal_code: postalCode,
+    country: country,
+    job_lat: jobLat,
+    job_lon: jobLon,
+    title: form.title.value,
+    description: form.description.value || '',
+    urgency: form.urgency.value,
+  };
+
+  const {status, data} = await apiPost('/api/installer/job/post', payload);
+  if (status >= 400) {
+    errEl.textContent = data.error || 'Failed to post job';
+    errEl.style.display = 'block';
+    return false;
+  }
+
+  succEl.innerHTML = '<strong style="color:var(--gn)">Job posted!</strong> ' +
+    'Vetted installers in your area will see this and can claim it. ' +
+    'You\\'ll be contacted at <strong>' + form.client_email.value + '</strong> when an installer claims your job.';
+  succEl.style.display = 'block';
+  form.reset();
+  toast('Job posted to the board!');
+  return false;
+}
+
+async function searchJobs() {
+  const code = document.getElementById('job-search-code').value.trim();
+  if (!code) { toast('Enter a postal/ZIP/area code', true); return; }
+
+  // Geocode for lat/lon
+  let lat = null, lon = null;
+  try {
+    const geoRes = await fetch('https://nominatim.openstreetmap.org/search?q=' +
+      encodeURIComponent(code) + '&format=json&limit=1');
+    const geoData = await geoRes.json();
+    if (geoData.length > 0) {
+      lat = parseFloat(geoData[0].lat);
+      lon = parseFloat(geoData[0].lon);
+    }
+  } catch(e) {}
+
+  let url = '/api/installer/job/search?postal_code=' + encodeURIComponent(code);
+  if (lat !== null) url += '&lat=' + lat + '&lon=' + lon;
+
+  const results = await api(url);
+  const container = document.getElementById('job-results');
+  const emptyEl = document.getElementById('job-empty');
+
+  if (!results.length) {
+    container.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  container.innerHTML = results.map(job => {
+    const urgencyBadge = job.urgency === 'priority'
+      ? '<span class="priority-badge">PRIORITY</span>'
+      : '<span class="standard-badge">Standard</span>';
+    const distInfo = job.distance_km !== undefined ? ' &middot; ' + job.distance_km + ' km away' : '';
+    const posted = (job.created_at || '').split('T')[0];
+
+    return '<div class="job-card fade-in">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
+        '<h3>' + job.title + '</h3>' +
+        urgencyBadge +
+      '</div>' +
+      '<div class="job-meta">' +
+        job.client_name + ' &middot; ' +
+        (job.postal_code || job.country || 'Location not specified') +
+        (job.country && job.postal_code ? ', ' + job.country : '') +
+        distInfo + ' &middot; Posted ' + posted +
+      '</div>' +
+      (job.description ? '<div class="job-desc">' + job.description + '</div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        (installerSession ? '<button class="btn btn-green btn-sm" onclick="claimJob(\\''+job.job_id+'\\')">Claim This Job</button>' : '') +
+        '<button class="btn btn-outline btn-sm" onclick="contactJobPoster(\\''+job.client_email+'\\',\\''+job.client_name+'\\')">Contact Client</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function claimJob(jobId) {
+  if (!installerSession) { toast('Sign in as an installer to claim jobs', true); showView('login'); return; }
+  if (!confirm('Claim this job? The client will be notified.')) return;
+
+  const {status, data} = await apiPost('/api/installer/job/claim', {
+    job_id: jobId,
+  });
+  if (status >= 400) {
+    toast(data.error || 'Failed to claim job', true);
+    return;
+  }
+  toast('Job claimed! Contact the client to schedule the install.');
+  searchJobs(); // Refresh the list
+}
+
+function contactJobPoster(email, name) {
+  toast('Contact ' + name + ' at: ' + email);
+  // Copy email to clipboard
+  navigator.clipboard.writeText(email).then(() => {
+    toast('Email copied to clipboard: ' + email);
+  }).catch(() => {});
 }
 
 // ── Init ──
@@ -2878,6 +3283,7 @@ function requestInstaller(installerId, name) {
   else if (path === '/installer/login') showView('login');
   else if (path === '/installer/dashboard') showView('dashboard');
   else if (path === '/installer/find') showView('find');
+  else if (path === '/installer/jobs') showView('jobs');
   else showView('home');
 })();
 </script>
@@ -3466,9 +3872,52 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                                                 db_path=self.db_path)
             return _json_response(self, permits)
 
+        # ── Job Board GET endpoints ──
+
+        if path == "/api/installer/job/search":
+            postal_code = qs.get("postal_code", [None])[0]
+            lat = _safe_float(qs.get("lat", [None])[0])
+            lon = _safe_float(qs.get("lon", [None])[0])
+            try:
+                results = bus.installer_search_jobs(
+                    postal_code=postal_code, lat=lat, lon=lon,
+                    radius_km=float(qs.get("radius", [50])[0]),
+                    db_path=self.db_path)
+                return _json_response(self, results)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        m = re.match(r"^/api/installer/job/([a-f0-9-]+)$", path)
+        if m:
+            job = bus.installer_get_job(m.group(1), db_path=self.db_path)
+            return _json_response(self, job or {"error": "not found"},
+                                  200 if job else 404)
+
+        if path == "/api/installer/jobs/mine":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            jobs = bus.installer_get_my_jobs(profile["installer_id"],
+                                             db_path=self.db_path)
+            return _json_response(self, jobs)
+
+        if path == "/api/installer/meet/requests":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            requests = bus.installer_get_meet_requests(
+                profile["installer_id"], db_path=self.db_path)
+            return _json_response(self, requests)
+
         # Installer website pages
         if path in ("/installer", "/installer/signup", "/installer/login",
-                     "/installer/dashboard", "/installer/find"):
+                     "/installer/dashboard", "/installer/find", "/installer/jobs"):
             return _html_response(self, INSTALLER_PAGE_HTML)
 
         _json_response(self, {"error": "not found"}, 404)
@@ -3775,6 +4224,100 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     db_path=self.db_path)
                 return _json_response(self, result, 201)
             except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Job Board POST endpoints ──
+
+        if path == "/api/installer/job/post":
+            required = ("client_name", "client_email", "title")
+            missing = [k for k in required if not data.get(k)]
+            if missing:
+                return _json_response(self, {"error": f"missing: {missing}"}, 400)
+            try:
+                result = bus.installer_post_job(
+                    client_name=data["client_name"],
+                    client_email=data["client_email"],
+                    title=data["title"],
+                    description=data.get("description", ""),
+                    postal_code=data.get("postal_code", ""),
+                    country=data.get("country", ""),
+                    job_lat=_safe_float(data.get("job_lat")),
+                    job_lon=_safe_float(data.get("job_lon")),
+                    client_phone=data.get("client_phone", ""),
+                    urgency=data.get("urgency", "standard"),
+                    db_path=self.db_path)
+                return _json_response(self, result, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/job/claim":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            try:
+                result = bus.installer_claim_job(
+                    data.get("job_id", ""),
+                    profile["installer_id"],
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except (ValueError, PermissionError) as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/job/status":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            try:
+                result = bus.installer_update_job_status(
+                    data.get("job_id", ""),
+                    data.get("status", ""),
+                    installer_id=profile["installer_id"],
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except (ValueError, PermissionError) as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Meet & Greet POST endpoints ──
+
+        if path == "/api/installer/meet/request":
+            required = ("installer_id", "client_name", "client_email")
+            missing = [k for k in required if not data.get(k)]
+            if missing:
+                return _json_response(self, {"error": f"missing: {missing}"}, 400)
+            try:
+                result = bus.installer_request_meet(
+                    installer_id=data["installer_id"],
+                    client_name=data["client_name"],
+                    client_email=data["client_email"],
+                    job_id=data.get("job_id"),
+                    proposed_time=data.get("proposed_time"),
+                    db_path=self.db_path)
+                return _json_response(self, result, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/installer/meet/respond":
+            session_id = _get_installer_session(self)
+            if not session_id:
+                return _json_response(self, {"error": "not authenticated"}, 401)
+            profile = bus.installer_get_session(session_id, db_path=self.db_path)
+            if not profile:
+                return _json_response(self, {"error": "session expired"}, 401)
+            try:
+                result = bus.installer_respond_meet(
+                    request_id=data.get("request_id", ""),
+                    installer_id=profile["installer_id"],
+                    accept=data.get("accept", False),
+                    meeting_link=data.get("meeting_link"),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except (ValueError, PermissionError) as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
         _json_response(self, {"error": "not found"}, 404)

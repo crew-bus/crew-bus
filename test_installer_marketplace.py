@@ -426,6 +426,286 @@ check("equator quarter ~10000km", 9900 < dist < 10100, f"got {dist:.0f}km")
 
 
 # ---------------------------------------------------------------------------
+# 22. Signup with postal code
+# ---------------------------------------------------------------------------
+section("22. installer_signup() stores postal_code")
+
+r = bus.installer_signup(
+    full_name="Diana Berlin",
+    email="diana@example.com",
+    password="password123",
+    phone="+49-30-1234",
+    country="Germany",
+    postal_code="10115",
+    service_lat=52.5200,
+    service_lon=13.4050,
+    specialties=["Linux", "Docker"],
+    db_path=TEST_DB,
+)
+DIANA_ID = r["installer_id"]
+bus.installer_verify_kyc(DIANA_ID, db_path=TEST_DB)
+profile = bus.installer_get_profile(DIANA_ID, db_path=TEST_DB)
+check("postal_code stored in profile", profile.get("postal_code") == "10115")
+
+# Update postal code
+updated = bus.installer_update_profile(DIANA_ID, {"postal_code": "10117"}, db_path=TEST_DB)
+check("postal_code updated", updated.get("postal_code") == "10117")
+
+# Search returns postal_code
+results = bus.installer_search(52.52, 13.40, db_path=TEST_DB)
+diana_result = [r for r in results if r["full_name"] == "Diana Berlin"]
+check("search result has postal_code", len(diana_result) == 1 and diana_result[0].get("postal_code") == "10117")
+
+
+# ---------------------------------------------------------------------------
+# 23. Post a job
+# ---------------------------------------------------------------------------
+section("23. installer_post_job() creates job on board")
+
+job = bus.installer_post_job(
+    client_name="Sarah Client",
+    client_email="sarah@dental.com",
+    title="crew-bus setup for dental office, Ubuntu server, 3 workstations",
+    description="Need crew-bus installed on our local Ubuntu server with 3 workstations connected.",
+    postal_code="10001",
+    country="United States",
+    job_lat=40.7484,
+    job_lon=-73.9967,
+    client_phone="+1-555-0200",
+    urgency="standard",
+    db_path=TEST_DB,
+)
+check("job returns job_id", "job_id" in job)
+check("job title stored", job["title"] == "crew-bus setup for dental office, Ubuntu server, 3 workstations")
+check("job status is open", job["status"] == "open")
+check("job postal_code stored", job["postal_code"] == "10001")
+JOB_ID = job["job_id"]
+
+# Priority job
+job2 = bus.installer_post_job(
+    client_name="Mike Law",
+    client_email="mike@lawfirm.com",
+    title="Emergency crew-bus install for law firm",
+    postal_code="10002",
+    country="United States",
+    urgency="priority",
+    db_path=TEST_DB,
+)
+check("priority job created", job2["urgency"] == "priority")
+JOB2_ID = job2["job_id"]
+
+
+# ---------------------------------------------------------------------------
+# 24. Post job validation
+# ---------------------------------------------------------------------------
+section("24. installer_post_job() validation")
+
+try:
+    bus.installer_post_job("", "email@test.com", "title", db_path=TEST_DB)
+    check("empty client_name", False, "should raise ValueError")
+except ValueError as e:
+    check("empty client_name rejected", "client_name" in str(e))
+
+try:
+    bus.installer_post_job("Name", "email@test.com", "", db_path=TEST_DB)
+    check("empty title", False, "should raise ValueError")
+except ValueError as e:
+    check("empty title rejected", "title" in str(e))
+
+try:
+    bus.installer_post_job("Name", "email@test.com", "title", urgency="invalid", db_path=TEST_DB)
+    check("invalid urgency", False, "should raise ValueError")
+except ValueError as e:
+    check("invalid urgency rejected", "urgency" in str(e))
+
+
+# ---------------------------------------------------------------------------
+# 25. Search jobs by postal code
+# ---------------------------------------------------------------------------
+section("25. installer_search_jobs() finds jobs by postal code")
+
+results = bus.installer_search_jobs(postal_code="10001", db_path=TEST_DB)
+check("postal search returns jobs", len(results) >= 1)
+# Priority jobs should be first
+found_job = [j for j in results if j["job_id"] == JOB_ID]
+check("original job found by postal code", len(found_job) == 1)
+
+
+# ---------------------------------------------------------------------------
+# 26. Search jobs by lat/lon
+# ---------------------------------------------------------------------------
+section("26. installer_search_jobs() finds jobs by lat/lon")
+
+results = bus.installer_search_jobs(lat=40.75, lon=-74.0, radius_km=50, db_path=TEST_DB)
+check("lat/lon search finds NYC jobs", len(results) >= 1)
+
+# Far away search should not find NYC jobs
+results = bus.installer_search_jobs(lat=51.5, lon=-0.1, radius_km=50, db_path=TEST_DB)
+nyc_jobs = [j for j in results if j.get("postal_code", "").startswith("100")]
+check("far search excludes NYC jobs", len(nyc_jobs) == 0)
+
+
+# ---------------------------------------------------------------------------
+# 27. Claim a job
+# ---------------------------------------------------------------------------
+section("27. installer_claim_job() assigns installer to job")
+
+claimed = bus.installer_claim_job(JOB_ID, ALICE_ID, db_path=TEST_DB)
+check("job status becomes claimed", claimed["status"] == "claimed")
+check("claimed_by is Alice", claimed["claimed_by"] == ALICE_ID)
+check("claimed_at is set", claimed["claimed_at"] is not None)
+
+# Can't claim already-claimed job
+try:
+    bus.installer_claim_job(JOB_ID, DIANA_ID, db_path=TEST_DB)
+    check("double claim", False, "should raise ValueError")
+except ValueError as e:
+    check("double claim rejected", "already" in str(e))
+
+# Unverified installer can't claim
+BOB_ID = None
+conn = bus.get_conn(TEST_DB)
+bob_row = conn.execute("SELECT installer_id FROM certified_installers WHERE email='bob@example.com'").fetchone()
+conn.close()
+if bob_row:
+    BOB_ID = bob_row["installer_id"]
+    try:
+        bus.installer_claim_job(JOB2_ID, BOB_ID, db_path=TEST_DB)
+        check("unverified claim", False, "should raise PermissionError")
+    except PermissionError as e:
+        check("unverified installer can't claim", "KYC" in str(e))
+
+
+# ---------------------------------------------------------------------------
+# 28. Update job status
+# ---------------------------------------------------------------------------
+section("28. installer_update_job_status() transitions correctly")
+
+updated = bus.installer_update_job_status(JOB_ID, "scheduled", installer_id=ALICE_ID, db_path=TEST_DB)
+check("status -> scheduled", updated["status"] == "scheduled")
+
+updated = bus.installer_update_job_status(JOB_ID, "in_progress", installer_id=ALICE_ID, db_path=TEST_DB)
+check("status -> in_progress", updated["status"] == "in_progress")
+
+updated = bus.installer_update_job_status(JOB_ID, "complete", installer_id=ALICE_ID, db_path=TEST_DB)
+check("status -> complete", updated["status"] == "complete")
+
+# Wrong installer can't update
+try:
+    bus.installer_update_job_status(JOB_ID, "cancelled", installer_id=DIANA_ID, db_path=TEST_DB)
+    check("wrong installer update", False, "should raise PermissionError")
+except PermissionError as e:
+    check("wrong installer can't update", "claiming" in str(e))
+
+
+# ---------------------------------------------------------------------------
+# 29. Get job and my jobs
+# ---------------------------------------------------------------------------
+section("29. installer_get_job() and installer_get_my_jobs()")
+
+job = bus.installer_get_job(JOB_ID, db_path=TEST_DB)
+check("get_job returns job", job is not None)
+check("get_job has correct title", "dental" in job["title"])
+
+none_job = bus.installer_get_job("nonexistent-id", db_path=TEST_DB)
+check("nonexistent job returns None", none_job is None)
+
+my_jobs = bus.installer_get_my_jobs(ALICE_ID, db_path=TEST_DB)
+check("my_jobs returns Alice's jobs", len(my_jobs) >= 1)
+check("my_jobs includes claimed job", any(j["job_id"] == JOB_ID for j in my_jobs))
+
+
+# ---------------------------------------------------------------------------
+# 30. Request video meet & greet
+# ---------------------------------------------------------------------------
+section("30. installer_request_meet() creates meet request")
+
+meet = bus.installer_request_meet(
+    installer_id=ALICE_ID,
+    client_name="Sarah Client",
+    client_email="sarah@dental.com",
+    proposed_time="Tomorrow 3pm EST",
+    db_path=TEST_DB,
+)
+check("meet returns request_id", "request_id" in meet)
+check("meet status is pending", meet["status"] == "pending")
+check("meet has proposed_time", meet["proposed_time"] == "Tomorrow 3pm EST")
+MEET_ID = meet["request_id"]
+
+# With job_id
+meet2 = bus.installer_request_meet(
+    installer_id=DIANA_ID,
+    client_name="Mike Law",
+    client_email="mike@lawfirm.com",
+    job_id=JOB2_ID,
+    db_path=TEST_DB,
+)
+check("meet with job_id created", "request_id" in meet2)
+
+
+# ---------------------------------------------------------------------------
+# 31. Meet request validation
+# ---------------------------------------------------------------------------
+section("31. installer_request_meet() validation")
+
+try:
+    bus.installer_request_meet("nonexistent-id", "Name", "email@test.com", db_path=TEST_DB)
+    check("nonexistent installer", False, "should raise ValueError")
+except ValueError as e:
+    check("nonexistent installer rejected", "not found" in str(e))
+
+try:
+    bus.installer_request_meet(ALICE_ID, "", "email@test.com", db_path=TEST_DB)
+    check("empty client_name", False, "should raise ValueError")
+except ValueError as e:
+    check("empty client_name rejected", "client_name" in str(e))
+
+
+# ---------------------------------------------------------------------------
+# 32. Respond to meet request
+# ---------------------------------------------------------------------------
+section("32. installer_respond_meet() accept/decline")
+
+# Accept with meeting link
+responded = bus.installer_respond_meet(
+    MEET_ID, ALICE_ID, accept=True,
+    meeting_link="https://facetime.apple.com/join#abc123",
+    db_path=TEST_DB,
+)
+check("meet accepted", responded["status"] == "accepted")
+check("meeting_link stored", responded["meeting_link"] == "https://facetime.apple.com/join#abc123")
+check("responded_at set", responded["responded_at"] is not None)
+
+# Can't respond twice
+try:
+    bus.installer_respond_meet(MEET_ID, ALICE_ID, accept=True, db_path=TEST_DB)
+    check("double respond", False, "should raise ValueError")
+except ValueError as e:
+    check("double respond rejected", "already" in str(e))
+
+# Wrong installer can't respond
+try:
+    bus.installer_respond_meet(meet2["request_id"], ALICE_ID, accept=True, db_path=TEST_DB)
+    check("wrong installer respond", False, "should raise PermissionError")
+except PermissionError as e:
+    check("wrong installer can't respond", "Only" in str(e))
+
+
+# ---------------------------------------------------------------------------
+# 33. Get meet requests for installer
+# ---------------------------------------------------------------------------
+section("33. installer_get_meet_requests() returns requests")
+
+requests = bus.installer_get_meet_requests(ALICE_ID, db_path=TEST_DB)
+check("Alice has 1 meet request", len(requests) == 1)
+check("request has client_name", requests[0]["client_name"] == "Sarah Client")
+check("request has meeting_link", requests[0]["meeting_link"] is not None)
+
+diana_reqs = bus.installer_get_meet_requests(DIANA_ID, db_path=TEST_DB)
+check("Diana has 1 meet request", len(diana_reqs) == 1)
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

@@ -442,6 +442,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             email               TEXT    NOT NULL UNIQUE,
             phone               TEXT    NOT NULL DEFAULT '',
             country             TEXT    NOT NULL DEFAULT '',
+            postal_code         TEXT    NOT NULL DEFAULT '',
             service_lat         REAL,
             service_lon         REAL,
             service_radius_km   REAL    NOT NULL DEFAULT 40.0,
@@ -485,13 +486,55 @@ def init_db(db_path: Optional[Path] = None) -> None:
             expires_at          TEXT    NOT NULL
         );
 
+        -- ========= Job Board (clients post, installers claim) =========
+
+        CREATE TABLE IF NOT EXISTS installer_jobs (
+            job_id              TEXT    PRIMARY KEY,
+            client_name         TEXT    NOT NULL,
+            client_email        TEXT    NOT NULL,
+            client_phone        TEXT    NOT NULL DEFAULT '',
+            postal_code         TEXT    NOT NULL DEFAULT '',
+            country             TEXT    NOT NULL DEFAULT '',
+            job_lat             REAL,
+            job_lon             REAL,
+            title               TEXT    NOT NULL,
+            description         TEXT    NOT NULL DEFAULT '',
+            urgency             TEXT    NOT NULL DEFAULT 'standard'
+                                CHECK(urgency IN ('standard','priority')),
+            status              TEXT    NOT NULL DEFAULT 'open'
+                                CHECK(status IN ('open','claimed','scheduled','in_progress','complete','cancelled')),
+            claimed_by          TEXT    REFERENCES certified_installers(installer_id),
+            claimed_at          TEXT,
+            created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        -- ========= Video Meet & Greet Requests =========
+
+        CREATE TABLE IF NOT EXISTS installer_meet_requests (
+            request_id          TEXT    PRIMARY KEY,
+            job_id              TEXT    REFERENCES installer_jobs(job_id),
+            installer_id        TEXT    NOT NULL REFERENCES certified_installers(installer_id),
+            client_name         TEXT    NOT NULL,
+            client_email        TEXT    NOT NULL,
+            status              TEXT    NOT NULL DEFAULT 'pending'
+                                CHECK(status IN ('pending','accepted','completed','declined')),
+            proposed_time       TEXT,
+            meeting_link        TEXT,
+            created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            responded_at        TEXT
+        );
+
         CREATE INDEX IF NOT EXISTS idx_installer_email      ON certified_installers(email);
         CREATE INDEX IF NOT EXISTS idx_installer_kyc         ON certified_installers(kyc_status, active);
         CREATE INDEX IF NOT EXISTS idx_installer_location    ON certified_installers(service_lat, service_lon);
+        CREATE INDEX IF NOT EXISTS idx_installer_postal      ON certified_installers(postal_code);
         CREATE INDEX IF NOT EXISTS idx_installer_permits     ON installer_permits(installer_id);
         CREATE INDEX IF NOT EXISTS idx_installer_permit_key  ON installer_permits(permit_key);
         CREATE INDEX IF NOT EXISTS idx_installer_reviews_inst ON installer_reviews(installer_id);
         CREATE INDEX IF NOT EXISTS idx_installer_sessions    ON installer_sessions(installer_id, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_installer_jobs_status ON installer_jobs(status, postal_code);
+        CREATE INDEX IF NOT EXISTS idx_installer_jobs_loc    ON installer_jobs(job_lat, job_lon);
+        CREATE INDEX IF NOT EXISTS idx_installer_meet_inst   ON installer_meet_requests(installer_id, status);
     """)
 
     # Seed default routing rules (skip if already populated)
@@ -3631,6 +3674,7 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 
 def installer_signup(full_name: str, email: str, password: str,
                      phone: str = "", country: str = "",
+                     postal_code: str = "",
                      service_lat: float = None, service_lon: float = None,
                      specialties: list = None, kyc_document_hash: str = None,
                      db_path: Optional[Path] = None) -> dict:
@@ -3658,12 +3702,12 @@ def installer_signup(full_name: str, email: str, password: str,
     try:
         conn.execute(
             "INSERT INTO certified_installers "
-            "(installer_id, full_name, email, phone, country, "
+            "(installer_id, full_name, email, phone, country, postal_code, "
             " service_lat, service_lon, specialties, kyc_document_hash, "
             " password_hash, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (installer_id, full_name.strip(), email.strip().lower(),
-             phone.strip(), country.strip(),
+             phone.strip(), country.strip(), postal_code.strip(),
              service_lat, service_lon, specs,
              kyc_document_hash, pw_hash, now, now),
         )
@@ -3871,7 +3915,7 @@ def installer_update_profile(installer_id: str, updates: dict,
 
     Returns the updated profile.
     """
-    allowed = {"phone", "country", "service_lat", "service_lon",
+    allowed = {"phone", "country", "postal_code", "service_lat", "service_lon",
                "service_radius_km", "specialties"}
     filtered = {k: v for k, v in updates.items() if k in allowed}
     if not filtered:
@@ -3908,7 +3952,7 @@ def installer_get_profile(installer_id: str,
     """Get public installer profile."""
     conn = get_conn(db_path)
     row = conn.execute(
-        "SELECT installer_id, full_name, email, phone, country, "
+        "SELECT installer_id, full_name, email, phone, country, postal_code, "
         "service_lat, service_lon, service_radius_km, specialties, "
         "kyc_status, active, created_at "
         "FROM certified_installers WHERE installer_id=?",
@@ -3934,7 +3978,7 @@ def installer_search(lat: float, lon: float, radius_km: float = 50.0,
     """
     conn = get_conn(db_path)
     rows = conn.execute(
-        "SELECT installer_id, full_name, country, specialties, "
+        "SELECT installer_id, full_name, country, postal_code, specialties, "
         "service_lat, service_lon, service_radius_km, created_at "
         "FROM certified_installers "
         "WHERE kyc_status='verified' AND active=1 "
@@ -4089,3 +4133,307 @@ def installer_verify_kyc(installer_id: str,
     conn.commit()
     conn.close()
     return {"installer_id": installer_id, "kyc_status": "verified"}
+
+
+# ---------------------------------------------------------------------------
+# Job Board — clients post jobs, installers claim them
+# ---------------------------------------------------------------------------
+
+def installer_post_job(client_name: str, client_email: str,
+                       title: str, description: str = "",
+                       postal_code: str = "", country: str = "",
+                       job_lat: float = None, job_lon: float = None,
+                       client_phone: str = "", urgency: str = "standard",
+                       db_path: Optional[Path] = None) -> dict:
+    """Client posts a job to the board. Returns job_id and details."""
+    if not client_name or not client_name.strip():
+        raise ValueError("client_name is required")
+    if not client_email or not client_email.strip():
+        raise ValueError("client_email is required")
+    if not title or not title.strip():
+        raise ValueError("title is required")
+    if urgency not in ("standard", "priority"):
+        raise ValueError("urgency must be 'standard' or 'priority'")
+
+    job_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    conn = get_conn(db_path)
+    conn.execute(
+        "INSERT INTO installer_jobs "
+        "(job_id, client_name, client_email, client_phone, postal_code, "
+        " country, job_lat, job_lon, title, description, urgency, "
+        " status, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)",
+        (job_id, client_name.strip(), client_email.strip().lower(),
+         client_phone.strip(), postal_code.strip(), country.strip(),
+         job_lat, job_lon, title.strip(), description.strip(),
+         urgency, now),
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "job_id": job_id,
+        "title": title.strip(),
+        "client_name": client_name.strip(),
+        "postal_code": postal_code.strip(),
+        "urgency": urgency,
+        "status": "open",
+        "created_at": now,
+    }
+
+
+def installer_search_jobs(postal_code: str = None,
+                          lat: float = None, lon: float = None,
+                          radius_km: float = 50.0,
+                          db_path: Optional[Path] = None) -> list:
+    """Search open jobs. Filter by postal code prefix or by lat/lon radius.
+
+    If postal_code is provided, matches jobs whose postal_code starts with
+    the same prefix (first 3 chars) for broad area matching.
+    If lat/lon provided, uses Haversine distance filtering.
+    Returns list of job dicts sorted by urgency (priority first) then date.
+    """
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT * FROM installer_jobs WHERE status='open' "
+        "ORDER BY CASE urgency WHEN 'priority' THEN 0 ELSE 1 END, created_at DESC",
+    ).fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        d = dict(r)
+        # Postal code prefix match (first 3 chars)
+        if postal_code:
+            pc = postal_code.strip().upper().replace(" ", "")
+            job_pc = (d.get("postal_code") or "").strip().upper().replace(" ", "")
+            if pc[:3] and job_pc[:3] and pc[:3] != job_pc[:3]:
+                # Also check lat/lon fallback if available
+                if lat is not None and lon is not None and d.get("job_lat") and d.get("job_lon"):
+                    dist = _haversine_km(lat, lon, d["job_lat"], d["job_lon"])
+                    if dist > radius_km:
+                        continue
+                    d["distance_km"] = round(dist, 1)
+                else:
+                    continue
+        elif lat is not None and lon is not None:
+            if d.get("job_lat") and d.get("job_lon"):
+                dist = _haversine_km(lat, lon, d["job_lat"], d["job_lon"])
+                if dist > radius_km:
+                    continue
+                d["distance_km"] = round(dist, 1)
+            else:
+                continue  # Skip jobs without coordinates in lat/lon search
+        results.append(d)
+
+    return results
+
+
+def installer_claim_job(job_id: str, installer_id: str,
+                        db_path: Optional[Path] = None) -> dict:
+    """Installer claims an open job. Returns updated job."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM installer_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Job not found")
+    if row["status"] != "open":
+        conn.close()
+        raise ValueError(f"Job is already {row['status']}")
+
+    # Verify installer exists and is KYC verified
+    inst = conn.execute(
+        "SELECT kyc_status, active FROM certified_installers WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    if not inst:
+        conn.close()
+        raise ValueError("Installer not found")
+    if inst["kyc_status"] != "verified":
+        conn.close()
+        raise PermissionError("Only KYC-verified installers can claim jobs")
+    if not inst["active"]:
+        conn.close()
+        raise PermissionError("Installer account is deactivated")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "UPDATE installer_jobs SET status='claimed', claimed_by=?, claimed_at=? "
+        "WHERE job_id=?",
+        (installer_id, now, job_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM installer_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def installer_update_job_status(job_id: str, new_status: str,
+                                installer_id: str = None,
+                                db_path: Optional[Path] = None) -> dict:
+    """Update the status of a job (scheduled, in_progress, complete, cancelled).
+
+    If installer_id is provided, verifies the installer is the one who claimed it.
+    """
+    valid = ("scheduled", "in_progress", "complete", "cancelled")
+    if new_status not in valid:
+        raise ValueError(f"status must be one of: {valid}")
+
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM installer_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Job not found")
+    if installer_id and row["claimed_by"] != installer_id:
+        conn.close()
+        raise PermissionError("Only the claiming installer can update this job")
+
+    conn.execute(
+        "UPDATE installer_jobs SET status=? WHERE job_id=?",
+        (new_status, job_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM installer_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def installer_get_job(job_id: str,
+                      db_path: Optional[Path] = None) -> Optional[dict]:
+    """Get a single job by ID."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM installer_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def installer_get_my_jobs(installer_id: str,
+                          db_path: Optional[Path] = None) -> list:
+    """Get all jobs claimed by an installer."""
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT * FROM installer_jobs WHERE claimed_by=? "
+        "ORDER BY claimed_at DESC",
+        (installer_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Video Meet & Greet — human verification between client and installer
+# ---------------------------------------------------------------------------
+
+def installer_request_meet(installer_id: str, client_name: str,
+                           client_email: str, job_id: str = None,
+                           proposed_time: str = None,
+                           db_path: Optional[Path] = None) -> dict:
+    """Client requests a video meet-and-greet with an installer.
+
+    This is for human verification — the client wants to see the installer
+    face-to-face before committing to a job. Returns request details.
+    """
+    if not client_name or not client_name.strip():
+        raise ValueError("client_name is required")
+    if not client_email or not client_email.strip():
+        raise ValueError("client_email is required")
+
+    conn = get_conn(db_path)
+    # Verify installer exists
+    inst = conn.execute(
+        "SELECT installer_id, kyc_status FROM certified_installers "
+        "WHERE installer_id=?",
+        (installer_id,),
+    ).fetchone()
+    if not inst:
+        conn.close()
+        raise ValueError("Installer not found")
+
+    request_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    conn.execute(
+        "INSERT INTO installer_meet_requests "
+        "(request_id, job_id, installer_id, client_name, client_email, "
+        " status, proposed_time, created_at) "
+        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+        (request_id, job_id, installer_id, client_name.strip(),
+         client_email.strip().lower(), proposed_time, now),
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "request_id": request_id,
+        "installer_id": installer_id,
+        "client_name": client_name.strip(),
+        "client_email": client_email.strip().lower(),
+        "status": "pending",
+        "proposed_time": proposed_time,
+        "created_at": now,
+    }
+
+
+def installer_respond_meet(request_id: str, installer_id: str,
+                           accept: bool, meeting_link: str = None,
+                           db_path: Optional[Path] = None) -> dict:
+    """Installer accepts or declines a meet-and-greet request.
+
+    If accepting, they can provide a meeting link (FaceTime, Zoom, Google Meet, etc.)
+    """
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM installer_meet_requests WHERE request_id=?",
+        (request_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Meet request not found")
+    if row["installer_id"] != installer_id:
+        conn.close()
+        raise PermissionError("Only the requested installer can respond")
+    if row["status"] != "pending":
+        conn.close()
+        raise ValueError(f"Request is already {row['status']}")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    new_status = "accepted" if accept else "declined"
+
+    conn.execute(
+        "UPDATE installer_meet_requests "
+        "SET status=?, meeting_link=?, responded_at=? "
+        "WHERE request_id=?",
+        (new_status, meeting_link if accept else None, now, request_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM installer_meet_requests WHERE request_id=?",
+        (request_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def installer_get_meet_requests(installer_id: str,
+                                db_path: Optional[Path] = None) -> list:
+    """Get all meet-and-greet requests for an installer."""
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT * FROM installer_meet_requests WHERE installer_id=? "
+        "ORDER BY created_at DESC",
+        (installer_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
