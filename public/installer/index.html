@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Find an Installer — crew-bus</title>
+    <meta name="description" content="Find a KYC-verified crew-bus installer in your area. Rated by the community. Book a video meet & greet.">
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/marketplace.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#features">Features</a>
+            <a href="/installer" class="active">Installers</a>
+            <a href="/jobs">Job Board</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<header class="page-header">
+    <div class="container">
+        <h1>Find an Installer</h1>
+        <p class="page-sub">KYC-verified professionals who set up and configure crew-bus for you. Rated by the community.</p>
+    </div>
+</header>
+
+<!-- Search Bar -->
+<section class="section" style="padding-top: 2rem;">
+    <div class="container">
+        <div class="search-bar">
+            <div class="search-row">
+                <div class="search-field search-field-lg">
+                    <label for="searchPostal">Postal / ZIP Code</label>
+                    <input type="text" id="searchPostal" placeholder="e.g. 90210, SW1A 1AA, 10115">
+                </div>
+                <div class="search-field">
+                    <label for="searchCountry">Country</label>
+                    <select id="searchCountry">
+                        <option value="">All Countries</option>
+                        <option value="US">United States</option>
+                        <option value="GB">United Kingdom</option>
+                        <option value="DE">Germany</option>
+                        <option value="CA">Canada</option>
+                        <option value="AU">Australia</option>
+                        <option value="FR">France</option>
+                        <option value="NL">Netherlands</option>
+                        <option value="JP">Japan</option>
+                        <option value="IN">India</option>
+                        <option value="BR">Brazil</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="searchBtn">Search</button>
+            </div>
+            <div class="search-filters">
+                <label class="filter-label">Filter:</label>
+                <select id="filterSpecialty">
+                    <option value="">All Specialties</option>
+                    <option value="full_crew">Full Crew Setup</option>
+                    <option value="custom_config">Custom Configs</option>
+                    <option value="training">Training</option>
+                    <option value="security_audit">Security Audit</option>
+                    <option value="channel_integration">Channel Integration</option>
+                    <option value="agent_tuning">Agent Tuning</option>
+                </select>
+                <select id="filterRating">
+                    <option value="">Any Rating</option>
+                    <option value="4.5">4.5+ Stars</option>
+                    <option value="4.0">4.0+ Stars</option>
+                    <option value="3.0">3.0+ Stars</option>
+                </select>
+                <select id="filterAvail">
+                    <option value="">Any Availability</option>
+                    <option value="available">Available Now</option>
+                    <option value="this_week">This Week</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Results -->
+<section class="section" style="padding-top: 1rem;">
+    <div class="container">
+        <div id="resultsInfo" class="results-info" style="display:none;">
+            <span id="resultsCount">0</span> installers found
+        </div>
+        <div id="installerGrid" class="installer-grid">
+            <!-- Populated by JS -->
+        </div>
+        <div id="noResults" class="empty-state">
+            <div class="empty-icon">&#9673;</div>
+            <h3>Search for installers</h3>
+            <p>Enter a postal code or browse all available installers.</p>
+            <button class="btn btn-outline" id="browseAll">Browse All Installers</button>
+        </div>
+        <div id="loading" class="loading-state" style="display:none;">
+            <div class="spinner"></div>
+            <p>Searching...</p>
+        </div>
+    </div>
+</section>
+
+<!-- Become an Installer CTA -->
+<section class="section section-dark">
+    <div class="container text-center">
+        <h2 class="section-title">Become a Verified Installer</h2>
+        <p class="section-sub">
+            First permit free. Earn money setting up crew-bus for clients in your area.
+            KYC verification takes under 24 hours.
+        </p>
+        <a href="/installer/signup" class="btn btn-primary btn-lg">Sign Up as Installer</a>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>crew-bus</h4>
+                <p class="footer-desc">Free, open-source AI crew infrastructure.<br>One human at the top — always.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="/#features">Features</a></li>
+                    <li><a href="/#pricing">Pricing</a></li>
+                    <li><a href="/activate">Guard Activation</a></li>
+                    <li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Marketplace</h4>
+                <ul>
+                    <li><a href="/installer">Find an Installer</a></li>
+                    <li><a href="/installer/signup">Become an Installer</a></li>
+                    <li><a href="/jobs">Job Board</a></li>
+                    <li><a href="/jobs/post">Post a Job</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="/privacy">Privacy Policy</a></li>
+                    <li><a href="/terms">Terms of Service</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 crew-bus. MIT License. Built for humans who run AI crews.</p>
+        </div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+<script src="/js/marketplace.js"></script>
+</body>
+</html>

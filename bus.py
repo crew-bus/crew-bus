@@ -408,6 +408,75 @@ def init_db(db_path: Optional[Path] = None) -> None:
             FOREIGN KEY (techie_id) REFERENCES authorized_techies(techie_id)
         );
 
+        -- ========= User Auth =========
+
+        CREATE TABLE IF NOT EXISTS users (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            email           TEXT    UNIQUE NOT NULL,
+            password_hash   TEXT    NOT NULL,
+            user_type       TEXT    NOT NULL DEFAULT 'client',
+            display_name    TEXT    DEFAULT '',
+            email_verified  INTEGER DEFAULT 0,
+            verify_token    TEXT,
+            reset_token     TEXT,
+            reset_expires   TEXT,
+            techie_id       TEXT,
+            created_at      TEXT    NOT NULL,
+            last_login      TEXT,
+            FOREIGN KEY (techie_id) REFERENCES authorized_techies(techie_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL,
+            token           TEXT    UNIQUE NOT NULL,
+            expires_at      TEXT    NOT NULL,
+            created_at      TEXT    NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        -- ========= Jobs =========
+
+        CREATE TABLE IF NOT EXISTS jobs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            title           TEXT    NOT NULL,
+            description     TEXT    NOT NULL,
+            needs           TEXT    DEFAULT '',
+            postal_code     TEXT    DEFAULT '',
+            country         TEXT    DEFAULT '',
+            urgency         TEXT    DEFAULT 'standard',
+            budget          TEXT    DEFAULT 'negotiable',
+            contact_name    TEXT    DEFAULT '',
+            contact_email   TEXT    DEFAULT '',
+            status          TEXT    DEFAULT 'open',
+            posted_by       INTEGER,
+            claimed_by      TEXT,
+            claimed_at      TEXT,
+            completed_at    TEXT,
+            created_at      TEXT    NOT NULL,
+            FOREIGN KEY (posted_by) REFERENCES users(id),
+            FOREIGN KEY (claimed_by) REFERENCES authorized_techies(techie_id)
+        );
+
+        -- ========= Meet & Greet =========
+
+        CREATE TABLE IF NOT EXISTS meet_requests (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_user_id  INTEGER,
+            techie_id       TEXT    NOT NULL,
+            job_id          INTEGER,
+            status          TEXT    DEFAULT 'pending',
+            proposed_times  TEXT    DEFAULT '[]',
+            accepted_time   TEXT,
+            meeting_link    TEXT,
+            notes           TEXT    DEFAULT '',
+            created_at      TEXT    NOT NULL,
+            responded_at    TEXT,
+            FOREIGN KEY (client_user_id) REFERENCES users(id),
+            FOREIGN KEY (techie_id) REFERENCES authorized_techies(techie_id),
+            FOREIGN KEY (job_id) REFERENCES jobs(id)
+        );
+
         -- ========= Indexes =========
 
         CREATE INDEX IF NOT EXISTS idx_messages_to      ON messages(to_agent_id, status);
@@ -433,6 +502,13 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_techie_standing    ON authorized_techies(kyc_status, standing);
         CREATE INDEX IF NOT EXISTS idx_techie_keys_techie ON techie_keys(techie_id);
         CREATE INDEX IF NOT EXISTS idx_techie_reviews     ON techie_reviews(techie_id);
+        CREATE INDEX IF NOT EXISTS idx_users_email        ON users(email);
+        CREATE INDEX IF NOT EXISTS idx_sessions_token     ON sessions(token);
+        CREATE INDEX IF NOT EXISTS idx_sessions_user      ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_jobs_status        ON jobs(status, created_at);
+        CREATE INDEX IF NOT EXISTS idx_jobs_postal        ON jobs(postal_code, status);
+        CREATE INDEX IF NOT EXISTS idx_meet_techie        ON meet_requests(techie_id, status);
+        CREATE INDEX IF NOT EXISTS idx_meet_client        ON meet_requests(client_user_id, status);
     """)
 
     # Seed default routing rules (skip if already populated)
@@ -3504,5 +3580,246 @@ def list_techies(status: str = "verified", standing: str = "good",
         "ORDER BY rating_avg DESC",
         (status, standing),
     ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# User Authentication
+# ---------------------------------------------------------------------------
+
+def create_user(email: str, password_hash: str, user_type: str = "client",
+                display_name: str = "", db_path: Optional[Path] = None) -> dict:
+    """Create a new user account."""
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    verify_token = uuid.uuid4().hex
+    try:
+        conn.execute(
+            "INSERT INTO users (email, password_hash, user_type, display_name, "
+            "verify_token, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (email.lower().strip(), password_hash, user_type, display_name,
+             verify_token, now),
+        )
+        conn.commit()
+        user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise ValueError("Email already registered")
+    conn.close()
+    return {"id": user_id, "email": email, "user_type": user_type,
+            "verify_token": verify_token}
+
+
+def get_user_by_email(email: str, db_path: Optional[Path] = None) -> Optional[dict]:
+    """Lookup user by email."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM users WHERE email=?", (email.lower().strip(),)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int, db_path: Optional[Path] = None) -> Optional[dict]:
+    """Lookup user by ID."""
+    conn = get_conn(db_path)
+    row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_session(user_id: int, hours: int = 168,
+                   db_path: Optional[Path] = None) -> str:
+    """Create a session token. Default 7 days."""
+    conn = get_conn(db_path)
+    token = uuid.uuid4().hex + uuid.uuid4().hex
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(hours=hours)
+    conn.execute(
+        "INSERT INTO sessions (user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?)",
+        (user_id, token, expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+         now.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    conn.commit()
+    conn.close()
+    return token
+
+
+def validate_session(token: str, db_path: Optional[Path] = None) -> Optional[dict]:
+    """Validate a session token, return user if valid."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT s.*, u.email, u.user_type, u.display_name, u.techie_id "
+        "FROM sessions s JOIN users u ON s.user_id=u.id "
+        "WHERE s.token=?", (token,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if row["expires_at"] < now:
+        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+        conn.commit()
+        conn.close()
+        return None
+    conn.close()
+    return dict(row)
+
+
+def delete_session(token: str, db_path: Optional[Path] = None) -> None:
+    """Delete a session token (logout)."""
+    conn = get_conn(db_path)
+    conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+
+def create_job(title: str, description: str, needs: str = "",
+               postal_code: str = "", country: str = "",
+               urgency: str = "standard", budget: str = "negotiable",
+               contact_name: str = "", contact_email: str = "",
+               posted_by: Optional[int] = None,
+               db_path: Optional[Path] = None) -> dict:
+    """Create a new job posting."""
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO jobs (title, description, needs, postal_code, country, "
+        "urgency, budget, contact_name, contact_email, posted_by, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (title, description, needs, postal_code, country, urgency, budget,
+         contact_name, contact_email, posted_by, now),
+    )
+    job_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"id": job_id, "title": title, "status": "open", "created_at": now}
+
+
+def list_jobs(status: str = "open", postal_code: str = "",
+              urgency: str = "", limit: int = 50,
+              db_path: Optional[Path] = None) -> list:
+    """List jobs with optional filters."""
+    conn = get_conn(db_path)
+    sql = "SELECT * FROM jobs WHERE 1=1"
+    params = []
+    if status and status != "all":
+        sql += " AND status=?"
+        params.append(status)
+    if postal_code:
+        sql += " AND postal_code LIKE ?"
+        params.append(postal_code + "%")
+    if urgency:
+        sql += " AND urgency=?"
+        params.append(urgency)
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_job(job_id: int, db_path: Optional[Path] = None) -> Optional[dict]:
+    """Get a single job by ID."""
+    conn = get_conn(db_path)
+    row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def claim_job(job_id: int, techie_id: str,
+              db_path: Optional[Path] = None) -> dict:
+    """Installer claims a job."""
+    conn = get_conn(db_path)
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Job not found")
+    if row["status"] != "open":
+        conn.close()
+        raise ValueError("Job is not open")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "UPDATE jobs SET status='claimed', claimed_by=?, claimed_at=? WHERE id=?",
+        (techie_id, now, job_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"job_id": job_id, "status": "claimed", "claimed_by": techie_id}
+
+
+def complete_job(job_id: int, db_path: Optional[Path] = None) -> dict:
+    """Mark a job as completed."""
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "UPDATE jobs SET status='completed', completed_at=? WHERE id=?",
+        (now, job_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"job_id": job_id, "status": "completed"}
+
+
+# ---------------------------------------------------------------------------
+# Meet & Greet
+# ---------------------------------------------------------------------------
+
+def create_meet_request(techie_id: str, client_user_id: Optional[int] = None,
+                        job_id: Optional[int] = None, proposed_times: str = "[]",
+                        notes: str = "", db_path: Optional[Path] = None) -> dict:
+    """Client requests a meet & greet with an installer."""
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO meet_requests (client_user_id, techie_id, job_id, "
+        "proposed_times, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (client_user_id, techie_id, job_id, proposed_times, notes, now),
+    )
+    req_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"id": req_id, "techie_id": techie_id, "status": "pending"}
+
+
+def respond_meet_request(request_id: int, accept: bool,
+                         accepted_time: str = "", meeting_link: str = "",
+                         db_path: Optional[Path] = None) -> dict:
+    """Installer accepts or declines a meet & greet request."""
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    status = "accepted" if accept else "declined"
+    conn.execute(
+        "UPDATE meet_requests SET status=?, accepted_time=?, meeting_link=?, "
+        "responded_at=? WHERE id=?",
+        (status, accepted_time, meeting_link, now, request_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": request_id, "status": status}
+
+
+def list_meet_requests(techie_id: str = "", client_user_id: Optional[int] = None,
+                       status: str = "", db_path: Optional[Path] = None) -> list:
+    """List meet & greet requests for an installer or client."""
+    conn = get_conn(db_path)
+    sql = "SELECT * FROM meet_requests WHERE 1=1"
+    params = []
+    if techie_id:
+        sql += " AND techie_id=?"
+        params.append(techie_id)
+    if client_user_id:
+        sql += " AND client_user_id=?"
+        params.append(client_user_id)
+    if status:
+        sql += " AND status=?"
+        params.append(status)
+    sql += " ORDER BY created_at DESC"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]

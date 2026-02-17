@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Guard Activated — crew-bus</title>
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+
+<nav class="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand">
+            <span class="nav-logo">&#9632;</span> crew-bus
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/#features">Features</a>
+        </div>
+    </div>
+</nav>
+
+<main class="page-content">
+    <div class="container container-narrow">
+        <div class="success-page">
+            <div class="success-icon">&#10003;</div>
+            <h1>Guard Activated</h1>
+            <p class="success-sub">Payment confirmed. Your Security Guard module is ready.</p>
+
+            <div class="key-card">
+                <h3>Your Activation Key</h3>
+                <div class="key-display" id="keyDisplay">
+                    Loading...
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="copyKey()">Copy Key</button>
+            </div>
+
+            <div class="instructions-card">
+                <h3>How to Activate</h3>
+                <div class="instruction-step">
+                    <span class="inst-num">1</span>
+                    <div>
+                        <strong>CLI method</strong>
+                        <div class="inst-terminal">
+                            <code>crew-bus guard activate <span class="key-placeholder">YOUR-KEY</span></code>
+                        </div>
+                    </div>
+                </div>
+                <div class="instruction-step">
+                    <span class="inst-num">2</span>
+                    <div>
+                        <strong>Dashboard method</strong>
+                        <p>Open your dashboard at <code>localhost:8080</code>, go to Settings, and paste the key in the Guard Activation field.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="success-actions">
+                <a href="/" class="btn btn-outline">Back to Home</a>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="footer">
+    <div class="container container-narrow text-center">
+        <p class="footer-bottom-text">
+            <a href="/privacy">Privacy Policy</a> &middot;
+            <a href="/terms">Terms of Service</a> &middot;
+            <a href="/">crew-bus.dev</a>
+        </p>
+    </div>
+</footer>
+
+<style>
+.page-content { padding: 7rem 0 3rem; }
+
+.success-page { text-align: center; }
+
+.success-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(0, 184, 148, 0.15);
+    color: var(--success);
+    font-size: 2.5rem; font-weight: 700;
+    margin-bottom: 1.5rem;
+}
+
+.success-page h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+.success-sub { color: var(--text-dim); font-size: 1.05rem; margin-bottom: 2rem; }
+
+.key-card {
+    background: var(--bg-card);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem; margin-bottom: 1.5rem;
+}
+.key-card h3 { font-size: 1rem; margin-bottom: 0.8rem; }
+
+.key-display {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 1.1rem;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 0.8rem;
+    word-break: break-all;
+    user-select: all;
+    color: var(--success);
+}
+
+.instructions-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem; margin-bottom: 2rem;
+    text-align: left;
+}
+.instructions-card h3 { font-size: 1rem; margin-bottom: 1rem; }
+
+.instruction-step {
+    display: flex; gap: 1rem; margin-bottom: 1.2rem;
+    align-items: flex-start;
+}
+.inst-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--highlight); color: #fff;
+    font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
+}
+.instruction-step strong { display: block; margin-bottom: 0.3rem; font-size: 0.9rem; }
+.instruction-step p { color: var(--text-dim); font-size: 0.85rem; margin: 0; }
+
+.inst-terminal {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.6rem 0.8rem; margin-top: 0.3rem;
+}
+.inst-terminal code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.85rem; color: var(--success);
+}
+.key-placeholder { color: var(--warning); }
+
+.success-actions { margin-top: 1.5rem; }
+
+.footer-bottom-text {
+    color: var(--text-muted); font-size: 0.8rem;
+}
+.footer-bottom-text a { color: var(--text-muted); }
+.footer-bottom-text a:hover { color: var(--text); }
+</style>
+
+<script>
+// Fetch the activation key from the session_id in the URL query params
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var sessionId = params.get('session_id');
+    var keyDisplay = document.getElementById('keyDisplay');
+
+    if (sessionId) {
+        fetch('/api/checkout/verify?session_id=' + encodeURIComponent(sessionId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.activation_key) {
+                keyDisplay.textContent = data.activation_key;
+            } else {
+                keyDisplay.textContent = 'Key will be emailed to you.';
+            }
+        })
+        .catch(function() {
+            keyDisplay.textContent = 'Check your email for the activation key.';
+        });
+    } else {
+        keyDisplay.textContent = 'Check your email for the activation key.';
+    }
+})();
+
+function copyKey() {
+    var key = document.getElementById('keyDisplay').textContent;
+    if (key && key !== 'Loading...' && !key.startsWith('Check')) {
+        navigator.clipboard.writeText(key).then(function() {
+            var btn = event.target;
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = 'Copy Key'; }, 2000);
+        });
+    }
+}
+</script>
+</body>
+</html>

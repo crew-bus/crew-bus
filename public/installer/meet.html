@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Request Meet & Greet — crew-bus</title>
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/marketplace.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#features">Features</a>
+            <a href="/installer">Installers</a>
+            <a href="/jobs">Job Board</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<header class="page-header">
+    <div class="container container-narrow">
+        <h1>Request a Meet & Greet</h1>
+        <p class="page-sub">Video call with the installer before committing. Build trust first.</p>
+    </div>
+</header>
+
+<section class="section" style="padding-top: 1rem;">
+    <div class="container container-narrow">
+        <div id="installerInfo" class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="installer-card-header">
+                <div class="installer-card-avatar">&#9673;</div>
+                <div>
+                    <div class="installer-card-name" id="meetInstallerName">Loading...</div>
+                    <div class="installer-card-meta">
+                        <span class="badge badge-success">&#10003; Verified</span>
+                        <span class="installer-card-stars" id="meetInstallerStars"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form id="meetForm" class="form-card" novalidate>
+            <h2>Schedule Your Call</h2>
+            <p class="form-hint">Pick up to 3 time slots that work for you. The installer will accept one.</p>
+
+            <div class="form-group">
+                <label for="slot1">Preferred Time 1 <span class="req">*</span></label>
+                <input type="datetime-local" id="slot1" name="slot1" required>
+            </div>
+            <div class="form-group">
+                <label for="slot2">Preferred Time 2</label>
+                <input type="datetime-local" id="slot2" name="slot2">
+            </div>
+            <div class="form-group">
+                <label for="slot3">Preferred Time 3</label>
+                <input type="datetime-local" id="slot3" name="slot3">
+            </div>
+            <div class="form-group">
+                <label for="meetNotes">Notes for the Installer</label>
+                <textarea id="meetNotes" name="notes" rows="3" placeholder="What would you like to discuss? Any specific questions about setup?"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="meetJob">Link to Job (optional)</label>
+                <select id="meetJob" name="job_id">
+                    <option value="">No specific job</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg btn-block" id="meetSubmit">Send Request</button>
+        </form>
+
+        <div id="meetSuccess" class="success-card" style="display:none">
+            <div class="success-icon">&#10003;</div>
+            <h2>Request Sent</h2>
+            <p>The installer will review your time slots and confirm. You'll receive an email with the meeting link once they accept.</p>
+            <div class="success-actions">
+                <a href="/installer" class="btn btn-outline">Back to Marketplace</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+<script>
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var techieId = params.get('id');
+
+    // Load installer info
+    if (techieId) {
+        fetch('/api/installers/' + techieId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.display_name) {
+                    document.getElementById('meetInstallerName').textContent = data.display_name;
+                    var stars = '';
+                    for (var i = 0; i < 5; i++) stars += i < Math.round(data.rating_avg || 0) ? '\u2605' : '\u2606';
+                    document.getElementById('meetInstallerStars').textContent = stars + ' ' + (data.rating_avg || '0.0');
+                }
+            });
+    }
+
+    // Form submit
+    var form = document.getElementById('meetForm');
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!techieId) { alert('No installer selected'); return; }
+
+        var slots = [];
+        ['slot1', 'slot2', 'slot3'].forEach(function(id) {
+            var val = document.getElementById(id).value;
+            if (val) slots.push(val);
+        });
+        if (!slots.length) { alert('Pick at least one time slot'); return; }
+
+        var token = localStorage.getItem('auth_token');
+        var headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+
+        var btn = document.getElementById('meetSubmit');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+
+        fetch('/api/meet-requests', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                techie_id: techieId,
+                proposed_times: slots,
+                notes: document.getElementById('meetNotes').value,
+                job_id: document.getElementById('meetJob').value || null,
+            }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                alert(data.error);
+                btn.disabled = false;
+                btn.textContent = 'Send Request';
+                return;
+            }
+            form.style.display = 'none';
+            document.getElementById('meetSuccess').style.display = 'block';
+        })
+        .catch(function() {
+            alert('Network error');
+            btn.disabled = false;
+            btn.textContent = 'Send Request';
+        });
+    });
+})();
+</script>
+</body>
+</html>

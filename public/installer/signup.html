@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Become an Installer — crew-bus</title>
+    <meta name="description" content="Sign up as a KYC-verified crew-bus installer. First permit free. Earn money setting up AI crews.">
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/marketplace.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#features">Features</a>
+            <a href="/installer">Installers</a>
+            <a href="/jobs">Job Board</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<header class="page-header">
+    <div class="container container-narrow">
+        <h1>Become a Verified Installer</h1>
+        <p class="page-sub">Set up crew-bus for clients in your area. First permit is free. 6 months of free Guardian key messaging included.</p>
+    </div>
+</header>
+
+<section class="section" style="padding-top: 1rem;">
+    <div class="container container-narrow">
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step-dot active" data-step="1"><span>1</span> Personal Info</div>
+            <div class="step-dot" data-step="2"><span>2</span> Specialties</div>
+            <div class="step-dot" data-step="3"><span>3</span> Service Area</div>
+            <div class="step-dot" data-step="4"><span>4</span> ID Verification</div>
+        </div>
+
+        <form id="signupForm" class="form-card" novalidate>
+
+            <!-- Step 1: Personal Info -->
+            <div class="form-step active" data-step="1">
+                <h2>Personal Information</h2>
+                <div class="form-group">
+                    <label for="displayName">Display Name <span class="req">*</span></label>
+                    <input type="text" id="displayName" name="display_name" required placeholder="How clients will see you">
+                    <span class="form-error" id="displayNameError"></span>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email">Email <span class="req">*</span></label>
+                        <input type="email" id="email" name="email" required placeholder="you@example.com">
+                        <span class="form-error" id="emailError"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone <span class="req">*</span></label>
+                        <input type="tel" id="phone" name="phone" required placeholder="+1 555-123-4567">
+                        <span class="form-error" id="phoneError"></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bio">Short Bio</label>
+                    <textarea id="bio" name="bio" rows="3" placeholder="Tell clients about your experience with AI systems, automation, or tech setup..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary next-step">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Specialties -->
+            <div class="form-step" data-step="2">
+                <h2>Your Specialties</h2>
+                <p class="form-hint">Select all that apply. Clients filter by these.</p>
+                <div class="checkbox-grid">
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="specialties" value="full_crew">
+                        <span class="checkbox-label">Full Crew Setup</span>
+                        <span class="checkbox-desc">Install and configure complete crew-bus from scratch</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="specialties" value="custom_config">
+                        <span class="checkbox-label">Custom Configs</span>
+                        <span class="checkbox-desc">YAML configuration, hierarchy design, timing rules</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="specialties" value="training">
+                        <span class="checkbox-label">Training</span>
+                        <span class="checkbox-desc">Teach clients how to use dashboard, CLI, and manage their crew</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="specialties" value="security_audit">
+                        <span class="checkbox-label">Security Audit</span>
+                        <span class="checkbox-desc">Guard setup, threat assessment, security hardening</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="specialties" value="channel_integration">
+                        <span class="checkbox-label">Channel Integration</span>
+                        <span class="checkbox-desc">Telegram, Email, Signal, custom delivery backends</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="specialties" value="agent_tuning">
+                        <span class="checkbox-label">Agent Tuning</span>
+                        <span class="checkbox-desc">Trust calibration, burnout thresholds, quiet hours optimization</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline prev-step">Back</button>
+                    <button type="button" class="btn btn-primary next-step">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Service Area -->
+            <div class="form-step" data-step="3">
+                <h2>Service Area</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="country">Country <span class="req">*</span></label>
+                        <select id="country" name="country" required>
+                            <option value="">Select country</option>
+                            <option value="US">United States</option>
+                            <option value="GB">United Kingdom</option>
+                            <option value="DE">Germany</option>
+                            <option value="CA">Canada</option>
+                            <option value="AU">Australia</option>
+                            <option value="FR">France</option>
+                            <option value="NL">Netherlands</option>
+                            <option value="JP">Japan</option>
+                            <option value="IN">India</option>
+                            <option value="BR">Brazil</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="postalCode">Postal / ZIP Code <span class="req">*</span></label>
+                        <input type="text" id="postalCode" name="postal_code" required placeholder="Your primary postal code">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="serviceRadius">Service Radius</label>
+                    <select id="serviceRadius" name="service_radius">
+                        <option value="10">10 km / 6 miles</option>
+                        <option value="25" selected>25 km / 15 miles</option>
+                        <option value="50">50 km / 30 miles</option>
+                        <option value="100">100 km / 60 miles</option>
+                        <option value="remote">Remote only (anywhere)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Service Type</label>
+                    <div class="radio-group">
+                        <label class="radio-label"><input type="radio" name="service_type" value="in_person" checked> In-person</label>
+                        <label class="radio-label"><input type="radio" name="service_type" value="remote"> Remote only</label>
+                        <label class="radio-label"><input type="radio" name="service_type" value="both"> Both</label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline prev-step">Back</button>
+                    <button type="button" class="btn btn-primary next-step">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 4: ID Verification -->
+            <div class="form-step" data-step="4">
+                <h2>ID Verification (KYC)</h2>
+                <div class="kyc-notice">
+                    <strong>Privacy first.</strong> Your ID photo is hashed client-side using SHA-256.
+                    We never store the raw image — only the hash for verification. Your ID never leaves your device.
+                </div>
+                <div class="form-group">
+                    <label for="idType">Document Type <span class="req">*</span></label>
+                    <select id="idType" name="id_type" required>
+                        <option value="">Select document type</option>
+                        <option value="passport">Passport</option>
+                        <option value="drivers_license">Driver's License</option>
+                        <option value="national_id">National ID Card</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="idUpload">Upload ID Photo <span class="req">*</span></label>
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">&#128247;</div>
+                        <p>Click or drag to upload your ID photo</p>
+                        <p class="upload-hint">JPG, PNG, or PDF. Max 10MB. Hashed locally — never uploaded.</p>
+                        <input type="file" id="idUpload" name="id_photo" accept="image/*,.pdf" style="display:none">
+                    </div>
+                    <div id="uploadPreview" class="upload-preview" style="display:none">
+                        <span class="upload-check">&#10003;</span>
+                        <span id="uploadFileName">file.jpg</span>
+                        <span id="uploadHash" class="upload-hash"></span>
+                        <button type="button" class="upload-remove" id="removeUpload">Remove</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-inline">
+                        <input type="checkbox" id="termsAccept" required>
+                        I agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline prev-step">Back</button>
+                    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">Submit Application</button>
+                </div>
+            </div>
+
+        </form>
+
+        <!-- Success State -->
+        <div id="signupSuccess" class="success-card" style="display:none">
+            <div class="success-icon">&#10003;</div>
+            <h2>Application Submitted</h2>
+            <p>Your installer application is under review. KYC verification typically takes less than 24 hours.</p>
+            <p>You'll receive an email at <strong id="successEmail"></strong> once verified.</p>
+            <div class="success-next">
+                <h3>What happens next?</h3>
+                <ol>
+                    <li>We verify your ID (SHA-256 hash only — your photo is never stored)</li>
+                    <li>You get your first free installer permit</li>
+                    <li>Your profile goes live on the marketplace</li>
+                    <li>Clients in your area can find and book you</li>
+                </ol>
+            </div>
+            <a href="/installer" class="btn btn-outline">Browse Marketplace</a>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-col"><h4>crew-bus</h4><p class="footer-desc">Free, open-source AI crew infrastructure.</p></div>
+            <div class="footer-col"><h4>Product</h4><ul><li><a href="/#features">Features</a></li><li><a href="/#pricing">Pricing</a></li><li><a href="/activate">Guard</a></li></ul></div>
+            <div class="footer-col"><h4>Marketplace</h4><ul><li><a href="/installer">Find Installer</a></li><li><a href="/jobs">Job Board</a></li></ul></div>
+            <div class="footer-col"><h4>Legal</h4><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul></div>
+        </div>
+        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+<script src="/js/installer-signup.js"></script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Post a Job — crew-bus</title>
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/marketplace.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#features">Features</a>
+            <a href="/installer">Installers</a>
+            <a href="/jobs" class="active">Job Board</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<header class="page-header">
+    <div class="container container-narrow">
+        <h1>Post a Job</h1>
+        <p class="page-sub">Describe what you need. A verified installer in your area will claim it.</p>
+    </div>
+</header>
+
+<section class="section" style="padding-top: 1rem;">
+    <div class="container container-narrow">
+        <form id="jobForm" class="form-card" novalidate>
+            <div class="form-group">
+                <label for="jobTitle">Job Title <span class="req">*</span></label>
+                <input type="text" id="jobTitle" name="title" required placeholder="e.g. Full crew-bus setup for small business">
+                <span class="form-error" id="jobTitleError"></span>
+            </div>
+
+            <div class="form-group">
+                <label for="jobDesc">Description <span class="req">*</span></label>
+                <textarea id="jobDesc" name="description" rows="5" required placeholder="What do you need set up? Any specific requirements or constraints?"></textarea>
+                <span class="form-error" id="jobDescError"></span>
+            </div>
+
+            <div class="form-group">
+                <label>What do you need? <span class="req">*</span></label>
+                <div class="checkbox-grid compact">
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="needs" value="full_crew">
+                        <span class="checkbox-label">Full Crew Setup</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="needs" value="specific_agents">
+                        <span class="checkbox-label">Specific Agents Only</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="needs" value="custom_config">
+                        <span class="checkbox-label">Custom Configuration</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="needs" value="channel_setup">
+                        <span class="checkbox-label">Channel Integration</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="needs" value="guard_setup">
+                        <span class="checkbox-label">Guard + Security</span>
+                    </label>
+                    <label class="checkbox-card">
+                        <input type="checkbox" name="needs" value="training">
+                        <span class="checkbox-label">Training Session</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="jobPostal">Postal / ZIP Code <span class="req">*</span></label>
+                    <input type="text" id="jobPostal" name="postal_code" required placeholder="Your location">
+                </div>
+                <div class="form-group">
+                    <label for="jobCountry">Country <span class="req">*</span></label>
+                    <select id="jobCountry" name="country" required>
+                        <option value="">Select country</option>
+                        <option value="US">United States</option>
+                        <option value="GB">United Kingdom</option>
+                        <option value="DE">Germany</option>
+                        <option value="CA">Canada</option>
+                        <option value="AU">Australia</option>
+                        <option value="FR">France</option>
+                        <option value="NL">Netherlands</option>
+                        <option value="JP">Japan</option>
+                        <option value="IN">India</option>
+                        <option value="BR">Brazil</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="jobUrgency">Urgency</label>
+                    <select id="jobUrgency" name="urgency">
+                        <option value="standard">Standard</option>
+                        <option value="priority">Priority (faster matching)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="jobBudget">Budget Range</label>
+                    <select id="jobBudget" name="budget">
+                        <option value="negotiable">Negotiable</option>
+                        <option value="50-100">$50 - $100</option>
+                        <option value="100-250">$100 - $250</option>
+                        <option value="250-500">$250 - $500</option>
+                        <option value="500+">$500+</option>
+                    </select>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 2rem;">Contact Info</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="jobName">Your Name <span class="req">*</span></label>
+                    <input type="text" id="jobName" name="contact_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="jobEmail">Email <span class="req">*</span></label>
+                    <input type="email" id="jobEmail" name="contact_email" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-inline">
+                    <input type="checkbox" id="jobTerms" required>
+                    I agree to the <a href="/terms" target="_blank">Terms of Service</a>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg btn-block" id="postJobBtn">Post Job</button>
+        </form>
+
+        <div id="jobSuccess" class="success-card" style="display:none">
+            <div class="success-icon">&#10003;</div>
+            <h2>Job Posted</h2>
+            <p>Your job is now live on the board. Verified installers in your area will see it.</p>
+            <p>You'll get an email when an installer claims your job.</p>
+            <div class="success-actions">
+                <a href="/jobs" class="btn btn-outline">View Job Board</a>
+                <a href="/jobs/post.html" class="btn btn-primary" id="postAnother">Post Another</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+<script src="/js/jobs.js"></script>
+</body>
+</html>

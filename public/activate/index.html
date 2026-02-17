@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Activate Security Guard — crew-bus</title>
+    <meta name="description" content="Activate the Security Guard module for crew-bus. $20 one-time payment for lifetime anomaly detection and threat monitoring.">
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+
+<nav class="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand">
+            <span class="nav-logo">&#9632;</span> crew-bus
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/#features">Features</a>
+            <a href="/#pricing">Pricing</a>
+        </div>
+    </div>
+</nav>
+
+<main class="page-content">
+    <div class="container container-narrow">
+
+        <div class="activate-header">
+            <div class="guard-shield-sm">
+                <span class="shield-icon">&#9681;</span>
+                <div class="shield-pulse"></div>
+            </div>
+            <h1>Activate Security Guard</h1>
+            <p class="activate-sub">One-time payment. Lifetime activation. No subscription.</p>
+        </div>
+
+        <div class="activate-card">
+            <h2>What Guard Unlocks</h2>
+            <div class="activate-features">
+                <div class="activate-feature">
+                    <span class="af-icon">&#10003;</span>
+                    <div>
+                        <strong>Anomaly Detection</strong>
+                        <p>Flags unusual message volume, suspicious timing patterns, and behavioral outliers across your agent crew.</p>
+                    </div>
+                </div>
+                <div class="activate-feature">
+                    <span class="af-icon">&#10003;</span>
+                    <div>
+                        <strong>Threat Monitoring</strong>
+                        <p>Six threat categories: mutiny, digital, financial, reputation, physical, and legal. Continuous scanning.</p>
+                    </div>
+                </div>
+                <div class="activate-feature">
+                    <span class="af-icon">&#10003;</span>
+                    <div>
+                        <strong>Automatic Escalation</strong>
+                        <p>Security events escalate to Crew Boss first, then to you if severity warrants it. No noise.</p>
+                    </div>
+                </div>
+                <div class="activate-feature">
+                    <span class="af-icon">&#10003;</span>
+                    <div>
+                        <strong>Role-Based Thresholds</strong>
+                        <p>Each agent role has message volume limits. Guard enforces them and alerts on violations.</p>
+                    </div>
+                </div>
+                <div class="activate-feature">
+                    <span class="af-icon">&#10003;</span>
+                    <div>
+                        <strong>Security Event Log</strong>
+                        <p>Full audit trail of every security event, detection, and escalation. Searchable from the dashboard.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="activate-price-block">
+                <div class="activate-price">$20</div>
+                <div class="activate-price-detail">
+                    one-time payment &middot; lifetime activation<br>
+                    <span class="text-muted">No recurring fees. No expiration.</span>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-lg btn-block" id="checkoutBtn" onclick="startCheckout()">
+                Pay $20 &mdash; Activate Guard
+            </button>
+
+            <p class="activate-stripe-note">
+                <span class="stripe-icon">&#9889;</span>
+                Secured by <strong>Stripe</strong>. We never see your card details.
+            </p>
+        </div>
+
+        <div class="activate-faq">
+            <h3>Questions</h3>
+            <details>
+                <summary>What happens after I pay?</summary>
+                <p>You'll receive an activation key instantly. Paste it into your crew-bus CLI or dashboard settings to enable Guard.</p>
+            </details>
+            <details>
+                <summary>Does this require a subscription?</summary>
+                <p>No. One payment, lifetime access. Guard runs locally on your machine — no cloud dependency.</p>
+            </details>
+            <details>
+                <summary>Can I try crew-bus without Guard?</summary>
+                <p>Absolutely. The core bus with Crew Boss and all 5 agents is free and always will be. Guard is optional security.</p>
+            </details>
+            <details>
+                <summary>What if I need a refund?</summary>
+                <p>Contact us within 7 days and we'll issue a full refund, no questions asked.</p>
+            </details>
+        </div>
+
+    </div>
+</main>
+
+<footer class="footer">
+    <div class="container container-narrow text-center">
+        <p class="footer-bottom-text">
+            <a href="/privacy">Privacy Policy</a> &middot;
+            <a href="/terms">Terms of Service</a> &middot;
+            <a href="/">crew-bus.dev</a>
+        </p>
+    </div>
+</footer>
+
+<style>
+.page-content { padding: 7rem 0 3rem; }
+
+.activate-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+.activate-header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+.activate-sub { color: var(--text-dim); font-size: 1.05rem; }
+
+.guard-shield-sm {
+    position: relative;
+    width: 80px; height: 80px;
+    margin: 0 auto 1rem;
+    display: flex; align-items: center; justify-content: center;
+}
+.guard-shield-sm .shield-icon { font-size: 3rem; color: var(--success); z-index: 1; }
+.guard-shield-sm .shield-pulse {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid var(--success);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.activate-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+.activate-card h2 { font-size: 1.2rem; margin-bottom: 1.2rem; }
+
+.activate-features { margin-bottom: 2rem; }
+
+.activate-feature {
+    display: flex; gap: 1rem; margin-bottom: 1rem;
+    align-items: flex-start;
+}
+.af-icon {
+    color: var(--success); font-weight: 700; font-size: 1.1rem;
+    flex-shrink: 0; margin-top: 0.15rem;
+}
+.activate-feature strong { display: block; margin-bottom: 0.2rem; font-size: 0.95rem; }
+.activate-feature p { color: var(--text-dim); font-size: 0.85rem; margin: 0; }
+
+.activate-price-block {
+    display: flex; align-items: center; gap: 1.2rem;
+    padding: 1.5rem; margin-bottom: 1.5rem;
+    background: rgba(233, 69, 96, 0.08);
+    border: 1px solid rgba(233, 69, 96, 0.2);
+    border-radius: var(--radius);
+}
+.activate-price { font-size: 2.5rem; font-weight: 800; }
+.activate-price-detail { font-size: 0.9rem; color: var(--text-dim); }
+.text-muted { color: var(--text-muted); }
+
+.activate-stripe-note {
+    text-align: center; margin-top: 1rem;
+    color: var(--text-muted); font-size: 0.8rem;
+}
+
+.activate-faq {
+    margin-top: 2rem;
+}
+.activate-faq h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+.activate-faq details {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 0.5rem;
+    background: var(--bg-card);
+}
+.activate-faq summary {
+    padding: 0.8rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.activate-faq details p {
+    padding: 0 1rem 0.8rem;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+.footer-bottom-text {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+.footer-bottom-text a { color: var(--text-muted); }
+.footer-bottom-text a:hover { color: var(--text); }
+</style>
+
+<script>
+function startCheckout() {
+    var btn = document.getElementById('checkoutBtn');
+    btn.textContent = 'Redirecting to Stripe...';
+    btn.disabled = true;
+
+    // POST to your backend to create a Stripe Checkout session
+    fetch('/api/checkout/guard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            btn.textContent = 'Pay $20 — Activate Guard';
+            btn.disabled = false;
+            alert(data.error || 'Something went wrong. Please try again.');
+        }
+    })
+    .catch(function() {
+        btn.textContent = 'Pay $20 — Activate Guard';
+        btn.disabled = false;
+        alert('Connection error. Please try again.');
+    });
+}
+</script>
+</body>
+</html>

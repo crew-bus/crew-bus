@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Job Board — crew-bus</title>
+    <meta name="description" content="Post a job or find crew-bus installation work. Connect with verified installers by postal code.">
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/marketplace.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#features">Features</a>
+            <a href="/installer">Installers</a>
+            <a href="/jobs" class="active">Job Board</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<header class="page-header">
+    <div class="container">
+        <div class="page-header-row">
+            <div>
+                <h1>Job Board</h1>
+                <p class="page-sub">Post what you need. A verified installer claims it. Simple.</p>
+            </div>
+            <a href="/jobs/post.html" class="btn btn-primary btn-lg">Post a Job</a>
+        </div>
+    </div>
+</header>
+
+<!-- Filters -->
+<section class="section" style="padding-top: 2rem;">
+    <div class="container">
+        <div class="search-bar">
+            <div class="search-row">
+                <div class="search-field search-field-lg">
+                    <label for="jobSearch">Postal / ZIP Code</label>
+                    <input type="text" id="jobSearch" placeholder="Search by location...">
+                </div>
+                <select id="jobUrgency">
+                    <option value="">Any Urgency</option>
+                    <option value="standard">Standard</option>
+                    <option value="priority">Priority</option>
+                </select>
+                <select id="jobStatus">
+                    <option value="open">Open Jobs</option>
+                    <option value="all">All Jobs</option>
+                    <option value="claimed">Claimed</option>
+                    <option value="completed">Completed</option>
+                </select>
+                <button class="btn btn-primary" id="jobSearchBtn">Search</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Job Listings -->
+<section class="section" style="padding-top: 1rem;">
+    <div class="container">
+        <div id="jobsInfo" class="results-info" style="display:none;">
+            <span id="jobsCount">0</span> jobs found
+        </div>
+        <div id="jobGrid" class="job-grid">
+            <!-- Populated by JS -->
+        </div>
+        <div id="noJobs" class="empty-state">
+            <div class="empty-icon">&#9998;</div>
+            <h3>No open jobs yet</h3>
+            <p>Be the first to post a job in your area.</p>
+            <a href="/jobs/post.html" class="btn btn-primary">Post a Job</a>
+        </div>
+        <div id="jobLoading" class="loading-state" style="display:none;">
+            <div class="spinner"></div>
+            <p>Loading jobs...</p>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works -->
+<section class="section section-dark">
+    <div class="container text-center">
+        <h2 class="section-title">How the Job Board Works</h2>
+        <div class="job-flow">
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#9998;</div>
+                <h4>Post</h4>
+                <p>Describe what you need and set your budget.</p>
+            </div>
+            <div class="job-flow-arrow">&rarr;</div>
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#9745;</div>
+                <h4>Match</h4>
+                <p>Verified installers in your area see and claim the job.</p>
+            </div>
+            <div class="job-flow-arrow">&rarr;</div>
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#9873;</div>
+                <h4>Meet</h4>
+                <p>Video meet & greet before committing.</p>
+            </div>
+            <div class="job-flow-arrow">&rarr;</div>
+            <div class="job-flow-step">
+                <div class="job-flow-icon">&#10003;</div>
+                <h4>Done</h4>
+                <p>Rate and review your installer.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-col"><h4>crew-bus</h4><p class="footer-desc">Free, open-source AI crew infrastructure.</p></div>
+            <div class="footer-col"><h4>Product</h4><ul><li><a href="/#features">Features</a></li><li><a href="/#pricing">Pricing</a></li><li><a href="/activate">Guard</a></li></ul></div>
+            <div class="footer-col"><h4>Marketplace</h4><ul><li><a href="/installer">Installers</a></li><li><a href="/jobs">Jobs</a></li></ul></div>
+            <div class="footer-col"><h4>Legal</h4><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul></div>
+        </div>
+        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+<script src="/js/jobs.js"></script>
+</body>
+</html>

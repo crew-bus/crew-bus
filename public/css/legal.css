@@ -1,0 +1,66 @@
+/* Legal pages styling (privacy, terms) */
+
+.page-content { padding: 7rem 0 3rem; }
+
+.legal-doc h1 {
+    font-size: 2rem;
+    margin-bottom: 0.3rem;
+}
+
+.legal-updated {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 2.5rem;
+}
+
+.legal-doc section {
+    margin-bottom: 2rem;
+}
+
+.legal-doc h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.legal-doc h3 {
+    font-size: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-dim);
+}
+
+.legal-doc p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    margin-bottom: 0.8rem;
+}
+
+.legal-doc ul {
+    margin-left: 1.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.legal-doc li {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    margin-bottom: 0.3rem;
+}
+
+.legal-doc a {
+    color: var(--info);
+}
+
+.legal-doc a:hover {
+    color: var(--highlight);
+}
+
+.footer-bottom-text {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+.footer-bottom-text a { color: var(--text-muted); }
+.footer-bottom-text a:hover { color: var(--text); }

@@ -48,9 +48,12 @@ FREE AND OPEN SOURCE — crew-bus is free infrastructure for the world.
 Security Guard module available separately (paid activation key).
 """
 
+import hashlib
 import json
+import os
 import random
 import re
+import secrets
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
@@ -62,6 +65,18 @@ from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
+
+# Stripe integration — optional, only required for public deployment
+try:
+    import stripe
+    STRIPE_AVAILABLE = True
+except ImportError:
+    STRIPE_AVAILABLE = False
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_GUARD_PRICE_ID = os.environ.get("STRIPE_GUARD_PRICE_ID", "")
+SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
@@ -2158,6 +2173,130 @@ def _get_audit_api(db_path, limit=200, agent_name=None):
 
 # ── Request Handler ─────────────────────────────────────────────────
 
+# ── Auth Helpers ────────────────────────────────────────────────────
+
+def _hash_password(password):
+    """Hash a password with a random salt using SHA-256."""
+    salt = secrets.token_hex(16)
+    h = hashlib.sha256((salt + password).encode()).hexdigest()
+    return salt + ":" + h
+
+
+def _verify_password(password, stored):
+    """Verify a password against a stored salt:hash pair."""
+    if ":" not in stored:
+        return False
+    salt, expected = stored.split(":", 1)
+    h = hashlib.sha256((salt + password).encode()).hexdigest()
+    return h == expected
+
+
+def _get_auth_user(handler):
+    """Extract user from Authorization: Bearer token header."""
+    auth = handler.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[7:]
+    return bus.validate_session(token, db_path=handler.db_path)
+
+
+# ── Stripe Checkout Helpers ──────────────────────────────────────────
+
+def _generate_activation_key():
+    """Generate a unique Guard activation key."""
+    raw = secrets.token_hex(16)
+    return f"GUARD-{raw[:8].upper()}-{raw[8:16].upper()}-{raw[16:24].upper()}-{raw[24:].upper()}"
+
+
+def _stripe_create_guard_checkout(handler):
+    """Create a Stripe Checkout session for Guard activation."""
+    if not STRIPE_AVAILABLE:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+    if not STRIPE_SECRET_KEY:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+
+    stripe.api_key = STRIPE_SECRET_KEY
+    try:
+        checkout_params = {
+            "mode": "payment",
+            "success_url": f"{SITE_URL}/activate/success.html?session_id={{CHECKOUT_SESSION_ID}}",
+            "cancel_url": f"{SITE_URL}/activate",
+            "line_items": [],
+        }
+        if STRIPE_GUARD_PRICE_ID:
+            checkout_params["line_items"].append({
+                "price": STRIPE_GUARD_PRICE_ID,
+                "quantity": 1,
+            })
+        else:
+            checkout_params["line_items"].append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": "crew-bus Security Guard",
+                        "description": "Lifetime activation — anomaly detection, threat monitoring, automatic escalation",
+                    },
+                    "unit_amount": 2000,
+                },
+                "quantity": 1,
+            })
+
+        session = stripe.checkout.Session.create(**checkout_params)
+        return _json_response(handler, {"url": session.url})
+    except Exception as e:
+        return _json_response(handler, {"error": str(e)}, 500)
+
+
+def _stripe_verify_session(handler, session_id):
+    """Verify a completed Stripe Checkout session and return activation key."""
+    if not session_id:
+        return _json_response(handler, {"error": "missing session_id"}, 400)
+    if not STRIPE_AVAILABLE or not STRIPE_SECRET_KEY:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+
+    stripe.api_key = STRIPE_SECRET_KEY
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        if session.payment_status == "paid":
+            key = _generate_activation_key()
+            # Activate guard in the database
+            bus.activate_guard(key, db_path=handler.db_path)
+            return _json_response(handler, {"activation_key": key, "status": "paid"})
+        return _json_response(handler, {"error": "payment not completed", "status": session.payment_status}, 402)
+    except Exception as e:
+        return _json_response(handler, {"error": str(e)}, 500)
+
+
+def _stripe_webhook(handler):
+    """Handle Stripe webhook events (payment confirmations, etc.)."""
+    if not STRIPE_AVAILABLE:
+        return _json_response(handler, {"error": "Stripe not configured"}, 503)
+
+    content_length = int(handler.headers.get("Content-Length", 0))
+    payload = handler.rfile.read(content_length)
+    sig_header = handler.headers.get("Stripe-Signature", "")
+
+    if STRIPE_WEBHOOK_SECRET:
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        except (ValueError, stripe.error.SignatureVerificationError):
+            return _json_response(handler, {"error": "invalid signature"}, 400)
+    else:
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            return _json_response(handler, {"error": "invalid JSON"}, 400)
+
+    if event.get("type") == "checkout.session.completed":
+        session = event["data"]["object"]
+        if session.get("payment_status") == "paid":
+            key = _generate_activation_key()
+            bus.activate_guard(key, db_path=handler.db_path)
+            # In production: send activation key via email to session customer_email
+
+    return _json_response(handler, {"received": True})
+
+
 class CrewBusHandler(BaseHTTPRequestHandler):
     db_path = DEFAULT_DB
 
@@ -2168,7 +2307,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
     def do_GET(self):
@@ -2265,6 +2404,68 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             return _json_response(self, {"status": "ok",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "db_path": str(self.db_path)})
+
+        # Stripe checkout session verification — returns activation key
+        if path == "/api/checkout/verify":
+            session_id = qs.get("session_id", [None])[0]
+            return _stripe_verify_session(self, session_id)
+
+        # ── Marketplace API (GET) ──
+
+        if path == "/api/installers":
+            postal = qs.get("postal_code", [""])[0]
+            country = qs.get("country", [""])[0]
+            specialty = qs.get("specialty", [""])[0]
+            min_rating = float(qs.get("min_rating", ["0"])[0])
+            techies = bus.list_techies(db_path=self.db_path)
+            if postal:
+                techies = [t for t in techies if t.get("postal_code", "").startswith(postal)]
+            if country:
+                techies = [t for t in techies if t.get("country", "") == country]
+            if specialty:
+                techies = [t for t in techies if specialty in (t.get("specialties") or "")]
+            if min_rating > 0:
+                techies = [t for t in techies if (t.get("rating_avg") or 0) >= min_rating]
+            return _json_response(self, {"installers": techies})
+
+        m = re.match(r"^/api/installers/([^/]+)$", path)
+        if m and m.group(1) != "signup":
+            profile = bus.get_techie_profile(m.group(1), db_path=self.db_path)
+            return _json_response(self, profile or {"error": "not found"}, 200 if profile else 404)
+
+        if path == "/api/jobs":
+            status_f = qs.get("status", ["open"])[0]
+            postal = qs.get("postal_code", [""])[0]
+            urgency = qs.get("urgency", [""])[0]
+            jobs = bus.list_jobs(status=status_f, postal_code=postal,
+                                urgency=urgency, db_path=self.db_path)
+            return _json_response(self, {"jobs": jobs})
+
+        m = re.match(r"^/api/jobs/(\d+)$", path)
+        if m:
+            job = bus.get_job(int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, job or {"error": "not found"}, 200 if job else 404)
+
+        if path == "/api/meet-requests":
+            user = _get_auth_user(self)
+            if not user:
+                return _json_response(self, {"error": "unauthorized"}, 401)
+            techie_id = qs.get("techie_id", [""])[0]
+            requests = bus.list_meet_requests(
+                techie_id=techie_id,
+                client_user_id=user["user_id"] if not techie_id else None,
+                db_path=self.db_path)
+            return _json_response(self, {"requests": requests})
+
+        if path == "/api/auth/me":
+            user = _get_auth_user(self)
+            if not user:
+                return _json_response(self, {"error": "unauthorized"}, 401)
+            return _json_response(self, {
+                "user_id": user["user_id"], "email": user["email"],
+                "user_type": user["user_type"], "display_name": user["display_name"],
+                "techie_id": user.get("techie_id"),
+            })
 
         _json_response(self, {"error": "not found"}, 404)
 
@@ -2445,6 +2646,167 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"ok": True, "message_id": result["message_id"]}, 201)
             except (PermissionError, ValueError) as e:
                 return _json_response(self, {"error": str(e)}, 400)
+
+        # Stripe checkout — create session for Guard activation ($20)
+        if path == "/api/checkout/guard":
+            return _stripe_create_guard_checkout(self)
+
+        # Stripe webhook — handle payment events
+        if path == "/api/stripe/webhook":
+            return _stripe_webhook(self)
+
+        # ── Auth API (POST) ──
+
+        if path == "/api/auth/signup":
+            email = data.get("email", "").strip()
+            password = data.get("password", "")
+            user_type = data.get("user_type", "client")
+            display_name = data.get("display_name", "")
+            if not email or not password:
+                return _json_response(self, {"error": "email and password required"}, 400)
+            if len(password) < 8:
+                return _json_response(self, {"error": "password must be at least 8 characters"}, 400)
+            if user_type not in ("client", "installer"):
+                return _json_response(self, {"error": "user_type must be client or installer"}, 400)
+            try:
+                user = bus.create_user(email, _hash_password(password),
+                                       user_type=user_type, display_name=display_name,
+                                       db_path=self.db_path)
+                token = bus.create_session(user["id"], db_path=self.db_path)
+                return _json_response(self, {"ok": True, "token": token,
+                    "user_id": user["id"], "email": email, "user_type": user_type}, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 409)
+
+        if path == "/api/auth/login":
+            email = data.get("email", "").strip()
+            password = data.get("password", "")
+            if not email or not password:
+                return _json_response(self, {"error": "email and password required"}, 400)
+            user = bus.get_user_by_email(email, db_path=self.db_path)
+            if not user or not _verify_password(password, user["password_hash"]):
+                return _json_response(self, {"error": "invalid email or password"}, 401)
+            token = bus.create_session(user["id"], db_path=self.db_path)
+            return _json_response(self, {"ok": True, "token": token,
+                "user_id": user["id"], "email": user["email"],
+                "user_type": user["user_type"], "display_name": user["display_name"],
+                "techie_id": user.get("techie_id")})
+
+        if path == "/api/auth/logout":
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Bearer "):
+                bus.delete_session(auth[7:], db_path=self.db_path)
+            return _json_response(self, {"ok": True})
+
+        # ── Installer Signup (POST) ──
+
+        if path == "/api/installers/signup":
+            display_name = data.get("display_name", "").strip()
+            email = data.get("email", "").strip()
+            if not display_name or not email:
+                return _json_response(self, {"error": "display_name and email required"}, 400)
+            import uuid as _uuid
+            techie_id = "INST-" + _uuid.uuid4().hex[:12].upper()
+            try:
+                result = bus.register_techie(techie_id, display_name, email,
+                                             db_path=self.db_path)
+                # Store extra fields
+                conn = bus.get_conn(self.db_path)
+                extras = {k: data.get(k, "") for k in
+                    ("phone", "bio", "specialties", "country", "postal_code",
+                     "service_radius", "service_type", "id_type", "id_hash")}
+                for key, val in extras.items():
+                    try:
+                        conn.execute(
+                            f"ALTER TABLE authorized_techies ADD COLUMN {key} TEXT DEFAULT ''")
+                    except Exception:
+                        pass
+                    conn.execute(
+                        f"UPDATE authorized_techies SET {key}=? WHERE techie_id=?",
+                        (val, techie_id))
+                conn.commit()
+                conn.close()
+                return _json_response(self, {"ok": True, "techie_id": techie_id}, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 409)
+
+        if path == "/api/installers/profile":
+            user = _get_auth_user(self)
+            if not user or not user.get("techie_id"):
+                return _json_response(self, {"error": "unauthorized"}, 401)
+            conn = bus.get_conn(self.db_path)
+            for key in ("display_name", "bio", "specialties", "postal_code", "service_radius"):
+                if key in data:
+                    conn.execute(
+                        f"UPDATE authorized_techies SET {key}=? WHERE techie_id=?",
+                        (data[key], user["techie_id"]))
+            conn.commit()
+            conn.close()
+            return _json_response(self, {"ok": True})
+
+        # ── Jobs API (POST) ──
+
+        if path == "/api/jobs":
+            title = data.get("title", "").strip()
+            description = data.get("description", "").strip()
+            if not title or not description:
+                return _json_response(self, {"error": "title and description required"}, 400)
+            user = _get_auth_user(self)
+            result = bus.create_job(
+                title=title, description=description,
+                needs=data.get("needs", ""),
+                postal_code=data.get("postal_code", ""),
+                country=data.get("country", ""),
+                urgency=data.get("urgency", "standard"),
+                budget=data.get("budget", "negotiable"),
+                contact_name=data.get("contact_name", ""),
+                contact_email=data.get("contact_email", ""),
+                posted_by=user["user_id"] if user else None,
+                db_path=self.db_path)
+            return _json_response(self, result, 201)
+
+        m = re.match(r"^/api/jobs/(\d+)/claim$", path)
+        if m:
+            user = _get_auth_user(self)
+            if not user or not user.get("techie_id"):
+                return _json_response(self, {"error": "must be a verified installer"}, 403)
+            try:
+                result = bus.claim_job(int(m.group(1)), user["techie_id"],
+                                       db_path=self.db_path)
+                return _json_response(self, result)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        m = re.match(r"^/api/jobs/(\d+)/complete$", path)
+        if m:
+            result = bus.complete_job(int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, result)
+
+        # ── Meet & Greet API (POST) ──
+
+        if path == "/api/meet-requests":
+            techie_id = data.get("techie_id", "").strip()
+            if not techie_id:
+                return _json_response(self, {"error": "techie_id required"}, 400)
+            user = _get_auth_user(self)
+            result = bus.create_meet_request(
+                techie_id=techie_id,
+                client_user_id=user["user_id"] if user else None,
+                job_id=data.get("job_id"),
+                proposed_times=json.dumps(data.get("proposed_times", [])),
+                notes=data.get("notes", ""),
+                db_path=self.db_path)
+            return _json_response(self, result, 201)
+
+        m = re.match(r"^/api/meet-requests/(\d+)/respond$", path)
+        if m:
+            accept = data.get("accept", False)
+            result = bus.respond_meet_request(
+                int(m.group(1)), accept=accept,
+                accepted_time=data.get("accepted_time", ""),
+                meeting_link=data.get("meeting_link", ""),
+                db_path=self.db_path)
+            return _json_response(self, result)
 
         _json_response(self, {"error": "not found"}, 404)
 
