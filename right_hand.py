@@ -362,6 +362,34 @@ class RightHand:
                 lines.append(f"  * [{d['decision_type']}] {ctx.get('subject', 'N/A')} -> {d['right_hand_action']}")
             lines.append("")
 
+        # Wellness snapshot
+        try:
+            wellness = bus.calculate_wellness_score(self.human_id, db_path=self.db_path)
+            w_score = wellness["overall_score"]
+            dims = wellness["dimensions"]
+
+            lines.append(f"WELLNESS SNAPSHOT (Score: {w_score}/100):")
+            # Show top concerns (lowest-scoring dimensions)
+            sorted_dims = sorted(dims.items(), key=lambda x: x[1]["score"])
+            for dim_name, dim_data in sorted_dims[:3]:
+                bar = "#" * (dim_data["score"] // 10) + "-" * (10 - dim_data["score"] // 10)
+                lines.append(f"  {dim_name.replace('_', ' ').title():18s} [{bar}] {dim_data['score']}%  {dim_data['detail']}")
+            lines.append("")
+        except Exception:
+            pass
+
+        # Wellness nudges
+        try:
+            nudges = bus.get_wellness_nudges(self.human_id, db_path=self.db_path)
+            if nudges:
+                lines.append("WELLNESS NUDGES:")
+                for n in nudges[:3]:
+                    icon = {"high": "!", "critical": "!!", "normal": "*"}.get(n["priority"], "*")
+                    lines.append(f"  {icon} {n['message']}")
+                lines.append("")
+        except Exception:
+            pass
+
         # Footer
         autonomy = self.autonomy
         lines.append(f"Best,")
@@ -665,15 +693,16 @@ class RightHand:
     # ------------------------------------------------------------------
 
     def assess_human_state(self) -> dict:
-        """Compile current human state from all sources.
+        """Compile current human state from all wellness sources.
 
         Used before every delivery decision to determine the recommended
-        cognitive load level.
+        cognitive load level. Now includes holistic wellness dimensions.
 
         Returns:
             {burnout_score, energy, activity, mood, consecutive_work_days,
              social_isolation_days, messages_received_today,
-             decisions_made_today, recommended_load}
+             decisions_made_today, recommended_load, wellness_score,
+             wellness_dimensions, wellness_nudges}
         """
         state = bus.get_human_state(self.human_id, db_path=self.db_path)
 
@@ -706,15 +735,32 @@ class RightHand:
         energy = state.get("energy_level", "medium")
         activity = state.get("current_activity", "working")
 
-        # Determine recommended load
+        # Determine recommended load (now wellness-aware)
+        sleep_quality = state.get("sleep_quality", 0) or 0
+        sleep_hours = state.get("sleep_hours", 0) or 0
+
         if burnout >= 8 or activity in ("driving", "unavailable"):
             load = "emergency_only"
         elif burnout >= 6 or activity in ("resting", "family_time"):
             load = "minimal"
-        elif burnout >= 4 or energy == "low":
+        elif burnout >= 4 or energy == "low" or (sleep_hours > 0 and sleep_hours < 5):
             load = "light"
         else:
             load = "full"
+
+        # Get holistic wellness score and nudges
+        try:
+            wellness = bus.calculate_wellness_score(self.human_id, db_path=self.db_path)
+            wellness_score = wellness["overall_score"]
+            wellness_dims = wellness["dimensions"]
+        except Exception:
+            wellness_score = state.get("overall_wellness_score", 50)
+            wellness_dims = {}
+
+        try:
+            nudges = bus.get_wellness_nudges(self.human_id, db_path=self.db_path)
+        except Exception:
+            nudges = []
 
         return {
             "burnout_score": burnout,
@@ -726,6 +772,14 @@ class RightHand:
             "messages_received_today": msg_today,
             "decisions_made_today": decisions_today,
             "recommended_load": load,
+            "wellness_score": wellness_score,
+            "wellness_dimensions": wellness_dims,
+            "wellness_nudges": nudges,
+            "sleep_quality": sleep_quality,
+            "sleep_hours": sleep_hours,
+            "hydration_glasses": state.get("hydration_glasses", 0) or 0,
+            "exercise_minutes_today": state.get("exercise_minutes_today", 0) or 0,
+            "gratitude_streak": state.get("gratitude_streak", 0) or 0,
         }
 
     # ------------------------------------------------------------------

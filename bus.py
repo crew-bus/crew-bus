@@ -78,6 +78,32 @@ VALID_KNOWLEDGE_CATEGORIES = ("decision", "contact", "lesson", "preference", "re
 # Timing rule types
 VALID_TIMING_RULES = ("quiet_hours", "busy_signal", "burnout_threshold", "focus_mode")
 
+# Wellness checkin types
+VALID_CHECKIN_TYPES = (
+    "sleep", "exercise", "hydration", "nutrition",
+    "mood", "screen_time", "outdoor", "social", "general",
+)
+
+# Wellness goal types
+VALID_GOAL_TYPES = (
+    "sleep", "exercise", "hydration", "nutrition",
+    "screen_time", "outdoor", "social", "mindfulness", "custom",
+)
+
+# Journal entry types
+VALID_JOURNAL_TYPES = (
+    "reflection", "gratitude", "mood_log", "coping", "win", "worry",
+)
+
+# Wellness interaction modes
+VALID_INTERACTION_MODES = ("proactive", "reactive", "both")
+
+# Wellness checkin frequencies
+VALID_CHECKIN_FREQUENCIES = ("hourly", "twice_daily", "daily", "weekly", "off")
+
+# Motivational styles
+VALID_MOTIVATIONAL_STYLES = ("gentle", "balanced", "coach", "drill_sergeant")
+
 
 def _role_for_type(agent_type: str) -> str:
     """Map an agent_type to its routing role."""
@@ -408,6 +434,74 @@ def init_db(db_path: Optional[Path] = None) -> None:
             FOREIGN KEY (techie_id) REFERENCES authorized_techies(techie_id)
         );
 
+        -- ========= Holistic Wellness =========
+
+        CREATE TABLE IF NOT EXISTS wellness_checkins (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            human_id        INTEGER NOT NULL REFERENCES agents(id),
+            checkin_type    TEXT    NOT NULL
+                            CHECK(checkin_type IN (
+                                'sleep','exercise','hydration','nutrition',
+                                'mood','screen_time','outdoor','social','general')),
+            data            TEXT    NOT NULL DEFAULT '{}',
+            notes           TEXT    NOT NULL DEFAULT '',
+            logged_by       TEXT    NOT NULL DEFAULT 'wellness',
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS wellness_goals (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            human_id        INTEGER NOT NULL REFERENCES agents(id),
+            goal_type       TEXT    NOT NULL
+                            CHECK(goal_type IN (
+                                'sleep','exercise','hydration','nutrition',
+                                'screen_time','outdoor','social','mindfulness','custom')),
+            title           TEXT    NOT NULL,
+            target_value    REAL    NOT NULL,
+            target_unit     TEXT    NOT NULL DEFAULT '',
+            frequency       TEXT    NOT NULL DEFAULT 'daily'
+                            CHECK(frequency IN ('daily','weekly','monthly')),
+            current_streak  INTEGER NOT NULL DEFAULT 0,
+            best_streak     INTEGER NOT NULL DEFAULT 0,
+            last_completed  TEXT,
+            active          INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS wellness_journal (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            human_id        INTEGER NOT NULL REFERENCES agents(id),
+            entry_type      TEXT    NOT NULL DEFAULT 'reflection'
+                            CHECK(entry_type IN (
+                                'reflection','gratitude','mood_log','coping',
+                                'win','worry')),
+            content         TEXT    NOT NULL,
+            mood_before     INTEGER CHECK(mood_before BETWEEN 1 AND 10),
+            mood_after      INTEGER CHECK(mood_after BETWEEN 1 AND 10),
+            tags            TEXT    NOT NULL DEFAULT '',
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS wellness_preferences (
+            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+            human_id                INTEGER NOT NULL UNIQUE REFERENCES agents(id),
+            interaction_mode        TEXT    NOT NULL DEFAULT 'both'
+                                    CHECK(interaction_mode IN ('proactive','reactive','both')),
+            checkin_frequency       TEXT    NOT NULL DEFAULT 'daily'
+                                    CHECK(checkin_frequency IN (
+                                        'hourly','twice_daily','daily','weekly','off')),
+            preferred_checkin_time  TEXT    NOT NULL DEFAULT '09:00',
+            evening_checkin_time    TEXT    NOT NULL DEFAULT '20:00',
+            nudge_types             TEXT    NOT NULL DEFAULT '["sleep","exercise","hydration","breaks","social"]',
+            quiet_on_weekends       INTEGER NOT NULL DEFAULT 0,
+            motivational_style      TEXT    NOT NULL DEFAULT 'gentle'
+                                    CHECK(motivational_style IN (
+                                        'gentle','balanced','coach','drill_sergeant')),
+            share_with_crew_boss    INTEGER NOT NULL DEFAULT 1,
+            updated_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
         -- ========= Indexes =========
 
         CREATE INDEX IF NOT EXISTS idx_messages_to      ON messages(to_agent_id, status);
@@ -433,7 +527,29 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_techie_standing    ON authorized_techies(kyc_status, standing);
         CREATE INDEX IF NOT EXISTS idx_techie_keys_techie ON techie_keys(techie_id);
         CREATE INDEX IF NOT EXISTS idx_techie_reviews     ON techie_reviews(techie_id);
+        CREATE INDEX IF NOT EXISTS idx_wellness_checkins  ON wellness_checkins(human_id, checkin_type, created_at);
+        CREATE INDEX IF NOT EXISTS idx_wellness_goals     ON wellness_goals(human_id, goal_type, active);
+        CREATE INDEX IF NOT EXISTS idx_wellness_journal   ON wellness_journal(human_id, entry_type, created_at);
+        CREATE INDEX IF NOT EXISTS idx_wellness_prefs     ON wellness_preferences(human_id);
     """)
+
+    # Extend human_state with holistic wellness columns (safe for existing DBs)
+    _extend_columns = [
+        ("human_state", "sleep_quality", "INTEGER DEFAULT 0"),
+        ("human_state", "sleep_hours", "REAL DEFAULT 0.0"),
+        ("human_state", "hydration_glasses", "INTEGER DEFAULT 0"),
+        ("human_state", "exercise_minutes_today", "INTEGER DEFAULT 0"),
+        ("human_state", "last_exercise", "TEXT"),
+        ("human_state", "screen_time_minutes", "INTEGER DEFAULT 0"),
+        ("human_state", "last_outdoor_time", "TEXT"),
+        ("human_state", "gratitude_streak", "INTEGER DEFAULT 0"),
+        ("human_state", "overall_wellness_score", "INTEGER DEFAULT 50"),
+    ]
+    for table, col, col_type in _extend_columns:
+        try:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
@@ -1467,6 +1583,16 @@ def update_burnout_score(human_id: int, new_score: int,
         "UPDATE agents SET burnout_score=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
         "WHERE id=?", (new_score, human_id),
     )
+    # Sync to human_state table as well
+    existing = conn.execute(
+        "SELECT id FROM human_state WHERE human_id=?", (human_id,)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE human_state SET burnout_score=?, updated_by='wellness', "
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE human_id=?",
+            (new_score, human_id),
+        )
     _audit(conn, "burnout_score_updated", human_id, {
         "old_score": old_score, "new_score": new_score,
     })
@@ -3506,3 +3632,722 @@ def list_techies(status: str = "verified", standing: str = "good",
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Holistic Wellness Engine
+# ---------------------------------------------------------------------------
+
+def store_wellness_checkin(human_id: int, checkin_type: str, data: dict,
+                           notes: str = "", logged_by: str = "wellness",
+                           db_path: Optional[Path] = None) -> int:
+    """Store a wellness check-in (sleep, exercise, hydration, etc.).
+
+    Args:
+        human_id: The human agent ID.
+        checkin_type: One of VALID_CHECKIN_TYPES.
+        data: Type-specific data dict. Examples:
+            sleep:       {"quality": 7, "hours": 7.5, "bedtime": "23:00", "waketime": "06:30"}
+            exercise:    {"activity": "running", "duration_min": 30, "intensity": "moderate"}
+            hydration:   {"glasses": 6, "target": 8}
+            nutrition:   {"meals": 3, "quality": "good", "skipped_meals": false}
+            mood:        {"score": 7, "triggers": ["meeting went well"], "coping": "walk"}
+            screen_time: {"minutes": 180, "breaks_taken": 3}
+            outdoor:     {"minutes": 45, "activity": "walk"}
+            social:      {"type": "call", "with": "friend", "quality": "good", "duration_min": 30}
+            general:     {"note": "Feeling rested today"}
+        notes: Free-text notes.
+        logged_by: Who logged this (default: wellness agent).
+
+    Returns:
+        The checkin ID.
+    """
+    if checkin_type not in VALID_CHECKIN_TYPES:
+        raise ValueError(f"Invalid checkin_type '{checkin_type}'. Must be one of {VALID_CHECKIN_TYPES}")
+
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "INSERT INTO wellness_checkins (human_id, checkin_type, data, notes, logged_by) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (human_id, checkin_type, json.dumps(data), notes, logged_by),
+    )
+    checkin_id = cur.lastrowid
+
+    # Auto-sync relevant fields to human_state
+    _sync_checkin_to_state(conn, human_id, checkin_type, data, logged_by)
+
+    _audit(conn, "wellness_checkin", human_id, {
+        "checkin_type": checkin_type, "checkin_id": checkin_id,
+    })
+    conn.commit()
+    conn.close()
+    return checkin_id
+
+
+def _sync_checkin_to_state(conn, human_id: int, checkin_type: str,
+                           data: dict, logged_by: str) -> None:
+    """Sync checkin data to human_state for quick access."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    updates = {}
+
+    if checkin_type == "sleep":
+        if "quality" in data:
+            updates["sleep_quality"] = max(1, min(10, int(data["quality"])))
+        if "hours" in data:
+            updates["sleep_hours"] = round(float(data["hours"]), 1)
+    elif checkin_type == "exercise":
+        dur = int(data.get("duration_min", 0))
+        updates["exercise_minutes_today"] = dur
+        updates["last_exercise"] = now
+    elif checkin_type == "hydration":
+        updates["hydration_glasses"] = int(data.get("glasses", 0))
+    elif checkin_type == "screen_time":
+        updates["screen_time_minutes"] = int(data.get("minutes", 0))
+    elif checkin_type == "outdoor":
+        updates["last_outdoor_time"] = now
+    elif checkin_type == "mood":
+        score = data.get("score")
+        if score is not None:
+            mood_map = {
+                (1, 3): "frustrated", (4, 5): "stressed",
+                (6, 6): "neutral", (7, 8): "good", (9, 10): "energized",
+            }
+            for (lo, hi), indicator in mood_map.items():
+                if lo <= int(score) <= hi:
+                    updates["mood_indicator"] = indicator
+                    break
+    elif checkin_type == "social":
+        updates["last_social_activity"] = now
+
+    if updates:
+        sets = [f"{k}=?" for k in updates]
+        sets.append("updated_by=?")
+        sets.append("updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')")
+        vals = list(updates.values()) + [logged_by]
+
+        existing = conn.execute(
+            "SELECT id FROM human_state WHERE human_id=?", (human_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                f"UPDATE human_state SET {', '.join(sets)} WHERE human_id=?",
+                vals + [human_id],
+            )
+        else:
+            conn.execute("INSERT INTO human_state (human_id) VALUES (?)", (human_id,))
+            conn.execute(
+                f"UPDATE human_state SET {', '.join(sets)} WHERE human_id=?",
+                vals + [human_id],
+            )
+
+
+def get_wellness_checkins(human_id: int, checkin_type: Optional[str] = None,
+                          days: int = 7, limit: int = 50,
+                          db_path: Optional[Path] = None) -> list:
+    """Get recent wellness check-ins for a human.
+
+    Args:
+        human_id: The human agent ID.
+        checkin_type: Optional filter by type.
+        days: How many days back to look (default 7).
+        limit: Max records to return.
+
+    Returns:
+        List of checkin dicts with parsed data.
+    """
+    conn = get_conn(db_path)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if checkin_type:
+        rows = conn.execute(
+            "SELECT * FROM wellness_checkins "
+            "WHERE human_id=? AND checkin_type=? AND created_at>=? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (human_id, checkin_type, cutoff, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM wellness_checkins "
+            "WHERE human_id=? AND created_at>=? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (human_id, cutoff, limit),
+        ).fetchall()
+
+    conn.close()
+    results = []
+    for r in rows:
+        d = dict(r)
+        d["data"] = json.loads(d["data"]) if isinstance(d["data"], str) else d["data"]
+        results.append(d)
+    return results
+
+
+def store_wellness_goal(human_id: int, goal_type: str, title: str,
+                        target_value: float, target_unit: str = "",
+                        frequency: str = "daily",
+                        db_path: Optional[Path] = None) -> int:
+    """Create a new wellness goal/habit.
+
+    Args:
+        human_id: The human agent ID.
+        goal_type: One of VALID_GOAL_TYPES.
+        title: Human-readable goal name (e.g., "Drink 8 glasses of water").
+        target_value: Numeric target (e.g., 8).
+        target_unit: Unit label (e.g., "glasses", "minutes", "hours").
+        frequency: daily/weekly/monthly.
+
+    Returns:
+        The goal ID.
+    """
+    if goal_type not in VALID_GOAL_TYPES:
+        raise ValueError(f"Invalid goal_type '{goal_type}'. Must be one of {VALID_GOAL_TYPES}")
+    if frequency not in ("daily", "weekly", "monthly"):
+        raise ValueError(f"Invalid frequency '{frequency}'")
+
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "INSERT INTO wellness_goals "
+        "(human_id, goal_type, title, target_value, target_unit, frequency) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (human_id, goal_type, title, target_value, target_unit, frequency),
+    )
+    goal_id = cur.lastrowid
+    _audit(conn, "wellness_goal_created", human_id, {
+        "goal_id": goal_id, "goal_type": goal_type, "title": title,
+    })
+    conn.commit()
+    conn.close()
+    return goal_id
+
+
+def get_wellness_goals(human_id: int, active_only: bool = True,
+                       db_path: Optional[Path] = None) -> list:
+    """Get wellness goals for a human."""
+    conn = get_conn(db_path)
+    if active_only:
+        rows = conn.execute(
+            "SELECT * FROM wellness_goals WHERE human_id=? AND active=1 "
+            "ORDER BY goal_type, created_at",
+            (human_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM wellness_goals WHERE human_id=? ORDER BY active DESC, goal_type",
+            (human_id,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_goal_streak(goal_id: int, completed: bool,
+                       db_path: Optional[Path] = None) -> dict:
+    """Update a goal's streak based on completion.
+
+    Args:
+        goal_id: The goal ID.
+        completed: True if the goal was met for the current period.
+
+    Returns:
+        Updated goal dict.
+    """
+    conn = get_conn(db_path)
+    goal = conn.execute("SELECT * FROM wellness_goals WHERE id=?", (goal_id,)).fetchone()
+    if not goal:
+        conn.close()
+        raise ValueError(f"Goal id={goal_id} not found")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if completed:
+        new_streak = goal["current_streak"] + 1
+        best = max(goal["best_streak"], new_streak)
+        conn.execute(
+            "UPDATE wellness_goals SET current_streak=?, best_streak=?, last_completed=?, "
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+            (new_streak, best, now, goal_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE wellness_goals SET current_streak=0, "
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+            (goal_id,),
+        )
+
+    _audit(conn, "wellness_goal_streak", goal["human_id"], {
+        "goal_id": goal_id, "completed": completed,
+    })
+    conn.commit()
+
+    updated = conn.execute("SELECT * FROM wellness_goals WHERE id=?", (goal_id,)).fetchone()
+    conn.close()
+    return dict(updated)
+
+
+def store_journal_entry(human_id: int, entry_type: str, content: str,
+                        mood_before: Optional[int] = None,
+                        mood_after: Optional[int] = None,
+                        tags: str = "",
+                        db_path: Optional[Path] = None) -> int:
+    """Store a wellness journal entry.
+
+    Args:
+        human_id: The human agent ID.
+        entry_type: One of VALID_JOURNAL_TYPES.
+        content: The journal content.
+        mood_before: Optional mood score before writing (1-10).
+        mood_after: Optional mood score after writing (1-10).
+        tags: Comma-separated tags.
+
+    Returns:
+        The journal entry ID.
+    """
+    if entry_type not in VALID_JOURNAL_TYPES:
+        raise ValueError(f"Invalid entry_type '{entry_type}'. Must be one of {VALID_JOURNAL_TYPES}")
+    if mood_before is not None and not 1 <= mood_before <= 10:
+        raise ValueError("mood_before must be 1-10")
+    if mood_after is not None and not 1 <= mood_after <= 10:
+        raise ValueError("mood_after must be 1-10")
+
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "INSERT INTO wellness_journal "
+        "(human_id, entry_type, content, mood_before, mood_after, tags) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (human_id, entry_type, content, mood_before, mood_after, tags),
+    )
+    entry_id = cur.lastrowid
+
+    # Update gratitude streak if this is a gratitude entry
+    if entry_type == "gratitude":
+        _update_gratitude_streak(conn, human_id)
+
+    _audit(conn, "wellness_journal_entry", human_id, {
+        "entry_id": entry_id, "entry_type": entry_type,
+    })
+    conn.commit()
+    conn.close()
+    return entry_id
+
+
+def _update_gratitude_streak(conn, human_id: int) -> None:
+    """Update the gratitude streak in human_state."""
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    prev = conn.execute(
+        "SELECT COUNT(*) FROM wellness_journal "
+        "WHERE human_id=? AND entry_type='gratitude' AND created_at>=?",
+        (human_id, yesterday),
+    ).fetchone()[0]
+
+    existing = conn.execute(
+        "SELECT gratitude_streak FROM human_state WHERE human_id=?", (human_id,)
+    ).fetchone()
+
+    if existing:
+        # If there was a gratitude entry yesterday too, increment; otherwise start at 1
+        new_streak = (existing["gratitude_streak"] or 0) + 1 if prev > 1 else 1
+        conn.execute(
+            "UPDATE human_state SET gratitude_streak=?, "
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE human_id=?",
+            (new_streak, human_id),
+        )
+
+
+def get_journal_entries(human_id: int, entry_type: Optional[str] = None,
+                        days: int = 30, limit: int = 50,
+                        db_path: Optional[Path] = None) -> list:
+    """Get journal entries for a human."""
+    conn = get_conn(db_path)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if entry_type:
+        rows = conn.execute(
+            "SELECT * FROM wellness_journal "
+            "WHERE human_id=? AND entry_type=? AND created_at>=? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (human_id, entry_type, cutoff, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM wellness_journal WHERE human_id=? AND created_at>=? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (human_id, cutoff, limit),
+        ).fetchall()
+
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_wellness_preferences(human_id: int,
+                             db_path: Optional[Path] = None) -> dict:
+    """Get wellness preferences for a human. Creates defaults if not exists."""
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM wellness_preferences WHERE human_id=?", (human_id,)
+    ).fetchone()
+
+    if not row:
+        conn.execute(
+            "INSERT INTO wellness_preferences (human_id) VALUES (?)", (human_id,)
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM wellness_preferences WHERE human_id=?", (human_id,)
+        ).fetchone()
+
+    conn.close()
+    d = dict(row)
+    d["nudge_types"] = json.loads(d["nudge_types"]) if isinstance(d["nudge_types"], str) else d["nudge_types"]
+    return d
+
+
+def update_wellness_preferences(human_id: int, prefs: dict,
+                                db_path: Optional[Path] = None) -> dict:
+    """Update wellness preferences for a human.
+
+    prefs dict keys (all optional):
+        interaction_mode, checkin_frequency, preferred_checkin_time,
+        evening_checkin_time, nudge_types (list), quiet_on_weekends (bool),
+        motivational_style, share_with_crew_boss (bool)
+    """
+    # Ensure row exists
+    get_wellness_preferences(human_id, db_path)
+
+    conn = get_conn(db_path)
+    sets = []
+    vals = []
+    valid_keys = (
+        "interaction_mode", "checkin_frequency", "preferred_checkin_time",
+        "evening_checkin_time", "nudge_types", "quiet_on_weekends",
+        "motivational_style", "share_with_crew_boss",
+    )
+    for key in valid_keys:
+        if key in prefs:
+            val = prefs[key]
+            if key == "nudge_types" and isinstance(val, list):
+                val = json.dumps(val)
+            if key in ("quiet_on_weekends", "share_with_crew_boss"):
+                val = 1 if val else 0
+            sets.append(f"{key}=?")
+            vals.append(val)
+
+    if sets:
+        sets.append("updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')")
+        conn.execute(
+            f"UPDATE wellness_preferences SET {', '.join(sets)} WHERE human_id=?",
+            vals + [human_id],
+        )
+        _audit(conn, "wellness_preferences_updated", human_id, {
+            "fields": list(prefs.keys()),
+        })
+        conn.commit()
+
+    conn.close()
+    return get_wellness_preferences(human_id, db_path)
+
+
+def calculate_wellness_score(human_id: int,
+                             db_path: Optional[Path] = None) -> dict:
+    """Calculate a holistic wellness score (0-100) from all wellness dimensions.
+
+    Dimensions (weighted):
+        - Burnout/Stress (20%): Inverse of burnout score
+        - Sleep (20%): Quality and hours
+        - Physical Activity (15%): Exercise frequency and duration
+        - Hydration (10%): Glasses vs target
+        - Social Connection (10%): Recency and frequency
+        - Mood (10%): Recent mood trend
+        - Outdoor/Nature (5%): Time outdoors
+        - Screen Balance (5%): Screen time vs breaks
+        - Mindfulness (5%): Journaling and gratitude streaks
+
+    Returns:
+        {overall_score, dimensions: {name: {score, weight, detail}}, trend}
+    """
+    state = get_human_state(human_id, db_path)
+    now = datetime.now(timezone.utc)
+    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    conn = get_conn(db_path)
+
+    # Get recent check-ins by type
+    def _recent_checkins(ctype):
+        rows = conn.execute(
+            "SELECT data, created_at FROM wellness_checkins "
+            "WHERE human_id=? AND checkin_type=? AND created_at>=? "
+            "ORDER BY created_at DESC",
+            (human_id, ctype, week_ago),
+        ).fetchall()
+        return [{"data": json.loads(r["data"]), "created_at": r["created_at"]} for r in rows]
+
+    sleep_data = _recent_checkins("sleep")
+    exercise_data = _recent_checkins("exercise")
+    hydration_data = _recent_checkins("hydration")
+    social_data = _recent_checkins("social")
+    mood_data = _recent_checkins("mood")
+    screen_data = _recent_checkins("screen_time")
+    outdoor_data = _recent_checkins("outdoor")
+
+    # Journal/gratitude count this week
+    journal_count = conn.execute(
+        "SELECT COUNT(*) FROM wellness_journal WHERE human_id=? AND created_at>=?",
+        (human_id, week_ago),
+    ).fetchone()[0]
+
+    gratitude_count = conn.execute(
+        "SELECT COUNT(*) FROM wellness_journal "
+        "WHERE human_id=? AND entry_type='gratitude' AND created_at>=?",
+        (human_id, week_ago),
+    ).fetchone()[0]
+
+    conn.close()
+
+    dimensions = {}
+
+    # 1. Burnout/Stress (20%) - inverse of burnout
+    burnout = state.get("burnout_score", 5)
+    stress_score = max(0, min(100, (10 - burnout) * 11.1))
+    dimensions["stress"] = {"score": round(stress_score), "weight": 20,
+                            "detail": f"Burnout {burnout}/10"}
+
+    # 2. Sleep (20%)
+    if sleep_data:
+        avg_quality = sum(d["data"].get("quality", 5) for d in sleep_data) / len(sleep_data)
+        avg_hours = sum(d["data"].get("hours", 7) for d in sleep_data) / len(sleep_data)
+        hours_score = max(0, min(100, (avg_hours / 8.0) * 100))
+        quality_score = avg_quality * 10
+        sleep_score = (hours_score + quality_score) / 2
+        dimensions["sleep"] = {"score": round(sleep_score), "weight": 20,
+                               "detail": f"Avg {avg_hours:.1f}h, quality {avg_quality:.1f}/10"}
+    else:
+        dimensions["sleep"] = {"score": 50, "weight": 20, "detail": "No data this week"}
+
+    # 3. Physical Activity (15%)
+    if exercise_data:
+        total_min = sum(d["data"].get("duration_min", 0) for d in exercise_data)
+        # WHO recommends 150 min/week moderate exercise
+        exercise_score = max(0, min(100, (total_min / 150) * 100))
+        dimensions["exercise"] = {"score": round(exercise_score), "weight": 15,
+                                  "detail": f"{total_min} min this week ({len(exercise_data)} sessions)"}
+    else:
+        dimensions["exercise"] = {"score": 0, "weight": 15, "detail": "No exercise logged"}
+
+    # 4. Hydration (10%)
+    if hydration_data:
+        avg_glasses = sum(d["data"].get("glasses", 0) for d in hydration_data) / len(hydration_data)
+        target = hydration_data[0]["data"].get("target", 8)
+        hydration_score = max(0, min(100, (avg_glasses / target) * 100))
+        dimensions["hydration"] = {"score": round(hydration_score), "weight": 10,
+                                   "detail": f"Avg {avg_glasses:.1f}/{target} glasses"}
+    else:
+        dimensions["hydration"] = {"score": 50, "weight": 10, "detail": "No data"}
+
+    # 5. Social Connection (10%)
+    if social_data:
+        social_score = min(100, len(social_data) * 25)  # 4+ interactions/week = 100
+        dimensions["social"] = {"score": round(social_score), "weight": 10,
+                                "detail": f"{len(social_data)} social interactions"}
+    else:
+        social_days = 0
+        if state.get("last_social_activity"):
+            try:
+                ls = datetime.fromisoformat(
+                    state["last_social_activity"].replace("Z", "+00:00")
+                )
+                social_days = (now - ls).days
+            except (ValueError, TypeError):
+                pass
+        social_score = max(0, 100 - social_days * 15)
+        dimensions["social"] = {"score": round(social_score), "weight": 10,
+                                "detail": f"{social_days} days since last social activity"}
+
+    # 6. Mood (10%)
+    if mood_data:
+        avg_mood = sum(d["data"].get("score", 5) for d in mood_data) / len(mood_data)
+        mood_score = avg_mood * 10
+        dimensions["mood"] = {"score": round(mood_score), "weight": 10,
+                              "detail": f"Avg mood {avg_mood:.1f}/10"}
+    else:
+        mood_map = {"energized": 90, "good": 75, "neutral": 50, "stressed": 30, "frustrated": 15}
+        mood_score = mood_map.get(state.get("mood_indicator", "neutral"), 50)
+        dimensions["mood"] = {"score": mood_score, "weight": 10,
+                              "detail": f"Current mood: {state.get('mood_indicator', 'neutral')}"}
+
+    # 7. Outdoor/Nature (5%)
+    if outdoor_data:
+        total_outdoor = sum(d["data"].get("minutes", 0) for d in outdoor_data)
+        outdoor_score = min(100, (total_outdoor / 120) * 100)  # 2 hours/week target
+        dimensions["outdoor"] = {"score": round(outdoor_score), "weight": 5,
+                                 "detail": f"{total_outdoor} min outdoors this week"}
+    else:
+        dimensions["outdoor"] = {"score": 25, "weight": 5, "detail": "No outdoor time logged"}
+
+    # 8. Screen Balance (5%)
+    if screen_data:
+        avg_screen = sum(d["data"].get("minutes", 0) for d in screen_data) / len(screen_data)
+        avg_breaks = sum(d["data"].get("breaks_taken", 0) for d in screen_data) / len(screen_data)
+        screen_score = max(0, 100 - max(0, avg_screen - 240) * 0.5)  # 4h baseline
+        if avg_breaks >= 3:
+            screen_score = min(100, screen_score + 15)
+        dimensions["screen_balance"] = {"score": round(screen_score), "weight": 5,
+                                        "detail": f"Avg {avg_screen:.0f} min/day, {avg_breaks:.0f} breaks"}
+    else:
+        dimensions["screen_balance"] = {"score": 50, "weight": 5, "detail": "No data"}
+
+    # 9. Mindfulness (5%)
+    mindfulness_score = min(100, journal_count * 15 + gratitude_count * 20)
+    streak = state.get("gratitude_streak", 0) or 0
+    if streak >= 7:
+        mindfulness_score = min(100, mindfulness_score + 20)
+    dimensions["mindfulness"] = {"score": round(mindfulness_score), "weight": 5,
+                                 "detail": f"{journal_count} journals, {gratitude_count} gratitudes, "
+                                           f"{streak}-day streak"}
+
+    # Calculate weighted overall score
+    overall = sum(d["score"] * d["weight"] for d in dimensions.values()) / 100
+    overall = round(max(0, min(100, overall)))
+
+    # Update human_state with the calculated score
+    conn2 = get_conn(db_path)
+    conn2.execute(
+        "UPDATE human_state SET overall_wellness_score=?, "
+        "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE human_id=?",
+        (overall, human_id),
+    )
+    conn2.commit()
+    conn2.close()
+
+    return {
+        "overall_score": overall,
+        "dimensions": dimensions,
+        "data_completeness": sum(1 for d in dimensions.values() if "No data" not in d["detail"]
+                                 and "No exercise" not in d["detail"]
+                                 and "No outdoor" not in d["detail"]) / len(dimensions) * 100,
+    }
+
+
+def get_wellness_nudges(human_id: int,
+                        db_path: Optional[Path] = None) -> list:
+    """Generate contextual wellness nudges based on current state and history.
+
+    Returns a list of nudge dicts: {type, message, priority, category}.
+    """
+    state = get_human_state(human_id, db_path)
+    prefs = get_wellness_preferences(human_id, db_path)
+    now = datetime.now(timezone.utc)
+    nudges = []
+
+    enabled_types = prefs.get("nudge_types", [])
+    if isinstance(enabled_types, str):
+        enabled_types = json.loads(enabled_types)
+    style = prefs.get("motivational_style", "gentle")
+
+    # Sleep nudges
+    if "sleep" in enabled_types:
+        sleep_quality = state.get("sleep_quality", 0) or 0
+        sleep_hours = state.get("sleep_hours", 0) or 0
+        if sleep_hours > 0 and sleep_hours < 6:
+            msg = {
+                "gentle": "You've been running on less sleep than usual. Maybe an earlier bedtime tonight?",
+                "balanced": "Sleep was short last night. Try to get to bed earlier tonight.",
+                "coach": "Low sleep detected. Prioritize 7+ hours tonight for peak performance.",
+                "drill_sergeant": "Only {h:.1f}h of sleep! Non-negotiable: lights out by 10 PM tonight.",
+            }
+            nudges.append({
+                "type": "nudge", "category": "sleep",
+                "message": msg.get(style, msg["gentle"]).format(h=sleep_hours),
+                "priority": "high",
+            })
+
+    # Exercise nudges
+    if "exercise" in enabled_types:
+        last_ex = state.get("last_exercise")
+        if last_ex:
+            try:
+                last_dt = datetime.fromisoformat(last_ex.replace("Z", "+00:00"))
+                days_since = (now - last_dt).days
+                if days_since >= 2:
+                    msg = {
+                        "gentle": "It's been a couple of days since you moved. Even a short walk helps!",
+                        "balanced": f"No exercise in {days_since} days. Time to get moving!",
+                        "coach": f"{days_since} days without exercise. Schedule a workout today.",
+                        "drill_sergeant": f"{days_since} days inactive! Drop and give me 20. Just kidding — but move!",
+                    }
+                    nudges.append({
+                        "type": "nudge", "category": "exercise",
+                        "message": msg.get(style, msg["gentle"]),
+                        "priority": "normal",
+                    })
+            except (ValueError, TypeError):
+                pass
+
+    # Hydration nudges
+    if "hydration" in enabled_types:
+        glasses = state.get("hydration_glasses", 0) or 0
+        hour = now.hour
+        if hour >= 14 and glasses < 4:
+            msg = {
+                "gentle": "Afternoon check — have you been drinking enough water today?",
+                "balanced": f"Only {glasses} glasses so far today. Time to hydrate!",
+                "coach": f"Hydration check: {glasses} glasses by afternoon. Aim for 8.",
+                "drill_sergeant": f"{glasses} glasses?! Your body needs fuel. Drink up!",
+            }
+            nudges.append({
+                "type": "nudge", "category": "hydration",
+                "message": msg.get(style, msg["gentle"]),
+                "priority": "normal",
+            })
+
+    # Social connection nudges
+    if "social" in enabled_types:
+        last_social = state.get("last_social_activity")
+        if last_social:
+            try:
+                ls_dt = datetime.fromisoformat(last_social.replace("Z", "+00:00"))
+                social_days = (now - ls_dt).days
+                if social_days >= 3:
+                    msg = {
+                        "gentle": "Been a few days since you connected with someone. Reach out when you're ready.",
+                        "balanced": f"{social_days} days since your last social interaction. Call a friend?",
+                        "coach": f"Social isolation alert: {social_days} days. Human connection is essential.",
+                        "drill_sergeant": f"{social_days} days alone! Call someone. Now. Your brain needs it.",
+                    }
+                    nudges.append({
+                        "type": "nudge", "category": "social",
+                        "message": msg.get(style, msg["gentle"]),
+                        "priority": "high" if social_days >= 5 else "normal",
+                    })
+            except (ValueError, TypeError):
+                pass
+
+    # Break nudges
+    if "breaks" in enabled_types:
+        work_days = state.get("consecutive_work_days", 0)
+        if work_days >= 5:
+            msg = {
+                "gentle": f"You've been going strong for {work_days} days. Rest is productive too.",
+                "balanced": f"{work_days} consecutive work days. Plan a break soon.",
+                "coach": f"{work_days} days straight. Recovery is part of the plan. Take a day off.",
+                "drill_sergeant": f"{work_days} DAYS WITHOUT REST! Even machines need downtime!",
+            }
+            nudges.append({
+                "type": "nudge", "category": "breaks",
+                "message": msg.get(style, msg["gentle"]),
+                "priority": "high" if work_days >= 7 else "normal",
+            })
+
+    # Burnout awareness
+    burnout = state.get("burnout_score", 5)
+    if burnout >= 7:
+        msg = {
+            "gentle": "Your burnout level is elevated. Be kind to yourself today.",
+            "balanced": f"Burnout at {burnout}/10. Reduce commitments where possible.",
+            "coach": f"Burnout critical ({burnout}/10). Cancel non-essentials. Recovery mode.",
+            "drill_sergeant": f"BURNOUT {burnout}/10! Stand down. Rest is an order, not a suggestion.",
+        }
+        nudges.append({
+            "type": "alert", "category": "burnout",
+            "message": msg.get(style, msg["gentle"]),
+            "priority": "critical" if burnout >= 9 else "high",
+        })
+
+    return nudges

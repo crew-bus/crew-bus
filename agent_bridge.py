@@ -300,6 +300,498 @@ class CrewBridge:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def log_sleep(self, quality: int, hours: float,
+                  bedtime: str = "", waketime: str = "",
+                  notes: str = "") -> dict:
+        """Log a sleep check-in. Only for wellness-type agents.
+
+        Args:
+            quality: Sleep quality (1-10).
+            hours: Hours slept.
+            bedtime: When you went to bed (e.g., "23:00").
+            waketime: When you woke up (e.g., "06:30").
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log sleep. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"quality": max(1, min(10, quality)), "hours": round(hours, 1)}
+            if bedtime:
+                data["bedtime"] = bedtime
+            if waketime:
+                data["waketime"] = waketime
+
+            cid = bus.store_wellness_checkin(
+                human_id, "sleep", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+
+            if quality <= 3 or hours < 5:
+                self.report(
+                    subject=f"Sleep Alert: {hours}h, quality {quality}/10",
+                    body=f"Poor sleep detected. {notes}".strip(),
+                    priority="high",
+                )
+
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_exercise(self, activity: str, duration_min: int,
+                     intensity: str = "moderate", notes: str = "") -> dict:
+        """Log an exercise check-in. Only for wellness-type agents.
+
+        Args:
+            activity: Type of exercise (e.g., "running", "yoga", "walking").
+            duration_min: Duration in minutes.
+            intensity: low/moderate/high.
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log exercise. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {
+                "activity": activity,
+                "duration_min": max(0, duration_min),
+                "intensity": intensity,
+            }
+            cid = bus.store_wellness_checkin(
+                human_id, "exercise", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_hydration(self, glasses: int, target: int = 8,
+                      notes: str = "") -> dict:
+        """Log a hydration check-in. Only for wellness-type agents.
+
+        Args:
+            glasses: Number of glasses of water consumed.
+            target: Daily target (default 8).
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log hydration. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"glasses": max(0, glasses), "target": target}
+            cid = bus.store_wellness_checkin(
+                human_id, "hydration", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_mood(self, score: int, triggers: Optional[list] = None,
+                 coping: str = "", notes: str = "") -> dict:
+        """Log a mood check-in. Only for wellness-type agents.
+
+        Args:
+            score: Mood score (1-10, where 10 is best).
+            triggers: Optional list of mood triggers.
+            coping: Optional coping mechanism used.
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log mood. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"score": max(1, min(10, score))}
+            if triggers:
+                data["triggers"] = triggers
+            if coping:
+                data["coping"] = coping
+
+            cid = bus.store_wellness_checkin(
+                human_id, "mood", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+
+            if score <= 3:
+                self.report(
+                    subject=f"Low Mood Alert: {score}/10",
+                    body=f"Human reporting low mood. Triggers: {triggers or 'unknown'}. {notes}".strip(),
+                    priority="high",
+                )
+
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_screen_time(self, minutes: int, breaks_taken: int = 0,
+                        notes: str = "") -> dict:
+        """Log screen time for the day. Only for wellness-type agents.
+
+        Args:
+            minutes: Total screen time in minutes.
+            breaks_taken: Number of breaks taken.
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log screen time. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"minutes": max(0, minutes), "breaks_taken": max(0, breaks_taken)}
+            cid = bus.store_wellness_checkin(
+                human_id, "screen_time", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_outdoor_time(self, minutes: int, activity: str = "",
+                         notes: str = "") -> dict:
+        """Log time spent outdoors. Only for wellness-type agents.
+
+        Args:
+            minutes: Minutes spent outdoors.
+            activity: What you did outdoors.
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log outdoor time. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"minutes": max(0, minutes)}
+            if activity:
+                data["activity"] = activity
+            cid = bus.store_wellness_checkin(
+                human_id, "outdoor", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_social(self, interaction_type: str, with_whom: str = "",
+                   quality: str = "good", duration_min: int = 0,
+                   notes: str = "") -> dict:
+        """Log a social interaction. Only for wellness-type agents.
+
+        Args:
+            interaction_type: call/text/in_person/video.
+            with_whom: Who the interaction was with.
+            quality: good/neutral/draining.
+            duration_min: Duration in minutes.
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log social. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"type": interaction_type, "quality": quality}
+            if with_whom:
+                data["with"] = with_whom
+            if duration_min:
+                data["duration_min"] = duration_min
+
+            cid = bus.store_wellness_checkin(
+                human_id, "social", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def log_nutrition(self, meals: int, quality: str = "good",
+                      skipped_meals: bool = False, notes: str = "") -> dict:
+        """Log nutrition for the day. Only for wellness-type agents.
+
+        Args:
+            meals: Number of meals eaten.
+            quality: good/fair/poor.
+            skipped_meals: Whether any meals were skipped.
+            notes: Optional notes.
+
+        Returns:
+            Dict with ok=True and checkin_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can log nutrition. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            data = {"meals": meals, "quality": quality, "skipped_meals": skipped_meals}
+            cid = bus.store_wellness_checkin(
+                human_id, "nutrition", data, notes=notes,
+                logged_by=self.agent_name, db_path=self.db_path,
+            )
+            return {"ok": True, "checkin_id": cid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def journal(self, entry_type: str, content: str,
+                mood_before: Optional[int] = None,
+                mood_after: Optional[int] = None,
+                tags: str = "") -> dict:
+        """Write a wellness journal entry. Only for wellness-type agents.
+
+        Args:
+            entry_type: reflection/gratitude/mood_log/coping/win/worry.
+            content: The journal content.
+            mood_before: Mood score before writing (1-10).
+            mood_after: Mood score after writing (1-10).
+            tags: Comma-separated tags.
+
+        Returns:
+            Dict with ok=True and entry_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can write journal entries. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            eid = bus.store_journal_entry(
+                human_id, entry_type, content,
+                mood_before=mood_before, mood_after=mood_after,
+                tags=tags, db_path=self.db_path,
+            )
+            return {"ok": True, "entry_id": eid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_wellness_goal(self, goal_type: str, title: str,
+                          target_value: float, target_unit: str = "",
+                          frequency: str = "daily") -> dict:
+        """Create a wellness goal. Only for wellness-type agents.
+
+        Args:
+            goal_type: sleep/exercise/hydration/nutrition/screen_time/outdoor/social/mindfulness/custom.
+            title: Goal title (e.g., "Drink 8 glasses of water").
+            target_value: Numeric target.
+            target_unit: Unit (e.g., "glasses", "minutes").
+            frequency: daily/weekly/monthly.
+
+        Returns:
+            Dict with ok=True and goal_id, or error dict.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can set goals. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            gid = bus.store_wellness_goal(
+                human_id, goal_type, title, target_value,
+                target_unit=target_unit, frequency=frequency,
+                db_path=self.db_path,
+            )
+            return {"ok": True, "goal_id": gid}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def update_goal_progress(self, goal_id: int, completed: bool) -> dict:
+        """Update progress on a wellness goal. Only for wellness-type agents.
+
+        Args:
+            goal_id: The goal ID.
+            completed: True if the goal was met today.
+
+        Returns:
+            Updated goal dict or error.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can update goals. You are '{self.agent_type}'."}
+
+        try:
+            result = bus.update_goal_streak(goal_id, completed, db_path=self.db_path)
+            return {"ok": True, "goal": result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_wellness_goals(self) -> List[dict]:
+        """Get all active wellness goals. Only for wellness-type agents."""
+        if self.agent_type != "wellness":
+            return []
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return []
+            return bus.get_wellness_goals(human_id, db_path=self.db_path)
+        except Exception:
+            return []
+
+    def get_wellness_score(self) -> dict:
+        """Calculate and return the holistic wellness score. Only for wellness-type agents.
+
+        Returns:
+            Dict with overall_score (0-100), dimensions breakdown, and data completeness.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can get wellness score. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+            return bus.calculate_wellness_score(human_id, db_path=self.db_path)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_wellness_summary(self, days: int = 7) -> dict:
+        """Get a comprehensive wellness summary. Only for wellness-type agents.
+
+        Returns:
+            Dict with recent checkins by type, goals, journal entries,
+            nudges, and overall score.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can get summary. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+
+            checkins = bus.get_wellness_checkins(human_id, days=days, db_path=self.db_path)
+            goals = bus.get_wellness_goals(human_id, db_path=self.db_path)
+            journal = bus.get_journal_entries(human_id, days=days, db_path=self.db_path)
+            nudges = bus.get_wellness_nudges(human_id, db_path=self.db_path)
+            score = bus.calculate_wellness_score(human_id, db_path=self.db_path)
+            prefs = bus.get_wellness_preferences(human_id, db_path=self.db_path)
+
+            # Group checkins by type
+            by_type = {}
+            for c in checkins:
+                t = c["checkin_type"]
+                by_type.setdefault(t, []).append(c)
+
+            return {
+                "ok": True,
+                "overall_score": score["overall_score"],
+                "dimensions": score["dimensions"],
+                "data_completeness": score["data_completeness"],
+                "checkins_by_type": {t: len(v) for t, v in by_type.items()},
+                "active_goals": len(goals),
+                "goals": goals,
+                "journal_entries": len(journal),
+                "nudges": nudges,
+                "preferences": prefs,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_nudges(self) -> List[dict]:
+        """Get wellness nudges based on current state. Only for wellness-type agents."""
+        if self.agent_type != "wellness":
+            return []
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return []
+            return bus.get_wellness_nudges(human_id, db_path=self.db_path)
+        except Exception:
+            return []
+
+    def update_preferences(self, **kwargs) -> dict:
+        """Update wellness preferences. Only for wellness-type agents.
+
+        Keyword Args:
+            interaction_mode: proactive/reactive/both
+            checkin_frequency: hourly/twice_daily/daily/weekly/off
+            preferred_checkin_time: HH:MM
+            evening_checkin_time: HH:MM
+            nudge_types: list of types (sleep/exercise/hydration/breaks/social)
+            quiet_on_weekends: bool
+            motivational_style: gentle/balanced/coach/drill_sergeant
+            share_with_crew_boss: bool
+
+        Returns:
+            Updated preferences dict or error.
+        """
+        if self.agent_type != "wellness":
+            return {"ok": False, "error": f"Only wellness agents can update preferences. You are '{self.agent_type}'."}
+
+        try:
+            human_id = self._get_human_id()
+            if isinstance(human_id, dict):
+                return human_id
+            result = bus.update_wellness_preferences(human_id, kwargs, db_path=self.db_path)
+            return {"ok": True, "preferences": result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _get_human_id(self) -> Union[int, dict]:
+        """Find the human agent ID."""
+        try:
+            conn = bus.get_conn(self.db_path)
+            try:
+                human = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+            if not human:
+                return {"ok": False, "error": "No human agent found"}
+            return human["id"]
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     # ── Strategy Ideas (strategy-type agents only) ──────────────────
 
     def submit_idea(self, subject: str, body: str, category: Optional[str] = None) -> dict:

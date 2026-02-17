@@ -43,6 +43,18 @@ API — all existing endpoints preserved, plus new ones:
   POST /api/restore/<id>              -> restore agent
   POST /api/decision/<id>/approve     -> approve decision
   POST /api/decision/<id>/override    -> override decision
+  GET  /api/wellness/score            -> holistic wellness score (0-100)
+  GET  /api/wellness/summary          -> full wellness summary with dimensions
+  GET  /api/wellness/checkins         -> recent wellness check-ins
+  GET  /api/wellness/goals            -> active wellness goals
+  GET  /api/wellness/journal          -> journal entries
+  GET  /api/wellness/nudges           -> contextual wellness nudges
+  GET  /api/wellness/preferences      -> wellness preferences
+  POST /api/wellness/checkin          -> log a wellness check-in
+  POST /api/wellness/goal             -> create a wellness goal
+  POST /api/wellness/journal          -> write a journal entry
+  POST /api/wellness/preferences      -> update wellness preferences
+  POST /api/wellness/goal/<id>/progress -> update goal streak
 
 FREE AND OPEN SOURCE — crew-bus is free infrastructure for the world.
 Security Guard module available separately (paid activation key).
@@ -2156,6 +2168,100 @@ def _get_audit_api(db_path, limit=200, agent_name=None):
         conn.close()
 
 
+# ── Wellness API Helpers ────────────────────────────────────────────
+
+def _get_human_id(db_path):
+    """Get the human agent ID."""
+    conn = bus.get_conn(db_path)
+    try:
+        human = conn.execute("SELECT id FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
+        if not human:
+            raise ValueError("No human agent found — load a config first")
+        return human["id"]
+    finally:
+        conn.close()
+
+
+def _wellness_score(db_path):
+    try:
+        human_id = _get_human_id(db_path)
+        return bus.calculate_wellness_score(human_id, db_path=db_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _wellness_summary(db_path, days=7):
+    try:
+        human_id = _get_human_id(db_path)
+        checkins = bus.get_wellness_checkins(human_id, days=days, db_path=db_path)
+        goals = bus.get_wellness_goals(human_id, db_path=db_path)
+        journal = bus.get_journal_entries(human_id, days=days, db_path=db_path)
+        nudges = bus.get_wellness_nudges(human_id, db_path=db_path)
+        score = bus.calculate_wellness_score(human_id, db_path=db_path)
+        prefs = bus.get_wellness_preferences(human_id, db_path=db_path)
+
+        by_type = {}
+        for c in checkins:
+            t = c["checkin_type"]
+            by_type.setdefault(t, []).append(c)
+
+        return {
+            "overall_score": score["overall_score"],
+            "dimensions": score["dimensions"],
+            "data_completeness": score["data_completeness"],
+            "checkins_by_type": {t: len(v) for t, v in by_type.items()},
+            "active_goals": len(goals),
+            "goals": goals,
+            "journal_entries": len(journal),
+            "nudges": nudges,
+            "preferences": prefs,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _wellness_checkins(db_path, checkin_type=None, days=7):
+    try:
+        human_id = _get_human_id(db_path)
+        return bus.get_wellness_checkins(human_id, checkin_type=checkin_type,
+                                         days=days, db_path=db_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _wellness_goals(db_path):
+    try:
+        human_id = _get_human_id(db_path)
+        return bus.get_wellness_goals(human_id, db_path=db_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _wellness_journal(db_path, entry_type=None, days=30):
+    try:
+        human_id = _get_human_id(db_path)
+        return bus.get_journal_entries(human_id, entry_type=entry_type,
+                                       days=days, db_path=db_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _wellness_nudges(db_path):
+    try:
+        human_id = _get_human_id(db_path)
+        return bus.get_wellness_nudges(human_id, db_path=db_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _wellness_preferences(db_path):
+    try:
+        human_id = _get_human_id(db_path)
+        return bus.get_wellness_preferences(human_id, db_path=db_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Request Handler ─────────────────────────────────────────────────
 
 class CrewBusHandler(BaseHTTPRequestHandler):
@@ -2265,6 +2371,33 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             return _json_response(self, {"status": "ok",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "db_path": str(self.db_path)})
+
+        # ── Wellness API (GET) ─────────────────────────────────────
+        if path == "/api/wellness/score":
+            return _json_response(self, _wellness_score(self.db_path))
+
+        if path == "/api/wellness/summary":
+            days = int(qs.get("days", [7])[0])
+            return _json_response(self, _wellness_summary(self.db_path, days))
+
+        if path == "/api/wellness/checkins":
+            checkin_type = qs.get("type", [None])[0]
+            days = int(qs.get("days", [7])[0])
+            return _json_response(self, _wellness_checkins(self.db_path, checkin_type, days))
+
+        if path == "/api/wellness/goals":
+            return _json_response(self, _wellness_goals(self.db_path))
+
+        if path == "/api/wellness/journal":
+            entry_type = qs.get("type", [None])[0]
+            days = int(qs.get("days", [30])[0])
+            return _json_response(self, _wellness_journal(self.db_path, entry_type, days))
+
+        if path == "/api/wellness/nudges":
+            return _json_response(self, _wellness_nudges(self.db_path))
+
+        if path == "/api/wellness/preferences":
+            return _json_response(self, _wellness_preferences(self.db_path))
 
         _json_response(self, {"error": "not found"}, 404)
 
@@ -2444,6 +2577,73 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     priority=data.get("priority", "normal"), db_path=self.db_path)
                 return _json_response(self, {"ok": True, "message_id": result["message_id"]}, 201)
             except (PermissionError, ValueError) as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Wellness API (POST) ────────────────────────────────────
+        if path == "/api/wellness/checkin":
+            checkin_type = data.get("type")
+            checkin_data = data.get("data", {})
+            notes = data.get("notes", "")
+            if not checkin_type:
+                return _json_response(self, {"error": "need type"}, 400)
+            try:
+                human_id = _get_human_id(self.db_path)
+                cid = bus.store_wellness_checkin(
+                    human_id, checkin_type, checkin_data,
+                    notes=notes, logged_by="dashboard", db_path=self.db_path)
+                return _json_response(self, {"ok": True, "checkin_id": cid}, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/wellness/goal":
+            goal_type = data.get("goal_type")
+            title = data.get("title")
+            target = data.get("target_value")
+            if not goal_type or not title or target is None:
+                return _json_response(self, {"error": "need goal_type, title, target_value"}, 400)
+            try:
+                human_id = _get_human_id(self.db_path)
+                gid = bus.store_wellness_goal(
+                    human_id, goal_type, title, float(target),
+                    target_unit=data.get("target_unit", ""),
+                    frequency=data.get("frequency", "daily"),
+                    db_path=self.db_path)
+                return _json_response(self, {"ok": True, "goal_id": gid}, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/wellness/journal":
+            entry_type = data.get("entry_type", "reflection")
+            content = data.get("content")
+            if not content:
+                return _json_response(self, {"error": "need content"}, 400)
+            try:
+                human_id = _get_human_id(self.db_path)
+                eid = bus.store_journal_entry(
+                    human_id, entry_type, content,
+                    mood_before=data.get("mood_before"),
+                    mood_after=data.get("mood_after"),
+                    tags=data.get("tags", ""),
+                    db_path=self.db_path)
+                return _json_response(self, {"ok": True, "entry_id": eid}, 201)
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/wellness/preferences":
+            try:
+                human_id = _get_human_id(self.db_path)
+                result = bus.update_wellness_preferences(human_id, data, db_path=self.db_path)
+                return _json_response(self, {"ok": True, "preferences": result})
+            except ValueError as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        m = re.match(r"^/api/wellness/goal/(\d+)/progress$", path)
+        if m:
+            completed = data.get("completed", False)
+            try:
+                result = bus.update_goal_streak(int(m.group(1)), completed, db_path=self.db_path)
+                return _json_response(self, {"ok": True, "goal": result})
+            except ValueError as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
         _json_response(self, {"error": "not found"}, 404)
