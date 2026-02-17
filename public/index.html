@@ -135,14 +135,84 @@
     </div>
 </header>
 
-<!-- TODO: Ryan can replace iframe with real Loom/GIF later if preferred -->
+<!-- TODO: Ryan can replace with real Loom/GIF later if preferred -->
 <!-- ============================================================
-     HERO DEMO — live animated 15-second dashboard preview
+     HERO DEMO — inline animated 15-second dashboard preview
      ============================================================ -->
 <section class="section" style="padding-top: 2rem; padding-bottom: 3rem;">
     <div class="container text-center">
         <div class="hero-demo">
-            <iframe src="/hero-demo-animation.html" class="demo-iframe" width="720" height="440" frameborder="0" scrolling="no" loading="lazy" title="15-second Crew Bus dashboard demo"></iframe>
+            <div class="hd-scene">
+                <!-- Ambient glow -->
+                <div class="hd-ambient"></div>
+                <!-- Particles -->
+                <div class="hd-particle" style="left:15%;top:60%;animation-delay:2s;animation-duration:8s;"></div>
+                <div class="hd-particle" style="left:25%;top:75%;animation-delay:4s;animation-duration:10s;"></div>
+                <div class="hd-particle" style="left:45%;top:80%;animation-delay:3s;animation-duration:7s;"></div>
+                <div class="hd-particle" style="left:55%;top:65%;animation-delay:5s;animation-duration:9s;"></div>
+                <div class="hd-particle" style="left:35%;top:70%;animation-delay:6s;animation-duration:11s;"></div>
+                <!-- Circle diagram -->
+                <div class="hd-diagram">
+                    <div class="hd-line hd-line-family"></div>
+                    <div class="hd-line hd-line-muse"></div>
+                    <div class="hd-line hd-line-health"></div>
+                    <div class="hd-line hd-line-growth"></div>
+                    <div class="hd-line hd-line-life"></div>
+                    <div class="hd-boss">
+                        <span class="hd-boss-icon">&#10025;</span>
+                        <span class="hd-boss-label">Crew Boss</span>
+                    </div>
+                    <div class="hd-agent hd-family">
+                        <span class="hd-agent-icon">&#127968;</span>
+                        <span class="hd-agent-label">Friend &amp; Family Helper</span>
+                    </div>
+                    <div class="hd-agent hd-muse">
+                        <span class="hd-agent-icon">&#127912;</span>
+                        <span class="hd-agent-label">Muse</span>
+                    </div>
+                    <div class="hd-agent hd-health">
+                        <span class="hd-agent-icon">&#128154;</span>
+                        <span class="hd-agent-label">Health Buddy</span>
+                    </div>
+                    <div class="hd-agent hd-growth">
+                        <span class="hd-agent-icon">&#127793;</span>
+                        <span class="hd-agent-label">Growth Coach</span>
+                    </div>
+                    <div class="hd-agent hd-life">
+                        <span class="hd-agent-icon">&#9889;</span>
+                        <span class="hd-agent-label">Life Assistant</span>
+                    </div>
+                </div>
+                <!-- Chat panel -->
+                <div class="hd-chat">
+                    <div class="hd-chat-header">
+                        <div class="hd-chat-avatar">&#10025;</div>
+                        <div>
+                            <div class="hd-chat-name">Crew Boss</div>
+                            <div class="hd-chat-status"><span class="hd-chat-dot"></span>Online</div>
+                        </div>
+                    </div>
+                    <div class="hd-chat-body">
+                        <div class="hd-typing" id="hdTyping">
+                            <div class="hd-typing-dot"></div>
+                            <div class="hd-typing-dot"></div>
+                            <div class="hd-typing-dot"></div>
+                        </div>
+                        <div class="hd-bubble" id="hdBubble"></div>
+                    </div>
+                    <div class="hd-chat-input">
+                        <div class="hd-input-field" id="hdInput">Type a message...</div>
+                        <div class="hd-send-btn">&#9654;</div>
+                    </div>
+                </div>
+                <!-- Branding -->
+                <div class="hd-brand">
+                    <span class="hd-brand-logo">&#9632; crew-bus</span>
+                    <span class="hd-brand-tag">&middot; your friendly AI crew</span>
+                </div>
+                <!-- Progress bar -->
+                <div class="hd-progress"></div>
+            </div>
             <p class="demo-caption">Watch your friendly crew come to life in 15 seconds</p>
         </div>
     </div>
