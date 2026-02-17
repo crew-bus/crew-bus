@@ -365,19 +365,37 @@ img { max-width: 100%; }
     box-shadow: 0 0 40px rgba(100, 181, 246, 0.5), 0 0 80px rgba(100, 181, 246, 0.2), 0 0 120px rgba(100, 181, 246, 0.08);
 }
 
-/* --- Hero Demo GIF Placeholder --- */
+/* --- Hero Demo GIF / Video Thumbnail --- */
 .hero-demo {
     max-width: 520px;
     margin: 0 auto;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.hero-demo:hover {
+    transform: scale(1.02);
 }
 
 .demo-gif {
     width: 100%;
     height: auto;
     border-radius: var(--radius-lg);
-    border: 1px solid var(--border);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 60px rgba(233, 69, 96, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.5),
+        0 0 80px rgba(233, 69, 96, 0.06),
+        0 0 1px rgba(255, 255, 255, 0.1);
     display: block;
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.hero-demo:hover .demo-gif {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow:
+        0 16px 50px rgba(0, 0, 0, 0.6),
+        0 0 100px rgba(233, 69, 96, 0.1),
+        0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 .demo-caption {
@@ -385,6 +403,11 @@ img { max-width: 100%; }
     font-size: 0.9rem;
     color: var(--text-muted);
     font-style: italic;
+    transition: color 0.3s ease;
+}
+
+.hero-demo:hover .demo-caption {
+    color: var(--text-dim);
 }
 
 /* --- Feature Grid --- */
