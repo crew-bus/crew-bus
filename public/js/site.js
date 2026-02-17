@@ -71,6 +71,33 @@ document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
     });
 })();
 
+// Hero demo typing animation
+(function() {
+    var typing = document.getElementById('hdTyping');
+    var bubble = document.getElementById('hdBubble');
+    var input = document.getElementById('hdInput');
+    if (!typing || !bubble) return;
+    var msg = "Hey! I\u2019m right here with you \uD83D\uDE0A What\u2019s on your mind today?";
+    setTimeout(function() { typing.style.opacity = '1'; typing.style.transition = 'opacity 0.3s'; }, 9000);
+    setTimeout(function() {
+        typing.style.opacity = '0';
+        bubble.style.opacity = '1'; bubble.style.transition = 'opacity 0.3s';
+        var i = 0;
+        var iv = setInterval(function() {
+            if (i < msg.length) { bubble.textContent = msg.substring(0, i + 1); i++; }
+            else clearInterval(iv);
+        }, 55);
+    }, 10500);
+    setTimeout(function() {
+        if (!input) return;
+        input.innerHTML = '<span style="color:var(--text-dim);">|</span>';
+        setInterval(function() {
+            var c = input.querySelector('span');
+            if (c) c.style.opacity = c.style.opacity === '0' ? '1' : '0';
+        }, 530);
+    }, 13500);
+})();
+
 // Toast helper
 window.showToast = function(msg, type) {
     var t = document.createElement('div');
