@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Crew Bus — Your Friendly AI Crew, Built for Real Life</title>
-    <meta name="description" content="Crew Bus is the personal AI crew for everyone — families, artists, teens, hobbyists, small businesses. One Crew Boss, five helpful agents, 100% private on your own computer. Free forever.">
+    <meta name="description" content="Crew Bus is your personal AI crew — a friendly Crew Boss and helpful agents for family, creativity, and health. Free forever, 100% private on your computer.">
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
@@ -16,7 +16,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://crew-bus.dev">
     <meta property="og:title" content="Crew Bus — Your Friendly AI Crew, Built for Real Life">
-    <meta property="og:description" content="Meet your personal AI crew — a Crew Boss and five agents that help with family life, creativity, health, growth, and everyday stuff. Free, private, runs on your computer.">
+    <meta property="og:description" content="Meet your personal AI crew. One friendly Crew Boss, helpful agents, 100% on your computer. Free forever.">
     <meta property="og:image" content="https://crew-bus.dev/img/og-card.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Crew Bus — Your Friendly AI Crew, Built for Real Life">
-    <meta name="twitter:description" content="Meet your personal AI crew — a Crew Boss and five agents that help with family life, creativity, health, growth, and everyday stuff. Free, private, runs on your computer.">
+    <meta name="twitter:description" content="Meet your personal AI crew. One friendly Crew Boss, helpful agents, 100% on your computer. Free forever.">
     <meta name="twitter:image" content="https://crew-bus.dev/img/og-card.png">
 
     <!-- JSON-LD Structured Data -->
@@ -35,21 +35,13 @@
         "name": "Crew Bus",
         "applicationCategory": "LifestyleApplication",
         "operatingSystem": "Linux, macOS, Windows",
-        "offers": [
-            {
-                "@type": "Offer",
-                "price": "0",
-                "priceCurrency": "USD",
-                "description": "Your full AI crew — free and open source forever"
-            },
-            {
-                "@type": "Offer",
-                "price": "20.00",
-                "priceCurrency": "USD",
-                "description": "Security Guard — one-time activation, extra protection on top of your free crew"
-            }
-        ],
-        "description": "The personal AI crew for everyone. One Crew Boss handles 80% of your day. Five friendly agents help with family, creativity, health, growth, and life. 100% private, runs on your computer.",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "description": "Your full AI crew — free and open source forever"
+        },
+        "description": "The personal AI crew for everyone. One friendly Crew Boss, helpful agents for family, creativity, and health. 100% private on your computer.",
         "url": "https://crew-bus.dev",
         "downloadUrl": "https://github.com/crew-bus/crew-bus",
         "softwareVersion": "1.0",
@@ -65,7 +57,7 @@
 <body>
 
 <!-- ============================================================
-     NAVIGATION
+     NAVIGATION (simplified)
      ============================================================ -->
 <nav class="nav" id="nav">
     <div class="nav-inner">
@@ -76,12 +68,10 @@
             <span></span><span></span><span></span>
         </button>
         <div class="nav-links" id="navLinks">
-            <a href="#features">Features</a>
+            <a href="#crew">Your Crew</a>
             <a href="#how-it-works">How It Works</a>
-            <a href="#guard">Guard</a>
-            <a href="/installer">Installers</a>
-            <a href="/jobs">Job Board</a>
-            <a href="#pricing">Pricing</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/installer">More</a>
             <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
             <a href="/auth/login.html" class="btn btn-sm btn-primary">Sign In</a>
         </div>
@@ -89,9 +79,9 @@
 </nav>
 
 <!-- ============================================================
-     HERO
+     HERO — 80vh, warm, personal, big CTA
      ============================================================ -->
-<header class="hero">
+<header class="hero" style="min-height: 80vh; display: flex; align-items: center;">
     <div class="container">
         <div class="hero-content">
             <h1 class="hero-title">Your Friendly AI Crew.<br><span class="highlight">Simple for Real Life.</span></h1>
@@ -101,11 +91,11 @@
                 background. 100% on your own computer. Free forever. No cloud ever.
             </p>
             <div class="hero-actions">
-                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary btn-lg">
+                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary btn-lg" style="font-size: 1.2rem; padding: 1rem 2.5rem;">
                     Get Started Free
                 </a>
                 <a href="#how-it-works" class="btn btn-outline btn-lg">
-                    See How Easy It Is
+                    See How Easy It Is &#9654;
                 </a>
             </div>
             <p class="hero-note">Free forever &middot; MIT License &middot; 100% private on your machine</p>
@@ -127,7 +117,7 @@
                         <span class="node-sublabel">Agent</span>
                     </div>
                     <div class="circle-node node-wellness" style="--angle: 72deg;">
-                        <span class="node-icon">&#9733;</span>
+                        <span class="node-icon">&#9835;</span>
                         <span class="node-label">Muse</span>
                         <span class="node-sublabel">Agent</span>
                     </div>
@@ -153,12 +143,12 @@
 </header>
 
 <!-- ============================================================
-     FEATURE CARDS (8)
+     MEET YOUR CREW — 4 big friendly cards
      ============================================================ -->
-<section class="section" id="features">
+<section class="section" id="crew">
     <div class="container">
         <h2 class="section-title">Meet Your Crew</h2>
-        <p class="section-sub">Six friendly helpers — each one great at something different, all working together for you.</p>
+        <p class="section-sub">Four friendly helpers who work together so you can focus on what matters.</p>
         <div class="feature-grid">
             <div class="feature-card">
                 <div class="feature-icon">&#9733;</div>
@@ -178,372 +168,89 @@
             <div class="feature-card">
                 <div class="feature-icon">&#9829;</div>
                 <h3>Health Buddy</h3>
-                <p>Watches your energy, gentle burnout nudges, quiet hours, Code Red override if needed.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#9650;</div>
-                <h3>Growth Coach</h3>
-                <p>Helps with learning, habits, big ideas, or turning dreams into action — for teens or adults.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#9670;</div>
-                <h3>Life Assistant</h3>
-                <p>Meals, shopping lists, fix-it reminders, daily life stuff that just needs to get done.</p>
+                <p>Watches your energy, gentle burnout nudges, quiet hours, and steps in if you really need a break.</p>
             </div>
         </div>
     </div>
 </section>
 
 <!-- ============================================================
-     HOW IT WORKS — 3 Steps
+     HOW IT WORKS — 3 simple icons
      ============================================================ -->
 <section class="section section-dark" id="how-it-works">
     <div class="container">
         <h2 class="section-title">Up and Running in 5 Minutes</h2>
-        <p class="section-sub">No tech skills needed. Three easy steps and your crew is ready to help.</p>
+        <p class="section-sub">No tech skills needed. Three easy steps.</p>
         <div class="steps">
             <div class="step">
                 <div class="step-number">1</div>
                 <h3>Install</h3>
-                <div class="step-terminal">
-                    <div class="terminal-bar">
-                        <span class="terminal-dot red"></span>
-                        <span class="terminal-dot yellow"></span>
-                        <span class="terminal-dot green"></span>
-                    </div>
-                    <code>pip install crew-bus</code>
-                </div>
-                <p>One quick command on your computer. No sign-ups, no cloud accounts. Everything stays on your machine, private and yours.</p>
+                <p>One quick command. No sign-ups, no cloud accounts. Everything stays on your computer.</p>
             </div>
             <div class="step">
                 <div class="step-number">2</div>
                 <h3>Meet Your Crew</h3>
-                <div class="step-terminal">
-                    <div class="terminal-bar">
-                        <span class="terminal-dot red"></span>
-                        <span class="terminal-dot yellow"></span>
-                        <span class="terminal-dot green"></span>
-                    </div>
-                    <code>crew-bus init</code>
-                </div>
-                <p>A friendly wizard asks a few questions — what you need help with, when your quiet hours are, what to call your Crew Boss. That's it.</p>
+                <p>A friendly wizard asks a few questions — what you need help with, what to call your Crew Boss. Done.</p>
             </div>
             <div class="step">
                 <div class="step-number">3</div>
                 <h3>Say Hi</h3>
-                <div class="step-terminal">
-                    <div class="terminal-bar">
-                        <span class="terminal-dot red"></span>
-                        <span class="terminal-dot yellow"></span>
-                        <span class="terminal-dot green"></span>
-                    </div>
-                    <code>crew-bus dashboard</code>
-                </div>
-                <p>Your dashboard lights up — Crew Boss in the middle, five agents around the circle, and you at the top. Your crew is ready. Just start talking.</p>
+                <p>Your dashboard lights up. Crew Boss is ready. Just start talking.</p>
             </div>
         </div>
     </div>
 </section>
 
 <!-- ============================================================
-     TERMINAL DEMO
-     ============================================================ -->
-<section class="section">
-    <div class="container container-narrow">
-        <h2 class="section-title">Your Dashboard</h2>
-        <p class="section-sub">See everything at a glance. Dark theme, circle layout — your crew is always one look away.</p>
-        <div class="demo-terminal">
-            <div class="terminal-bar">
-                <span class="terminal-dot red"></span>
-                <span class="terminal-dot yellow"></span>
-                <span class="terminal-dot green"></span>
-                <span class="terminal-title">crew-bus dashboard — localhost:8080</span>
-            </div>
-            <div class="demo-screen">
-                <div class="demo-sidebar">
-                    <div class="demo-brand">CREW-BUS</div>
-                    <div class="demo-nav-item active">&#9632; Overview</div>
-                    <div class="demo-nav-item">&#9679; Agents</div>
-                    <div class="demo-nav-item">&#9993; Messages</div>
-                    <div class="demo-nav-item">&#9881; Decisions</div>
-                    <div class="demo-nav-item">&#9788; Briefings</div>
-                </div>
-                <div class="demo-main">
-                    <div class="demo-stats">
-                        <div class="demo-stat"><span class="demo-stat-val">3</span><span class="demo-stat-label">Trust</span></div>
-                        <div class="demo-stat"><span class="demo-stat-val">2</span><span class="demo-stat-label">Burnout</span></div>
-                        <div class="demo-stat"><span class="demo-stat-val">5</span><span class="demo-stat-label">Agents</span></div>
-                        <div class="demo-stat"><span class="demo-stat-val">47</span><span class="demo-stat-label">Messages</span></div>
-                    </div>
-                    <div class="demo-circle">
-                        <div class="demo-agent demo-boss">Crew Boss</div>
-                        <div class="demo-agent demo-g">Family Helper</div>
-                        <div class="demo-agent demo-w">Muse</div>
-                        <div class="demo-agent demo-i">Health Buddy</div>
-                        <div class="demo-agent demo-wa">Growth Coach</div>
-                        <div class="demo-agent demo-l">Life Assistant</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ============================================================
-     GUARD ACTIVATION
-     ============================================================ -->
-<section class="section section-dark" id="guard">
-    <div class="container">
-        <div class="guard-split">
-            <div class="guard-info">
-                <h2 class="section-title text-left">Security Guard</h2>
-                <p class="guard-desc">
-                    Your free crew handles everyday life beautifully. Want extra peace of mind?
-                    The Security Guard watches for anything unusual and lets you know — like a
-                    friendly lookout for your crew.
-                </p>
-                <ul class="guard-features">
-                    <li>Spots unusual patterns — so you don't have to watch 24/7</li>
-                    <li>Keeps an eye on all six risk areas (finances, reputation, digital, and more)</li>
-                    <li>Alerts your Crew Boss and you if something needs attention</li>
-                    <li>Keeps a clear record of everything for your peace of mind</li>
-                    <li>One-time $20 — no subscriptions, no surprises</li>
-                </ul>
-                <div class="guard-price">
-                    <span class="price">$20</span>
-                    <span class="price-note">one-time &middot; lifetime activation</span>
-                </div>
-                <a href="/activate" class="btn btn-primary btn-lg">Activate Guard</a>
-            </div>
-            <div class="guard-visual">
-                <div class="guard-shield">
-                    <span class="shield-icon">&#9681;</span>
-                    <div class="shield-pulse"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ============================================================
-     INSTALLER MARKETPLACE SECTION
-     ============================================================ -->
-<section class="section" id="installers">
-    <div class="container">
-        <h2 class="section-title">Need a Hand Setting Up?</h2>
-        <p class="section-sub">
-            Not tech-savvy? No worries. Our friendly installers are ex-coders who love helping
-            people get started. They'll set up your crew, show you around, and make sure everything works perfectly.
-        </p>
-        <div class="installer-preview">
-            <div class="installer-card-preview">
-                <div class="installer-avatar">&#9673;</div>
-                <div class="installer-info">
-                    <strong>Verified Installer</strong>
-                    <span class="installer-badge">&#10003; Verified</span>
-                    <span class="installer-stars">&#9733;&#9733;&#9733;&#9733;&#9733; 4.9</span>
-                    <span class="installer-spec">Full crew setup &middot; Personalized walkthrough &middot; Friendly coaching</span>
-                </div>
-            </div>
-            <div class="installer-card-preview">
-                <div class="installer-avatar">&#9673;</div>
-                <div class="installer-info">
-                    <strong>Verified Installer</strong>
-                    <span class="installer-badge">&#10003; Verified</span>
-                    <span class="installer-stars">&#9733;&#9733;&#9733;&#9733;&#9734; 4.6</span>
-                    <span class="installer-spec">Family setups &middot; Passion crew builds &middot; Ongoing support</span>
-                </div>
-            </div>
-        </div>
-        <div class="installer-actions">
-            <a href="/installer" class="btn btn-primary">Find an Installer Near You</a>
-            <a href="/installer/signup" class="btn btn-outline">Become an Installer</a>
-        </div>
-    </div>
-</section>
-
-<!-- ============================================================
-     JOB BOARD SECTION
-     ============================================================ -->
-<section class="section section-dark" id="jobs">
-    <div class="container">
-        <h2 class="section-title">Job Board</h2>
-        <p class="section-sub">
-            Tell us what you need, and a friendly installer will take care of it. Simple as that.
-        </p>
-        <div class="job-flow">
-            <div class="job-flow-step">
-                <div class="job-flow-icon">&#9998;</div>
-                <h4>Tell Us</h4>
-                <p>Describe what you need help with. No tech jargon required — just say it in your own words.</p>
-            </div>
-            <div class="job-flow-arrow">&rarr;</div>
-            <div class="job-flow-step">
-                <div class="job-flow-icon">&#9745;</div>
-                <h4>Get Matched</h4>
-                <p>A verified installer nearby sees your request and says "I can help with that!"</p>
-            </div>
-            <div class="job-flow-arrow">&rarr;</div>
-            <div class="job-flow-step">
-                <div class="job-flow-icon">&#9873;</div>
-                <h4>Meet First</h4>
-                <p>Quick video chat so you can meet each other. No commitment until you feel good about it.</p>
-            </div>
-            <div class="job-flow-arrow">&rarr;</div>
-            <div class="job-flow-step">
-                <div class="job-flow-icon">&#10003;</div>
-                <h4>All Set!</h4>
-                <p>Your installer gets everything running. Leave a review to help others find great help too.</p>
-            </div>
-        </div>
-        <div class="job-actions">
-            <a href="/jobs/post" class="btn btn-primary">Post a Job</a>
-            <a href="/jobs" class="btn btn-outline">Browse Jobs</a>
-        </div>
-    </div>
-</section>
-
-<!-- ============================================================
-     GLOBAL POSTAL CODE GRID
-     ============================================================ -->
-<section class="section" id="coverage">
-    <div class="container">
-        <h2 class="section-title">Installers Everywhere</h2>
-        <p class="section-sub">Find a friendly installer near you — wherever you are in the world.</p>
-        <div class="postal-grid">
-            <div class="postal-region">
-                <h4>North America</h4>
-                <div class="postal-codes">
-                    <span class="postal-tag">US ZIP</span>
-                    <span class="postal-tag">CA Postal</span>
-                    <span class="postal-tag">MX CP</span>
-                </div>
-            </div>
-            <div class="postal-region">
-                <h4>Europe</h4>
-                <div class="postal-codes">
-                    <span class="postal-tag">UK Postcode</span>
-                    <span class="postal-tag">DE PLZ</span>
-                    <span class="postal-tag">FR Code Postal</span>
-                    <span class="postal-tag">NL Postcode</span>
-                </div>
-            </div>
-            <div class="postal-region">
-                <h4>Asia-Pacific</h4>
-                <div class="postal-codes">
-                    <span class="postal-tag">JP Postal</span>
-                    <span class="postal-tag">AU Postcode</span>
-                    <span class="postal-tag">IN PIN</span>
-                    <span class="postal-tag">SG Postal</span>
-                </div>
-            </div>
-            <div class="postal-region">
-                <h4>Rest of World</h4>
-                <div class="postal-codes">
-                    <span class="postal-tag">BR CEP</span>
-                    <span class="postal-tag">ZA Postal</span>
-                    <span class="postal-tag">NG Postal</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ============================================================
-     PRICING
-     ============================================================ -->
-<section class="section section-dark" id="pricing">
-    <div class="container">
-        <h2 class="section-title">Simple, Honest Pricing</h2>
-        <p class="section-sub">Your whole crew is free — seriously. Add extra security if you want. That's it.</p>
-        <div class="pricing-grid">
-            <div class="pricing-card">
-                <h3>Core</h3>
-                <div class="pricing-amount">Free</div>
-                <p class="pricing-note">forever &middot; MIT License</p>
-                <ul class="pricing-features">
-                    <li>Your full crew, no limits</li>
-                    <li>Crew Boss + 5 friendly agents:</li>
-                    <li class="pricing-agent">&bull; Family Helper &bull; Muse &bull; Health Buddy</li>
-                    <li class="pricing-agent">&bull; Growth Coach &bull; Life Assistant</li>
-                    <li>Trust slider — you set the pace</li>
-                    <li>Burnout awareness + quiet hours</li>
-                    <li>Beautiful circle dashboard</li>
-                    <li>Family Mode &amp; Passion Mode</li>
-                </ul>
-                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-outline btn-block">Get Started Free</a>
-            </div>
-            <div class="pricing-card pricing-featured">
-                <div class="pricing-badge">Most Popular</div>
-                <h3>Guard</h3>
-                <div class="pricing-amount">$20</div>
-                <p class="pricing-note">one-time &middot; yours forever</p>
-                <ul class="pricing-features">
-                    <li>Everything in Core +</li>
-                    <li>Security Guard agent on top</li>
-                    <li>Spots unusual activity</li>
-                    <li>Watches six risk areas</li>
-                    <li>Alerts you automatically</li>
-                    <li>Clear security log</li>
-                </ul>
-                <a href="/activate" class="btn btn-primary btn-block">Activate Guard</a>
-            </div>
-            <div class="pricing-card">
-                <h3>Installer Permit</h3>
-                <div class="pricing-amount">$25</div>
-                <p class="pricing-note">per permit &middot; first one free</p>
-                <ul class="pricing-features">
-                    <li>Your own marketplace listing</li>
-                    <li>Verified badge</li>
-                    <li>Job board access</li>
-                    <li>Video meet &amp; greet</li>
-                    <li>Community reviews</li>
-                    <li>6 months free messaging</li>
-                </ul>
-                <a href="/installer/signup" class="btn btn-outline btn-block">Become an Installer</a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ============================================================
-     STRIPE BADGE
+     TESTIMONIAL (placeholder)
      ============================================================ -->
 <section class="section">
     <div class="container container-narrow text-center">
-        <p class="stripe-badge">
-            <span class="stripe-icon">&#9889;</span>
-            Payments are handled by <strong>Stripe</strong> — we never see your card details.
-        </p>
+        <blockquote style="font-size: 1.3rem; font-style: italic; color: var(--text); max-width: 600px; margin: 0 auto; line-height: 1.6;">
+            &ldquo;My kids love chatting with their Crew Boss! We renamed him Captain and now he helps with homework and chores. It&rsquo;s like having a friendly helper who never gets tired.&rdquo;
+        </blockquote>
+        <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.95rem;">— Sarah, mom of 3</p>
     </div>
 </section>
 
 <!-- ============================================================
-     FOOTER
+     PRIVACY BADGE
+     ============================================================ -->
+<section class="section section-dark">
+    <div class="container container-narrow text-center">
+        <div style="padding: 2rem 0;">
+            <p style="font-size: 1.4rem; font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">&#128274; Your data stays 100% on your machine.</p>
+            <p style="font-size: 1.1rem; color: var(--text-dim);">Free forever. No cloud. No tracking. No surprises. Just your crew, working for you.</p>
+            <div style="margin-top: 1.5rem;">
+                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary btn-lg" style="font-size: 1.1rem; padding: 0.9rem 2rem;">Get Started Free</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     FOOTER (simplified)
      ============================================================ -->
 <footer class="footer">
     <div class="container">
         <div class="footer-grid">
             <div class="footer-col">
                 <h4>crew-bus</h4>
-                <p class="footer-desc">Your personal AI crew — free, private, and built for real life.<br>One human at the top, always.</p>
+                <p class="footer-desc">Your personal AI crew — free, private, and built for real life.</p>
             </div>
             <div class="footer-col">
                 <h4>Product</h4>
                 <ul>
-                    <li><a href="#features">Features</a></li>
-                    <li><a href="#pricing">Pricing</a></li>
-                    <li><a href="/activate">Guard Activation</a></li>
+                    <li><a href="#crew">Your Crew</a></li>
+                    <li><a href="/pricing">Pricing</a></li>
                     <li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li>
                 </ul>
             </div>
             <div class="footer-col">
-                <h4>Marketplace</h4>
+                <h4>Help</h4>
                 <ul>
                     <li><a href="/installer">Find an Installer</a></li>
-                    <li><a href="/installer/signup">Become an Installer</a></li>
                     <li><a href="/jobs">Job Board</a></li>
-                    <li><a href="/jobs/post">Post a Job</a></li>
                 </ul>
             </div>
             <div class="footer-col">
@@ -555,7 +262,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2025 Crew Bus. MIT License. Built for humans, not corporations.</p>
+            <p>&copy; 2025 Crew Bus. MIT License. One human at the top, always.</p>
         </div>
     </div>
 </footer>
