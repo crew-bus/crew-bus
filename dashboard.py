@@ -2059,7 +2059,8 @@ a:hover{text-decoration:underline}
       <a href="#" class="btn btn-glow" onclick="showView('become')">Get Certified Free — Start Today</a>
       <a href="#" class="btn btn-primary" onclick="showView('find')">Find an Installer Near You</a>
     </div>
-    <p class="hero-fine">No signup fee. No monthly charges. Your first Permit to Work is free ($25 value).</p>
+    <p class="hero-fine">No signup fee. No monthly charges. You get a free Permit to Work ($25 value)
+    + a free 6-month Guardian unlock for your own crew-bus system so you can master the platform.</p>
   </div>
 
   <div class="numbers-row">
@@ -2153,10 +2154,11 @@ a:hover{text-decoration:underline}
         </div>
         <div class="stat-card">
           <div class="stat-value" style="font-size:1.5rem;color:var(--gn)">2</div>
-          <div class="stat-label" style="font-size:1.05rem;color:var(--tx);margin-top:8px;font-weight:600">Get Your Free Permit</div>
+          <div class="stat-label" style="font-size:1.05rem;color:var(--tx);margin-top:8px;font-weight:600">Get Your Free Permit + Guardian</div>
           <p style="color:var(--mu);font-size:.9rem;margin-top:8px;line-height:1.5">
-            Your first Permit to Work is on us ($25 value). That's your license to do your first install.
-            Each additional permit is $25. Most installers charge $75–$200 per job — do the math.
+            Your first Permit to Work is on us ($25 value) — plus a free 6-month Guardian
+            activation key for your own crew-bus system. Master the full platform yourself
+            before you install for a single client. Additional permits are $25 each.
           </p>
         </div>
         <div class="stat-card">
@@ -2246,9 +2248,9 @@ a:hover{text-decoration:underline}
           will be able to find you when they need a crew-bus system set up.
           Your skills, your schedule, your business.</p>
         <div class="income-banner" style="margin:16px auto">
-          <span>Your first permit:</span>
+          <span>You get:</span>
           <span class="amount">FREE</span>
-          <span>($25 value — on us)</span>
+          <span>Permit to Work + 6-month Guardian unlock — on us</span>
         </div>
       </div>
 
@@ -2315,7 +2317,8 @@ a:hover{text-decoration:underline}
           </button>
           <p style="text-align:center;color:var(--mu);font-size:.8rem;margin-top:10px">
             No credit card. No monthly fee. No catch.<br>
-            You pay $25 per permit only when you're ready to do a job. First one's on us.</p>
+            You get a free Permit to Work + a free 6-month Guardian unlock to master the platform.
+            Additional permits $25 each when you're ready to take jobs.</p>
         </form>
       </div>
     </div>
@@ -2551,11 +2554,17 @@ async function handleSignup(e) {
     return false;
   }
 
-  succEl.innerHTML = 'Account created! Your free permit key: <strong>' +
-    data.free_permit_key + '</strong><br>Please sign in to access your dashboard.';
+  succEl.innerHTML = '<strong style="font-size:1.1rem;color:var(--gn)">Welcome aboard!</strong><br><br>' +
+    '<strong>Your Free Permit to Work:</strong><br>' +
+    '<code style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:.85rem">' + data.free_permit_key + '</code><br><br>' +
+    '<strong>Your Free Guardian Activation Key:</strong><br>' +
+    '<code style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:.8rem;word-break:break-all">' + (data.free_guard_key||'') + '</code><br>' +
+    '<span style="color:var(--mu);font-size:.85rem">Paste this into your own crew-bus Guardian to unlock it for 6 months — free. ' +
+    'Master the full platform on your own system first. After 6 months, purchase a standard key like everyone else.</span><br><br>' +
+    '<a href="#" onclick="showView(\'login\')" style="color:var(--ac)">Sign in to your dashboard</a>';
   succEl.style.display = 'block';
   form.reset();
-  toast('Signup successful!');
+  toast('You\'re in! Check your keys below.');
   return false;
 }
 

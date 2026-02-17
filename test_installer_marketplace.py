@@ -28,6 +28,7 @@ Run:
   python test_installer_marketplace.py
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -78,7 +79,7 @@ print("Database initialized.")
 # ---------------------------------------------------------------------------
 # 1. Signup
 # ---------------------------------------------------------------------------
-section("1. installer_signup() creates installer with free permit")
+section("1. installer_signup() creates installer with free permit + guard key")
 
 result = bus.installer_signup(
     full_name="Alice Johnson",
@@ -95,7 +96,24 @@ result = bus.installer_signup(
 check("signup returns installer_id", "installer_id" in result)
 check("signup returns email", result.get("email") == "alice@example.com")
 check("signup returns free_permit_key", "free_permit_key" in result)
+check("signup returns free_guard_key", "free_guard_key" in result)
+check("guard key starts with CREWBUS", result["free_guard_key"].startswith("CREWBUS-"))
 check("signup kyc_status is pending", result.get("kyc_status") == "pending")
+
+# Verify the guard key payload has 6-month expiry
+import base64
+_gk = result["free_guard_key"]
+_rem = _gk[len("CREWBUS-"):]
+_pb64 = _rem[:_rem.rfind("-")]
+_payload = json.loads(base64.b64decode(_pb64))
+check("guard key has expires field", "expires" in _payload)
+check("guard key has installer_grant", _payload.get("installer_grant") is True)
+check("guard key has installer_id", _payload.get("installer_id") == result["installer_id"])
+
+# Verify the guard key is actually valid
+_ok, _msg = bus.activate_guard(result["free_guard_key"], db_path=TEST_DB)
+check("guard key activates successfully", _ok, _msg)
+
 ALICE_ID = result["installer_id"]
 ALICE_FREE_PERMIT = result["free_permit_key"]
 

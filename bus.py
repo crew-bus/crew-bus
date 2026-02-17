@@ -3301,6 +3301,33 @@ def generate_test_activation_key(verify_key: Optional[str] = None) -> str:
     return f"CREWBUS-{payload_b64}-{sig}"
 
 
+def generate_installer_guard_key(installer_id: str,
+                                 verify_key: Optional[str] = None) -> str:
+    """Generate a free Guardian activation key for a certified installer.
+
+    Key includes a 6-month expiry. After that the installer purchases
+    a standard Guard key like everyone else.
+    """
+    key = verify_key or GUARD_ACTIVATION_VERIFY_KEY
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=180)
+    payload_dict = {
+        "type": "guard",
+        "issued": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "expires": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "id": str(uuid.uuid4()),
+        "installer_id": installer_id,
+        "installer_grant": True,
+    }
+    payload_b64 = base64.b64encode(json.dumps(payload_dict).encode("utf-8")).decode("utf-8")
+    sig = hmac.new(
+        key.encode("utf-8"),
+        payload_b64.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"CREWBUS-{payload_b64}-{sig}"
+
+
 # ---------------------------------------------------------------------------
 # Agent Skills (gated by Guard activation)
 # ---------------------------------------------------------------------------
@@ -3607,9 +3634,13 @@ def installer_signup(full_name: str, email: str, password: str,
                      service_lat: float = None, service_lon: float = None,
                      specialties: list = None, kyc_document_hash: str = None,
                      db_path: Optional[Path] = None) -> dict:
-    """Register a new certified installer and issue one free permit.
+    """Register a new certified installer, issue one free permit and a free Guard key.
 
-    Returns dict with installer_id and free_permit_key.
+    Every installer gets a free Permit to Work ($25 value) and a free Guard
+    activation key so they can unlock their own crew-bus system and master
+    the platform before installing for clients.
+
+    Returns dict with installer_id, free_permit_key, and free_guard_key.
     """
     if not full_name or not full_name.strip():
         raise ValueError("full_name is required")
@@ -3652,12 +3683,18 @@ def installer_signup(full_name: str, email: str, password: str,
 
     conn.commit()
     conn.close()
+
+    # Generate a free Guard activation key (6-month trial) so the installer
+    # can unlock their own crew-bus Guardian and master the platform
+    free_guard_key = generate_installer_guard_key(installer_id)
+
     return {
         "installer_id": installer_id,
         "full_name": full_name.strip(),
         "email": email.strip().lower(),
         "kyc_status": "pending",
         "free_permit_key": permit_key,
+        "free_guard_key": free_guard_key,
     }
 
 
