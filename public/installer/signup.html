@@ -213,15 +213,30 @@
         <!-- Success State -->
         <div id="signupSuccess" class="success-card" style="display:none">
             <div class="success-icon">&#10003;</div>
-            <h2>Application Submitted</h2>
-            <p>Your installer application is under review. KYC verification typically takes less than 24 hours.</p>
-            <p>You'll receive an email at <strong id="successEmail"></strong> once verified.</p>
+            <h2>Welcome to the Crew!</h2>
+            <p>Your installer application is submitted. KYC verification typically takes less than 24 hours.</p>
+            <p>We also sent these keys to <strong id="successEmail"></strong>.</p>
+
+            <div class="key-box">
+                <h3>Guard Activation Key <span class="key-badge">6 months free</span></h3>
+                <p class="key-hint">Paste this in your crew-bus dashboard under Guard to unlock skill-adding for your agents.</p>
+                <div class="key-display" id="guardKeyDisplay">Generating...</div>
+                <p class="key-expires">Expires: <span id="guardExpiresDisplay"></span></p>
+            </div>
+
+            <div class="key-box">
+                <h3>Install Permit Key <span class="key-badge">1 free install</span></h3>
+                <p class="key-hint">Use this when setting up crew-bus for your first client.</p>
+                <div class="key-display" id="permitKeyDisplay">Generating...</div>
+            </div>
+
             <div class="success-next">
                 <h3>What happens next?</h3>
                 <ol>
-                    <li>We verify your ID (SHA-256 hash only — your photo is never stored)</li>
-                    <li>You get your first free installer permit</li>
-                    <li>Your profile goes live on the marketplace</li>
+                    <li>Save your keys above (also emailed to you)</li>
+                    <li>Install crew-bus locally and activate Guard with your key</li>
+                    <li>Get familiar with the platform — explore, break things, give feedback</li>
+                    <li>Once KYC-verified, your profile goes live on the marketplace</li>
                     <li>Clients in your area can find and book you</li>
                 </ol>
             </div>

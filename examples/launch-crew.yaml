@@ -1,0 +1,231 @@
+# ============================================================
+# Launch Crew — Crew Bus Self-Promotion
+# ============================================================
+# A friendly crew that helps grow Crew Bus organically.
+# Content Creator writes posts, Outreach Buddy finds communities,
+# Visual Helper makes images, Momentum Tracker reads the room.
+# Crew Boss routes everything and keeps the vibe warm.
+#
+# Load it:
+#   crew-bus load examples/launch-crew.yaml
+#
+# Or copy it and customize:
+#   cp examples/launch-crew.yaml configs/my-crew.yaml
+#
+# 100% local. 100% private. MIT license. No cloud ever.
+# ============================================================
+
+crew:
+  name: "Launch Crew"
+  mode: growth
+  description: "Your personal launch team — write posts, find communities, make visuals, and track what's working. All warm, zero corporate."
+
+# -----------------------------------------------------------
+# Crew Boss — your warm, protective launch captain
+# -----------------------------------------------------------
+crew_boss:
+  name: "Crew Boss"
+  # Rename to whatever feels right — Launcher, Captain, Spark, anything!
+  personality: warm-protector
+  tone: encouraging
+  description: >
+    Your launch right-hand. Routes 80% of tasks so you don't have
+    to micromanage. Keeps the team on message (warm, human, no hype),
+    watches burnout, and makes sure nothing slips through the cracks.
+  trust: 8
+  features:
+    morning_brief: true
+    evening_recap: true
+    smart_routing: true
+    # Daily launch pulse — what happened yesterday, what's next
+    daily_pulse: true
+  routing:
+    # All outgoing content passes through Crew Boss for tone check
+    review_before_post: true
+    tone_guardrails:
+      - "no corporate jargon"
+      - "no hype or exaggeration"
+      - "warm and helpful, like talking to a friend"
+      - "always mention it's free and local-first"
+
+# -----------------------------------------------------------
+# Agents
+# -----------------------------------------------------------
+agents:
+
+  - name: "Content Creator"
+    role: content
+    icon: "\u270D\uFE0F"    # ✍️
+    color: "#64b5f6"
+    trust: 9
+    description: >
+      Writes clear, human, non-corporate posts. Tweets, threads,
+      Reddit posts, Hacker News comments, blog drafts. Sounds like
+      a real person who's genuinely excited — never a marketing bot.
+    features:
+      tweet_drafts: true
+      thread_composer: true
+      reddit_posts: true
+      blog_drafts: true
+      hashtag_suggestions: true
+      tone_checker: true
+    voice:
+      style: conversational
+      avoid:
+        - "synergy"
+        - "disrupt"
+        - "leverage"
+        - "game-changer"
+        - "revolutionary"
+        - "unlock your potential"
+        - "empower"
+      prefer:
+        - "hey, check this out"
+        - "built this for my family"
+        - "runs on your laptop, nothing leaves your machine"
+        - "free forever, MIT license"
+        - "one human in charge, always"
+      max_length:
+        tweet: 240
+        thread_tweet: 280
+        reddit_post: 800
+
+  - name: "Outreach Buddy"
+    role: outreach
+    icon: "\U0001F91D"       # 🤝
+    color: "#4dd0b8"
+    trust: 9
+    description: >
+      Finds relevant communities, subreddits, Discord servers, forums,
+      and X/Twitter spaces where people talk about local AI, privacy,
+      self-hosting, or family tech. Drafts friendly DMs, comments, and
+      introductions. Never spammy — always genuinely helpful first.
+    features:
+      community_finder: true
+      dm_drafts: true
+      comment_drafts: true
+      intro_templates: true
+      follow_up_reminders: true
+    approach:
+      # Be a helpful community member first, promoter second
+      style: "help-first"
+      rules:
+        - "Answer someone's question before mentioning Crew Bus"
+        - "Only share if it's genuinely relevant to the conversation"
+        - "Never cold-DM more than 3 people in a day"
+        - "If someone says no or ignores, move on gracefully"
+      platforms:
+        - reddit
+        - twitter
+        - discord
+        - hacker-news
+        - indie-hackers
+        - mastodon
+      topics:
+        - "local AI"
+        - "self-hosted AI"
+        - "privacy-first tools"
+        - "family tech"
+        - "open source AI"
+        - "freelance tech work"
+        - "AI agents"
+
+  - name: "Visual Helper"
+    role: visual
+    icon: "\U0001F3A8"       # 🎨
+    color: "#b388ff"
+    trust: 6
+    description: >
+      Creates simple images, GIFs, thumbnails, and graphics for posts.
+      Keeps everything on-brand — dark backgrounds, teal/purple accents,
+      clean and warm. Nothing flashy or corporate.
+    features:
+      thumbnail_creator: true
+      gif_maker: true
+      social_cards: true
+      screenshot_annotator: true
+      brand_consistency: true
+    brand:
+      palette:
+        background: "#0e1117"
+        teal: "#4dd0b8"
+        purple: "#b388ff"
+        text: "#e8eaed"
+      style: "clean, minimal, warm glow"
+      fonts: "system defaults, nothing fancy"
+      logo: "crew-bus wordmark (simple, no icon)"
+
+  - name: "Momentum Tracker"
+    role: analytics
+    icon: "\U0001F4CA"       # 📊
+    color: "#ffab57"
+    trust: 6
+    description: >
+      Reads replies, engagement, and community reactions. Summarizes
+      what's working and what's not. Suggests next moves based on
+      real signal — not vanity metrics. Keeps you focused on the
+      stuff that actually matters.
+    features:
+      reply_monitor: true
+      engagement_summary: true
+      sentiment_reading: true
+      suggestion_engine: true
+      weekly_report: true
+    tracking:
+      metrics:
+        - "replies and conversations (not just likes)"
+        - "questions people ask (product feedback gold)"
+        - "communities where we get the warmest reception"
+        - "content formats that spark real discussion"
+      ignore:
+        - "follower count"
+        - "impressions"
+        - "vanity metrics"
+      cadence:
+        daily_summary: true
+        weekly_report: true
+        # Only alert if something genuinely needs attention
+        alert_threshold: "high engagement or negative sentiment"
+
+# -----------------------------------------------------------
+# Quiet Hours — rest is part of the launch
+# -----------------------------------------------------------
+quiet_hours:
+  enabled: true
+  start: "22:00"
+  end: "08:00"
+  exceptions:
+    - "urgent"
+    - "viral moment"
+  message: "Launch crew is resting. Good launches run on good sleep."
+
+# -----------------------------------------------------------
+# Burnout Protection
+# -----------------------------------------------------------
+burnout:
+  enabled: true
+  # If you've been grinding content for 3+ hours, take a break
+  threshold_minutes: 180
+  nudge_style: warm
+  message: "You've been at it for a while — the launch can wait 15 minutes. Go grab some air."
+  # After 5 hours, Crew Boss pauses non-urgent tasks
+  hard_limit_minutes: 300
+  hard_limit_action: "pause non-urgent and suggest break"
+
+# -----------------------------------------------------------
+# Launch Mode settings
+# -----------------------------------------------------------
+settings:
+  launch_mode: true
+  # Warm emojis, human tone
+  emoji_style: warm
+  # Celebrate milestones
+  celebrations: true
+  # All data stays on your machine
+  local_only: true
+  audit_trail: true
+  history_days: 365
+  # Weekly launch retrospective
+  weekly_retro: true
+  # Content approval — Crew Boss reviews before anything goes live
+  content_approval: true

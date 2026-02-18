@@ -166,6 +166,18 @@
             form.style.display = 'none';
             document.querySelector('.step-indicator').style.display = 'none';
             document.getElementById('successEmail').textContent = payload.email;
+
+            // Show the keys the API returned
+            var gkEl = document.getElementById('guardKeyDisplay');
+            var pkEl = document.getElementById('permitKeyDisplay');
+            var geEl = document.getElementById('guardExpiresDisplay');
+            if (gkEl && data.guard_key) gkEl.textContent = data.guard_key;
+            if (pkEl && data.permit_key) pkEl.textContent = data.permit_key;
+            if (geEl && data.guard_expires) {
+                var d = new Date(data.guard_expires);
+                geEl.textContent = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+
             success.style.display = 'block';
         })
         .catch(function() {

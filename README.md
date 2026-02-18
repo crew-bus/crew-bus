@@ -65,6 +65,13 @@ crew-bus load examples/teen-crew.yaml
 ```
 Includes: Crew Boss (chill big-bro energy), Friend & Family Helper, Muse (gaming, music, drawing), Growth Coach (study timer + skill tree). Fun Mode with gamification.
 
+### Launch Crew (for growing Crew Bus)
+For spreading the word about Crew Bus — warm, human, zero-corporate outreach.
+```bash
+crew-bus load examples/launch-crew.yaml
+```
+Includes: Crew Boss (warm launch captain), Content Creator (tweets, threads, Reddit posts), Outreach Buddy (finds communities, drafts friendly intros), Visual Helper (images, GIFs, thumbnails), Momentum Tracker (reads replies, suggests next moves). Launch Mode with burnout protection and content approval.
+
 > Want to customize? Copy any example to `configs/my-crew.yaml` and make it yours. Rename Crew Boss to anything you want.
 
 ## Screenshots
@@ -132,7 +139,8 @@ crew-bus/
 ├── examples/           # Ready-to-use crew configs
 │   ├── family-crew.yaml        # Family crew (chores, meals, health)
 │   ├── artist-passion-crew.yaml # Creative crew (art, music, writing)
-│   └── teen-crew.yaml          # Teen crew (school, gaming, big ideas)
+│   ├── teen-crew.yaml          # Teen crew (school, gaming, big ideas)
+│   └── launch-crew.yaml        # Launch crew (grow Crew Bus organically)
 ├── templates/          # HTML templates
 ├── test_day2.py        # Core bus tests (38)
 ├── test_day3.py        # Advanced feature tests (61)
