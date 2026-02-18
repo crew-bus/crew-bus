@@ -56,6 +56,7 @@ import re
 import secrets
 import sys
 import threading
+import webbrowser
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -856,6 +857,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 }
 .as-title{font-weight:700;font-size:1rem;flex:1;cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s}
 .as-title:hover{border-bottom-color:rgba(255,255,255,0.3)}
+.edit-icon{display:inline-block;font-size:.65rem;color:var(--mu);cursor:pointer;margin-left:4px;opacity:.4;transition:opacity .2s;vertical-align:middle}
+.edit-icon:hover{opacity:1;color:var(--ac)}
 .as-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .as-body{
   flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -1078,6 +1081,30 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .setup-footer{
   margin-top:20px;font-size:.75rem;color:var(--mu);line-height:1.4;
 }
+.setup-pin-section{margin-top:16px;margin-bottom:12px;text-align:left}
+.setup-pin-sub{font-size:.75rem;color:var(--mu);margin-bottom:8px;line-height:1.3}
+
+/* ── Lock screen ── */
+.lock-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  z-index:600;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  transition:opacity .5s;
+}
+.lock-overlay.fade-out{opacity:0;pointer-events:none}
+.lock-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:16px;
+  padding:40px 32px;width:100%;max-width:360px;text-align:center;
+  box-shadow:0 8px 40px rgba(0,0,0,.3);
+}
+.lock-icon{font-size:3rem;margin-bottom:12px}
+.lock-sub{color:var(--mu);font-size:.9rem;margin-bottom:20px}
+.lock-btn{
+  display:inline-block;background:none;border:1px solid var(--bd);
+  color:var(--mu);padding:6px 14px;border-radius:var(--r);font-size:.75rem;
+  cursor:pointer;transition:all .2s;margin-left:auto;
+}
+.lock-btn:hover{border-color:var(--ac);color:var(--ac)}
 
 /* ── Legacy pages (messages, decisions, audit) ── */
 .legacy-container{padding:16px;max-width:900px;margin:0 auto}
@@ -1349,6 +1376,75 @@ function closeConfirm(result){
   document.getElementById('confirm-modal').classList.remove('open');
   if(_confirmResolve){_confirmResolve(result);_confirmResolve=null;}
 }
+
+// ── Password prompt modal ──
+var _pwResolve=null;
+function showPasswordPrompt(msg){
+  document.getElementById('pw-prompt-msg').textContent=msg||'Enter your PIN';
+  document.getElementById('pw-prompt-input').value='';
+  document.getElementById('pw-prompt-error').textContent='';
+  document.getElementById('pw-prompt-modal').classList.add('open');
+  setTimeout(function(){document.getElementById('pw-prompt-input').focus()},100);
+  return new Promise(function(resolve){_pwResolve=resolve;});
+}
+function closePasswordPrompt(submit){
+  var modal=document.getElementById('pw-prompt-modal');
+  if(submit){
+    var val=document.getElementById('pw-prompt-input').value.trim();
+    modal.classList.remove('open');
+    if(_pwResolve){_pwResolve(val);_pwResolve=null;}
+  }else{
+    modal.classList.remove('open');
+    if(_pwResolve){_pwResolve(null);_pwResolve=null;}
+  }
+}
+
+// ── Dashboard lock/unlock ──
+var _dashboardLocked=false;
+var _idleTimer=null;
+var IDLE_TIMEOUT=5*60*1000; // 5 minutes
+
+function lockDashboard(){
+  _dashboardLocked=true;
+  document.getElementById('lock-overlay').style.display='flex';
+  document.querySelectorAll('.topbar,.content,.bottombar,.agent-space').forEach(function(el){el.style.display='none'});
+}
+
+function unlockDashboard(){
+  var pin=document.getElementById('lock-pin').value.trim();
+  var errEl=document.getElementById('lock-error');
+  errEl.textContent='';
+  if(!pin){errEl.textContent='Please enter your PIN.';return;}
+  apiPost('/api/dashboard/verify-password',{password:pin}).then(function(r){
+    if(r&&r.valid){
+      _dashboardLocked=false;
+      var overlay=document.getElementById('lock-overlay');
+      overlay.classList.add('fade-out');
+      document.querySelectorAll('.topbar,.content,.bottombar').forEach(function(el){el.style.display=''});
+      setTimeout(function(){overlay.style.display='none';overlay.classList.remove('fade-out')},600);
+      document.getElementById('lock-pin').value='';
+      resetIdleTimer();
+    }else{
+      errEl.textContent='Wrong PIN. Try again.';
+      document.getElementById('lock-pin').value='';
+      document.getElementById('lock-pin').focus();
+    }
+  }).catch(function(){errEl.textContent='Connection error.';});
+}
+
+function resetIdleTimer(){
+  if(_idleTimer)clearTimeout(_idleTimer);
+  _idleTimer=setTimeout(function(){
+    if(!_dashboardLocked){
+      fetch('/api/dashboard/has-password').then(function(r){return r.json()}).then(function(d){
+        if(d.has_password)lockDashboard();
+      }).catch(function(){});
+    }
+  },IDLE_TIMEOUT);
+}
+['click','keydown','mousemove','touchstart'].forEach(function(evt){
+  document.addEventListener(evt,function(){if(!_dashboardLocked)resetIdleTimer()});
+});
 
 async function api(path){return(await fetch(path)).json()}
 async function apiPost(path,data){
@@ -1877,6 +1973,16 @@ async function deleteTeam(teamId,teamName){
     'Delete Team'
   );
   if(!ok)return;
+  // If PIN is set, require it before deleting
+  try{
+    var hasPass=await api('/api/dashboard/has-password');
+    if(hasPass.has_password){
+      var pin=await showPasswordPrompt('Enter your PIN to delete this team');
+      if(!pin)return;
+      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
+      if(!verify.valid){showToast('Wrong PIN. Deletion cancelled.','error');return;}
+    }
+  }catch(e){}
   try{
     var r=await apiPost('/api/teams/'+teamId+'/delete',{});
     if(r.ok){showToast('Team deleted ('+r.deleted_count+' agents removed)');showView('crew');loadTeams();}
@@ -1944,7 +2050,7 @@ async function openTeamDash(teamId){
 
   var html='<div class="team-dash-header">'+
     '<button class="team-dash-back" onclick="showView(\'crew\')">\u2190</button>'+
-    '<span class="team-dash-title" id="team-dash-name" data-team-id="'+teamId+'" onclick="startRenameTeam()" title="Click to rename">'+esc(team.name)+'</span>'+
+    '<span class="team-dash-title" id="team-dash-name" data-team-id="'+teamId+'" onclick="startRenameTeam()" title="Click to rename">'+esc(team.name)+' <span class="edit-icon">\u270F\uFE0F</span></span>'+
     '<span class="badge badge-active">'+team.agent_count+' agents</span>'+
     '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
@@ -1952,7 +2058,7 @@ async function openTeamDash(teamId){
   if(mgr){
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
       '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
-      '<span class="team-mgr-label" ondblclick="renameTeamAgent('+mgr.id+',this,event)" title="Double-click to rename">'+esc(mgr.name)+'</span>'+
+      '<span class="team-mgr-label">'+esc(mgr.name)+' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span>'+
       '<span class="team-mgr-sub">Manager</span></div></div>';
   }
 
@@ -1973,7 +2079,7 @@ async function openTeamDash(teamId){
   workers.forEach(function(w){
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
       '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
-      '<span class="team-worker-label" ondblclick="renameTeamAgent('+w.id+',this,event)" title="Double-click to rename">'+esc(w.name)+'</span></div>';
+      '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
   html+='</div>';
 
@@ -2395,6 +2501,13 @@ function bootDashboard(){
   apiPost('/api/config/get',{key:'default_model'}).then(function(r){
     if(r&&r.value)_defaultModel=r.value;
   }).catch(function(){});
+  // Show lock button and start idle timer if PIN is set
+  fetch('/api/dashboard/has-password').then(function(r){return r.json()}).then(function(d){
+    if(d.has_password){
+      document.getElementById('lock-btn').style.display='';
+      resetIdleTimer();
+    }
+  }).catch(function(){});
 }
 
 function checkSetupNeeded(){
@@ -2424,9 +2537,10 @@ function submitSetup(){
     errEl.textContent='Please paste your '+provName+' API key.';
     keyInput.focus();return;
   }
+  var pin=(document.getElementById('setup-pin').value||'').trim();
   btn.disabled=true;btn.textContent='Setting up...';
   fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:model,api_key:key})})
+    body:JSON.stringify({model:model,api_key:key,dashboard_pin:pin})})
     .then(function(r){return r.json()})
     .then(function(d){
       if(d.ok){
@@ -2475,6 +2589,7 @@ def _build_html():
   <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
+  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock dashboard" style="display:none">\U0001f512</button>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
@@ -2594,7 +2709,7 @@ def _build_html():
 <div id="agent-space" class="agent-space">
   <div class="as-topbar">
     <button class="as-back" onclick="closeAgentSpace()">\u2190</button>
-    <span class="as-title" id="as-name" onclick="startRenameAgent()" title="Click to rename">Agent</span>
+    <span class="as-title" id="as-name" onclick="startRenameAgent()" title="Click to rename">Agent <span class="edit-icon">\u270F\uFE0F</span></span>
     <span class="as-dot dot-green" id="as-status-dot"></span>
     <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Toggle private session">\U0001f512</button>
   </div>
@@ -2731,9 +2846,45 @@ def _build_html():
       </a>
     </div>
 
+    <div class="setup-pin-section">
+      <label for="setup-pin">Set a dashboard PIN (optional)</label>
+      <p class="setup-pin-sub">Locks your dashboard and protects against accidental team deletion.</p>
+      <input class="setup-key" id="setup-pin" type="password" placeholder="4+ characters..."
+        maxlength="32" autocomplete="off" onkeydown="if(event.key==='Enter')submitSetup()">
+    </div>
+
     <div class="setup-error" id="setup-error"></div>
     <button class="setup-btn" id="setup-btn" onclick="submitSetup()">\U0001f680 Start My Crew</button>
     <div class="setup-footer">100% local \u00b7 MIT license \u00b7 No cloud \u00b7 Your data stays on your machine</div>
+  </div>
+</div>
+
+<!-- ══════════ LOCK SCREEN ══════════ -->
+<div class="lock-overlay" id="lock-overlay" style="display:none">
+  <div class="lock-card">
+    <div class="lock-icon">\U0001f512</div>
+    <h2>Dashboard Locked</h2>
+    <p class="lock-sub">Enter your PIN to unlock</p>
+    <input class="setup-key" id="lock-pin" type="password" placeholder="Enter PIN..."
+      autocomplete="off" onkeydown="if(event.key==='Enter')unlockDashboard()">
+    <div class="setup-error" id="lock-error"></div>
+    <button class="setup-btn" onclick="unlockDashboard()" style="margin-top:12px">\U0001f513 Unlock</button>
+  </div>
+</div>
+
+<!-- ══════════ PASSWORD PROMPT MODAL ══════════ -->
+<div class="confirm-overlay" id="pw-prompt-modal">
+  <div class="confirm-box">
+    <h3>Confirm Action</h3>
+    <p id="pw-prompt-msg">Enter your PIN</p>
+    <input class="setup-key" id="pw-prompt-input" type="password" placeholder="PIN..."
+      style="margin:12px 0 8px" autocomplete="off"
+      onkeydown="if(event.key==='Enter')closePasswordPrompt(true)">
+    <div class="setup-error" id="pw-prompt-error"></div>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="closePasswordPrompt(false)">Cancel</button>
+      <button class="confirm-danger" onclick="closePasswordPrompt(true)">Confirm</button>
+    </div>
   </div>
 </div>
 
@@ -3520,6 +3671,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 "default_model": default_model,
             })
 
+        if path == "/api/dashboard/has-password":
+            stored = bus.get_config("dashboard_password", db_path=self.db_path)
+            return _json_response(self, {"has_password": bool(stored)})
+
         _json_response(self, {"error": "not found"}, 404)
 
     def do_POST(self):
@@ -4042,7 +4197,32 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass  # Non-fatal
+            # Save optional dashboard PIN
+            pin = data.get("dashboard_pin", "").strip()
+            if pin and len(pin) >= 4:
+                hashed = _hash_password(pin)
+                bus.set_config("dashboard_password", hashed, db_path=self.db_path)
             return _json_response(self, {"ok": True, "wizard_id": wizard_id})
+
+        # ── Dashboard password management ──
+
+        if path == "/api/dashboard/set-password":
+            password = data.get("password", "").strip()
+            if not password:
+                return _json_response(self, {"error": "password required"}, 400)
+            if len(password) < 4:
+                return _json_response(self, {"error": "PIN must be at least 4 characters"}, 400)
+            hashed = _hash_password(password)
+            bus.set_config("dashboard_password", hashed, db_path=self.db_path)
+            return _json_response(self, {"ok": True})
+
+        if path == "/api/dashboard/verify-password":
+            password = data.get("password", "").strip()
+            stored = bus.get_config("dashboard_password", db_path=self.db_path)
+            if not stored:
+                return _json_response(self, {"ok": True, "valid": True})
+            valid = _verify_password(password, stored)
+            return _json_response(self, {"ok": True, "valid": valid})
 
         # ── Config get/set (model keys, settings) ──
 
@@ -4174,13 +4354,13 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     _ensure_wizard(db_path)  # Wizard always self-spawns first
     if config:
         bus.load_hierarchy(config, db_path=db_path)
-    else:
-        _auto_load_hierarchy(db_path)
+    # No auto-load: clean slate, Wizard guides team creation
     handler = type("Handler", (CrewBusHandler,), {"db_path": db_path})
     return ThreadedHTTPServer((host, port), handler)
 
 
-def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
+def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
+               open_browser=True):
     server = create_server(port=port, db_path=db_path, config=config, host=host)
     actual_db = server.RequestHandlerClass.db_path
     print(f"crew-bus dashboard running on http://{host}:{port}")
@@ -4188,6 +4368,11 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
 
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
+
+    # Auto-open browser after 1-second delay (server needs to be ready)
+    if open_browser:
+        url = f"http://127.0.0.1:{port}"
+        threading.Timer(1.0, webbrowser.open, args=[url]).start()
 
     print("Press Ctrl+C to stop.")
     try:
@@ -4206,6 +4391,9 @@ if __name__ == "__main__":
     parser.add_argument("--db", type=str, default=None)
     parser.add_argument("--config", type=str, default=None,
                         help="Path to YAML config file (auto-detected from configs/ if omitted)")
+    parser.add_argument("--no-browser", action="store_true",
+                        help="Don't auto-open browser on startup")
     args = parser.parse_args()
     db = Path(args.db) if args.db else None
-    run_server(port=args.port, db_path=db, config=args.config, host=args.host)
+    run_server(port=args.port, db_path=db, config=args.config, host=args.host,
+               open_browser=not args.no_browser)
