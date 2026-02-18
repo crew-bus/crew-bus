@@ -204,8 +204,8 @@ a{color:var(--ac);text-decoration:none}
 /* ── Circle layout ── */
 .circle-wrap{
   position:relative;width:100%;
-  max-width:400px;margin:0 auto;
-  aspect-ratio:1;padding:16px;
+  max-width:480px;margin:0 auto;
+  aspect-ratio:1;padding:24px;
 }
 .circle-wrap svg.lines{
   position:absolute;top:0;left:0;width:100%;height:100%;
@@ -220,66 +220,115 @@ a{color:var(--ac);text-decoration:none}
   position:absolute;z-index:5;
   display:flex;flex-direction:column;align-items:center;
   cursor:pointer;-webkit-tap-highlight-color:transparent;
-  transition:transform .2s;
+  transition:transform .25s ease;
 }
-.bubble:active{transform:scale(.94)}
+.bubble:active{transform:scale(.92)!important}
 .bubble-circle{
   border-radius:50%;display:flex;align-items:center;justify-content:center;
-  position:relative;transition:box-shadow .3s;
+  position:relative;transition:box-shadow .35s ease, transform .25s ease, border-color .3s ease;
   background:var(--sf);border:2px solid var(--bd);
 }
+.bubble:hover{transform:scale(1.08)}
 .bubble:hover .bubble-circle{box-shadow:0 0 25px rgba(255,255,255,.15)}
-.bubble-circle .icon{font-size:1.4rem}
+.bubble-circle .icon{font-size:1.6rem;filter:drop-shadow(0 0 4px rgba(255,255,255,0.3))}
 .bubble-circle .status-dot{
-  position:absolute;top:2px;right:2px;width:10px;height:10px;
-  border-radius:50%;border:2px solid var(--sf);
+  position:absolute;top:4px;right:4px;width:11px;height:11px;
+  border-radius:50%;border:2.5px solid rgba(12,14,22,0.95);
 }
 .dot-green{background:var(--gn)}
 .dot-yellow{background:var(--yl)}
 .dot-red{background:var(--rd)}
 .bubble-label{
-  margin-top:4px;font-size:.7rem;font-weight:600;color:var(--mu);
-  text-align:center;white-space:nowrap;
+  margin-top:8px;font-size:.78rem;font-weight:700;color:rgba(255,255,255,0.85);
+  text-align:center;white-space:nowrap;letter-spacing:0.02em;
+  text-shadow:0 1px 6px rgba(0,0,0,0.5);
 }
 .bubble-count{
-  font-size:.65rem;color:var(--ac);margin-top:1px;
+  font-size:.65rem;color:var(--ac);margin-top:2px;font-weight:600;
 }
 .bubble-sub{
-  font-size:.6rem;color:var(--mu);margin-top:1px;
-  max-width:90px;text-align:center;overflow:hidden;
+  font-size:.6rem;color:var(--mu);margin-top:2px;
+  max-width:110px;text-align:center;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
 }
 
-/* Center (Crew Boss) — warm star icon, premium glow */
+/* ── Crew Boss — dominant center star ── */
 .bubble.center .bubble-circle{
-  width:96px;height:96px;
-  border-color:rgba(255,255,255,0.9);border-width:2.5px;
+  width:120px;height:120px;
+  border-color:rgba(255,255,255,0.95);border-width:2.5px;
   background:rgba(12,14,22,0.95);
-  box-shadow:0 0 30px rgba(255,255,255,0.2),0 0 60px rgba(255,255,255,0.08);
+  box-shadow:
+    0 0 30px rgba(255,255,255,0.25),
+    0 0 60px rgba(255,255,255,0.1),
+    inset 0 0 20px rgba(255,255,255,0.04);
   animation:bossGlow 3s ease-in-out infinite;
 }
-.bubble.center .bubble-circle .icon{font-size:2rem}
-.bubble.center .bubble-label{font-size:.85rem;color:#fff;font-weight:700}
+.bubble.center .bubble-circle::after{
+  content:'';position:absolute;inset:-8px;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.12);
+  animation:bossPulse 2.5s ease-in-out infinite;
+}
+.bubble.center .bubble-circle .icon{font-size:2.4rem;filter:drop-shadow(0 0 8px rgba(255,255,255,0.5))}
+.bubble.center .bubble-label{
+  font-size:.95rem;color:#fff;font-weight:800;letter-spacing:0.04em;
+  text-shadow:0 0 12px rgba(255,255,255,0.3);
+}
 .bubble.center:hover .bubble-circle{
-  box-shadow:0 0 40px rgba(255,255,255,0.35),0 0 80px rgba(255,255,255,0.12);
+  box-shadow:
+    0 0 45px rgba(255,255,255,0.4),
+    0 0 90px rgba(255,255,255,0.15),
+    inset 0 0 25px rgba(255,255,255,0.06);
 }
 @keyframes bossGlow{
-  0%,100%{box-shadow:0 0 30px rgba(255,255,255,0.2),0 0 60px rgba(255,255,255,0.08)}
-  50%{box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 70px rgba(255,255,255,0.12)}
+  0%,100%{box-shadow:0 0 30px rgba(255,255,255,0.25),0 0 60px rgba(255,255,255,0.1),inset 0 0 20px rgba(255,255,255,0.04)}
+  50%{box-shadow:0 0 40px rgba(255,255,255,0.4),0 0 80px rgba(255,255,255,0.15),inset 0 0 25px rgba(255,255,255,0.06)}
+}
+@keyframes bossPulse{
+  0%,100%{transform:scale(1);opacity:0.4}
+  50%{transform:scale(1.12);opacity:0}
 }
 
-/* Agent-specific neon glows */
-#bubble-family .bubble-circle{border-color:#4dd0b8;box-shadow:0 0 20px rgba(77,208,184,0.25)}
-#bubble-family:hover .bubble-circle{box-shadow:0 0 35px rgba(77,208,184,0.45)}
-#bubble-health .bubble-circle{border-color:#ffab57;box-shadow:0 0 20px rgba(255,171,87,0.25)}
-#bubble-health:hover .bubble-circle{box-shadow:0 0 35px rgba(255,171,87,0.45)}
-#bubble-growth .bubble-circle{border-color:#66d97a;box-shadow:0 0 20px rgba(102,217,122,0.25)}
-#bubble-growth:hover .bubble-circle{box-shadow:0 0 35px rgba(102,217,122,0.45)}
-#bubble-life .bubble-circle{border-color:#64b5f6;box-shadow:0 0 20px rgba(100,181,246,0.25)}
-#bubble-life:hover .bubble-circle{box-shadow:0 0 35px rgba(100,181,246,0.45)}
+/* ── Agent-specific neon glows with breathing ── */
+#bubble-family .bubble-circle{
+  border-color:#4dd0b8;border-width:2.5px;
+  box-shadow:0 0 20px rgba(77,208,184,0.3),0 0 45px rgba(77,208,184,0.1);
+  animation:breatheTeal 2.5s ease-in-out infinite;
+}
+#bubble-family:hover .bubble-circle{
+  box-shadow:0 0 40px rgba(77,208,184,0.55),0 0 70px rgba(77,208,184,0.2);
+}
+#bubble-health .bubble-circle{
+  border-color:#ffab57;border-width:2.5px;
+  box-shadow:0 0 20px rgba(255,171,87,0.3),0 0 45px rgba(255,171,87,0.1);
+  animation:breatheOrange 2.5s ease-in-out infinite;
+}
+#bubble-health:hover .bubble-circle{
+  box-shadow:0 0 40px rgba(255,171,87,0.55),0 0 70px rgba(255,171,87,0.2);
+}
+#bubble-growth .bubble-circle{
+  border-color:#66d97a;border-width:2.5px;
+  box-shadow:0 0 20px rgba(102,217,122,0.3),0 0 45px rgba(102,217,122,0.1);
+  animation:breatheGreen 2.5s ease-in-out infinite;
+}
+#bubble-growth:hover .bubble-circle{
+  box-shadow:0 0 40px rgba(102,217,122,0.55),0 0 70px rgba(102,217,122,0.2);
+}
+#bubble-life .bubble-circle{
+  border-color:#64b5f6;border-width:2.5px;
+  box-shadow:0 0 20px rgba(100,181,246,0.3),0 0 45px rgba(100,181,246,0.1);
+  animation:breatheBlue 2.5s ease-in-out infinite;
+}
+#bubble-life:hover .bubble-circle{
+  box-shadow:0 0 40px rgba(100,181,246,0.55),0 0 70px rgba(100,181,246,0.2);
+}
 
-/* Outer agents */
-.bubble.outer .bubble-circle{width:74px;height:74px;background:rgba(12,14,22,0.9)}
+@keyframes breatheTeal{0%,100%{box-shadow:0 0 20px rgba(77,208,184,0.3),0 0 45px rgba(77,208,184,0.1)}50%{box-shadow:0 0 35px rgba(77,208,184,0.5),0 0 60px rgba(77,208,184,0.2)}}
+@keyframes breatheOrange{0%,100%{box-shadow:0 0 20px rgba(255,171,87,0.3),0 0 45px rgba(255,171,87,0.1)}50%{box-shadow:0 0 35px rgba(255,171,87,0.5),0 0 60px rgba(255,171,87,0.2)}}
+@keyframes breatheGreen{0%,100%{box-shadow:0 0 20px rgba(102,217,122,0.3),0 0 45px rgba(102,217,122,0.1)}50%{box-shadow:0 0 35px rgba(102,217,122,0.5),0 0 60px rgba(102,217,122,0.2)}}
+@keyframes breatheBlue{0%,100%{box-shadow:0 0 20px rgba(100,181,246,0.3),0 0 45px rgba(100,181,246,0.1)}50%{box-shadow:0 0 35px rgba(100,181,246,0.5),0 0 60px rgba(100,181,246,0.2)}}
+
+/* Outer agents — bigger circles */
+.bubble.outer .bubble-circle{width:92px;height:92px;background:rgba(12,14,22,0.9)}
 
 /* Trust + Burnout beneath circle */
 .indicators{
@@ -615,7 +664,7 @@ tr.override td{background:rgba(210,153,34,.08)}
   }
   .main-left{flex:1;max-width:450px}
   .main-right{flex:1;max-width:400px}
-  .circle-wrap{max-width:400px}
+  .circle-wrap{max-width:480px}
   /* Agent space: left half on desktop */
   .agent-space{
     width:50%;max-width:520px;
@@ -1584,29 +1633,29 @@ def _build_html():
     <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   </div>
   <div class="circle-wrap">
-    <svg class="lines" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
-      <line x1="200" y1="200" x2="200" y2="60" style="stroke:#4dd0b8;opacity:.25"/>
-      <line x1="200" y1="200" x2="60"  y2="200" style="stroke:#ffab57;opacity:.25"/>
-      <line x1="200" y1="200" x2="340" y2="200" style="stroke:#66d97a;opacity:.25"/>
-      <line x1="200" y1="200" x2="200" y2="340" style="stroke:#64b5f6;opacity:.25"/>
+    <svg class="lines" viewBox="0 0 480 480" preserveAspectRatio="xMidYMid meet">
+      <line x1="240" y1="240" x2="240" y2="65" style="stroke:#4dd0b8;opacity:.2"/>
+      <line x1="240" y1="240" x2="55"  y2="240" style="stroke:#ffab57;opacity:.2"/>
+      <line x1="240" y1="240" x2="425" y2="240" style="stroke:#66d97a;opacity:.2"/>
+      <line x1="240" y1="240" x2="240" y2="415" style="stroke:#64b5f6;opacity:.2"/>
     </svg>
     <div class="bubble center" id="bubble-boss" style="left:50%;top:50%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:5%;transform:translateX(-50%)">
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:3%;transform:translateX(-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-health" style="left:2%;top:50%;transform:translateY(-50%)">
+    <div class="bubble outer" id="bubble-health" style="left:1%;top:50%;transform:translateY(-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="right:2%;top:50%;transform:translateY(-50%)">
+    <div class="bubble outer" id="bubble-growth" style="right:1%;top:50%;transform:translateY(-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-life" style="left:50%;bottom:5%;transform:translateX(-50%)">
+    <div class="bubble outer" id="bubble-life" style="left:50%;bottom:3%;transform:translateX(-50%)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
