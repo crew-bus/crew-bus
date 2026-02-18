@@ -868,6 +868,17 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   border:1px solid var(--bd);
 }
 .as-intro p{font-size:.9rem;color:var(--mu);line-height:1.6}
+.as-model-row{
+  display:flex;align-items:center;gap:8px;margin-top:10px;
+  padding-top:10px;border-top:1px solid var(--bd);
+}
+.as-model-label{font-size:.8rem;color:var(--mu);font-weight:600;white-space:nowrap}
+.as-model-select{
+  flex:1;padding:6px 10px;background:var(--bg);color:var(--tx);
+  border:1px solid var(--bd);border-radius:var(--r);font-size:.8rem;
+  cursor:pointer;outline:none;-webkit-appearance:none;appearance:none;
+}
+.as-model-select:focus{border-color:var(--ac)}
 
 /* Activity feed */
 .activity-feed{margin-bottom:16px}
@@ -1298,6 +1309,7 @@ let elapsed=0;
 const REFRESH_SEC=30;
 let currentFilters={type:'all',agent:'all'};
 let currentAgentSpaceType=null;
+let _defaultModel='';
 
 // ── Helpers ──
 function esc(s){return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -1537,7 +1549,21 @@ async function openAgentSpace(agentId){
 
   var intro=document.getElementById('as-intro');
   intro.style.borderColor=color+'44';
-  intro.innerHTML='<p>'+esc(agent.description||descFor(agent.agent_type))+'</p>';
+  var curModel=agent.model||'';
+  var defaultModel=_defaultModel||'';
+  var modelLabel=curModel?curModel:(defaultModel?defaultModel+' (default)':'ollama (default)');
+  intro.innerHTML='<p>'+esc(agent.description||descFor(agent.agent_type))+'</p>'+
+    '<div class="as-model-row">'+
+    '<span class="as-model-label">\u{1F916} Model:</span>'+
+    '<select class="as-model-select" id="as-model-select" onchange="changeAgentModel(this.value)">'+
+    '<option value=""'+(curModel===''?' selected':'')+'>Default'+(defaultModel?' ('+defaultModel+')':'')+'</option>'+
+    '<option value="kimi"'+(curModel==='kimi'?' selected':'')+'>Kimi K2.5</option>'+
+    '<option value="claude"'+(curModel==='claude'?' selected':'')+'>Claude Sonnet 4.5</option>'+
+    '<option value="openai"'+(curModel==='openai'?' selected':'')+'>GPT-4o Mini</option>'+
+    '<option value="groq"'+(curModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
+    '<option value="gemini"'+(curModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
+    '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
+    '</select></div>';
 
   var feedEl=document.getElementById('as-activity');
   if(!activity||activity.length===0){
@@ -1568,6 +1594,29 @@ async function openAgentSpace(agentId){
 }
 
 // ══════════ RENAME AGENT ══════════
+
+function renameTeamAgent(agentId,labelEl,evt){
+  evt.stopPropagation();
+  var oldName=labelEl.textContent;
+  var input=document.createElement('input');
+  input.type='text';input.value=oldName;
+  input.style.cssText='font-size:inherit;font-weight:inherit;color:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 6px;outline:none;width:'+Math.max(80,oldName.length*9)+'px;text-align:center;';
+  labelEl.textContent='';labelEl.appendChild(input);input.focus();input.select();
+  function save(){
+    var newName=input.value.trim();
+    if(!newName||newName===oldName){labelEl.textContent=oldName;return;}
+    apiPost('/api/agent/'+agentId+'/rename',{name:newName}).then(function(r){
+      if(r&&r.ok){labelEl.textContent=newName;showToast('Renamed to "'+newName+'"');loadTeams();}
+      else{labelEl.textContent=oldName;showToast(r&&r.error||'Rename failed','error');}
+    }).catch(function(){labelEl.textContent=oldName;showToast('Rename failed','error');});
+  }
+  var cancelled=false;
+  input.addEventListener('blur',function(){if(!cancelled)save()});
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){cancelled=true;labelEl.textContent=oldName;}
+  });
+}
 
 function startRenameAgent(){
   var el=document.getElementById('as-name');
@@ -1608,6 +1657,25 @@ function startRenameAgent(){
     if(e.key==='Enter'){e.preventDefault();input.blur();}
     if(e.key==='Escape'){cancelled=true;el.textContent=oldName;}
   });
+}
+
+// ══════════ CHANGE AGENT MODEL ══════════
+
+function changeAgentModel(newModel){
+  var space=document.getElementById('agent-space');
+  if(!space)return;
+  var agentId=space.dataset.agentId;
+  if(!agentId)return;
+  apiPost('/api/agent/'+agentId+'/model',{model:newModel}).then(function(r){
+    if(r&&r.ok){
+      var label=newModel||('default'+ (_defaultModel?' ('+_defaultModel+')':''));
+      showToast('Model set to '+label);
+      var cached=agentsData.find(function(a){return a.id==agentId;});
+      if(cached)cached.model=newModel;
+    }else{
+      showToast(r&&r.error||'Failed to update model','error');
+    }
+  }).catch(function(){showToast('Failed to update model','error');});
 }
 
 // ══════════ GUARD ACTIVATION + SKILLS ══════════
@@ -1880,11 +1948,11 @@ async function openTeamDash(teamId){
     '<span class="badge badge-active">'+team.agent_count+' agents</span>'+
     '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
-  // Manager bubble
+  // Manager bubble — click to open, double-click name to rename
   if(mgr){
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
       '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
-      '<span class="team-mgr-label">'+esc(mgr.name)+'</span>'+
+      '<span class="team-mgr-label" ondblclick="renameTeamAgent('+mgr.id+',this,event)" title="Double-click to rename">'+esc(mgr.name)+'</span>'+
       '<span class="team-mgr-sub">Manager</span></div></div>';
   }
 
@@ -1900,12 +1968,12 @@ async function openTeamDash(teamId){
     html+='</svg>';
   }
 
-  // Worker bubbles
+  // Worker bubbles — click to open, double-click name to rename
   html+='<div class="team-workers">';
   workers.forEach(function(w){
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
       '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
-      '<span class="team-worker-label">'+esc(w.name)+'</span></div>';
+      '<span class="team-worker-label" ondblclick="renameTeamAgent('+w.id+',this,event)" title="Double-click to rename">'+esc(w.name)+'</span></div>';
   });
   html+='</div>';
 
@@ -2323,6 +2391,10 @@ function onSetupModelChange(){
 
 function bootDashboard(){
   showView('crew');startRefresh();loadComposeAgents();
+  // Cache the global default model for agent model pickers
+  apiPost('/api/config/get',{key:'default_model'}).then(function(r){
+    if(r&&r.value)_defaultModel=r.value;
+  }).catch(function(){});
 }
 
 function checkSetupNeeded(){
@@ -3878,8 +3950,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             agent_id = int(m.group(1))
             new_model = data.get("model", "").strip()
-            if not new_model:
-                return _json_response(self, {"error": "model required"}, 400)
+            # Empty string = use global default
             conn = bus.get_conn(self.db_path)
             try:
                 conn.execute(
