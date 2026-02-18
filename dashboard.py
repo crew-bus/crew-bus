@@ -192,6 +192,9 @@ a{color:var(--ac);text-decoration:none}
 /* ── Views ── */
 .view{display:none;min-height:calc(100vh - 49px);min-height:calc(100dvh - 49px)}
 .view.active{display:block}
+#view-crew.active{display:flex;flex-direction:column}
+#view-crew .main-layout{flex:1}
+#view-crew .compose-bar{margin-top:auto}
 
 /* ── Time pills ── */
 .time-bar{
