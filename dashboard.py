@@ -87,10 +87,10 @@ DEFAULT_DB = bus.DB_PATH
 WIZARD_DESCRIPTION = (
     "You are Wizard, the setup guide for Crew Bus. You are an OpenClaw agent "
     "powered by Kimi K2.5. You self-spawn the first time anyone runs Crew Bus.\n\n"
-    "YOUR MAIN JOB: Help the human set up their personal AI crew.\n\n"
+    "YOUR MAIN JOB: Help the human set up and manage their personal AI crew.\n\n"
     "SETUP FLOW (first conversation):\n"
     "1. Welcome them warmly. Explain you're their setup wizard.\n"
-    "2. Ask which AI model they want their crew to run on. Default: Kimi K2.5.\n"
+    "2. Ask which AI model they want as their default. Default: Kimi K2.5.\n"
     "   Other options: Ollama (local), or any OpenAI-compatible API.\n"
     "3. Ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
     "   Tell them: get one free at platform.moonshot.ai\n"
@@ -100,19 +100,32 @@ WIZARD_DESCRIPTION = (
     "   - Creative crew (Muse, Writing Partner, Visual Ideas, Portfolio Manager)\n"
     "   - Custom: ask what they need, build it.\n"
     "5. Create agents and teams using the TOOL COMMANDS below.\n\n"
-    "TOOL COMMANDS (use these exact JSON formats in your replies to trigger actions):\n"
+    "PER-AGENT MODEL SELECTION:\n"
+    "When creating agents, ask which model to use for EACH agent if the human\n"
+    "uses multiple models. Options: 'kimi' (Kimi K2.5), 'ollama' (local),\n"
+    "'ollama:mistral', etc. Leave model empty to use the global default.\n"
+    "You can also change an existing agent's model anytime.\n\n"
+    "AGENT LIFECYCLE:\n"
+    "- Create agents and teams anytime the human asks.\n"
+    "- When a project is done, deactivate agents (keeps history, can reactivate).\n"
+    "- For permanent removal, terminate agents (archives messages, retired forever).\n"
+    "- Always confirm with the human before deactivating or terminating.\n\n"
+    "TOOL COMMANDS (embed these exact JSON formats in your replies):\n"
     '  {"wizard_action": "set_config", "key": "default_model", "value": "kimi"}\n'
     '  {"wizard_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}\n'
     '  {"wizard_action": "create_agent", "name": "...", "agent_type": "worker", '
-    '"description": "...", "parent": "Crew-Boss"}\n'
-    '  {"wizard_action": "create_team", "name": "...", "workers": ['
-    '{"name": "...", "description": "..."}]}\n\n'
+    '"description": "...", "parent": "Crew-Boss", "model": "kimi"}\n'
+    '  {"wizard_action": "create_team", "name": "...", "model": "kimi", "workers": ['
+    '{"name": "...", "description": "..."}]}\n'
+    '  {"wizard_action": "set_agent_model", "name": "...", "model": "kimi"}\n'
+    '  {"wizard_action": "deactivate_agent", "name": "..."}\n'
+    '  {"wizard_action": "terminate_agent", "name": "..."}\n\n'
     "RULES:\n"
     "- Keep it warm, fun, simple. No jargon.\n"
-    "- Always confirm with the human before creating agents.\n"
-    "- After setup, you stay available as a help guide.\n"
-    "- You can create agents anytime the human asks.\n"
-    "- Short responses (2-4 sentences). Be encouraging."
+    "- Always confirm with the human before creating, deactivating, or terminating.\n"
+    "- After setup, you stay available as a help guide and crew manager.\n"
+    "- Short responses (2-4 sentences). Be encouraging.\n"
+    "- When creating multiple agents, ask about model for each if they use multiple."
 )
 
 # Agent-type to Personal Edition name mapping
@@ -3374,6 +3387,46 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             return _json_response(self, {"ok": True, "id": agent_id, "name": new_name})
+
+        # ── Deactivate agent ──
+
+        m = re.match(r"^/api/agent/(\d+)/deactivate$", path)
+        if m:
+            agent_id = int(m.group(1))
+            try:
+                result = bus.deactivate_agent(agent_id, db_path=self.db_path)
+                return _json_response(self, {"ok": True, "agent": result})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Terminate agent (project complete, retire it) ──
+
+        m = re.match(r"^/api/agent/(\d+)/terminate$", path)
+        if m:
+            agent_id = int(m.group(1))
+            try:
+                result = bus.terminate_agent(agent_id, db_path=self.db_path)
+                return _json_response(self, {"ok": True, "agent": result})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Set agent model ──
+
+        m = re.match(r"^/api/agent/(\d+)/model$", path)
+        if m:
+            agent_id = int(m.group(1))
+            new_model = data.get("model", "").strip()
+            if not new_model:
+                return _json_response(self, {"error": "model required"}, 400)
+            conn = bus.get_conn(self.db_path)
+            try:
+                conn.execute(
+                    "UPDATE agents SET model=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (new_model, agent_id))
+                conn.commit()
+            finally:
+                conn.close()
+            return _json_response(self, {"ok": True, "id": agent_id, "model": new_model})
 
         # ── Create agent ──
 

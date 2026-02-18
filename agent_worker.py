@@ -422,6 +422,47 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             else:
                 print(f"[wizard] team error: {result.get('error')}")
 
+        elif cmd == "deactivate_agent":
+            agent_name = action.get("name", "")
+            if agent_name:
+                try:
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        bus.deactivate_agent(agent["id"], db_path=db_path)
+                        print(f"[wizard] deactivated agent: {agent_name}")
+                    else:
+                        print(f"[wizard] agent not found: {agent_name}")
+                except Exception as e:
+                    print(f"[wizard] deactivate error: {e}")
+
+        elif cmd == "terminate_agent":
+            agent_name = action.get("name", "")
+            if agent_name:
+                try:
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        bus.terminate_agent(agent["id"], db_path=db_path)
+                        print(f"[wizard] terminated agent: {agent_name}")
+                    else:
+                        print(f"[wizard] agent not found: {agent_name}")
+                except Exception as e:
+                    print(f"[wizard] terminate error: {e}")
+
+        elif cmd == "set_agent_model":
+            agent_name = action.get("name", "")
+            new_model = action.get("model", "")
+            if agent_name and new_model:
+                try:
+                    conn = bus.get_conn(db_path)
+                    conn.execute(
+                        "UPDATE agents SET model=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                        "WHERE name=?", (new_model, agent_name))
+                    conn.commit()
+                    conn.close()
+                    print(f"[wizard] set model for {agent_name}: {new_model}")
+                except Exception as e:
+                    print(f"[wizard] set_agent_model error: {e}")
+
     # Strip action blocks from reply so human sees clean text
     clean = reply
     for raw in matches:
