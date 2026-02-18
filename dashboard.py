@@ -89,6 +89,7 @@ PERSONAL_NAMES = {
     "wellness": "Health Buddy",
     "strategy": "Growth Coach",
     "financial": "Life Assistant",
+    "creative": "Muse",
     "help": "Help",
     "human": "You",
 }
@@ -99,9 +100,10 @@ PERSONAL_COLORS = {
     "wellness": "#ffab57",
     "strategy": "#66d97a",
     "financial": "#64b5f6",
+    "creative": "#b388ff",
 }
 
-CORE_TYPES = ("right_hand", "security", "wellness", "strategy", "financial")
+CORE_TYPES = ("right_hand", "security", "wellness", "strategy", "financial", "creative")
 
 AGENT_ACKS = {
     "right_hand": [
@@ -129,6 +131,11 @@ AGENT_ACKS = {
         "On it! I\u2019ll add that to your list.",
         "Got it \u2014 I\u2019ll sort this out for you.",
         "No problem, handling the details!",
+    ],
+    "creative": [
+        "Ooh, love it! Let\u2019s make something beautiful \U0001f3a8",
+        "Inspiration incoming! I\u2019m on it.",
+        "Great idea \u2014 let\u2019s get creative!",
     ],
     "help": [
         "Good question! Check the info above for guidance.",
@@ -201,137 +208,167 @@ a{color:var(--ac);text-decoration:none}
   color:var(--tx);background:var(--bd);
 }
 
-/* ── Circle layout ── */
+/* ── Circle layout — spacious, warm, premium ── */
 .circle-wrap{
   position:relative;width:100%;
-  max-width:560px;margin:0 auto;
-  aspect-ratio:1;padding:36px;
+  max-width:640px;margin:0 auto;
+  aspect-ratio:1;padding:40px;
 }
 .circle-wrap svg.lines{
   position:absolute;top:0;left:0;width:100%;height:100%;
   pointer-events:none;z-index:1;
 }
 .circle-wrap svg.lines line{
-  stroke-width:1.5;stroke-dasharray:6 4;
+  stroke-width:1;stroke-dasharray:6 4;opacity:0.2;
 }
 
-/* Agent bubble */
+/* Agent bubble — base */
 .bubble{
   position:absolute;z-index:5;
   display:flex;flex-direction:column;align-items:center;
   cursor:pointer;-webkit-tap-highlight-color:transparent;
-  transition:transform .25s ease;
+  transition:transform .3s ease;
 }
 .bubble:active{transform:scale(.92)!important}
 .bubble-circle{
   border-radius:50%;display:flex;align-items:center;justify-content:center;
-  position:relative;transition:box-shadow .35s ease, transform .25s ease, border-color .3s ease;
+  position:relative;transition:box-shadow .4s ease, transform .3s ease, border-color .3s ease;
   background:var(--sf);border:2px solid var(--bd);
 }
 .bubble:hover{transform:scale(1.08)}
 .bubble:hover .bubble-circle{box-shadow:0 0 25px rgba(255,255,255,.15)}
-.bubble-circle .icon{font-size:2rem;filter:drop-shadow(0 0 6px rgba(255,255,255,0.3))}
+.bubble-circle .icon{font-size:2.2rem;filter:drop-shadow(0 0 6px rgba(255,255,255,0.35))}
 .bubble-circle .status-dot{
-  position:absolute;top:4px;right:4px;width:11px;height:11px;
+  position:absolute;top:6px;right:6px;width:12px;height:12px;
   border-radius:50%;border:2.5px solid rgba(12,14,22,0.95);
 }
 .dot-green{background:var(--gn)}
 .dot-yellow{background:var(--yl)}
 .dot-red{background:var(--rd)}
 .bubble-label{
-  margin-top:10px;font-size:.82rem;font-weight:700;color:rgba(255,255,255,0.88);
-  text-align:center;white-space:nowrap;letter-spacing:0.03em;
+  margin-top:10px;font-size:.82rem;font-weight:700;color:rgba(255,255,255,0.92);
+  text-align:center;white-space:nowrap;letter-spacing:0.04em;
   text-shadow:0 1px 8px rgba(0,0,0,0.6);
 }
 .bubble-count{
-  font-size:.65rem;color:var(--ac);margin-top:2px;font-weight:600;
+  font-size:.65rem;color:var(--ac);margin-top:3px;font-weight:600;
 }
 .bubble-sub{
   font-size:.6rem;color:var(--mu);margin-top:2px;
-  max-width:110px;text-align:center;overflow:hidden;
+  max-width:120px;text-align:center;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
 }
 
-/* ── Crew Boss — dominant center star ── */
+/* ── Crew Boss — dominant center star (hero-level presence) ── */
 .bubble.center .bubble-circle{
-  width:160px;height:160px;
+  width:200px;height:200px;
   border-color:rgba(255,255,255,0.95);border-width:3px;
   background:rgba(12,14,22,0.95);
   box-shadow:
-    0 0 40px rgba(255,255,255,0.28),
-    0 0 80px rgba(255,255,255,0.12),
-    0 0 120px rgba(255,255,255,0.05),
+    0 0 40px rgba(255,255,255,0.25),
+    0 0 80px rgba(255,255,255,0.10),
+    0 0 120px rgba(255,255,255,0.04),
     inset 0 0 30px rgba(255,255,255,0.04);
   animation:bossGlow 3s ease-in-out infinite;
 }
 .bubble.center .bubble-circle::after{
-  content:'';position:absolute;inset:-10px;border-radius:50%;
+  content:'';position:absolute;inset:-12px;border-radius:50%;
   border:1px solid rgba(255,255,255,0.15);
   animation:bossPulse 2.5s ease-in-out infinite;
 }
-.bubble.center .bubble-circle .icon{font-size:3rem;filter:drop-shadow(0 0 12px rgba(255,255,255,0.6))}
+.bubble.center .bubble-circle .icon{font-size:3.4rem;filter:drop-shadow(0 0 14px rgba(255,255,255,0.65))}
 .bubble.center .bubble-label{
-  font-size:1.05rem;color:#fff;font-weight:800;letter-spacing:0.06em;
-  text-shadow:0 0 16px rgba(255,255,255,0.35);
+  font-size:1.1rem;color:#fff;font-weight:800;letter-spacing:0.08em;
+  text-shadow:0 0 18px rgba(255,255,255,0.35);
 }
 .bubble.center:hover .bubble-circle{
   box-shadow:
-    0 0 50px rgba(255,255,255,0.45),
-    0 0 100px rgba(255,255,255,0.18),
-    0 0 140px rgba(255,255,255,0.07),
+    0 0 50px rgba(255,255,255,0.40),
+    0 0 100px rgba(255,255,255,0.15),
+    0 0 140px rgba(255,255,255,0.06),
     inset 0 0 35px rgba(255,255,255,0.06);
 }
 @keyframes bossGlow{
-  0%,100%{box-shadow:0 0 40px rgba(255,255,255,0.28),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05),inset 0 0 30px rgba(255,255,255,0.04)}
-  50%{box-shadow:0 0 50px rgba(255,255,255,0.42),0 0 100px rgba(255,255,255,0.18),0 0 140px rgba(255,255,255,0.07),inset 0 0 35px rgba(255,255,255,0.06)}
+  0%,100%{box-shadow:0 0 40px rgba(255,255,255,0.25),0 0 80px rgba(255,255,255,0.10),0 0 120px rgba(255,255,255,0.04),inset 0 0 30px rgba(255,255,255,0.04)}
+  50%{box-shadow:0 0 50px rgba(255,255,255,0.40),0 0 100px rgba(255,255,255,0.15),0 0 140px rgba(255,255,255,0.06),inset 0 0 35px rgba(255,255,255,0.06)}
 }
 @keyframes bossPulse{
-  0%,100%{transform:scale(1);opacity:0.4}
+  0%,100%{transform:scale(1);opacity:0.35}
   50%{transform:scale(1.15);opacity:0}
 }
 
-/* ── Agent-specific neon glows with breathing (3-layer premium) ── */
+/* ── Outer agents — large, spacious, premium ── */
+.bubble.outer .bubble-circle{
+  width:155px;height:155px;
+  background:rgba(12,14,22,0.9);
+  padding:1.2rem;
+}
+.bubble.outer .bubble-circle .icon{font-size:2.4rem}
+.bubble.outer:hover{transform:scale(1.1)}
+/* ── Agent-specific neon glows with 3-layer breathing ── */
+
+/* Teal — Friend & Family Helper (slightly larger for long name) */
 #bubble-family .bubble-circle{
+  width:165px;height:165px;padding:1.4rem;
   border-color:#4dd0b8;border-width:2.5px;
   box-shadow:0 0 25px rgba(77,208,184,0.3),0 0 60px rgba(77,208,184,0.1),0 0 90px rgba(77,208,184,0.04);
   animation:breatheTeal 2.5s ease-in-out infinite;
 }
 #bubble-family:hover .bubble-circle{
+  border-color:#6eecd4;
   box-shadow:0 0 40px rgba(77,208,184,0.5),0 0 80px rgba(77,208,184,0.2),0 0 120px rgba(77,208,184,0.08);
 }
+
+/* Soft orange — Health Buddy */
 #bubble-health .bubble-circle{
   border-color:#ffab57;border-width:2.5px;
   box-shadow:0 0 25px rgba(255,171,87,0.3),0 0 60px rgba(255,171,87,0.1),0 0 90px rgba(255,171,87,0.04);
   animation:breatheOrange 2.5s ease-in-out infinite;
 }
 #bubble-health:hover .bubble-circle{
+  border-color:#ffc580;
   box-shadow:0 0 40px rgba(255,171,87,0.5),0 0 80px rgba(255,171,87,0.2),0 0 120px rgba(255,171,87,0.08);
 }
+
+/* Fresh green — Growth Coach */
 #bubble-growth .bubble-circle{
   border-color:#66d97a;border-width:2.5px;
   box-shadow:0 0 25px rgba(102,217,122,0.3),0 0 60px rgba(102,217,122,0.1),0 0 90px rgba(102,217,122,0.04);
   animation:breatheGreen 2.5s ease-in-out infinite;
 }
 #bubble-growth:hover .bubble-circle{
+  border-color:#8aeea0;
   box-shadow:0 0 40px rgba(102,217,122,0.5),0 0 80px rgba(102,217,122,0.2),0 0 120px rgba(102,217,122,0.08);
 }
+
+/* Clean blue — Life Assistant */
 #bubble-life .bubble-circle{
   border-color:#64b5f6;border-width:2.5px;
   box-shadow:0 0 25px rgba(100,181,246,0.3),0 0 60px rgba(100,181,246,0.1),0 0 90px rgba(100,181,246,0.04);
   animation:breatheBlue 2.5s ease-in-out infinite;
 }
 #bubble-life:hover .bubble-circle{
+  border-color:#90caf9;
   box-shadow:0 0 40px rgba(100,181,246,0.5),0 0 80px rgba(100,181,246,0.2),0 0 120px rgba(100,181,246,0.08);
 }
 
+/* Warm purple — Muse */
+#bubble-muse .bubble-circle{
+  border-color:#b388ff;border-width:2.5px;
+  box-shadow:0 0 25px rgba(179,136,255,0.3),0 0 60px rgba(179,136,255,0.1),0 0 90px rgba(179,136,255,0.04);
+  animation:breathePurple 2.5s ease-in-out infinite;
+}
+#bubble-muse:hover .bubble-circle{
+  border-color:#d0b0ff;
+  box-shadow:0 0 40px rgba(179,136,255,0.5),0 0 80px rgba(179,136,255,0.2),0 0 120px rgba(179,136,255,0.08);
+}
+
+/* Breathing keyframes — staggered via animation-delay in HTML */
 @keyframes breatheTeal{0%,100%{box-shadow:0 0 25px rgba(77,208,184,0.3),0 0 60px rgba(77,208,184,0.1),0 0 90px rgba(77,208,184,0.04)}50%{box-shadow:0 0 40px rgba(77,208,184,0.5),0 0 80px rgba(77,208,184,0.2),0 0 120px rgba(77,208,184,0.08)}}
 @keyframes breatheOrange{0%,100%{box-shadow:0 0 25px rgba(255,171,87,0.3),0 0 60px rgba(255,171,87,0.1),0 0 90px rgba(255,171,87,0.04)}50%{box-shadow:0 0 40px rgba(255,171,87,0.5),0 0 80px rgba(255,171,87,0.2),0 0 120px rgba(255,171,87,0.08)}}
 @keyframes breatheGreen{0%,100%{box-shadow:0 0 25px rgba(102,217,122,0.3),0 0 60px rgba(102,217,122,0.1),0 0 90px rgba(102,217,122,0.04)}50%{box-shadow:0 0 40px rgba(102,217,122,0.5),0 0 80px rgba(102,217,122,0.2),0 0 120px rgba(102,217,122,0.08)}}
 @keyframes breatheBlue{0%,100%{box-shadow:0 0 25px rgba(100,181,246,0.3),0 0 60px rgba(100,181,246,0.1),0 0 90px rgba(100,181,246,0.04)}50%{box-shadow:0 0 40px rgba(100,181,246,0.5),0 0 80px rgba(100,181,246,0.2),0 0 120px rgba(100,181,246,0.08)}}
-
-/* Outer agents — bigger premium circles */
-.bubble.outer .bubble-circle{width:130px;height:130px;background:rgba(12,14,22,0.9);padding:16px}
-.bubble.outer:hover{transform:scale(1.1)}
+@keyframes breathePurple{0%,100%{box-shadow:0 0 25px rgba(179,136,255,0.3),0 0 60px rgba(179,136,255,0.1),0 0 90px rgba(179,136,255,0.04)}50%{box-shadow:0 0 40px rgba(179,136,255,0.5),0 0 80px rgba(179,136,255,0.2),0 0 120px rgba(179,136,255,0.08)}}
 
 /* Trust + Burnout beneath circle */
 .indicators{
@@ -663,11 +700,11 @@ tr.override td{background:rgba(210,153,34,.08)}
 @media(min-width:768px){
   .main-layout{
     display:flex;align-items:flex-start;justify-content:center;
-    gap:32px;max-width:900px;margin:0 auto;padding:24px;
+    gap:32px;max-width:960px;margin:0 auto;padding:24px;
   }
-  .main-left{flex:1;max-width:450px}
-  .main-right{flex:1;max-width:400px}
-  .circle-wrap{max-width:560px}
+  .main-left{flex:1;max-width:520px}
+  .main-right{flex:1;max-width:380px}
+  .circle-wrap{max-width:640px}
   /* Agent space: left half on desktop */
   .agent-space{
     width:50%;max-width:520px;
@@ -886,12 +923,14 @@ async function loadCircle(){
   var well=agents.find(function(a){return a.agent_type==='wellness'});
   var ideas=agents.find(function(a){return a.agent_type==='strategy'});
   var wallet=agents.find(function(a){return a.agent_type==='financial'});
+  var muse=agents.find(function(a){return a.agent_type==='creative'});
 
   var guardCI='';
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
 
   renderBubble('bubble-boss',boss,null);
   renderBubble('bubble-family',guard,null);
+  renderBubble('bubble-muse',muse,null);
   renderBubble('bubble-health',well,null);
   renderBubble('bubble-growth',ideas,null);
   renderBubble('bubble-life',wallet,null);
@@ -1636,31 +1675,39 @@ def _build_html():
     <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   </div>
   <div class="circle-wrap">
-    <svg class="lines" viewBox="0 0 560 560" preserveAspectRatio="xMidYMid meet">
-      <line x1="280" y1="280" x2="280" y2="75" style="stroke:#4dd0b8;opacity:.18"/>
-      <line x1="280" y1="280" x2="65"  y2="280" style="stroke:#ffab57;opacity:.18"/>
-      <line x1="280" y1="280" x2="495" y2="280" style="stroke:#66d97a;opacity:.18"/>
-      <line x1="280" y1="280" x2="280" y2="485" style="stroke:#64b5f6;opacity:.18"/>
+    <svg class="lines" viewBox="0 0 640 640" preserveAspectRatio="xMidYMid meet">
+      <!-- 5-point star lines: center (320,320) to each pentagon vertex -->
+      <line x1="320" y1="320" x2="320" y2="62" stroke="#4dd0b8"/>
+      <line x1="320" y1="320" x2="565" y2="138" stroke="#b388ff"/>
+      <line x1="320" y1="320" x2="472" y2="515" stroke="#66d97a"/>
+      <line x1="320" y1="320" x2="168" y2="515" stroke="#64b5f6"/>
+      <line x1="320" y1="320" x2="75"  y2="138" stroke="#ffab57"/>
     </svg>
+    <!-- Crew Boss — center star -->
     <div class="bubble center" id="bubble-boss" style="left:50%;top:50%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:1%;transform:translateX(-50%)">
+    <!-- Pentagon positions (top, upper-right, lower-right, lower-left, upper-left) -->
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:0%;transform:translateX(-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-health" style="left:-2%;top:50%;transform:translateY(-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    <div class="bubble outer" id="bubble-muse" style="right:1%;top:14%;transform:translate(0,0)">
+      <div class="bubble-circle"><span class="icon">\U0001f3a8</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="right:-2%;top:50%;transform:translateY(-50%)">
+    <div class="bubble outer" id="bubble-growth" style="right:8%;bottom:10%;transform:translate(0,0)">
       <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-life" style="left:50%;bottom:1%;transform:translateX(-50%)">
+    <div class="bubble outer" id="bubble-life" style="left:8%;bottom:10%;transform:translate(0,0)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    </div>
+    <div class="bubble outer" id="bubble-health" style="left:1%;top:14%;transform:translate(0,0)">
+      <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
   </div>
   <!-- FIX 3: indicators click opens popup, no more bottom sheet -->
