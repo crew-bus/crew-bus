@@ -375,6 +375,95 @@ a{color:var(--ac);text-decoration:none}
 @keyframes breatheBlue{0%,100%{box-shadow:0 0 22px rgba(100,181,246,0.40),0 0 50px rgba(100,181,246,0.16),0 0 80px rgba(100,181,246,0.06)}50%{box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10)}}
 @keyframes breathePurple{0%,100%{box-shadow:0 0 22px rgba(179,136,255,0.40),0 0 50px rgba(179,136,255,0.16),0 0 80px rgba(179,136,255,0.06)}50%{box-shadow:0 0 35px rgba(179,136,255,0.60),0 0 70px rgba(179,136,255,0.25),0 0 100px rgba(179,136,255,0.10)}}
 
+/* ══ IMMERSION — Living, Breathing Dashboard ══ */
+
+/* Teams list — cycling warm glow, one card at a time */
+@keyframes teamBreathe{
+  0%,20%{box-shadow:0 0 12px rgba(88,166,255,0.25),0 0 30px rgba(88,166,255,0.08);border-color:rgba(88,166,255,0.5)}
+  10%{box-shadow:0 0 20px rgba(88,166,255,0.40),0 0 45px rgba(88,166,255,0.15);border-color:rgba(88,166,255,0.7)}
+  25%,100%{box-shadow:none;border-color:var(--bd)}
+}
+.team-card:nth-child(1){animation:teamBreathe 8s ease-in-out infinite}
+.team-card:nth-child(2){animation:teamBreathe 8s ease-in-out 2s infinite}
+.team-card:nth-child(3){animation:teamBreathe 8s ease-in-out 4s infinite}
+.team-card:nth-child(4){animation:teamBreathe 8s ease-in-out 6s infinite}
+
+/* Send button — warm breathing glow */
+@keyframes sendBreathe{
+  0%,100%{box-shadow:0 0 8px rgba(88,166,255,0.20),0 0 20px rgba(88,166,255,0.06)}
+  50%{box-shadow:0 0 16px rgba(88,166,255,0.45),0 0 35px rgba(88,166,255,0.12)}
+}
+.compose-send{animation:sendBreathe 3s ease-in-out infinite}
+.compose-send:hover{box-shadow:0 0 22px rgba(88,166,255,0.6),0 0 45px rgba(88,166,255,0.2)!important}
+
+/* Input fields — subtle warm glow on focus */
+@keyframes inputFocusGlow{
+  0%,100%{box-shadow:0 0 6px rgba(88,166,255,0.15),0 0 18px rgba(88,166,255,0.05)}
+  50%{box-shadow:0 0 12px rgba(88,166,255,0.30),0 0 30px rgba(88,166,255,0.10)}
+}
+.compose-subject:focus,.compose-body:focus{
+  border-color:rgba(88,166,255,0.5);animation:inputFocusGlow 2.5s ease-in-out infinite;outline:none;
+}
+
+/* Active nav pill — subtle breathing highlight */
+@keyframes navActivePulse{
+  0%,100%{box-shadow:0 0 6px rgba(88,166,255,0.15),inset 0 0 8px rgba(88,166,255,0.04)}
+  50%{box-shadow:0 0 14px rgba(88,166,255,0.30),inset 0 0 12px rgba(88,166,255,0.08)}
+}
+.topbar .nav-pill.active{animation:navActivePulse 4s ease-in-out infinite}
+
+/* Trust & Energy indicators — gentle breathing */
+@keyframes indicatorBreathe{
+  0%,100%{box-shadow:0 0 6px rgba(255,255,255,0.06),0 0 15px rgba(255,255,255,0.02)}
+  50%{box-shadow:0 0 14px rgba(255,255,255,0.12),0 0 30px rgba(255,255,255,0.04)}
+}
+.indicator{animation:indicatorBreathe 3.5s ease-in-out infinite}
+.indicator:nth-child(2){animation-delay:1.5s}
+
+/* Background ambient warmth — near-imperceptible radial color shift */
+@keyframes ambientWarmth{
+  0%,100%{background:radial-gradient(ellipse at 30% 40%,rgba(88,166,255,0.012) 0%,transparent 70%),var(--bg)}
+  33%{background:radial-gradient(ellipse at 35% 45%,rgba(179,136,255,0.015) 0%,transparent 70%),var(--bg)}
+  66%{background:radial-gradient(ellipse at 25% 35%,rgba(77,208,184,0.012) 0%,transparent 70%),var(--bg)}
+}
+body{animation:ambientWarmth 20s ease-in-out infinite}
+
+/* Compose bar — subtle top-border breathing */
+@keyframes composeBarGlow{
+  0%,100%{border-top-color:var(--bd)}
+  50%{border-top-color:rgba(88,166,255,0.25)}
+}
+.compose-bar{animation:composeBarGlow 5s ease-in-out infinite}
+
+/* Top bar — very subtle ambient border breathing */
+@keyframes topbarGlow{
+  0%,100%{border-bottom-color:var(--bd)}
+  50%{border-bottom-color:rgba(88,166,255,0.15)}
+}
+.topbar{animation:topbarGlow 6s ease-in-out infinite}
+
+/* Active time pill — gentle ambient presence */
+@keyframes timePillAmbient{
+  0%,100%{border-color:var(--bd)}
+  50%{border-color:rgba(88,166,255,0.2)}
+}
+.time-pill.active{animation:timePillAmbient 4s ease-in-out infinite}
+
+/* SVG connecting lines — staggered breathing opacity */
+@keyframes linesBreathe{0%,100%{opacity:0.18}50%{opacity:0.30}}
+.circle-wrap svg.lines line{animation:linesBreathe 4s ease-in-out infinite}
+.circle-wrap svg.lines line:nth-child(2){animation-delay:0.8s}
+.circle-wrap svg.lines line:nth-child(3){animation-delay:1.6s}
+.circle-wrap svg.lines line:nth-child(4){animation-delay:2.4s}
+.circle-wrap svg.lines line:nth-child(5){animation-delay:3.2s}
+
+/* Add Team button — subtle breathing */
+@keyframes addTeamBreathe{
+  0%,100%{border-color:var(--bd);color:var(--ac)}
+  50%{border-color:rgba(88,166,255,0.4);color:#7dc4ff}
+}
+.btn-add{animation:addTeamBreathe 5s ease-in-out infinite}
+
 /* Trust + Burnout beneath circle */
 .indicators{
   display:flex;gap:20px;justify-content:center;
