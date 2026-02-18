@@ -1684,11 +1684,11 @@ def _build_html():
   </div>
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 420 420" preserveAspectRatio="xMidYMid meet">
-      <!-- 5-point star: center(210,210) to pentagon vertices at r=165 -->
-      <line x1="210" y1="210" x2="210" y2="45"  stroke="#4dd0b8"/>
+      <!-- 5-point star: center(210,210) to pentagon vertices -->
+      <line x1="210" y1="210" x2="210" y2="18"  stroke="#4dd0b8"/>
       <line x1="210" y1="210" x2="367" y2="109" stroke="#b388ff"/>
-      <line x1="210" y1="210" x2="307" y2="331" stroke="#66d97a"/>
-      <line x1="210" y1="210" x2="113" y2="331" stroke="#64b5f6"/>
+      <line x1="210" y1="210" x2="307" y2="365" stroke="#66d97a"/>
+      <line x1="210" y1="210" x2="113" y2="365" stroke="#64b5f6"/>
       <line x1="210" y1="210" x2="53"  y2="109" stroke="#ffab57"/>
     </svg>
     <!-- Crew Boss — center star -->
@@ -1697,7 +1697,7 @@ def _build_html():
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
     <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:4%;transform:translate(-50%,0)">
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:-3%;transform:translate(-50%,0)">
       <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
@@ -1705,11 +1705,11 @@ def _build_html():
       <div class="bubble-circle"><span class="icon">\U0001f3a8</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="left:72%;top:76%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-growth" style="left:72%;top:84%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-life" style="left:28%;top:76%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-life" style="left:28%;top:84%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
