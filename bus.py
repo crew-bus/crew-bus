@@ -137,7 +137,14 @@ def init_db(db_path: Optional[Path] = None) -> None:
             active          INTEGER NOT NULL DEFAULT 1,
             capabilities    TEXT    NOT NULL DEFAULT '[]',
             description     TEXT    NOT NULL DEFAULT '',
+            model           TEXT    NOT NULL DEFAULT '',
             created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS crew_config (
+            key             TEXT    PRIMARY KEY,
+            value           TEXT    NOT NULL DEFAULT '',
             updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         );
 
@@ -511,6 +518,11 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_meet_client        ON meet_requests(client_user_id, status);
     """)
 
+    # Migrate existing DBs: add model column to agents if missing
+    cols = [r[1] for r in cur.execute("PRAGMA table_info(agents)").fetchall()]
+    if "model" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
     if existing == 0:
@@ -880,6 +892,7 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
     is_active = 1 if agent_def.get("active", True) else 0
     caps = json.dumps(agent_def.get("capabilities", []))
     desc = agent_def.get("description", "")
+    model = agent_def.get("model", "")
 
     existing = conn.execute("SELECT id FROM agents WHERE name = ?", (name,)).fetchone()
     if existing:
@@ -887,11 +900,11 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
             "UPDATE agents SET agent_type=?, role=?, channel=?, channel_address=?, "
             "trust_score=?, burnout_score=?, budget_limit=?, "
             "quiet_hours_start=?, quiet_hours_end=?, timezone=?, "
-            "active=?, capabilities=?, description=?, "
+            "active=?, capabilities=?, description=?, model=?, "
             "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE name=?",
             (agent_type, role, channel, address, trust, burnout, budget_limit,
              qh_start, qh_end, tz,
-             is_active, caps, desc, name),
+             is_active, caps, desc, model, name),
         )
         agent_id = existing["id"]
     else:
@@ -899,11 +912,11 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
             "INSERT INTO agents (name, agent_type, role, channel, channel_address, "
             "trust_score, burnout_score, budget_limit, "
             "quiet_hours_start, quiet_hours_end, timezone, "
-            "active, capabilities, description) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "active, capabilities, description, model) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (name, agent_type, role, channel, address, trust, burnout, budget_limit,
              qh_start, qh_end, tz,
-             is_active, caps, desc),
+             is_active, caps, desc, model),
         )
         agent_id = cur.lastrowid
 
@@ -919,6 +932,139 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
             )
 
     return agent_id
+
+
+# ---------------------------------------------------------------------------
+# Public agent & team creation (used by Wizard and API)
+# ---------------------------------------------------------------------------
+
+def create_agent(name: str, agent_type: str = "worker",
+                 description: str = "", parent_name: str = "",
+                 model: str = "", db_path: Optional[Path] = None) -> dict:
+    """Create a new agent in the crew. Returns {ok, agent_id} or {ok, error}.
+
+    This is the public API for programmatic agent creation — used by the
+    Wizard, dashboard API, and CrewBridge.
+    """
+    if not name or not name.strip():
+        return {"ok": False, "error": "Agent name is required"}
+    name = name.strip()
+    if len(name) > 60:
+        return {"ok": False, "error": "Name too long (max 60 chars)"}
+    if agent_type not in VALID_AGENT_TYPES:
+        return {"ok": False, "error": f"Invalid type '{agent_type}'. Valid: {', '.join(VALID_AGENT_TYPES)}"}
+
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        existing = conn.execute("SELECT id FROM agents WHERE name=?", (name,)).fetchone()
+        if existing:
+            return {"ok": False, "error": f"Agent '{name}' already exists"}
+
+        agent_def = {
+            "name": name,
+            "agent_type": agent_type,
+            "description": description,
+            "model": model,
+        }
+        if parent_name:
+            agent_def["parent"] = parent_name
+
+        agent_id = _upsert_agent(conn, agent_def)
+        conn.commit()
+        return {"ok": True, "agent_id": agent_id, "name": name}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def create_team(team_name: str, manager_name: str = "",
+                worker_names: list = None, worker_descriptions: list = None,
+                parent_name: str = "Crew-Boss", model: str = "",
+                db_path: Optional[Path] = None) -> dict:
+    """Create a team with a manager and optional workers.
+
+    Returns {ok, team_id, manager_id, worker_ids} or {ok, error}.
+    """
+    if not team_name or not team_name.strip():
+        return {"ok": False, "error": "Team name is required"}
+
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    worker_names = worker_names or []
+    worker_descriptions = worker_descriptions or []
+
+    if not manager_name:
+        manager_name = f"{team_name}-Manager"
+
+    try:
+        # Create manager
+        mgr_def = {
+            "name": manager_name,
+            "agent_type": "manager",
+            "description": f"Manages the {team_name} team.",
+            "parent": parent_name,
+            "model": model,
+        }
+        mgr_id = _upsert_agent(conn, mgr_def)
+
+        # Create workers
+        w_ids = []
+        for i, wname in enumerate(worker_names):
+            wdesc = worker_descriptions[i] if i < len(worker_descriptions) else ""
+            w_def = {
+                "name": wname,
+                "agent_type": "worker",
+                "description": wdesc,
+                "parent": manager_name,
+                "model": model,
+            }
+            w_ids.append(_upsert_agent(conn, w_def))
+
+        # Insert into team_mailbox meta (team uses manager's id as team_id)
+        conn.commit()
+        return {
+            "ok": True,
+            "team_name": team_name,
+            "manager_id": mgr_id,
+            "manager_name": manager_name,
+            "worker_ids": w_ids,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Crew config (model keys, settings)
+# ---------------------------------------------------------------------------
+
+def set_config(key: str, value: str, db_path: Optional[Path] = None) -> None:
+    """Set a crew config value (e.g. 'default_model', 'kimi_api_key')."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        conn.execute(
+            "INSERT INTO crew_config (key, value, updated_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now')) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, value),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_config(key: str, default: str = "", db_path: Optional[Path] = None) -> str:
+    """Get a crew config value."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        row = conn.execute("SELECT value FROM crew_config WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else default
+    finally:
+        conn.close()
 
 
 def _upsert_timing_rule(conn: sqlite3.Connection, agent_id: int,

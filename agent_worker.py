@@ -1,12 +1,18 @@
 """
-crew-bus Agent Worker — Ollama-powered AI brain for all agents.
+crew-bus Agent Worker — AI brain for all agents.
 
 Background thread that:
   1. Polls the messages table for queued messages TO agents FROM the human
-  2. Sends them to Ollama (local LLM) with agent-specific system prompts
+  2. Sends them to the agent's configured LLM backend
   3. Writes the agent's reply back as a new message in the bus
 
-100% local. No cloud. No API keys. Just Ollama on your machine.
+Supports multiple backends:
+  - Ollama (local, default fallback)
+  - Kimi K2.5 (OpenAI-compatible API via api.moonshot.ai)
+  - Any OpenAI-compatible endpoint
+
+Per-agent model selection: each agent can have its own model field.
+Global default stored in crew_config table ('default_model' key).
 """
 
 import json
@@ -27,6 +33,8 @@ import bus
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "llama3.2"
+KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions"
+KIMI_DEFAULT_MODEL = "kimi-k2.5"
 POLL_INTERVAL = 2  # seconds between queue checks
 
 # ---------------------------------------------------------------------------
@@ -103,38 +111,22 @@ def _build_system_prompt(agent_type: str, agent_name: str,
 
 
 # ---------------------------------------------------------------------------
-# Ollama caller
+# LLM callers — routes to the right backend per agent
 # ---------------------------------------------------------------------------
 
-def call_ollama(system_prompt: str, user_message: str,
-                chat_history: Optional[list] = None,
-                model: str = OLLAMA_MODEL) -> str:
-    """Call local Ollama and return the assistant response text."""
-    messages = [{"role": "system", "content": system_prompt}]
-
-    # Add recent chat history for context (last few exchanges)
-    if chat_history:
-        for msg in chat_history[-6:]:  # last 3 exchanges max
-            messages.append(msg)
-
-    messages.append({"role": "user", "content": user_message})
-
+def _call_ollama(messages: list, model: str = OLLAMA_MODEL) -> str:
+    """Call local Ollama and return assistant response text."""
     payload = json.dumps({
         "model": model,
         "messages": messages,
         "stream": False,
-        "options": {
-            "temperature": 0.7,
-            "num_predict": 256,  # keep replies concise
-        },
+        "options": {"temperature": 0.7, "num_predict": 256},
     }).encode("utf-8")
 
     req = urllib.request.Request(
-        OLLAMA_URL,
-        data=payload,
+        OLLAMA_URL, data=payload,
         headers={"Content-Type": "application/json"},
     )
-
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -143,6 +135,129 @@ def call_ollama(system_prompt: str, user_message: str,
         return f"(Ollama not reachable — is it running? Error: {e})"
     except Exception as e:
         return f"(Error generating response: {e})"
+
+
+def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
+               api_key: str = "") -> str:
+    """Call Kimi K2.5 API (OpenAI-compatible). Returns assistant response."""
+    if not api_key:
+        return "(Kimi API key not configured. Set it via Wizard or crew_config.)"
+
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "temperature": 0.6,
+        "max_tokens": 512,
+        "extra_body": {"thinking": {"type": "disabled"}},
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        KIMI_API_URL, data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            choices = data.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "").strip()
+            return "(Empty response from Kimi)"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:200]
+        return f"(Kimi API error {e.code}: {body})"
+    except Exception as e:
+        return f"(Error calling Kimi: {e})"
+
+
+def _call_openai_compat(messages: list, model: str, api_url: str,
+                        api_key: str = "") -> str:
+    """Call any OpenAI-compatible endpoint. Fallback for custom setups."""
+    if not api_key:
+        return "(API key not configured for this model.)"
+
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "temperature": 0.7,
+        "max_tokens": 512,
+    }).encode("utf-8")
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req = urllib.request.Request(api_url, data=payload, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            choices = data.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "").strip()
+            return "(Empty response)"
+    except Exception as e:
+        return f"(Error: {e})"
+
+
+def call_llm(system_prompt: str, user_message: str,
+             chat_history: Optional[list] = None,
+             model: str = "", db_path: Path = None) -> str:
+    """Route to the correct LLM backend based on model string.
+
+    Model resolution order:
+      1. Per-agent model field (passed in)
+      2. crew_config 'default_model' key
+      3. Ollama fallback (llama3.2)
+
+    Model string format:
+      - "" or "ollama:*" or plain name → Ollama
+      - "kimi" or "kimi:*" → Kimi K2.5 API
+      - "openai:model@url" → custom OpenAI-compatible
+    """
+    messages = [{"role": "system", "content": system_prompt}]
+    if chat_history:
+        for msg in chat_history[-6:]:
+            messages.append(msg)
+    messages.append({"role": "user", "content": user_message})
+
+    # Resolve model
+    if not model:
+        model = bus.get_config("default_model", "", db_path=db_path) if db_path else ""
+
+    if not model or model == "ollama":
+        return _call_ollama(messages)
+
+    # Kimi K2.5
+    if model.startswith("kimi"):
+        kimi_model = KIMI_DEFAULT_MODEL
+        if ":" in model:
+            kimi_model = model.split(":", 1)[1]
+        api_key = bus.get_config("kimi_api_key", "", db_path=db_path) if db_path else ""
+        return _call_kimi(messages, model=kimi_model, api_key=api_key)
+
+    # Ollama with specific model name (e.g. "ollama:mistral")
+    if model.startswith("ollama:"):
+        return _call_ollama(messages, model=model.split(":", 1)[1])
+
+    # Generic: assume Ollama local model name
+    return _call_ollama(messages, model=model)
+
+
+# Keep legacy name for backwards compat with tests
+def call_ollama(system_prompt: str, user_message: str,
+                chat_history: Optional[list] = None,
+                model: str = OLLAMA_MODEL) -> str:
+    """Legacy wrapper — routes through call_llm."""
+    messages = [{"role": "system", "content": system_prompt}]
+    if chat_history:
+        for msg in chat_history[-6:]:
+            messages.append(msg)
+    messages.append({"role": "user", "content": user_message})
+    return _call_ollama(messages, model=model)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +300,7 @@ def _process_queued_messages(db_path: Path):
         # Find ALL queued messages from ANY human to ANY non-human agent
         rows = conn.execute("""
             SELECT m.id, m.from_agent_id, m.to_agent_id, m.body, m.subject,
-                   a.agent_type, a.name
+                   a.agent_type, a.name, a.model
             FROM messages m
             JOIN agents a ON m.to_agent_id = a.id
             JOIN agents h ON m.from_agent_id = h.id
@@ -203,6 +318,7 @@ def _process_queued_messages(db_path: Path):
         agent_id = row["to_agent_id"]
         agent_type = row["agent_type"]
         agent_name = row["name"]
+        agent_model = row["model"] if row["model"] else ""
         user_text = row["body"] if row["body"] else row["subject"]
 
         if not user_text:
@@ -227,15 +343,92 @@ def _process_queued_messages(db_path: Path):
         # Get recent chat history for context
         chat_history = _get_recent_chat(db_path, human_id, agent_id)
 
-        # Call Ollama
-        reply = call_ollama(system_prompt, user_text, chat_history)
+        # Call LLM — routes to Kimi/Ollama/etc based on agent's model field
+        reply = call_llm(system_prompt, user_text, chat_history,
+                         model=agent_model, db_path=db_path)
 
         if reply:
+            # Execute any wizard_action commands embedded in the reply
+            clean_reply = _execute_wizard_actions(reply, db_path)
+
             # Insert reply directly — always works, bypasses routing rules
-            _insert_reply_direct(db_path, agent_id, human_id, reply)
+            _insert_reply_direct(db_path, agent_id, human_id, clean_reply)
 
         # Mark original message as delivered
         _mark_delivered(db_path, msg_id)
+
+
+import re as _re
+
+def _execute_wizard_actions(reply: str, db_path: Path) -> str:
+    """Parse and execute wizard_action JSON commands from an LLM reply.
+
+    The Wizard agent can embed action commands in its replies like:
+      {"wizard_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}
+      {"wizard_action": "create_agent", "name": "Muse", ...}
+
+    Actions are executed, and the JSON blocks are stripped from the
+    reply text so the human only sees the conversational part.
+    """
+    # Find all JSON-like blocks in the reply
+    pattern = r'\{[^{}]*"wizard_action"[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+
+    if not matches:
+        return reply
+
+    for raw in matches:
+        try:
+            action = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        cmd = action.get("wizard_action", "")
+
+        if cmd == "set_config":
+            key = action.get("key", "")
+            value = action.get("value", "")
+            if key and value:
+                bus.set_config(key, value, db_path=db_path)
+                print(f"[wizard] config set: {key}")
+
+        elif cmd == "create_agent":
+            result = bus.create_agent(
+                name=action.get("name", ""),
+                agent_type=action.get("agent_type", "worker"),
+                description=action.get("description", ""),
+                parent_name=action.get("parent", "Crew-Boss"),
+                model=action.get("model", ""),
+                db_path=db_path,
+            )
+            if result.get("ok"):
+                print(f"[wizard] created agent: {action.get('name')}")
+            else:
+                print(f"[wizard] agent error: {result.get('error')}")
+
+        elif cmd == "create_team":
+            workers = action.get("workers", [])
+            w_names = [w.get("name", "") for w in workers]
+            w_descs = [w.get("description", "") for w in workers]
+            result = bus.create_team(
+                team_name=action.get("name", ""),
+                worker_names=w_names,
+                worker_descriptions=w_descs,
+                model=action.get("model", ""),
+                db_path=db_path,
+            )
+            if result.get("ok"):
+                print(f"[wizard] created team: {action.get('name')}")
+            else:
+                print(f"[wizard] team error: {result.get('error')}")
+
+    # Strip action blocks from reply so human sees clean text
+    clean = reply
+    for raw in matches:
+        clean = clean.replace(raw, "")
+    # Clean up extra whitespace left behind
+    clean = _re.sub(r'\n{3,}', '\n\n', clean).strip()
+    return clean
 
 
 def _mark_delivered(db_path: Path, message_id: int):
@@ -286,7 +479,8 @@ def start_worker(db_path: Path = None):
     _stop_event.clear()
 
     def _loop():
-        print(f"Agent worker started (model: {OLLAMA_MODEL}, poll: {POLL_INTERVAL}s)")
+        default_model = bus.get_config("default_model", "ollama", db_path=db_path)
+        print(f"Agent worker started (default: {default_model}, poll: {POLL_INTERVAL}s)")
         while not _stop_event.is_set():
             try:
                 _process_queued_messages(db_path)

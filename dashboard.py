@@ -82,6 +82,39 @@ SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
 
+# Wizard — the setup agent that self-spawns on every Crew Bus install.
+# This description doubles as its system prompt via _build_system_prompt().
+WIZARD_DESCRIPTION = (
+    "You are Wizard, the setup guide for Crew Bus. You are an OpenClaw agent "
+    "powered by Kimi K2.5. You self-spawn the first time anyone runs Crew Bus.\n\n"
+    "YOUR MAIN JOB: Help the human set up their personal AI crew.\n\n"
+    "SETUP FLOW (first conversation):\n"
+    "1. Welcome them warmly. Explain you're their setup wizard.\n"
+    "2. Ask which AI model they want their crew to run on. Default: Kimi K2.5.\n"
+    "   Other options: Ollama (local), or any OpenAI-compatible API.\n"
+    "3. Ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
+    "   Tell them: get one free at platform.moonshot.ai\n"
+    "4. Once configured, offer to create their first crew — suggest starter packs:\n"
+    "   - Personal crew (Family Helper, Health Buddy, Growth Coach, Life Assistant)\n"
+    "   - Business crew (Sales Tracker, Content Writer, Outreach, Analytics)\n"
+    "   - Creative crew (Muse, Writing Partner, Visual Ideas, Portfolio Manager)\n"
+    "   - Custom: ask what they need, build it.\n"
+    "5. Create agents and teams using the TOOL COMMANDS below.\n\n"
+    "TOOL COMMANDS (use these exact JSON formats in your replies to trigger actions):\n"
+    '  {"wizard_action": "set_config", "key": "default_model", "value": "kimi"}\n'
+    '  {"wizard_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}\n'
+    '  {"wizard_action": "create_agent", "name": "...", "agent_type": "worker", '
+    '"description": "...", "parent": "Crew-Boss"}\n'
+    '  {"wizard_action": "create_team", "name": "...", "workers": ['
+    '{"name": "...", "description": "..."}]}\n\n'
+    "RULES:\n"
+    "- Keep it warm, fun, simple. No jargon.\n"
+    "- Always confirm with the human before creating agents.\n"
+    "- After setup, you stay available as a help guide.\n"
+    "- You can create agents anytime the human asks.\n"
+    "- Short responses (2-4 sentences). Be encouraging."
+)
+
 # Agent-type to Personal Edition name mapping
 PERSONAL_NAMES = {
     "right_hand": "Crew Boss",
@@ -3342,6 +3375,55 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 conn.close()
             return _json_response(self, {"ok": True, "id": agent_id, "name": new_name})
 
+        # ── Create agent ──
+
+        if path == "/api/agents/create":
+            name = data.get("name", "").strip()
+            agent_type = data.get("agent_type", "worker")
+            description = data.get("description", "")
+            parent_name = data.get("parent", "")
+            model = data.get("model", "")
+            result = bus.create_agent(
+                name=name, agent_type=agent_type,
+                description=description, parent_name=parent_name,
+                model=model, db_path=self.db_path,
+            )
+            code = 200 if result.get("ok") else 400
+            return _json_response(self, result, code)
+
+        # ── Create team ──
+
+        if path == "/api/teams/create":
+            team_name = data.get("name", "").strip()
+            manager_name = data.get("manager_name", "")
+            workers = data.get("workers", [])
+            w_names = [w.get("name", "") for w in workers]
+            w_descs = [w.get("description", "") for w in workers]
+            parent = data.get("parent", "Crew-Boss")
+            model = data.get("model", "")
+            result = bus.create_team(
+                team_name=team_name, manager_name=manager_name,
+                worker_names=w_names, worker_descriptions=w_descs,
+                parent_name=parent, model=model, db_path=self.db_path,
+            )
+            code = 200 if result.get("ok") else 400
+            return _json_response(self, result, code)
+
+        # ── Config get/set (model keys, settings) ──
+
+        if path == "/api/config/get":
+            key = data.get("key", "")
+            val = bus.get_config(key, db_path=self.db_path)
+            return _json_response(self, {"key": key, "value": val})
+
+        if path == "/api/config/set":
+            key = data.get("key", "").strip()
+            value = data.get("value", "")
+            if not key:
+                return _json_response(self, {"error": "key required"}, 400)
+            bus.set_config(key, value, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "key": key})
+
         # ── Crew Load API (hot-reload YAML) ──
 
         if path == "/api/crew/load":
@@ -3371,19 +3453,69 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
 
 
+def _ensure_wizard(db_path):
+    """Ensure the Wizard agent exists. Self-spawns on first run.
+
+    The Wizard is the first agent every Crew Bus install gets.
+    It guides new users through setup — picking a model, entering
+    their API key, and creating their first crew.
+    """
+    conn = bus.get_conn(db_path)
+    try:
+        wiz = conn.execute("SELECT id FROM agents WHERE agent_type='help'").fetchone()
+        if wiz:
+            return  # already exists
+    finally:
+        conn.close()
+
+    # Create minimal bootstrap: Human + Crew-Boss + Wizard
+    conn = bus.get_conn(db_path)
+    try:
+        # Human
+        conn.execute(
+            "INSERT OR IGNORE INTO agents (name, agent_type, role, channel) "
+            "VALUES ('Human', 'human', 'human', 'console')"
+        )
+        human = conn.execute("SELECT id FROM agents WHERE agent_type='human'").fetchone()
+        human_id = human["id"] if human else 1
+
+        # Crew-Boss
+        conn.execute(
+            "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
+            "trust_score, description) VALUES ('Crew-Boss', 'right_hand', 'right_hand', "
+            "'console', ?, 5, 'Your friendly AI right-hand. Handles 80%% of everything.')",
+            (human_id,)
+        )
+        boss = conn.execute("SELECT id FROM agents WHERE agent_type='right_hand'").fetchone()
+        boss_id = boss["id"] if boss else 2
+
+        # Wizard — the setup agent
+        conn.execute(
+            "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
+            "trust_score, model, description) VALUES "
+            "('Wizard', 'help', 'worker', 'console', ?, 8, 'kimi', ?)",
+            (boss_id, WIZARD_DESCRIPTION)
+        )
+        conn.commit()
+        print("Wizard self-spawned — ready to guide setup.")
+    finally:
+        conn.close()
+
+
 def _auto_load_hierarchy(db_path):
-    """Load hierarchy from configs/ if DB has no agents.
+    """Load hierarchy from configs/ if DB has few agents.
 
     Prefers example_stack.yaml if present (default for new installs).
     Falls back to first .yaml/.yml file found.
+    Wizard is always spawned first via _ensure_wizard().
     """
     conn = bus.get_conn(db_path)
     try:
         count = conn.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
     finally:
         conn.close()
-    if count > 0:
-        return  # already populated
+    if count > 3:
+        return  # already populated beyond bootstrap
     configs_dir = Path(__file__).parent / "configs"
     if not configs_dir.is_dir():
         return
@@ -3404,6 +3536,7 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     if db_path is None:
         db_path = DEFAULT_DB
     bus.init_db(db_path=db_path)
+    _ensure_wizard(db_path)  # Wizard always self-spawns first
     if config:
         bus.load_hierarchy(config, db_path=db_path)
     else:
