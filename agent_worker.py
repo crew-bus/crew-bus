@@ -8,7 +8,11 @@ Background thread that:
 
 Supports multiple backends:
   - Ollama (local, default fallback)
-  - Kimi K2.5 (OpenAI-compatible API via api.moonshot.ai)
+  - Kimi K2.5 (api.moonshot.ai)
+  - Claude (Anthropic Messages API)
+  - OpenAI (GPT-4o, etc.)
+  - Groq (Llama 3.3 70B, etc.)
+  - Gemini (Google AI)
   - Any OpenAI-compatible endpoint
 
 Per-agent model selection: each agent can have its own model field.
@@ -36,6 +40,16 @@ OLLAMA_MODEL = "llama3.2"
 KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions"
 KIMI_DEFAULT_MODEL = "kimi-k2.5"
 POLL_INTERVAL = 0.5  # seconds between queue checks
+
+# Provider registry — model_prefix → (api_url, default_model, config_key_for_api_key)
+PROVIDERS = {
+    "kimi":    ("https://api.moonshot.ai/v1/chat/completions",   "kimi-k2.5",            "kimi_api_key"),
+    "claude":  ("https://api.anthropic.com/v1/messages",         "claude-sonnet-4-5-20250929", "claude_api_key"),
+    "openai":  ("https://api.openai.com/v1/chat/completions",    "gpt-4o-mini",          "openai_api_key"),
+    "groq":    ("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", "groq_api_key"),
+    "gemini":  ("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.0-flash", "gemini_api_key"),
+    "ollama":  (OLLAMA_URL,                                       OLLAMA_MODEL,           ""),
+}
 
 # ---------------------------------------------------------------------------
 # Agent system prompts — warm, friendly, personality-first
@@ -178,9 +192,55 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
         return f"(Error calling Kimi: {e})"
 
 
+def _call_claude(messages: list, model: str = "claude-sonnet-4-5-20250929",
+                 api_key: str = "") -> str:
+    """Call Anthropic Claude Messages API. Different format from OpenAI."""
+    if not api_key:
+        return "(Claude API key not configured. Set it via setup or crew_config.)"
+
+    # Anthropic format: system is separate, messages are user/assistant only
+    system_text = ""
+    chat_messages = []
+    for msg in messages:
+        if msg["role"] == "system":
+            system_text = msg["content"]
+        else:
+            chat_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    body = {
+        "model": model,
+        "max_tokens": 1024,
+        "messages": chat_messages,
+    }
+    if system_text:
+        body["system"] = system_text
+
+    payload = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            content = data.get("content", [])
+            if content:
+                return content[0].get("text", "").strip()
+            return "(Empty response from Claude)"
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")[:200]
+        return f"(Claude API error {e.code}: {body_text})"
+    except Exception as e:
+        return f"(Error calling Claude: {e})"
+
+
 def _call_openai_compat(messages: list, model: str, api_url: str,
                         api_key: str = "") -> str:
-    """Call any OpenAI-compatible endpoint. Fallback for custom setups."""
+    """Call any OpenAI-compatible endpoint (OpenAI, Groq, Gemini, etc.)."""
     if not api_key:
         return "(API key not configured for this model.)"
 
@@ -189,7 +249,7 @@ def _call_openai_compat(messages: list, model: str, api_url: str,
         "messages": messages,
         "stream": False,
         "temperature": 0.7,
-        "max_tokens": 512,
+        "max_tokens": 1024,
     }).encode("utf-8")
 
     headers = {"Content-Type": "application/json"}
@@ -204,6 +264,9 @@ def _call_openai_compat(messages: list, model: str, api_url: str,
             if choices:
                 return choices[0].get("message", {}).get("content", "").strip()
             return "(Empty response)"
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")[:200]
+        return f"(API error {e.code}: {body_text})"
     except Exception as e:
         return f"(Error: {e})"
 
@@ -236,19 +299,36 @@ def call_llm(system_prompt: str, user_message: str,
     if not model or model == "ollama":
         return _call_ollama(messages)
 
-    # Kimi K2.5
-    if model.startswith("kimi"):
-        kimi_model = KIMI_DEFAULT_MODEL
-        if ":" in model:
-            kimi_model = model.split(":", 1)[1]
+    # Parse "provider" or "provider:specific-model"
+    provider = model.split(":")[0] if ":" in model else model
+    specific_model = model.split(":", 1)[1] if ":" in model else ""
+
+    # Kimi K2.5 — has its own caller (thinking param, reasoning_content)
+    if provider == "kimi":
+        kimi_model = specific_model or KIMI_DEFAULT_MODEL
         api_key = bus.get_config("kimi_api_key", "", db_path=db_path) if db_path else ""
         return _call_kimi(messages, model=kimi_model, api_key=api_key)
+
+    # Claude — Anthropic Messages API (different format)
+    if provider == "claude":
+        claude_model = specific_model or PROVIDERS["claude"][1]
+        api_key = bus.get_config("claude_api_key", "", db_path=db_path) if db_path else ""
+        return _call_claude(messages, model=claude_model, api_key=api_key)
+
+    # OpenAI, Groq, Gemini — all OpenAI-compatible
+    if provider in PROVIDERS:
+        api_url, default_model, key_name = PROVIDERS[provider]
+        use_model = specific_model or default_model
+        api_key = bus.get_config(key_name, "", db_path=db_path) if (db_path and key_name) else ""
+        if provider == "ollama":
+            return _call_ollama(messages, model=use_model)
+        return _call_openai_compat(messages, model=use_model, api_url=api_url, api_key=api_key)
 
     # Ollama with specific model name (e.g. "ollama:mistral")
     if model.startswith("ollama:"):
         return _call_ollama(messages, model=model.split(":", 1)[1])
 
-    # Generic: assume Ollama local model name
+    # Generic fallback: assume Ollama local model name
     return _call_ollama(messages, model=model)
 
 

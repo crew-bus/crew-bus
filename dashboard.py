@@ -1035,6 +1035,20 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   background:none;border:none;color:var(--mu);cursor:pointer;font-size:1.1rem;
   padding:4px;
 }
+.setup-model-toggle{
+  display:inline-block;font-size:.8rem;color:var(--ac);cursor:pointer;
+  margin-bottom:16px;background:none;border:none;padding:0;
+}
+.setup-model-toggle:hover{text-decoration:underline}
+.setup-model-section{margin-bottom:20px;display:none}
+.setup-model-section.open{display:block}
+.setup-select{
+  width:100%;padding:10px 14px;background:var(--bg);color:var(--tx);
+  border:1px solid var(--bd);border-radius:var(--r);font-size:.9rem;
+  outline:none;cursor:pointer;margin-bottom:12px;
+  -webkit-appearance:none;appearance:none;
+}
+.setup-select:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(88,166,255,0.15)}
 .setup-link{
   display:block;font-size:.8rem;color:var(--ac);text-decoration:none;
   margin-bottom:20px;
@@ -2282,6 +2296,31 @@ function toggleSetupKey(){
   if(inp.type==='password'){inp.type='text';} else {inp.type='password';}
 }
 
+function onSetupModelChange(){
+  var sel=document.getElementById('setup-model');
+  var opt=sel.options[sel.selectedIndex];
+  var keyName=opt.dataset.keyName;
+  var placeholder=opt.dataset.placeholder;
+  var url=opt.dataset.url;
+  var urlLabel=opt.dataset.urlLabel;
+  var keySection=document.getElementById('setup-key-section');
+  var keyLabel=document.getElementById('setup-key-label');
+  var keyInput=document.getElementById('setup-key');
+  var link=document.getElementById('setup-link');
+  document.getElementById('setup-error').textContent='';
+  // Ollama needs no key
+  if(sel.value==='ollama'){
+    keySection.style.display='none';
+  } else {
+    keySection.style.display='';
+    keyLabel.textContent='Paste your '+keyName+' API key';
+    keyInput.placeholder=placeholder;
+    keyInput.value='';
+    if(url){link.href=url;link.textContent=urlLabel+' \u2192';link.style.display='';}
+    else{link.style.display='none';}
+  }
+}
+
 function bootDashboard(){
   showView('crew');startRefresh();loadComposeAgents();
 }
@@ -2295,20 +2334,27 @@ function checkSetupNeeded(){
       bootDashboard();
     }
   }).catch(function(){
-    // If endpoint fails, boot normally
     bootDashboard();
   });
 }
 
 function submitSetup(){
+  var sel=document.getElementById('setup-model');
+  var model=sel.value;
   var keyInput=document.getElementById('setup-key');
   var errEl=document.getElementById('setup-error');
   var btn=document.getElementById('setup-btn');
   var key=(keyInput.value||'').trim();
   errEl.textContent='';
-  if(!key){errEl.textContent='Please paste your Moonshot API key.';keyInput.focus();return;}
+  // Ollama doesn't need a key
+  if(model!=='ollama' && !key){
+    var provName=sel.options[sel.selectedIndex].dataset.keyName;
+    errEl.textContent='Please paste your '+provName+' API key.';
+    keyInput.focus();return;
+  }
   btn.disabled=true;btn.textContent='Setting up...';
-  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})})
+  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:model,api_key:key})})
     .then(function(r){return r.json()})
     .then(function(d){
       if(d.ok){
@@ -2317,7 +2363,6 @@ function submitSetup(){
         document.querySelectorAll('.topbar,.content,.bottombar').forEach(function(el){el.style.display=''});
         setTimeout(function(){overlay.style.display='none'},600);
         bootDashboard();
-        // Auto-open Wizard chat after a brief delay
         setTimeout(function(){
           if(d.wizard_id){openAgentChat(d.wizard_id);}
         },800);
@@ -2587,17 +2632,33 @@ def _build_html():
   <div class="setup-card">
     <div class="setup-icon">\U0001f9d9\u200d\u2642\ufe0f</div>
     <h2>Welcome to Crew Bus</h2>
-    <p class="setup-sub">Your personal AI crew, powered by Kimi K2.5.<br>
-    Let's get your crew online in 30 seconds.</p>
-    <label for="setup-key">Paste your Moonshot API key</label>
-    <div class="setup-key-wrap">
-      <input class="setup-key" id="setup-key" type="password" placeholder="sk-..." autocomplete="off"
-        onkeydown="if(event.key==='Enter')submitSetup()">
-      <button class="setup-key-toggle" onclick="toggleSetupKey()" title="Show/hide key">\U0001f441\ufe0f</button>
+    <p class="setup-sub">Your personal AI crew. Pick your AI model<br>
+    and get your crew online in 30 seconds.</p>
+
+    <div class="setup-model-section open" id="setup-model-section">
+      <label for="setup-model">Choose your AI model</label>
+      <select class="setup-select" id="setup-model" onchange="onSetupModelChange()">
+        <option value="kimi" data-key-name="Moonshot" data-placeholder="sk-..." data-url="https://platform.moonshot.ai" data-url-label="Get a free key at platform.moonshot.ai" selected>Kimi K2.5 (Free tier available)</option>
+        <option value="claude" data-key-name="Anthropic" data-placeholder="sk-ant-..." data-url="https://console.anthropic.com/settings/keys" data-url-label="Get your key at console.anthropic.com">Claude Sonnet 4.5 (Anthropic)</option>
+        <option value="openai" data-key-name="OpenAI" data-placeholder="sk-..." data-url="https://platform.openai.com/api-keys" data-url-label="Get your key at platform.openai.com">GPT-4o Mini (OpenAI)</option>
+        <option value="groq" data-key-name="Groq" data-placeholder="gsk_..." data-url="https://console.groq.com/keys" data-url-label="Get a free key at console.groq.com">Llama 3.3 70B (Groq \u2014 Free)</option>
+        <option value="gemini" data-key-name="Google AI" data-placeholder="AI..." data-url="https://aistudio.google.com/apikey" data-url-label="Get a free key at aistudio.google.com">Gemini 2.0 Flash (Google \u2014 Free)</option>
+        <option value="ollama" data-key-name="" data-placeholder="" data-url="" data-url-label="">Ollama (Local \u2014 No key needed)</option>
+      </select>
     </div>
-    <a class="setup-link" href="https://platform.moonshot.ai" target="_blank" rel="noopener">
-      Get a free API key at platform.moonshot.ai \u2192
-    </a>
+
+    <div id="setup-key-section">
+      <label for="setup-key" id="setup-key-label">Paste your Moonshot API key</label>
+      <div class="setup-key-wrap">
+        <input class="setup-key" id="setup-key" type="password" placeholder="sk-..." autocomplete="off"
+          onkeydown="if(event.key==='Enter')submitSetup()">
+        <button class="setup-key-toggle" onclick="toggleSetupKey()" title="Show/hide key">\U0001f441\ufe0f</button>
+      </div>
+      <a class="setup-link" id="setup-link" href="https://platform.moonshot.ai" target="_blank" rel="noopener">
+        Get a free key at platform.moonshot.ai \u2192
+      </a>
+    </div>
+
     <div class="setup-error" id="setup-error"></div>
     <button class="setup-btn" id="setup-btn" onclick="submitSetup()">\U0001f680 Start My Crew</button>
     <div class="setup-footer">100% local \u00b7 MIT license \u00b7 No cloud \u00b7 Your data stays on your machine</div>
@@ -3866,21 +3927,29 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         # ── First-time setup complete ──
 
         if path == "/api/setup/complete":
+            model = data.get("model", "kimi").strip()
             api_key = data.get("api_key", "").strip()
-            if not api_key:
+            # Map model → config key name
+            key_map = {
+                "kimi": "kimi_api_key", "claude": "claude_api_key",
+                "openai": "openai_api_key", "groq": "groq_api_key",
+                "gemini": "gemini_api_key",
+            }
+            if model != "ollama" and not api_key:
                 return _json_response(self, {"error": "API key is required"}, 400)
             # Save config
-            bus.set_config("default_model", "kimi", db_path=self.db_path)
-            bus.set_config("kimi_api_key", api_key, db_path=self.db_path)
-            # Update all agents that have no model set → kimi
+            bus.set_config("default_model", model, db_path=self.db_path)
+            if model in key_map and api_key:
+                bus.set_config(key_map[model], api_key, db_path=self.db_path)
+            # Update all agents that have no model set → chosen model
             conn = bus.get_conn(self.db_path)
             wizard_id = None
             try:
                 conn.execute(
-                    "UPDATE agents SET model='kimi' WHERE model='' OR model IS NULL"
+                    "UPDATE agents SET model=? WHERE model='' OR model IS NULL",
+                    (model,),
                 )
                 conn.commit()
-                # Find human and wizard for welcome message
                 human = conn.execute(
                     "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
                 ).fetchone()
@@ -3901,7 +3970,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                         db_path=self.db_path,
                     )
                 except Exception:
-                    pass  # Non-fatal — wizard will still work
+                    pass  # Non-fatal
             return _json_response(self, {"ok": True, "wizard_id": wizard_id})
 
         # ── Config get/set (model keys, settings) ──
