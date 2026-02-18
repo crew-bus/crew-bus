@@ -202,7 +202,7 @@ a{color:var(--ac);text-decoration:none}
   padding:10px 16px 8px;flex-wrap:wrap;align-items:center;
 }
 @media(min-width:768px){
-  .time-bar{margin-left:60px}
+  .time-bar{margin-left:50px}
 }
 
 /* Day/Night toggle */
@@ -502,6 +502,29 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
 .wizard-title{font-size:.9rem;font-weight:700;color:var(--tx)}
 .wizard-sub{font-size:.7rem;color:var(--mu)}
 .wizard-status{flex-shrink:0}
+
+/* ═══ FINAL POLISH — warmth, depth, fullness ═══ */
+
+/* Subtle warm panel gradients for depth */
+.wizard-card{background:linear-gradient(135deg,rgba(179,136,255,0.04) 0%,var(--sf) 100%)}
+.team-card{background:linear-gradient(135deg,rgba(88,166,255,0.02) 0%,var(--sf) 100%)}
+.compose-bar{background:linear-gradient(180deg,var(--sf) 0%,rgba(22,27,34,0.97) 100%)}
+.topbar{background:linear-gradient(90deg,var(--sf) 0%,rgba(22,27,34,0.95) 50%,var(--sf) 100%)}
+
+/* Immersive vignette — subtle cocoon darkening at edges */
+body::before{
+  content:'';position:fixed;top:0;left:0;right:0;bottom:0;
+  pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 35% 45%,transparent 40%,rgba(0,0,0,0.12) 100%);
+}
+.topbar,.view,.compose-bar{position:relative}
+
+/* Compose selects — warm focus glow */
+.compose-row select:focus{
+  border-color:rgba(88,166,255,0.4);
+  box-shadow:0 0 8px rgba(88,166,255,0.15);
+  outline:none;
+}
 
 /* Trust + Burnout beneath circle */
 .indicators{
@@ -833,10 +856,10 @@ tr.override td{background:rgba(210,153,34,.08)}
 @media(min-width:768px){
   .main-layout{
     display:flex;align-items:flex-start;justify-content:flex-start;
-    gap:32px;max-width:1100px;margin:0 0 0 60px;padding:24px;
+    gap:36px;max-width:1200px;margin:0 0 0 50px;padding:24px;
   }
-  .main-left{flex:3;min-width:420px;max-width:540px}
-  .main-right{flex:1;min-width:200px;max-width:320px}
+  .main-left{flex:3;min-width:420px;max-width:560px}
+  .main-right{flex:2;min-width:280px;max-width:400px}
   .circle-wrap{max-width:540px;aspect-ratio:unset;height:490px}
   /* Agent space: left half on desktop */
   .agent-space{
