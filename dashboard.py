@@ -202,9 +202,20 @@ body.day-mode .tb-popup{box-shadow:0 8px 32px rgba(0,0,0,.12)}
 body.day-mode .tb-popup-overlay{background:rgba(0,0,0,.2)}
 body.day-mode .bubble-count{color:var(--ac)}
 body.day-mode .nav-btn.active{background:var(--ac);color:#fff}
+body.day-mode .nav-pill.active{background:var(--ac);color:#fff}
 body.day-mode .time-pill.active{background:var(--ac);color:#fff;border-color:var(--ac)}
 body.day-mode .dn-btn.active{background:var(--ac);color:#fff}
-.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.time-pill,.nav-btn,.dn-btn{
+/* Day mode — richer warm ambient life */
+body.day-mode .wizard-card{
+  background:linear-gradient(135deg,rgba(130,80,223,0.07) 0%,var(--sf) 50%,rgba(9,105,218,0.04) 100%) !important;
+  border-color:rgba(130,80,223,0.30);
+}
+body.day-mode .indicator{border-color:rgba(9,105,218,0.18)}
+body.day-mode .compose-subject,body.day-mode .compose-body{
+  border-color:rgba(9,105,218,0.15);box-shadow:0 0 4px rgba(9,105,218,0.06);
+}
+body.day-mode .compose-bar{border-top-color:rgba(9,105,218,0.12) !important}
+.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.time-pill,.nav-pill,.dn-btn,.indicator,.compose-subject,.compose-body{
   transition:background .6s ease,color .6s ease,border-color .6s ease,box-shadow .6s ease;
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -462,20 +473,33 @@ a{color:var(--ac);text-decoration:none}
 .compose-send{animation:sendBreathe 3s ease-in-out infinite}
 .compose-send:hover{box-shadow:0 0 22px rgba(88,166,255,0.6),0 0 45px rgba(88,166,255,0.2)!important}
 
-/* Input fields — subtle warm glow on focus */
-@keyframes inputFocusGlow{
-  0%,100%{box-shadow:0 0 6px rgba(88,166,255,0.15),0 0 18px rgba(88,166,255,0.05)}
-  50%{box-shadow:0 0 12px rgba(88,166,255,0.30),0 0 30px rgba(88,166,255,0.10)}
+/* Input fields — alive at rest, stronger when focused */
+@keyframes inputRestGlow{
+  0%,100%{box-shadow:0 0 4px rgba(88,166,255,0.06),0 0 12px rgba(88,166,255,0.02);border-color:var(--bd)}
+  50%{box-shadow:0 0 8px rgba(88,166,255,0.12),0 0 20px rgba(88,166,255,0.04);border-color:rgba(88,166,255,0.18)}
 }
+@keyframes inputFocusGlow{
+  0%,100%{box-shadow:0 0 8px rgba(88,166,255,0.20),0 0 22px rgba(88,166,255,0.08);border-color:rgba(88,166,255,0.4)}
+  50%{box-shadow:0 0 16px rgba(88,166,255,0.38),0 0 35px rgba(88,166,255,0.12);border-color:rgba(88,166,255,0.6)}
+}
+.compose-subject,.compose-body{animation:inputRestGlow 4s ease-in-out infinite}
 .compose-subject:focus,.compose-body:focus{
-  border-color:rgba(88,166,255,0.5);animation:inputFocusGlow 2.5s ease-in-out infinite;outline:none;
+  animation:inputFocusGlow 2.5s ease-in-out infinite;outline:none;
 }
 
-/* Active nav pill — subtle breathing highlight */
-@keyframes navActivePulse{
-  0%,100%{box-shadow:0 0 6px rgba(88,166,255,0.15),inset 0 0 8px rgba(88,166,255,0.04)}
-  50%{box-shadow:0 0 14px rgba(88,166,255,0.30),inset 0 0 12px rgba(88,166,255,0.08)}
+/* Nav pills — idle shimmer + stronger active breathing */
+@keyframes navIdleShimmer{
+  0%,100%{border-color:var(--bd)}
+  50%{border-color:rgba(88,166,255,0.15)}
 }
+@keyframes navActivePulse{
+  0%,100%{box-shadow:0 0 8px rgba(88,166,255,0.18),inset 0 0 8px rgba(88,166,255,0.05);border-color:rgba(88,166,255,0.25)}
+  50%{box-shadow:0 0 18px rgba(88,166,255,0.35),inset 0 0 14px rgba(88,166,255,0.08);border-color:rgba(88,166,255,0.45)}
+}
+.topbar .nav-pill{animation:navIdleShimmer 6s ease-in-out infinite}
+.topbar .nav-pill:nth-child(4){animation-delay:1.5s}
+.topbar .nav-pill:nth-child(5){animation-delay:3s}
+.topbar .nav-pill:nth-child(6){animation-delay:4.5s}
 .topbar .nav-pill.active{animation:navActivePulse 4s ease-in-out infinite}
 
 /* Trust & Energy indicators — gentle breathing */
@@ -510,11 +534,19 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
 }
 .topbar{animation:topbarGlow 6s ease-in-out infinite}
 
-/* Active time pill — gentle ambient presence */
-@keyframes timePillAmbient{
+/* Time pills — idle shimmer + active breathing */
+@keyframes timePillIdle{
   0%,100%{border-color:var(--bd)}
-  50%{border-color:rgba(88,166,255,0.2)}
+  50%{border-color:rgba(88,166,255,0.12)}
 }
+@keyframes timePillAmbient{
+  0%,100%{border-color:var(--bd);box-shadow:0 0 6px rgba(88,166,255,0.10)}
+  50%{border-color:rgba(88,166,255,0.3);box-shadow:0 0 14px rgba(88,166,255,0.20)}
+}
+.time-pill{animation:timePillIdle 5s ease-in-out infinite}
+.time-pill:nth-child(2){animation-delay:1.2s}
+.time-pill:nth-child(3){animation-delay:2.4s}
+.time-pill:nth-child(4){animation-delay:3.6s}
 .time-pill.active{animation:timePillAmbient 4s ease-in-out infinite}
 
 /* SVG connecting lines — staggered breathing opacity */
@@ -532,21 +564,22 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
 }
 .btn-add{animation:addTeamBreathe 5s ease-in-out infinite}
 
-/* Wizard card — alive purple breathing */
+/* Wizard card — rich warm purple breathing */
 .wizard-card{
   display:flex;align-items:center;gap:14px;
-  padding:14px 16px;margin:0 0 16px;
-  background:var(--sf);border:1px solid rgba(179,136,255,0.35);border-radius:var(--r);
+  padding:14px 18px;margin:0 0 16px;
+  background:linear-gradient(135deg,rgba(179,136,255,0.06) 0%,var(--sf) 60%,rgba(88,166,255,0.03) 100%);
+  border:1.5px solid rgba(179,136,255,0.35);border-radius:var(--r);
   cursor:pointer;transition:border-color .3s,box-shadow .3s;
   animation:wizardBreathe 3.5s ease-in-out infinite;
 }
 .wizard-card:hover{
-  border-color:rgba(179,136,255,0.7);
-  box-shadow:0 0 25px rgba(179,136,255,0.35),0 0 50px rgba(179,136,255,0.12);
+  border-color:rgba(179,136,255,0.8);
+  box-shadow:0 0 30px rgba(179,136,255,0.40),0 0 60px rgba(179,136,255,0.15);
 }
 @keyframes wizardBreathe{
-  0%,100%{box-shadow:0 0 12px rgba(179,136,255,0.22),0 0 30px rgba(179,136,255,0.08);border-color:rgba(179,136,255,0.35)}
-  50%{box-shadow:0 0 24px rgba(179,136,255,0.45),0 0 55px rgba(179,136,255,0.15);border-color:rgba(179,136,255,0.65)}
+  0%,100%{box-shadow:0 0 14px rgba(179,136,255,0.25),0 0 35px rgba(179,136,255,0.08),inset 0 0 20px rgba(179,136,255,0.03);border-color:rgba(179,136,255,0.35)}
+  50%{box-shadow:0 0 28px rgba(179,136,255,0.48),0 0 60px rgba(179,136,255,0.16),inset 0 0 30px rgba(179,136,255,0.06);border-color:rgba(179,136,255,0.7)}
 }
 .wizard-icon{font-size:1.8rem}
 .wizard-info{flex:1}
@@ -557,8 +590,7 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
 /* ═══ FINAL POLISH — warmth, depth, fullness ═══ */
 
 /* Subtle warm panel gradients for depth */
-.wizard-card{background:linear-gradient(135deg,rgba(179,136,255,0.04) 0%,var(--sf) 100%)}
-.team-card{background:linear-gradient(135deg,rgba(88,166,255,0.02) 0%,var(--sf) 100%)}
+.team-card{background:linear-gradient(135deg,rgba(88,166,255,0.03) 0%,var(--sf) 60%,rgba(179,136,255,0.02) 100%)}
 .compose-bar{background:linear-gradient(180deg,var(--sf) 0%,rgba(22,27,34,0.97) 100%)}
 .topbar{background:linear-gradient(90deg,var(--sf) 0%,rgba(22,27,34,0.95) 50%,var(--sf) 100%)}
 
@@ -1034,13 +1066,11 @@ tr.override td{background:rgba(210,153,34,.08)}
   width:100%;margin-top:8px;background:var(--bg);color:var(--tx);
   border:1px solid var(--bd);border-radius:6px;padding:8px 10px;
   font-size:.85rem;font-family:inherit;
-  box-shadow:0 0 4px rgba(88,166,255,0.06);
 }
 .compose-body{
   width:100%;margin-top:6px;background:var(--bg);color:var(--tx);
   border:1px solid var(--bd);border-radius:6px;padding:8px 10px;
   font-size:.85rem;font-family:inherit;resize:vertical;
-  box-shadow:0 0 4px rgba(88,166,255,0.06);
   min-height:2.4em;transition:min-height .2s;
 }
 .compose-body:focus{min-height:4.8em}
