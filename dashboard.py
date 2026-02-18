@@ -801,7 +801,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   background:transparent;color:var(--tx);font-size:1.2rem;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
 }
-.as-title{font-weight:700;font-size:1rem;flex:1}
+.as-title{font-weight:700;font-size:1rem;flex:1;cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s}
+.as-title:hover{border-bottom-color:rgba(255,255,255,0.3)}
 .as-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .as-body{
   flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -1385,6 +1386,48 @@ async function openAgentSpace(agentId){
 
   // Start chat auto-refresh polling
   startChatPoll();
+}
+
+// ══════════ RENAME AGENT ══════════
+
+function startRenameAgent(){
+  var el=document.getElementById('as-name');
+  var space=document.getElementById('agent-space');
+  if(!el||!space)return;
+  var agentId=space.dataset.agentId;
+  if(!agentId)return;
+  var oldName=el.textContent;
+  var input=document.createElement('input');
+  input.type='text';
+  input.value=oldName;
+  input.className='rename-input';
+  input.style.cssText='font-size:inherit;font-weight:inherit;color:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;outline:none;width:'+Math.max(120,oldName.length*12)+'px;';
+  el.textContent='';
+  el.appendChild(input);
+  input.focus();
+  input.select();
+  function save(){
+    var newName=input.value.trim();
+    if(!newName||newName===oldName){el.textContent=oldName;return;}
+    apiPost('/api/agent/'+agentId+'/rename',{name:newName}).then(function(r){
+      if(r&&r.ok){
+        el.textContent=newName;
+        // Update cached data too
+        var cached=agentsData.find(function(a){return a.id==agentId;});
+        if(cached)cached.name=newName;
+        loadAgents();
+        loadTeams();
+      }else{
+        el.textContent=oldName;
+        if(r&&r.error)alert(r.error);
+      }
+    });
+  }
+  input.addEventListener('blur',save);
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){input.value=oldName;input.blur();}
+  });
 }
 
 // ══════════ GUARD ACTIVATION + SKILLS ══════════
@@ -2142,7 +2185,7 @@ def _build_html():
 <div id="agent-space" class="agent-space">
   <div class="as-topbar">
     <button class="as-back" onclick="closeAgentSpace()">\u2190</button>
-    <span class="as-title" id="as-name">Agent</span>
+    <span class="as-title" id="as-name" onclick="startRenameAgent()" title="Click to rename">Agent</span>
     <span class="as-dot dot-green" id="as-status-dot"></span>
     <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Toggle private session">\U0001f512</button>
   </div>
@@ -3275,6 +3318,29 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 meeting_link=data.get("meeting_link", ""),
                 db_path=self.db_path)
             return _json_response(self, result)
+
+        # ── Rename agent or team ──
+
+        m = re.match(r"^/api/agent/(\d+)/rename$", path)
+        if m:
+            agent_id = int(m.group(1))
+            new_name = data.get("name", "").strip()
+            if not new_name:
+                return _json_response(self, {"error": "name required"}, 400)
+            if len(new_name) > 40:
+                return _json_response(self, {"error": "name too long (max 40 chars)"}, 400)
+            conn = bus.get_conn(self.db_path)
+            try:
+                existing = conn.execute("SELECT id FROM agents WHERE name=? AND id!=?",
+                                        (new_name, agent_id)).fetchone()
+                if existing:
+                    return _json_response(self, {"error": "name already taken"}, 409)
+                conn.execute("UPDATE agents SET name=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                             (new_name, agent_id))
+                conn.commit()
+            finally:
+                conn.close()
+            return _json_response(self, {"ok": True, "id": agent_id, "name": new_name})
 
         # ── Crew Load API (hot-reload YAML) ──
 

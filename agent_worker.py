@@ -69,12 +69,37 @@ SYSTEM_PROMPTS = {
         "appointments, and keeping life organized. "
         "Keep responses short, practical, and friendly."
     ),
+    "manager": (
+        "You are a team manager in the user's personal AI crew. "
+        "You coordinate your team's workers and report up to Crew Boss. "
+        "Keep responses short, organized, and helpful."
+    ),
 }
 
 DEFAULT_PROMPT = (
     "You are a helpful AI assistant that is part of the user's personal AI crew. "
     "Keep responses short, warm, and helpful."
 )
+
+
+def _build_system_prompt(agent_type: str, agent_name: str,
+                         description: str = "") -> str:
+    """Build a system prompt for an agent, using its DB description if available.
+
+    Priority: agent description from DB > hardcoded type prompt > default.
+    This lets any crew YAML define agent personalities that carry through.
+    """
+    # If the agent has a description in the DB, use it as the core prompt
+    if description and len(description) > 20:
+        return (
+            f"You are {agent_name}, part of the user's personal AI crew (Crew Bus). "
+            f"{description} "
+            "Keep responses short, warm, and helpful (2-4 sentences usually). "
+            "Use casual, human language — no corporate jargon."
+        )
+
+    # Fall back to hardcoded type prompts
+    return SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
 
 
 # ---------------------------------------------------------------------------
@@ -177,14 +202,27 @@ def _process_queued_messages(db_path: Path):
         human_id = row["from_agent_id"]
         agent_id = row["to_agent_id"]
         agent_type = row["agent_type"]
+        agent_name = row["name"]
         user_text = row["body"] if row["body"] else row["subject"]
 
         if not user_text:
             _mark_delivered(db_path, msg_id)
             continue
 
-        # Get system prompt for this agent type
-        system_prompt = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
+        # Get agent description from DB for dynamic prompts
+        desc = ""
+        try:
+            _conn = bus.get_conn(db_path)
+            _row = _conn.execute("SELECT description FROM agents WHERE id=?",
+                                 (agent_id,)).fetchone()
+            if _row:
+                desc = _row["description"] or ""
+            _conn.close()
+        except Exception:
+            pass
+
+        # Build system prompt — uses description if available
+        system_prompt = _build_system_prompt(agent_type, agent_name, desc)
 
         # Get recent chat history for context
         chat_history = _get_recent_chat(db_path, human_id, agent_id)
