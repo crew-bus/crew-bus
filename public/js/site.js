@@ -71,14 +71,10 @@ document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
     });
 })();
 
-// Hero demo — infinite looping animation
+// Hero demo — infinite looping animation via DOM clone restart
 (function() {
-    var scene = document.querySelector('.hd-scene');
-    if (!scene) return;
-    var typing = document.getElementById('hdTyping');
-    var bubble = document.getElementById('hdBubble');
-    var input = document.getElementById('hdInput');
-    if (!typing || !bubble) return;
+    var sceneWrap = document.querySelector('.hero-demo');
+    if (!sceneWrap) return;
 
     var messages = [
         "Hey! I\u2019m right here with you \uD83D\uDE0A What\u2019s on your mind today?",
@@ -88,33 +84,16 @@ document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
         "I found 3 great ideas for your project \u2728 Want to see them?"
     ];
     var msgIdx = 0;
-    var inputPlaceholder = 'Type a message...';
+    // Save the original scene HTML for clean resets
+    var originalScene = sceneWrap.querySelector('.hd-scene');
+    var sceneHTML = originalScene.outerHTML;
     var cursorIv = null;
 
-    function resetDemo() {
-        // Kill any cursor blink interval
-        if (cursorIv) { clearInterval(cursorIv); cursorIv = null; }
-        // Reset all animated children by re-triggering CSS animations
-        var animated = scene.querySelectorAll('.hd-ambient, .hd-line, .hd-boss, .hd-agent, .hd-chat, .hd-send-btn, .hd-brand, .hd-progress');
-        animated.forEach(function(el) {
-            el.style.animation = 'none';
-            el.offsetHeight; // force reflow
-        });
-        // Reset text content
-        typing.style.opacity = '0';
-        typing.style.transition = 'none';
-        bubble.style.opacity = '0';
-        bubble.textContent = '';
-        if (input) input.textContent = inputPlaceholder;
-        // Restore animations after reflow
-        requestAnimationFrame(function() {
-            animated.forEach(function(el) {
-                el.style.animation = '';
-            });
-        });
-    }
-
     function playTyping() {
+        var typing = document.getElementById('hdTyping');
+        var bubble = document.getElementById('hdBubble');
+        var input = document.getElementById('hdInput');
+        if (!typing || !bubble) return;
         var msg = messages[msgIdx % messages.length];
         msgIdx++;
         // Show typing dots at 9s
@@ -144,14 +123,26 @@ document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
         }, 13500);
     }
 
+    function resetAndReplay() {
+        // Kill cursor interval
+        if (cursorIv) { clearInterval(cursorIv); cursorIv = null; }
+        // Replace scene with fresh clone (resets all CSS animations)
+        var oldScene = sceneWrap.querySelector('.hd-scene');
+        if (oldScene) {
+            var temp = document.createElement('div');
+            temp.innerHTML = sceneHTML;
+            var newScene = temp.firstChild;
+            oldScene.parentNode.replaceChild(newScene, oldScene);
+        }
+        // Start typing animation on fresh DOM
+        playTyping();
+    }
+
     // Initial play
     playTyping();
 
     // Loop every 17s (15s demo + 2s pause)
-    setInterval(function() {
-        resetDemo();
-        setTimeout(playTyping, 50);
-    }, 17000);
+    setInterval(resetAndReplay, 17000);
 })();
 
 // Toast helper
