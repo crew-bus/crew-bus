@@ -71,6 +71,40 @@ document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
     });
 })();
 
+// Magical floating particles — ambient snowflake / firefly effect
+(function() {
+    var container = document.getElementById('magicParticles');
+    if (!container) return;
+
+    var sizes = ['mp-sm', 'mp-sm', 'mp-sm', 'mp-md', 'mp-md', 'mp-lg'];
+    var colors = ['', '', '', '', 'mp-teal', 'mp-purple', 'mp-blue', 'mp-pink', 'mp-orange', 'mp-green'];
+    var PARTICLE_COUNT = 35;
+
+    function spawnParticle() {
+        var p = document.createElement('div');
+        var size = sizes[Math.floor(Math.random() * sizes.length)];
+        var color = colors[Math.floor(Math.random() * colors.length)];
+        p.className = 'magic-particle ' + size + (color ? ' ' + color : '');
+        // Random horizontal position
+        p.style.left = Math.random() * 100 + '%';
+        // Random drift direction
+        var drift = (Math.random() - 0.5) * 120;
+        p.style.setProperty('--drift', drift + 'px');
+        // Random duration (slow, relaxing 12-28s)
+        var dur = 12 + Math.random() * 16;
+        p.style.animationDuration = dur + 's';
+        // Random start delay for initial spread
+        p.style.animationDelay = Math.random() * dur + 's';
+        container.appendChild(p);
+        return p;
+    }
+
+    // Spawn initial batch
+    for (var i = 0; i < PARTICLE_COUNT; i++) {
+        spawnParticle();
+    }
+})();
+
 // Hero demo — infinite looping animation via DOM clone restart
 (function() {
     var sceneWrap = document.querySelector('.hero-demo');

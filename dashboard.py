@@ -616,6 +616,39 @@ body::after{
   0%,100%{opacity:1}
   50%{opacity:0.5}
 }
+/* Magical floating particles — ambient snowflake / firefly effect */
+.magic-particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden}
+.magic-particle{
+  position:absolute;border-radius:50%;
+  background:rgba(255,255,255,0.30);
+  box-shadow:0 0 6px rgba(255,255,255,0.12),0 0 12px rgba(255,255,255,0.05);
+  opacity:0;animation:magicFloat linear infinite;
+}
+.magic-particle.mp-sm{width:2px;height:2px}
+.magic-particle.mp-md{width:3px;height:3px;background:rgba(255,255,255,0.22);box-shadow:0 0 8px rgba(255,255,255,0.10)}
+.magic-particle.mp-lg{width:4px;height:4px;background:rgba(255,255,255,0.16);box-shadow:0 0 10px rgba(255,255,255,0.08),0 0 20px rgba(255,255,255,0.03)}
+.magic-particle.mp-teal{background:rgba(77,208,184,0.25);box-shadow:0 0 8px rgba(77,208,184,0.12)}
+.magic-particle.mp-purple{background:rgba(179,136,255,0.25);box-shadow:0 0 8px rgba(179,136,255,0.12)}
+.magic-particle.mp-blue{background:rgba(88,166,255,0.25);box-shadow:0 0 8px rgba(88,166,255,0.12)}
+.magic-particle.mp-pink{background:rgba(233,69,96,0.20);box-shadow:0 0 8px rgba(233,69,96,0.10)}
+.magic-particle.mp-orange{background:rgba(255,171,87,0.22);box-shadow:0 0 8px rgba(255,171,87,0.10)}
+.magic-particle.mp-green{background:rgba(102,217,122,0.22);box-shadow:0 0 8px rgba(102,217,122,0.10)}
+@keyframes magicFloat{
+  0%{transform:translateY(100vh) translateX(0) rotate(0deg);opacity:0}
+  5%{opacity:0.6}
+  50%{opacity:0.35}
+  95%{opacity:0.5}
+  100%{transform:translateY(-10vh) translateX(var(--drift,30px)) rotate(360deg);opacity:0}
+}
+/* Day mode particles — softer, more subtle */
+body.day-mode .magic-particle{background:rgba(0,0,0,0.06);box-shadow:0 0 6px rgba(0,0,0,0.03)}
+body.day-mode .magic-particle.mp-teal{background:rgba(77,208,184,0.12);box-shadow:0 0 6px rgba(77,208,184,0.06)}
+body.day-mode .magic-particle.mp-purple{background:rgba(179,136,255,0.12);box-shadow:0 0 6px rgba(179,136,255,0.06)}
+body.day-mode .magic-particle.mp-blue{background:rgba(88,166,255,0.12);box-shadow:0 0 6px rgba(88,166,255,0.06)}
+body.day-mode .magic-particle.mp-pink{background:rgba(233,69,96,0.10);box-shadow:0 0 6px rgba(233,69,96,0.05)}
+body.day-mode .magic-particle.mp-orange{background:rgba(255,171,87,0.10);box-shadow:0 0 6px rgba(255,171,87,0.05)}
+body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-shadow:0 0 6px rgba(102,217,122,0.05)}
+
 .topbar,.view,.compose-bar{position:relative;z-index:1}
 
 /* Compose selects — warm focus glow */
@@ -1942,6 +1975,28 @@ async function doChatPoll(){
   }catch(e){}
 }
 
+// ── Magical floating particles ──
+(function(){
+  var c=document.getElementById('magicParticles');
+  if(!c)return;
+  var sizes=['mp-sm','mp-sm','mp-sm','mp-md','mp-md','mp-lg'];
+  var colors=['','','','','mp-teal','mp-purple','mp-blue','mp-pink','mp-orange','mp-green'];
+  var COUNT=30;
+  for(var i=0;i<COUNT;i++){
+    var p=document.createElement('div');
+    var sz=sizes[Math.floor(Math.random()*sizes.length)];
+    var cl=colors[Math.floor(Math.random()*colors.length)];
+    p.className='magic-particle '+sz+(cl?' '+cl:'');
+    p.style.left=Math.random()*100+'%';
+    var drift=(Math.random()-0.5)*120;
+    p.style.setProperty('--drift',drift+'px');
+    var dur=12+Math.random()*16;
+    p.style.animationDuration=dur+'s';
+    p.style.animationDelay=Math.random()*dur+'s';
+    c.appendChild(p);
+  }
+})();
+
 // ── Boot ──
 document.addEventListener('DOMContentLoaded',function(){showView('crew');startRefresh();loadComposeAgents()});
 """
@@ -1958,6 +2013,7 @@ def _build_html():
 <style>{CSS}</style>
 </head>
 <body data-page="crew">
+<div class="magic-particles" id="magicParticles"></div>
 <div id="refresh-bar" class="refresh-bar"></div>
 
 <div class="topbar">
