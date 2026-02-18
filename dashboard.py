@@ -211,11 +211,11 @@ a{color:var(--ac);text-decoration:none}
   color:var(--tx);background:var(--bd);
 }
 
-/* ── Circle layout — designed for real ~420px container ── */
+/* ── Circle layout — scales with main-left (420-520px) ── */
 .circle-wrap{
   position:relative;width:100%;
   max-width:520px;margin:0 auto;
-  aspect-ratio:1;padding:12px;
+  aspect-ratio:1;padding:16px;
   overflow:visible;
 }
 .circle-wrap svg.lines{
@@ -242,7 +242,7 @@ a{color:var(--ac);text-decoration:none}
 }
 .bubble:hover{transform:scale(1.08)}
 .bubble:hover .bubble-circle{box-shadow:0 0 30px rgba(255,255,255,.12)}
-.bubble-circle .icon{font-size:1.8rem;filter:drop-shadow(0 0 5px rgba(255,255,255,0.4))}
+.bubble-circle .icon{font-size:2rem;filter:drop-shadow(0 0 5px rgba(255,255,255,0.4))}
 .bubble-circle .status-dot{
   position:absolute;top:4px;right:4px;width:11px;height:11px;
   border-radius:50%;border:2.5px solid rgba(12,14,22,0.95);
@@ -251,22 +251,22 @@ a{color:var(--ac);text-decoration:none}
 .dot-yellow{background:var(--yl)}
 .dot-red{background:var(--rd)}
 .bubble-label{
-  margin-top:7px;font-size:.72rem;font-weight:700;color:rgba(255,255,255,0.92);
+  margin-top:8px;font-size:.78rem;font-weight:700;color:rgba(255,255,255,0.92);
   text-align:center;white-space:nowrap;letter-spacing:0.04em;
   text-shadow:0 1px 6px rgba(0,0,0,0.7);
 }
 .bubble-count{
-  font-size:.58rem;color:var(--ac);margin-top:2px;font-weight:600;
+  font-size:.62rem;color:var(--ac);margin-top:2px;font-weight:600;
 }
 .bubble-sub{
-  font-size:.52rem;color:var(--mu);margin-top:1px;
-  max-width:90px;text-align:center;overflow:hidden;
+  font-size:.55rem;color:var(--mu);margin-top:1px;
+  max-width:110px;text-align:center;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
 }
 
 /* ── Crew Boss — dominant center star ── */
 .bubble.center .bubble-circle{
-  width:130px;height:130px;
+  width:150px;height:150px;
   border-color:rgba(255,255,255,0.9);border-width:3px;
   background:rgba(12,14,22,0.95);
   box-shadow:
@@ -281,7 +281,7 @@ a{color:var(--ac);text-decoration:none}
   border:1px solid rgba(255,255,255,0.15);
   animation:bossPulse 2.5s ease-in-out infinite;
 }
-.bubble.center .bubble-circle .icon{font-size:2.8rem;filter:drop-shadow(0 0 12px rgba(255,255,255,0.7))}
+.bubble.center .bubble-circle .icon{font-size:3.2rem;filter:drop-shadow(0 0 12px rgba(255,255,255,0.7))}
 .bubble.center .bubble-label{
   font-size:.95rem;color:#fff;font-weight:800;letter-spacing:0.06em;
   text-shadow:0 0 14px rgba(255,255,255,0.4);
@@ -302,13 +302,13 @@ a{color:var(--ac);text-decoration:none}
   50%{transform:scale(1.18);opacity:0}
 }
 
-/* ── Outer agents — properly sized for pentagon in ~420px ── */
+/* ── Outer agents — sized for pentagon in ~500px ── */
 .bubble.outer .bubble-circle{
-  width:90px;height:90px;
+  width:100px;height:100px;
   background:rgba(12,14,22,0.9);
-  padding:.8rem;
+  padding:1rem;
 }
-.bubble.outer .bubble-circle .icon{font-size:2rem}
+.bubble.outer .bubble-circle .icon{font-size:2.2rem}
 .bubble.outer:hover{transform:scale(1.12)}
 
 /* ── Agent-specific premium neon glows (visible! not subtle) ── */
@@ -707,8 +707,8 @@ tr.override td{background:rgba(210,153,34,.08)}
     display:flex;align-items:flex-start;justify-content:center;
     gap:32px;max-width:900px;margin:0 auto;padding:24px;
   }
-  .main-left{flex:1;max-width:480px}
-  .main-right{flex:1;max-width:380px}
+  .main-left{flex:3;min-width:420px;max-width:540px}
+  .main-right{flex:1;min-width:200px;max-width:320px}
   .circle-wrap{max-width:520px}
   /* Agent space: left half on desktop */
   .agent-space{
@@ -1686,13 +1686,13 @@ def _build_html():
     <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   </div>
   <div class="circle-wrap">
-    <svg class="lines" viewBox="0 0 420 420" preserveAspectRatio="xMidYMid meet">
-      <!-- 5-point star: center(210,210) to pentagon vertices -->
-      <line x1="210" y1="210" x2="210" y2="18"  stroke="#4dd0b8"/>
-      <line x1="210" y1="210" x2="367" y2="109" stroke="#b388ff"/>
-      <line x1="210" y1="210" x2="307" y2="365" stroke="#66d97a"/>
-      <line x1="210" y1="210" x2="113" y2="365" stroke="#64b5f6"/>
-      <line x1="210" y1="210" x2="53"  y2="109" stroke="#ffab57"/>
+    <svg class="lines" viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet">
+      <!-- 5-point star: center(250,250) to true pentagon vertices r=180 -->
+      <line x1="250" y1="250" x2="250" y2="70"  stroke="#4dd0b8"/>
+      <line x1="250" y1="250" x2="421" y2="194" stroke="#b388ff"/>
+      <line x1="250" y1="250" x2="356" y2="396" stroke="#66d97a"/>
+      <line x1="250" y1="250" x2="144" y2="396" stroke="#64b5f6"/>
+      <line x1="250" y1="250" x2="79"  y2="194" stroke="#ffab57"/>
     </svg>
     <!-- Crew Boss — center star -->
     <div class="bubble center" id="bubble-boss" style="left:50%;top:50%;transform:translate(-50%,-50%)">
@@ -1700,23 +1700,23 @@ def _build_html():
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
     <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:-3%;transform:translate(-50%,0)">
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:14%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-muse" style="left:86%;top:22%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-muse" style="left:84%;top:39%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3a8</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="left:72%;top:84%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-growth" style="left:71%;top:79%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-life" style="left:28%;top:84%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-life" style="left:29%;top:79%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-health" style="left:14%;top:22%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-health" style="left:16%;top:39%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
