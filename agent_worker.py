@@ -147,9 +147,8 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
         "model": model,
         "messages": messages,
         "stream": False,
-        "temperature": 0.6,
+        "temperature": 1,
         "max_tokens": 1024,
-        "extra_body": {"thinking": {"type": "disabled"}},
     }).encode("utf-8")
 
     req = urllib.request.Request(
