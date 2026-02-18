@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Activate Security Guard — crew-bus</title>
-    <meta name="description" content="Activate the Security Guard module for crew-bus. $20 one-time payment for lifetime anomaly detection and threat monitoring.">
+    <meta name="description" content="Activate the Security Guard module for crew-bus. $29 one-time payment for lifetime anomaly detection and threat monitoring.">
     <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
     <link rel="stylesheet" href="/css/site.css">
 </head>
@@ -76,7 +76,7 @@
             </div>
 
             <div class="activate-price-block">
-                <div class="activate-price">$20</div>
+                <div class="activate-price">$29</div>
                 <div class="activate-price-detail">
                     one-time payment &middot; lifetime activation<br>
                     <span class="text-muted">No recurring fees. No expiration.</span>
@@ -84,7 +84,7 @@
             </div>
 
             <button class="btn btn-primary btn-lg btn-block" id="checkoutBtn" onclick="startCheckout()">
-                Pay $20 &mdash; Activate Guard
+                Pay $29 &mdash; Activate Guard
             </button>
 
             <p class="activate-stripe-note">
@@ -233,13 +233,13 @@ function startCheckout() {
         if (data.url) {
             window.location.href = data.url;
         } else {
-            btn.textContent = 'Pay $20 — Activate Guard';
+            btn.textContent = 'Pay $29 — Activate Guard';
             btn.disabled = false;
             alert(data.error || 'Something went wrong. Please try again.');
         }
     })
     .catch(function() {
-        btn.textContent = 'Pay $20 — Activate Guard';
+        btn.textContent = 'Pay $29 — Activate Guard';
         btn.disabled = false;
         alert('Connection error. Please try again.');
     });

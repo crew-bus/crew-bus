@@ -942,6 +942,16 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .template-name{font-weight:600;font-size:.9rem}
 .template-desc{font-size:.75rem;color:var(--mu)}
 
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ac);color:#fff;padding:10px 20px;border-radius:var(--r);
+  font-size:.85rem;font-weight:600;z-index:999;opacity:0;
+  transition:opacity .3s,transform .3s;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast-err{background:#e94560}
+
 /* ── Override modal ── */
 .override-modal{
   display:none;position:fixed;top:0;left:0;width:100%;height:100%;
@@ -1203,6 +1213,15 @@ function timeAgo(ts){
   if(sec<3600)return Math.floor(sec/60)+'m ago';
   if(sec<86400)return Math.floor(sec/3600)+'h ago';
   return Math.floor(sec/86400)+'d ago';
+}
+
+function showToast(msg,type){
+  var t=document.createElement('div');
+  t.className='toast'+(type==='error'?' toast-err':'');
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(function(){t.classList.add('show')},10);
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},3000);
 }
 
 async function api(path){return(await fetch(path)).json()}
@@ -1656,7 +1675,15 @@ async function loadTeams(){
 
 function openTemplatePicker(){document.getElementById('template-modal').classList.add('open')}
 function closeTemplatePicker(){document.getElementById('template-modal').classList.remove('open')}
-async function createTeam(name){await apiPost('/api/teams',{template:name});closeTemplatePicker();loadTeams()}
+async function createTeam(name){
+  try{
+    var r=await apiPost('/api/teams',{template:name});
+    closeTemplatePicker();
+    if(r.ok){showToast('Team "'+r.team_name+'" created with '+(r.worker_ids?r.worker_ids.length:0)+' agents')}
+    else{showToast(r.error||'Failed to create team','error')}
+    await loadTeams();
+  }catch(e){closeTemplatePicker();showToast('Error creating team','error')}
+}
 
 // ══════════ TEAM DASHBOARD (FIX 1) ══════════
 
@@ -2042,7 +2069,7 @@ function startChatPoll(){
   stopChatPoll();
   chatPollCount=0;
   doChatPoll();
-  chatPollTimer=setInterval(doChatPoll,5000);
+  chatPollTimer=setInterval(doChatPoll,1500);
 }
 
 function stopChatPoll(){
@@ -2590,8 +2617,83 @@ def _get_team_agents(db_path, team_id):
         conn.close()
 
 
+TEAM_TEMPLATES = {
+    "business": {
+        "name": "Business",
+        "workers": [
+            ("Strategy Lead", "Analyzes market trends, competitors, and growth opportunities."),
+            ("Sales Bot", "Tracks leads, drafts outreach, and follows up on prospects."),
+            ("Ops Coordinator", "Manages schedules, tasks, and day-to-day operations."),
+        ],
+    },
+    "department": {
+        "name": "Department",
+        "workers": [
+            ("Task Runner", "Handles assigned tasks and reports progress."),
+            ("Research Aide", "Gathers information and summarizes findings."),
+        ],
+    },
+    "freelance": {
+        "name": "Freelance",
+        "workers": [
+            ("Lead Finder", "Scans job boards and communities for freelance gigs."),
+            ("Invoice Bot", "Drafts invoices, tracks payments, and sends reminders."),
+            ("Client Follow-up", "Sends check-ins and nurtures client relationships."),
+        ],
+    },
+    "sidehustle": {
+        "name": "Side Hustle",
+        "workers": [
+            ("Market Scout", "Researches demand, pricing, and competition for your idea."),
+            ("Content Creator", "Drafts posts, product descriptions, and marketing copy."),
+            ("Sales Tracker", "Tracks revenue, expenses, and profit margins."),
+        ],
+    },
+    "school": {
+        "name": "School",
+        "workers": [
+            ("Tutor", "Explains concepts, answers homework questions, quizzes you."),
+            ("Research Assistant", "Finds sources, summarizes papers, checks citations."),
+            ("Study Planner", "Builds study schedules, tracks deadlines, sends reminders."),
+        ],
+    },
+    "passion": {
+        "name": "Passion Project",
+        "workers": [
+            ("Project Planner", "Breaks your project into milestones and tracks progress."),
+            ("Skill Coach", "Suggests exercises, tutorials, and practice routines."),
+            ("Progress Tracker", "Logs what you've done and celebrates streaks."),
+        ],
+    },
+    "household": {
+        "name": "Household",
+        "workers": [
+            ("Meal Planner", "Suggests meals, builds grocery lists, tracks nutrition."),
+            ("Budget Tracker", "Tracks household spending and flags overspending."),
+            ("Schedule Keeper", "Manages family calendar, appointments, and chores."),
+        ],
+    },
+    "custom": {
+        "name": "Custom Team",
+        "workers": [
+            ("Assistant", "A general-purpose helper for your custom team."),
+        ],
+    },
+}
+
+
 def _create_team(db_path, template):
-    return {"ok": True, "template": template, "message": f"Team from '{template}' template queued for setup."}
+    tpl = TEAM_TEMPLATES.get(template, TEAM_TEMPLATES["custom"])
+    team_name = tpl["name"]
+    worker_names = [w[0] for w in tpl["workers"]]
+    worker_descs = [w[1] for w in tpl["workers"]]
+    result = bus.create_team(
+        team_name=team_name,
+        worker_names=worker_names,
+        worker_descriptions=worker_descs,
+        db_path=db_path,
+    )
+    return result
 
 
 def _get_guard_checkin(db_path):
@@ -3204,7 +3306,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             except (PermissionError, ValueError) as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
-        # Stripe checkout — create session for Guard activation ($20)
+        # Stripe checkout — create session for Guard activation ($29)
         if path == "/api/checkout/guard":
             return _stripe_create_guard_checkout(self)
 

@@ -35,7 +35,7 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "llama3.2"
 KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions"
 KIMI_DEFAULT_MODEL = "kimi-k2.5"
-POLL_INTERVAL = 2  # seconds between queue checks
+POLL_INTERVAL = 0.5  # seconds between queue checks
 
 # ---------------------------------------------------------------------------
 # Agent system prompts — warm, friendly, personality-first
@@ -120,7 +120,7 @@ def _call_ollama(messages: list, model: str = OLLAMA_MODEL) -> str:
         "model": model,
         "messages": messages,
         "stream": False,
-        "options": {"temperature": 0.7, "num_predict": 256},
+        "options": {"temperature": 0.7, "num_predict": 1024},
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -148,7 +148,7 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
         "messages": messages,
         "stream": False,
         "temperature": 0.6,
-        "max_tokens": 512,
+        "max_tokens": 1024,
         "extra_body": {"thinking": {"type": "disabled"}},
     }).encode("utf-8")
 

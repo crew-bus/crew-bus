@@ -1,6 +1,20 @@
-# crew-bus
+<h1 align="center">crew-bus</h1>
 
-Your AI crew. Your hardware. Your rules.
+<p align="center">
+  <strong>Your AI crew. Your hardware. Your rules.</strong>
+</p>
+
+<div align="center">
+
+## LAUNCHING TODAY
+
+**crew-bus is LIVE.** Free, open-source AI crew for everyone.
+
+[**Get Started**](https://crew-bus.dev) | [**Pricing**](https://crew-bus.dev/pricing) | [**Find an Installer**](https://crew-bus.dev/installer)
+
+</div>
+
+---
 
 **crew-bus** is a free, open-source coordination system for managing multiple AI agents from a single dashboard. No cloud. No subscriptions. No data leaving your machine.
 
@@ -27,6 +41,16 @@ Your **Crew Boss** is your AI chief of staff — the only agent that talks to yo
 - **Visual dashboard** — Clean circle layout. Status dots tell you everything. Mobile-first.
 - **Full audit trail** — Every message, every decision, every routing event. Logged locally.
 - **Runs on anything** — Python + SQLite. Works on a Raspberry Pi, a laptop, or a server.
+
+## Pricing
+
+| Tier | Price | What You Get |
+|------|-------|-------------|
+| **Core** | **Free forever** | Full message bus, Crew Boss, 5 agents (Family Helper, Muse, Health Buddy, Growth Coach, Life Assistant), dashboard, CLI, private sessions, team mailbox, unlimited agents & departments. MIT License. |
+| **Security Guard** | **$29 one-time** | Everything in Core + real-time anomaly detection, threat monitoring (6 domains), automatic escalation, mutiny detection, audit trail hardening. Lifetime activation key. |
+| **Installer Permit** | **$25 per permit** | Marketplace listing, KYC badge, job board access, video meet & greet, community reviews, 6 months free Guardian messaging. First permit free. |
+
+No subscriptions. No cloud fees. No hidden charges. Payments via Stripe.
 
 ## Quick Start
 
