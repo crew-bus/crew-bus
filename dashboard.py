@@ -1003,6 +1003,57 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .confirm-danger{background:#e94560;color:#fff;border-color:#e94560}
 .confirm-danger:hover{background:#d63350}
 
+/* ── First-time setup overlay ── */
+.setup-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  z-index:500;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  padding:16px;transition:opacity .5s;
+}
+.setup-overlay.fade-out{opacity:0;pointer-events:none}
+.setup-card{
+  background:var(--sf);border:1px solid var(--bd);border-radius:16px;
+  padding:40px 32px;width:100%;max-width:400px;text-align:center;
+  box-shadow:0 8px 40px rgba(0,0,0,.3);
+}
+.setup-card .setup-icon{font-size:3rem;margin-bottom:12px}
+.setup-card h2{font-size:1.4rem;font-weight:700;margin-bottom:4px;color:var(--tx)}
+.setup-card .setup-sub{color:var(--mu);font-size:.9rem;margin-bottom:28px;line-height:1.4}
+.setup-card label{
+  display:block;text-align:left;font-size:.8rem;font-weight:600;
+  color:var(--mu);margin-bottom:6px;letter-spacing:.03em;
+}
+.setup-key-wrap{position:relative;margin-bottom:8px}
+.setup-key{
+  width:100%;padding:12px 44px 12px 14px;background:var(--bg);color:var(--tx);
+  border:1px solid var(--bd);border-radius:var(--r);font-size:.9rem;
+  font-family:monospace;outline:none;transition:border-color .2s;
+}
+.setup-key:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(88,166,255,0.15)}
+.setup-key-toggle{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--mu);cursor:pointer;font-size:1.1rem;
+  padding:4px;
+}
+.setup-link{
+  display:block;font-size:.8rem;color:var(--ac);text-decoration:none;
+  margin-bottom:20px;
+}
+.setup-link:hover{text-decoration:underline}
+.setup-error{
+  color:#e94560;font-size:.8rem;margin-bottom:12px;min-height:1.2em;
+}
+.setup-btn{
+  width:100%;padding:14px;background:var(--ac);color:#000;
+  border:none;border-radius:var(--r);font-size:1rem;font-weight:700;
+  cursor:pointer;transition:opacity .2s;letter-spacing:.02em;
+}
+.setup-btn:hover{opacity:.85}
+.setup-btn:disabled{opacity:.5;cursor:not-allowed}
+.setup-footer{
+  margin-top:20px;font-size:.75rem;color:var(--mu);line-height:1.4;
+}
+
 /* ── Legacy pages (messages, decisions, audit) ── */
 .legacy-container{padding:16px;max-width:900px;margin:0 auto}
 .legacy-container h1{font-size:1.3rem;margin-bottom:12px}
@@ -2224,8 +2275,65 @@ async function doChatPoll(){
   }
 })();
 
+// ── Setup / Onboarding ──
+function toggleSetupKey(){
+  var inp=document.getElementById('setup-key');
+  if(!inp)return;
+  if(inp.type==='password'){inp.type='text';} else {inp.type='password';}
+}
+
+function bootDashboard(){
+  showView('crew');startRefresh();loadComposeAgents();
+}
+
+function checkSetupNeeded(){
+  fetch('/api/setup/status').then(function(r){return r.json()}).then(function(d){
+    if(d.needs_setup){
+      document.getElementById('setup-overlay').style.display='flex';
+      document.querySelectorAll('.topbar,.content,.bottombar').forEach(function(el){el.style.display='none'});
+    } else {
+      bootDashboard();
+    }
+  }).catch(function(){
+    // If endpoint fails, boot normally
+    bootDashboard();
+  });
+}
+
+function submitSetup(){
+  var keyInput=document.getElementById('setup-key');
+  var errEl=document.getElementById('setup-error');
+  var btn=document.getElementById('setup-btn');
+  var key=(keyInput.value||'').trim();
+  errEl.textContent='';
+  if(!key){errEl.textContent='Please paste your Moonshot API key.';keyInput.focus();return;}
+  btn.disabled=true;btn.textContent='Setting up...';
+  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.ok){
+        var overlay=document.getElementById('setup-overlay');
+        overlay.classList.add('fade-out');
+        document.querySelectorAll('.topbar,.content,.bottombar').forEach(function(el){el.style.display=''});
+        setTimeout(function(){overlay.style.display='none'},600);
+        bootDashboard();
+        // Auto-open Wizard chat after a brief delay
+        setTimeout(function(){
+          if(d.wizard_id){openAgentChat(d.wizard_id);}
+        },800);
+      } else {
+        errEl.textContent=d.error||'Setup failed. Please try again.';
+        btn.disabled=false;btn.textContent='\u{1F680} Start My Crew';
+      }
+    })
+    .catch(function(){
+      errEl.textContent='Connection error. Is the server running?';
+      btn.disabled=false;btn.textContent='\u{1F680} Start My Crew';
+    });
+}
+
 // ── Boot ──
-document.addEventListener('DOMContentLoaded',function(){showView('crew');startRefresh();loadComposeAgents()});
+document.addEventListener('DOMContentLoaded',function(){checkSetupNeeded()});
 """
 
 # ── HTML ────────────────────────────────────────────────────────────
@@ -2471,6 +2579,28 @@ def _build_html():
       <button class="confirm-cancel" onclick="closeConfirm(false)">Cancel</button>
       <button class="confirm-danger" id="confirm-ok-btn" onclick="closeConfirm(true)">Delete</button>
     </div>
+  </div>
+</div>
+
+<!-- First-time setup overlay -->
+<div class="setup-overlay" id="setup-overlay" style="display:none">
+  <div class="setup-card">
+    <div class="setup-icon">\U0001f9d9\u200d\u2642\ufe0f</div>
+    <h2>Welcome to Crew Bus</h2>
+    <p class="setup-sub">Your personal AI crew, powered by Kimi K2.5.<br>
+    Let's get your crew online in 30 seconds.</p>
+    <label for="setup-key">Paste your Moonshot API key</label>
+    <div class="setup-key-wrap">
+      <input class="setup-key" id="setup-key" type="password" placeholder="sk-..." autocomplete="off"
+        onkeydown="if(event.key==='Enter')submitSetup()">
+      <button class="setup-key-toggle" onclick="toggleSetupKey()" title="Show/hide key">\U0001f441\ufe0f</button>
+    </div>
+    <a class="setup-link" href="https://platform.moonshot.ai" target="_blank" rel="noopener">
+      Get a free API key at platform.moonshot.ai \u2192
+    </a>
+    <div class="setup-error" id="setup-error"></div>
+    <button class="setup-btn" id="setup-btn" onclick="submitSetup()">\U0001f680 Start My Crew</button>
+    <div class="setup-footer">100% local \u00b7 MIT license \u00b7 No cloud \u00b7 Your data stays on your machine</div>
   </div>
 </div>
 
@@ -3249,6 +3379,14 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 "techie_id": user.get("techie_id"),
             })
 
+        # ── First-time setup status ──
+        if path == "/api/setup/status":
+            default_model = bus.get_config("default_model", db_path=self.db_path)
+            return _json_response(self, {
+                "needs_setup": not bool(default_model),
+                "default_model": default_model,
+            })
+
         _json_response(self, {"error": "not found"}, 404)
 
     def do_POST(self):
@@ -3724,6 +3862,47 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             )
             code = 200 if result.get("ok") else 400
             return _json_response(self, result, code)
+
+        # ── First-time setup complete ──
+
+        if path == "/api/setup/complete":
+            api_key = data.get("api_key", "").strip()
+            if not api_key:
+                return _json_response(self, {"error": "API key is required"}, 400)
+            # Save config
+            bus.set_config("default_model", "kimi", db_path=self.db_path)
+            bus.set_config("kimi_api_key", api_key, db_path=self.db_path)
+            # Update all agents that have no model set → kimi
+            conn = bus.get_conn(self.db_path)
+            wizard_id = None
+            try:
+                conn.execute(
+                    "UPDATE agents SET model='kimi' WHERE model='' OR model IS NULL"
+                )
+                conn.commit()
+                # Find human and wizard for welcome message
+                human = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+                wizard = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='help' LIMIT 1"
+                ).fetchone()
+                if wizard:
+                    wizard_id = wizard["id"]
+            finally:
+                conn.close()
+            # Send welcome message from Human to Wizard
+            if human and wizard:
+                try:
+                    bus.send_message(
+                        human["id"], wizard["id"], "task",
+                        "Setup complete",
+                        "I just set up Crew Bus! Say hello and help me get started.",
+                        db_path=self.db_path,
+                    )
+                except Exception:
+                    pass  # Non-fatal — wizard will still work
+            return _json_response(self, {"ok": True, "wizard_id": wizard_id})
 
         # ── Config get/set (model keys, settings) ──
 
