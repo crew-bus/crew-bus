@@ -1687,36 +1687,36 @@ def _build_html():
   </div>
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 540 490" preserveAspectRatio="xMidYMid meet">
-      <!-- 5-point star: center(270,245) to pentagon vertices R=195 -->
-      <line x1="270" y1="245" x2="270" y2="50"  stroke="#4dd0b8"/>
-      <line x1="270" y1="245" x2="455" y2="185" stroke="#b388ff"/>
-      <line x1="270" y1="245" x2="384" y2="403" stroke="#66d97a"/>
-      <line x1="270" y1="245" x2="156" y2="403" stroke="#64b5f6"/>
-      <line x1="270" y1="245" x2="85"  y2="185" stroke="#ffab57"/>
+      <!-- 5-point star: center(270,260) to pentagon vertices R=185 -->
+      <line x1="270" y1="260" x2="270" y2="75"  stroke="#4dd0b8"/>
+      <line x1="270" y1="260" x2="446" y2="203" stroke="#b388ff"/>
+      <line x1="270" y1="260" x2="379" y2="410" stroke="#66d97a"/>
+      <line x1="270" y1="260" x2="161" y2="410" stroke="#64b5f6"/>
+      <line x1="270" y1="260" x2="94"  y2="203" stroke="#ffab57"/>
     </svg>
     <!-- Crew Boss — center star -->
-    <div class="bubble center" id="bubble-boss" style="left:50%;top:50%;transform:translate(-50%,-50%)">
+    <div class="bubble center" id="bubble-boss" style="left:50%;top:53.1%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
     <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:10.2%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:15.3%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-muse" style="left:84.3%;top:37.7%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-muse" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3a8</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="left:71.2%;top:82.2%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-growth" style="left:70.1%;top:83.6%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-life" style="left:28.8%;top:82.2%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-life" style="left:29.9%;top:83.6%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-health" style="left:15.7%;top:37.7%;transform:translate(-50%,-50%)">
+    <div class="bubble outer" id="bubble-health" style="left:17.4%;top:41.4%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
