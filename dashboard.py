@@ -787,7 +787,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   background:transparent;color:var(--tx);font-size:1.2rem;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
 }
-.team-dash-title{font-weight:700;font-size:1.2rem;flex:1}
+.team-dash-title{font-weight:700;font-size:1.2rem;flex:1;cursor:pointer;border-radius:6px;padding:2px 6px}
+.team-dash-title:hover{background:rgba(255,255,255,0.06)}
 .btn-delete-team{
   padding:6px 12px;font-size:.75rem;border-radius:var(--r);
   border:1px solid #e94560;background:transparent;color:#e94560;
@@ -950,10 +951,11 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 
 /* ── Toast ── */
 .toast{
-  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
-  background:var(--ac);color:#fff;padding:10px 20px;border-radius:var(--r);
-  font-size:.85rem;font-weight:600;z-index:999;opacity:0;
+  position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ac);color:#fff;padding:12px 24px;border-radius:var(--r);
+  font-size:.85rem;font-weight:600;z-index:9999;opacity:0;
   transition:opacity .3s,transform .3s;pointer-events:none;
+  box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:90vw;text-align:center;
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast-err{background:#e94560}
@@ -976,6 +978,30 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   font-size:.9rem;resize:vertical;margin-bottom:12px;
 }
 .override-actions{display:flex;gap:8px;justify-content:flex-end}
+
+/* ── Confirm modal (reusable) ── */
+.confirm-overlay{
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  z-index:400;background:rgba(0,0,0,.6);align-items:center;
+  justify-content:center;padding:16px;
+}
+.confirm-overlay.open{display:flex}
+.confirm-box{
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
+  padding:24px;width:100%;max-width:380px;text-align:center;
+}
+.confirm-box h3{margin-bottom:8px;font-size:1.1rem}
+.confirm-box p{color:var(--mu);font-size:.85rem;margin-bottom:20px;line-height:1.4}
+.confirm-actions{display:flex;gap:10px;justify-content:center}
+.confirm-actions button{
+  padding:10px 20px;border-radius:var(--r);font-size:.85rem;
+  font-weight:600;cursor:pointer;border:1px solid var(--bd);
+  transition:all .2s;min-width:100px;
+}
+.confirm-cancel{background:var(--sf);color:var(--tx)}
+.confirm-cancel:hover{background:var(--bd)}
+.confirm-danger{background:#e94560;color:#fff;border-color:#e94560}
+.confirm-danger:hover{background:#d63350}
 
 /* ── Legacy pages (messages, decisions, audit) ── */
 .legacy-container{padding:16px;max-width:900px;margin:0 auto}
@@ -1170,6 +1196,9 @@ tr.override td{background:rgba(210,153,34,.08)}
   min-height:2.4em;transition:min-height .2s;
 }
 .compose-body:focus{min-height:4.8em}
+.compose-subject:focus,.compose-body:focus,.chat-input:focus{
+  border-color:var(--ac);box-shadow:0 0 0 2px rgba(88,166,255,0.15);outline:none;
+}
 .compose-send{
   background:var(--ac);color:#000;border:none;border-radius:6px;
   padding:6px 18px;font-size:.85rem;font-weight:600;cursor:pointer;
@@ -1228,6 +1257,20 @@ function showToast(msg,type){
   document.body.appendChild(t);
   setTimeout(function(){t.classList.add('show')},10);
   setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},3000);
+}
+
+// Reusable confirm modal (replaces browser confirm())
+var _confirmResolve=null;
+function showConfirm(title,msg,okLabel){
+  document.getElementById('confirm-title').textContent=title||'Are you sure?';
+  document.getElementById('confirm-msg').textContent=msg||'';
+  document.getElementById('confirm-ok-btn').textContent=okLabel||'Delete';
+  document.getElementById('confirm-modal').classList.add('open');
+  return new Promise(function(resolve){_confirmResolve=resolve;});
+}
+function closeConfirm(result){
+  document.getElementById('confirm-modal').classList.remove('open');
+  if(_confirmResolve){_confirmResolve(result);_confirmResolve=null;}
 }
 
 async function api(path){return(await fetch(path)).json()}
@@ -1490,14 +1533,15 @@ function startRenameAgent(){
         loadTeams();
       }else{
         el.textContent=oldName;
-        if(r&&r.error)alert(r.error);
+        if(r&&r.error)showToast(r.error,'error');
       }
-    });
+    }).catch(function(){el.textContent=oldName;showToast('Rename failed','error');});
   }
-  input.addEventListener('blur',save);
+  var cancelled=false;
+  input.addEventListener('blur',function(){if(!cancelled)save()});
   input.addEventListener('keydown',function(e){
     if(e.key==='Enter'){e.preventDefault();input.blur();}
-    if(e.key==='Escape'){input.value=oldName;input.blur();}
+    if(e.key==='Escape'){cancelled=true;el.textContent=oldName;}
   });
 }
 
@@ -1649,7 +1693,9 @@ async function loadTeams(){
   var el=document.getElementById('teams-list');
   if(!el)return;
   if(teamsData.length===0){
-    el.innerHTML='<p style="color:var(--mu);font-size:.85rem;text-align:center;padding:12px">No teams yet. Add one to expand your crew.</p>';
+    el.innerHTML='<div style="text-align:center;padding:24px 12px">'+
+      '<p style="color:var(--mu);font-size:.85rem;margin-bottom:12px">No teams yet.</p>'+
+      '<button onclick="openTemplatePicker()" style="background:var(--ac);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer">Create Your First Team</button></div>';
     return;
   }
   // FIX 1: team click opens team dashboard instead of messages
@@ -1692,12 +1738,55 @@ async function createTeam(name){
 }
 
 async function deleteTeam(teamId,teamName){
-  if(!confirm('Delete team "'+teamName+'" and all its agents? This cannot be undone.'))return;
+  var ok=await showConfirm(
+    'Delete Team',
+    'Delete "'+teamName+'" and all its agents? This cannot be undone.',
+    'Delete Team'
+  );
+  if(!ok)return;
   try{
     var r=await apiPost('/api/teams/'+teamId+'/delete',{});
     if(r.ok){showToast('Team deleted ('+r.deleted_count+' agents removed)');showView('crew');loadTeams();}
     else{showToast(r.error||'Failed to delete team','error')}
   }catch(e){showToast('Error deleting team','error')}
+}
+
+// ══════════ RENAME TEAM ══════════
+
+function startRenameTeam(){
+  var el=document.getElementById('team-dash-name');
+  if(!el)return;
+  var teamId=el.dataset.teamId;
+  if(!teamId)return;
+  var oldName=el.textContent;
+  var input=document.createElement('input');
+  input.type='text';
+  input.value=oldName;
+  input.className='rename-input';
+  input.style.cssText='font-size:inherit;font-weight:inherit;color:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;outline:none;width:'+Math.max(140,oldName.length*12)+'px;';
+  el.textContent='';
+  el.appendChild(input);
+  input.focus();
+  input.select();
+  function save(){
+    var newName=input.value.trim();
+    if(!newName||newName===oldName){el.textContent=oldName;return;}
+    apiPost('/api/teams/'+teamId+'/rename',{name:newName}).then(function(r){
+      if(r&&r.ok){
+        el.textContent=newName;
+        showToast('Team renamed to "'+newName+'"');
+        loadTeams();
+      }else{
+        el.textContent=oldName;
+        showToast(r&&r.error||'Rename failed','error');
+      }
+    });
+  }
+  input.addEventListener('blur',save);
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){input.value=oldName;input.blur();}
+  });
 }
 
 // ══════════ TEAM DASHBOARD (FIX 1) ══════════
@@ -1722,9 +1811,9 @@ async function openTeamDash(teamId){
 
   var html='<div class="team-dash-header">'+
     '<button class="team-dash-back" onclick="showView(\'crew\')">\u2190</button>'+
-    '<span class="team-dash-title">'+esc(team.name)+'</span>'+
+    '<span class="team-dash-title" id="team-dash-name" data-team-id="'+teamId+'" onclick="startRenameTeam()" title="Click to rename">'+esc(team.name)+'</span>'+
     '<span class="badge badge-active">'+team.agent_count+' agents</span>'+
-    '<button class="btn-delete-team" onclick="deleteTeam('+teamId+',\''+esc(team.name).replace(/'/g,"\\'")+'\')">Delete Team</button></div>';
+    '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
   // Manager bubble
   if(mgr){
@@ -1937,7 +2026,9 @@ async function sendChat(){
   var input=document.getElementById('chat-input');
   var text=input.value.trim();if(!text)return;
   var agentId=document.getElementById('agent-space').dataset.agentId;
+  var sendBtn=document.getElementById('chat-send-btn');
   input.value='';
+  if(sendBtn){sendBtn.disabled=true;sendBtn.textContent='...';}
 
   // Optimistically show the sent message immediately
   var wrap=document.getElementById('as-chat-msgs');
@@ -1959,6 +2050,8 @@ async function sendChat(){
   }catch(e){
     // If fetch failed, at least the optimistic message is visible
     console.error('sendChat error:',e);
+  }finally{
+    if(sendBtn){sendBtn.disabled=false;sendBtn.textContent='Send';}
   }
 }
 
@@ -1987,7 +2080,7 @@ async function loadTeamMailbox(teamId,container){
   try{
     var msgs=await api('/api/teams/'+teamId+'/mailbox');
     if(!msgs||msgs.length===0){
-      container.innerHTML='<p style="color:var(--mu);font-size:.85rem;text-align:center;padding:8px">No mailbox messages.</p>';
+      container.innerHTML='<p style="color:var(--mu);font-size:.85rem;text-align:center;padding:12px">No messages yet. Your agents will post updates here as they work.</p>';
       return;
     }
     container.innerHTML=msgs.map(function(m){
@@ -2060,7 +2153,9 @@ async function composeSend(){
   if(!agent){composeToast('Select a recipient','error');return;}
   if(!subject){composeToast('Enter a subject','error');return;}
   var btn=document.getElementById('compose-send-btn');
+  var origText=btn.textContent;
   btn.disabled=true;
+  btn.textContent='Sending...';
   try{
     var res=await apiPost('/api/compose',{
       to_agent:agent,message_type:type,subject:subject,body:body,priority:priority
@@ -2074,7 +2169,7 @@ async function composeSend(){
       composeToast(res.error||'Send failed',true);
     }
   }catch(e){composeToast('Network error',true);}
-  finally{btn.disabled=false;}
+  finally{btn.disabled=false;btn.textContent=origText;}
 }
 
 // ── Chat auto-refresh ──
@@ -2363,6 +2458,18 @@ def _build_html():
     <div class="override-actions">
       <button class="btn" onclick="closeOverride()">Cancel</button>
       <button class="btn btn-danger" onclick="submitOverride()">Override</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reusable confirm modal -->
+<div class="confirm-overlay" id="confirm-modal">
+  <div class="confirm-box">
+    <h3 id="confirm-title">Are you sure?</h3>
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="closeConfirm(false)">Cancel</button>
+      <button class="confirm-danger" id="confirm-ok-btn" onclick="closeConfirm(true)">Delete</button>
     </div>
   </div>
 </div>
@@ -3306,6 +3413,38 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             team_id = int(m.group(1))
             result = bus.delete_team(team_id, db_path=self.db_path)
             return _json_response(self, result, 200 if result.get("ok") else 400)
+
+        m = re.match(r"^/api/teams/(\d+)/rename$", path)
+        if m:
+            team_id = int(m.group(1))
+            new_name = data.get("name", "").strip()
+            if not new_name:
+                return _json_response(self, {"error": "name required"}, 400)
+            if len(new_name) > 40:
+                return _json_response(self, {"error": "name too long (max 40 chars)"}, 400)
+            conn = bus.get_conn(self.db_path)
+            try:
+                mgr = conn.execute(
+                    "SELECT * FROM agents WHERE id=? AND agent_type='manager'",
+                    (team_id,)).fetchone()
+                if not mgr:
+                    return _json_response(self, {"error": "team not found"}, 404)
+                # Manager name pattern: "<TeamName>-Manager"
+                new_mgr_name = new_name + "-Manager"
+                # Check for name collision
+                dup = conn.execute(
+                    "SELECT id FROM agents WHERE name=? AND id!=?",
+                    (new_mgr_name, team_id)).fetchone()
+                if dup:
+                    return _json_response(self, {"error": "team name already taken"}, 409)
+                conn.execute(
+                    "UPDATE agents SET name=?, description=?, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (new_mgr_name, f"Manages the {new_name} team.", team_id))
+                conn.commit()
+            finally:
+                conn.close()
+            return _json_response(self, {"ok": True, "id": team_id, "name": new_name})
 
         if path == "/api/message":
             required = ("from_agent", "to_agent", "message_type", "subject", "body")

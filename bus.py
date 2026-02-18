@@ -1038,7 +1038,11 @@ def create_team(team_name: str, manager_name: str = "",
 
 
 def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
-    """Delete a team by terminating the manager and all its workers.
+    """Delete a team by removing the manager and all its workers.
+
+    Cleanly handles all foreign-key references across every table
+    (messages, audit_log, timing_rules, agent_skills, team_mailbox,
+    private_sessions) before deleting the agent rows.
 
     Returns {ok, deleted_count} or {ok, error}.
     """
@@ -1056,30 +1060,52 @@ def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
             "SELECT id FROM agents WHERE parent_agent_id=?",
             (manager_id,),
         ).fetchall()
+        worker_ids = [w["id"] for w in workers]
+        all_ids = worker_ids + [manager_id]
 
-        deleted = 0
-        for w in workers:
-            conn.execute(
-                "UPDATE messages SET status='archived' "
-                "WHERE from_agent_id=? OR to_agent_id=?",
-                (w["id"], w["id"]),
-            )
-            conn.execute("DELETE FROM agents WHERE id=?", (w["id"],))
-            deleted += 1
-
-        conn.execute(
-            "UPDATE messages SET status='archived' "
-            "WHERE from_agent_id=? OR to_agent_id=?",
-            (manager_id, manager_id),
-        )
-        conn.execute("DELETE FROM agents WHERE id=?", (manager_id,))
-        deleted += 1
-
+        # Audit BEFORE deleting (FK on audit_log.agent_id -> agents.id)
         _audit(conn, "team_deleted", manager_id, {
-            "name": mgr["name"], "workers_deleted": deleted - 1,
+            "name": mgr["name"], "workers_deleted": len(worker_ids),
         })
+
+        # Clean up all FK references for every agent being removed
+        for aid in all_ids:
+            # messages: from_agent_id / to_agent_id are NOT NULL — must delete rows
+            conn.execute(
+                "DELETE FROM messages WHERE from_agent_id=? OR to_agent_id=?",
+                (aid, aid),
+            )
+            # audit_log: agent_id is nullable — null it out
+            conn.execute(
+                "UPDATE audit_log SET agent_id=NULL WHERE agent_id=?",
+                (aid,),
+            )
+            # timing_rules: agent_id NOT NULL — delete rows
+            conn.execute("DELETE FROM timing_rules WHERE agent_id=?", (aid,))
+            # agent_skills: agent_id NOT NULL — delete rows
+            conn.execute("DELETE FROM agent_skills WHERE agent_id=?", (aid,))
+            # team_mailbox: from_agent_id NOT NULL — delete rows
+            conn.execute(
+                "DELETE FROM team_mailbox WHERE from_agent_id=? OR team_id=?",
+                (aid, aid),
+            )
+            # private_sessions: human_id / agent_id NOT NULL — delete rows
+            conn.execute(
+                "DELETE FROM private_sessions WHERE human_id=? OR agent_id=?",
+                (aid, aid),
+            )
+            # agents: parent_agent_id nullable — null out any orphaned children
+            conn.execute(
+                "UPDATE agents SET parent_agent_id=NULL WHERE parent_agent_id=?",
+                (aid,),
+            )
+
+        # Now safe to delete the agent rows themselves
+        for aid in all_ids:
+            conn.execute("DELETE FROM agents WHERE id=?", (aid,))
+
         conn.commit()
-        return {"ok": True, "deleted_count": deleted}
+        return {"ok": True, "deleted_count": len(all_ids)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     finally:
