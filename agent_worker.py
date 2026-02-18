@@ -147,8 +147,9 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
         "model": model,
         "messages": messages,
         "stream": False,
-        "temperature": 1,
+        "temperature": 0.6,
         "max_tokens": 1024,
+        "thinking": {"type": "disabled"},
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -163,7 +164,12 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
             data = json.loads(resp.read().decode("utf-8"))
             choices = data.get("choices", [])
             if choices:
-                return choices[0].get("message", {}).get("content", "").strip()
+                msg = choices[0].get("message", {})
+                # Kimi K2.5 may put the real answer in content OR reasoning_content
+                text = msg.get("content", "").strip()
+                if not text:
+                    text = msg.get("reasoning_content", "").strip()
+                return text if text else "(Empty response from Kimi)"
             return "(Empty response from Kimi)"
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")[:200]
