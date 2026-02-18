@@ -159,6 +159,46 @@ CSS = r"""
   --or:#d18616;--pr:#bc8cff;--tl:#39d0d0;
   --r:12px;--sh:0 2px 12px rgba(0,0,0,.4);
 }
+
+/* ═══ DAY MODE — warm, bright, friendly ═══ */
+body.day-mode{
+  --bg:#f0f2f5;--sf:#ffffff;--bd:#d0d7de;
+  --tx:#1f2328;--mu:#656d76;--ac:#0969da;
+  --gn:#1a7f37;--yl:#9a6700;--rd:#cf222e;
+  --or:#bc4c00;--pr:#8250df;--tl:#0e8a7e;
+  --sh:0 2px 12px rgba(0,0,0,.08);
+}
+body.day-mode .bubble.center .bubble-circle{
+  background:rgba(255,255,255,0.95);border-color:rgba(31,35,40,0.7);
+}
+body.day-mode .bubble.center .bubble-circle .icon{filter:drop-shadow(0 0 8px rgba(0,0,0,0.15))}
+body.day-mode .bubble.center .bubble-label{
+  color:#1f2328;text-shadow:0 0 8px rgba(255,255,255,0.8);
+}
+body.day-mode .bubble.center .bubble-circle::after{border-color:rgba(31,35,40,0.12)}
+body.day-mode .bubble.outer .bubble-circle{background:rgba(255,255,255,0.92)}
+body.day-mode .bubble-label{color:#1f2328;text-shadow:0 1px 4px rgba(255,255,255,0.9)}
+body.day-mode .bubble-sub{color:#656d76}
+body.day-mode .lines line{opacity:0.3}
+body.day-mode::before{
+  background:radial-gradient(ellipse at 35% 45%,transparent 40%,rgba(0,0,0,0.03) 100%) !important;
+}
+body.day-mode .compose-bar{background:linear-gradient(180deg,var(--sf) 0%,rgba(240,242,245,0.97) 100%) !important}
+body.day-mode .topbar{background:linear-gradient(90deg,var(--sf) 0%,rgba(240,242,245,0.95) 50%,var(--sf) 100%) !important}
+body.day-mode .wizard-card{background:linear-gradient(135deg,rgba(130,80,223,0.06) 0%,var(--sf) 100%) !important}
+body.day-mode .team-card{background:linear-gradient(135deg,rgba(9,105,218,0.04) 0%,var(--sf) 100%) !important}
+body.day-mode .bubble.center:hover .bubble-circle{
+  box-shadow:0 0 45px rgba(9,105,218,0.2),0 0 90px rgba(9,105,218,0.08);
+}
+body.day-mode .tb-popup{box-shadow:0 8px 32px rgba(0,0,0,.12)}
+body.day-mode .tb-popup-overlay{background:rgba(0,0,0,.2)}
+body.day-mode .bubble-count{color:var(--ac)}
+body.day-mode .nav-btn.active{background:var(--ac);color:#fff}
+body.day-mode .time-pill.active{background:var(--ac);color:#fff;border-color:var(--ac)}
+body.day-mode .dn-btn.active{background:var(--ac);color:#fff}
+.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.time-pill,.nav-btn,.dn-btn{
+  transition:background .6s ease,color .6s ease,border-color .6s ease,box-shadow .6s ease;
+}
 *{margin:0;padding:0;box-sizing:border-box}
 html{font-size:16px;-webkit-text-size-adjust:100%}
 body{
@@ -166,6 +206,7 @@ body{
   background:var(--bg);color:var(--tx);line-height:1.5;
   min-height:100vh;min-height:100dvh;overflow-x:hidden;
   -webkit-tap-highlight-color:transparent;
+  transition:background .6s ease,color .6s ease;
 }
 a{color:var(--ac);text-decoration:none}
 
@@ -1164,7 +1205,11 @@ function setTimePeriod(p,el){
 function setDayNight(mode,el){
   document.querySelectorAll('.dn-btn').forEach(function(b){b.classList.remove('active')});
   if(el)el.classList.add('active');
-  // Future: toggle day/night color scheme
+  if(mode==='day'){
+    document.body.classList.add('day-mode');
+  }else{
+    document.body.classList.remove('day-mode');
+  }
 }
 
 // FIX 3: Trust/Burnout popup instead of old sliders
