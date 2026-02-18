@@ -211,15 +211,16 @@ a{color:var(--ac);text-decoration:none}
 /* ── Circle layout — spacious, warm, premium ── */
 .circle-wrap{
   position:relative;width:100%;
-  max-width:640px;margin:0 auto;
-  aspect-ratio:1;padding:40px;
+  max-width:700px;margin:0 auto;
+  aspect-ratio:1;padding:48px;
+  overflow:visible;
 }
 .circle-wrap svg.lines{
   position:absolute;top:0;left:0;width:100%;height:100%;
   pointer-events:none;z-index:1;
 }
 .circle-wrap svg.lines line{
-  stroke-width:1;stroke-dasharray:6 4;opacity:0.2;
+  stroke-width:1;stroke-dasharray:6 4;opacity:0.15;
 }
 
 /* Agent bubble — base */
@@ -227,148 +228,150 @@ a{color:var(--ac);text-decoration:none}
   position:absolute;z-index:5;
   display:flex;flex-direction:column;align-items:center;
   cursor:pointer;-webkit-tap-highlight-color:transparent;
-  transition:transform .3s ease;
+  transition:transform .35s cubic-bezier(.4,0,.2,1);
 }
 .bubble:active{transform:scale(.92)!important}
 .bubble-circle{
   border-radius:50%;display:flex;align-items:center;justify-content:center;
-  position:relative;transition:box-shadow .4s ease, transform .3s ease, border-color .3s ease;
+  position:relative;
+  transition:box-shadow .45s cubic-bezier(.4,0,.2,1), transform .35s ease, border-color .35s ease;
   background:var(--sf);border:2px solid var(--bd);
 }
-.bubble:hover{transform:scale(1.08)}
-.bubble:hover .bubble-circle{box-shadow:0 0 25px rgba(255,255,255,.15)}
-.bubble-circle .icon{font-size:2.2rem;filter:drop-shadow(0 0 6px rgba(255,255,255,0.35))}
+.bubble:hover{transform:scale(1.07)}
+.bubble:hover .bubble-circle{box-shadow:0 0 30px rgba(255,255,255,.12)}
+.bubble-circle .icon{font-size:2.4rem;filter:drop-shadow(0 0 6px rgba(255,255,255,0.35))}
 .bubble-circle .status-dot{
-  position:absolute;top:6px;right:6px;width:12px;height:12px;
+  position:absolute;top:8px;right:8px;width:13px;height:13px;
   border-radius:50%;border:2.5px solid rgba(12,14,22,0.95);
 }
 .dot-green{background:var(--gn)}
 .dot-yellow{background:var(--yl)}
 .dot-red{background:var(--rd)}
 .bubble-label{
-  margin-top:10px;font-size:.82rem;font-weight:700;color:rgba(255,255,255,0.92);
-  text-align:center;white-space:nowrap;letter-spacing:0.04em;
-  text-shadow:0 1px 8px rgba(0,0,0,0.6);
+  margin-top:10px;font-size:.8rem;font-weight:700;color:rgba(255,255,255,0.9);
+  text-align:center;white-space:nowrap;letter-spacing:0.05em;
+  text-shadow:0 1px 8px rgba(0,0,0,0.7);
 }
 .bubble-count{
   font-size:.65rem;color:var(--ac);margin-top:3px;font-weight:600;
 }
 .bubble-sub{
   font-size:.6rem;color:var(--mu);margin-top:2px;
-  max-width:120px;text-align:center;overflow:hidden;
+  max-width:140px;text-align:center;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
 }
 
 /* ── Crew Boss — dominant center star (hero-level presence) ── */
 .bubble.center .bubble-circle{
-  width:200px;height:200px;
-  border-color:rgba(255,255,255,0.95);border-width:3px;
+  width:220px;height:220px;
+  border-color:rgba(255,255,255,0.9);border-width:3px;
   background:rgba(12,14,22,0.95);
   box-shadow:
-    0 0 40px rgba(255,255,255,0.25),
-    0 0 80px rgba(255,255,255,0.10),
-    0 0 120px rgba(255,255,255,0.04),
-    inset 0 0 30px rgba(255,255,255,0.04);
+    0 0 45px rgba(255,255,255,0.22),
+    0 0 90px rgba(255,255,255,0.08),
+    0 0 140px rgba(255,255,255,0.03),
+    inset 0 0 35px rgba(255,255,255,0.03);
   animation:bossGlow 3s ease-in-out infinite;
 }
 .bubble.center .bubble-circle::after{
-  content:'';position:absolute;inset:-12px;border-radius:50%;
-  border:1px solid rgba(255,255,255,0.15);
+  content:'';position:absolute;inset:-14px;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.12);
   animation:bossPulse 2.5s ease-in-out infinite;
 }
-.bubble.center .bubble-circle .icon{font-size:3.4rem;filter:drop-shadow(0 0 14px rgba(255,255,255,0.65))}
+.bubble.center .bubble-circle .icon{font-size:3.6rem;filter:drop-shadow(0 0 16px rgba(255,255,255,0.6))}
 .bubble.center .bubble-label{
   font-size:1.1rem;color:#fff;font-weight:800;letter-spacing:0.08em;
-  text-shadow:0 0 18px rgba(255,255,255,0.35);
+  text-shadow:0 0 20px rgba(255,255,255,0.3);
 }
 .bubble.center:hover .bubble-circle{
   box-shadow:
-    0 0 50px rgba(255,255,255,0.40),
-    0 0 100px rgba(255,255,255,0.15),
-    0 0 140px rgba(255,255,255,0.06),
-    inset 0 0 35px rgba(255,255,255,0.06);
+    0 0 55px rgba(255,255,255,0.35),
+    0 0 110px rgba(255,255,255,0.12),
+    0 0 160px rgba(255,255,255,0.05),
+    inset 0 0 40px rgba(255,255,255,0.05);
 }
 @keyframes bossGlow{
-  0%,100%{box-shadow:0 0 40px rgba(255,255,255,0.25),0 0 80px rgba(255,255,255,0.10),0 0 120px rgba(255,255,255,0.04),inset 0 0 30px rgba(255,255,255,0.04)}
-  50%{box-shadow:0 0 50px rgba(255,255,255,0.40),0 0 100px rgba(255,255,255,0.15),0 0 140px rgba(255,255,255,0.06),inset 0 0 35px rgba(255,255,255,0.06)}
+  0%,100%{box-shadow:0 0 45px rgba(255,255,255,0.22),0 0 90px rgba(255,255,255,0.08),0 0 140px rgba(255,255,255,0.03),inset 0 0 35px rgba(255,255,255,0.03)}
+  50%{box-shadow:0 0 55px rgba(255,255,255,0.35),0 0 110px rgba(255,255,255,0.12),0 0 160px rgba(255,255,255,0.05),inset 0 0 40px rgba(255,255,255,0.05)}
 }
 @keyframes bossPulse{
-  0%,100%{transform:scale(1);opacity:0.35}
+  0%,100%{transform:scale(1);opacity:0.3}
   50%{transform:scale(1.15);opacity:0}
 }
 
 /* ── Outer agents — large, spacious, premium ── */
 .bubble.outer .bubble-circle{
-  width:155px;height:155px;
+  width:160px;height:160px;
   background:rgba(12,14,22,0.9);
-  padding:1.2rem;
+  padding:1.4rem;
 }
-.bubble.outer .bubble-circle .icon{font-size:2.4rem}
-.bubble.outer:hover{transform:scale(1.1)}
-/* ── Agent-specific neon glows with 3-layer breathing ── */
+.bubble.outer .bubble-circle .icon{font-size:2.6rem}
+.bubble.outer:hover{transform:scale(1.09)}
 
-/* Teal — Friend & Family Helper (slightly larger for long name) */
+/* ── Agent-specific neon glows with soft 3-layer breathing ── */
+
+/* Teal — Friend & Family Helper (wider for long name) */
 #bubble-family .bubble-circle{
-  width:165px;height:165px;padding:1.4rem;
+  width:175px;height:175px;padding:1.6rem;
   border-color:#4dd0b8;border-width:2.5px;
-  box-shadow:0 0 25px rgba(77,208,184,0.3),0 0 60px rgba(77,208,184,0.1),0 0 90px rgba(77,208,184,0.04);
+  box-shadow:0 0 28px rgba(77,208,184,0.28),0 0 65px rgba(77,208,184,0.10),0 0 100px rgba(77,208,184,0.04);
   animation:breatheTeal 2.5s ease-in-out infinite;
 }
 #bubble-family:hover .bubble-circle{
   border-color:#6eecd4;
-  box-shadow:0 0 40px rgba(77,208,184,0.5),0 0 80px rgba(77,208,184,0.2),0 0 120px rgba(77,208,184,0.08);
+  box-shadow:0 0 45px rgba(77,208,184,0.45),0 0 90px rgba(77,208,184,0.18),0 0 130px rgba(77,208,184,0.07);
 }
 
 /* Soft orange — Health Buddy */
 #bubble-health .bubble-circle{
   border-color:#ffab57;border-width:2.5px;
-  box-shadow:0 0 25px rgba(255,171,87,0.3),0 0 60px rgba(255,171,87,0.1),0 0 90px rgba(255,171,87,0.04);
+  box-shadow:0 0 28px rgba(255,171,87,0.28),0 0 65px rgba(255,171,87,0.10),0 0 100px rgba(255,171,87,0.04);
   animation:breatheOrange 2.5s ease-in-out infinite;
 }
 #bubble-health:hover .bubble-circle{
   border-color:#ffc580;
-  box-shadow:0 0 40px rgba(255,171,87,0.5),0 0 80px rgba(255,171,87,0.2),0 0 120px rgba(255,171,87,0.08);
+  box-shadow:0 0 45px rgba(255,171,87,0.45),0 0 90px rgba(255,171,87,0.18),0 0 130px rgba(255,171,87,0.07);
 }
 
 /* Fresh green — Growth Coach */
 #bubble-growth .bubble-circle{
   border-color:#66d97a;border-width:2.5px;
-  box-shadow:0 0 25px rgba(102,217,122,0.3),0 0 60px rgba(102,217,122,0.1),0 0 90px rgba(102,217,122,0.04);
+  box-shadow:0 0 28px rgba(102,217,122,0.28),0 0 65px rgba(102,217,122,0.10),0 0 100px rgba(102,217,122,0.04);
   animation:breatheGreen 2.5s ease-in-out infinite;
 }
 #bubble-growth:hover .bubble-circle{
   border-color:#8aeea0;
-  box-shadow:0 0 40px rgba(102,217,122,0.5),0 0 80px rgba(102,217,122,0.2),0 0 120px rgba(102,217,122,0.08);
+  box-shadow:0 0 45px rgba(102,217,122,0.45),0 0 90px rgba(102,217,122,0.18),0 0 130px rgba(102,217,122,0.07);
 }
 
 /* Clean blue — Life Assistant */
 #bubble-life .bubble-circle{
   border-color:#64b5f6;border-width:2.5px;
-  box-shadow:0 0 25px rgba(100,181,246,0.3),0 0 60px rgba(100,181,246,0.1),0 0 90px rgba(100,181,246,0.04);
+  box-shadow:0 0 28px rgba(100,181,246,0.28),0 0 65px rgba(100,181,246,0.10),0 0 100px rgba(100,181,246,0.04);
   animation:breatheBlue 2.5s ease-in-out infinite;
 }
 #bubble-life:hover .bubble-circle{
   border-color:#90caf9;
-  box-shadow:0 0 40px rgba(100,181,246,0.5),0 0 80px rgba(100,181,246,0.2),0 0 120px rgba(100,181,246,0.08);
+  box-shadow:0 0 45px rgba(100,181,246,0.45),0 0 90px rgba(100,181,246,0.18),0 0 130px rgba(100,181,246,0.07);
 }
 
 /* Warm purple — Muse */
 #bubble-muse .bubble-circle{
   border-color:#b388ff;border-width:2.5px;
-  box-shadow:0 0 25px rgba(179,136,255,0.3),0 0 60px rgba(179,136,255,0.1),0 0 90px rgba(179,136,255,0.04);
+  box-shadow:0 0 28px rgba(179,136,255,0.28),0 0 65px rgba(179,136,255,0.10),0 0 100px rgba(179,136,255,0.04);
   animation:breathePurple 2.5s ease-in-out infinite;
 }
 #bubble-muse:hover .bubble-circle{
   border-color:#d0b0ff;
-  box-shadow:0 0 40px rgba(179,136,255,0.5),0 0 80px rgba(179,136,255,0.2),0 0 120px rgba(179,136,255,0.08);
+  box-shadow:0 0 45px rgba(179,136,255,0.45),0 0 90px rgba(179,136,255,0.18),0 0 130px rgba(179,136,255,0.07);
 }
 
-/* Breathing keyframes — staggered via animation-delay in HTML */
-@keyframes breatheTeal{0%,100%{box-shadow:0 0 25px rgba(77,208,184,0.3),0 0 60px rgba(77,208,184,0.1),0 0 90px rgba(77,208,184,0.04)}50%{box-shadow:0 0 40px rgba(77,208,184,0.5),0 0 80px rgba(77,208,184,0.2),0 0 120px rgba(77,208,184,0.08)}}
-@keyframes breatheOrange{0%,100%{box-shadow:0 0 25px rgba(255,171,87,0.3),0 0 60px rgba(255,171,87,0.1),0 0 90px rgba(255,171,87,0.04)}50%{box-shadow:0 0 40px rgba(255,171,87,0.5),0 0 80px rgba(255,171,87,0.2),0 0 120px rgba(255,171,87,0.08)}}
-@keyframes breatheGreen{0%,100%{box-shadow:0 0 25px rgba(102,217,122,0.3),0 0 60px rgba(102,217,122,0.1),0 0 90px rgba(102,217,122,0.04)}50%{box-shadow:0 0 40px rgba(102,217,122,0.5),0 0 80px rgba(102,217,122,0.2),0 0 120px rgba(102,217,122,0.08)}}
-@keyframes breatheBlue{0%,100%{box-shadow:0 0 25px rgba(100,181,246,0.3),0 0 60px rgba(100,181,246,0.1),0 0 90px rgba(100,181,246,0.04)}50%{box-shadow:0 0 40px rgba(100,181,246,0.5),0 0 80px rgba(100,181,246,0.2),0 0 120px rgba(100,181,246,0.08)}}
-@keyframes breathePurple{0%,100%{box-shadow:0 0 25px rgba(179,136,255,0.3),0 0 60px rgba(179,136,255,0.1),0 0 90px rgba(179,136,255,0.04)}50%{box-shadow:0 0 40px rgba(179,136,255,0.5),0 0 80px rgba(179,136,255,0.2),0 0 120px rgba(179,136,255,0.08)}}
+/* Breathing keyframes — soft premium pulsation */
+@keyframes breatheTeal{0%,100%{box-shadow:0 0 28px rgba(77,208,184,0.28),0 0 65px rgba(77,208,184,0.10),0 0 100px rgba(77,208,184,0.04)}50%{box-shadow:0 0 45px rgba(77,208,184,0.45),0 0 90px rgba(77,208,184,0.18),0 0 130px rgba(77,208,184,0.07)}}
+@keyframes breatheOrange{0%,100%{box-shadow:0 0 28px rgba(255,171,87,0.28),0 0 65px rgba(255,171,87,0.10),0 0 100px rgba(255,171,87,0.04)}50%{box-shadow:0 0 45px rgba(255,171,87,0.45),0 0 90px rgba(255,171,87,0.18),0 0 130px rgba(255,171,87,0.07)}}
+@keyframes breatheGreen{0%,100%{box-shadow:0 0 28px rgba(102,217,122,0.28),0 0 65px rgba(102,217,122,0.10),0 0 100px rgba(102,217,122,0.04)}50%{box-shadow:0 0 45px rgba(102,217,122,0.45),0 0 90px rgba(102,217,122,0.18),0 0 130px rgba(102,217,122,0.07)}}
+@keyframes breatheBlue{0%,100%{box-shadow:0 0 28px rgba(100,181,246,0.28),0 0 65px rgba(100,181,246,0.10),0 0 100px rgba(100,181,246,0.04)}50%{box-shadow:0 0 45px rgba(100,181,246,0.45),0 0 90px rgba(100,181,246,0.18),0 0 130px rgba(100,181,246,0.07)}}
+@keyframes breathePurple{0%,100%{box-shadow:0 0 28px rgba(179,136,255,0.28),0 0 65px rgba(179,136,255,0.10),0 0 100px rgba(179,136,255,0.04)}50%{box-shadow:0 0 45px rgba(179,136,255,0.45),0 0 90px rgba(179,136,255,0.18),0 0 130px rgba(179,136,255,0.07)}}
 
 /* Trust + Burnout beneath circle */
 .indicators{
@@ -700,11 +703,11 @@ tr.override td{background:rgba(210,153,34,.08)}
 @media(min-width:768px){
   .main-layout{
     display:flex;align-items:flex-start;justify-content:center;
-    gap:32px;max-width:960px;margin:0 auto;padding:24px;
+    gap:32px;max-width:1060px;margin:0 auto;padding:24px;
   }
-  .main-left{flex:1;max-width:520px}
+  .main-left{flex:1;max-width:580px}
   .main-right{flex:1;max-width:380px}
-  .circle-wrap{max-width:640px}
+  .circle-wrap{max-width:700px}
   /* Agent space: left half on desktop */
   .agent-space{
     width:50%;max-width:520px;
@@ -952,7 +955,13 @@ async function loadCircle(){
 
 function renderBubble(id,agent,sub){
   var el=document.getElementById(id);
-  if(!el||!agent)return;
+  if(!el)return;
+  if(!agent){
+    /* Agent not in DB yet — show bubble as-is (static placeholder) */
+    var dot=el.querySelector('.status-dot');
+    if(dot)dot.className='status-dot dot-yellow';
+    return;
+  }
   el.onclick=function(){openAgentSpace(agent.id)};
   var dot=el.querySelector('.status-dot');
   if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null);
@@ -1675,37 +1684,37 @@ def _build_html():
     <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   </div>
   <div class="circle-wrap">
-    <svg class="lines" viewBox="0 0 640 640" preserveAspectRatio="xMidYMid meet">
-      <!-- 5-point star lines: center (320,320) to each pentagon vertex -->
-      <line x1="320" y1="320" x2="320" y2="62" stroke="#4dd0b8"/>
-      <line x1="320" y1="320" x2="565" y2="138" stroke="#b388ff"/>
-      <line x1="320" y1="320" x2="472" y2="515" stroke="#66d97a"/>
-      <line x1="320" y1="320" x2="168" y2="515" stroke="#64b5f6"/>
-      <line x1="320" y1="320" x2="75"  y2="138" stroke="#ffab57"/>
+    <svg class="lines" viewBox="0 0 700 700" preserveAspectRatio="xMidYMid meet">
+      <!-- 5-point star lines: center to each pentagon vertex -->
+      <line x1="350" y1="350" x2="350" y2="50"  stroke="#4dd0b8"/>
+      <line x1="350" y1="350" x2="636" y2="157" stroke="#b388ff"/>
+      <line x1="350" y1="350" x2="527" y2="593" stroke="#66d97a"/>
+      <line x1="350" y1="350" x2="173" y2="593" stroke="#64b5f6"/>
+      <line x1="350" y1="350" x2="64"  y2="157" stroke="#ffab57"/>
     </svg>
     <!-- Crew Boss — center star -->
     <div class="bubble center" id="bubble-boss" style="left:50%;top:50%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
     </div>
-    <!-- Pentagon positions (top, upper-right, lower-right, lower-left, upper-left) -->
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:0%;transform:translateX(-50%)">
+    <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
+    <div class="bubble outer" id="bubble-family" style="left:50%;top:-2%;transform:translateX(-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-muse" style="right:1%;top:14%;transform:translate(0,0)">
+    <div class="bubble outer" id="bubble-muse" style="left:88%;top:18%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f3a8</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="right:8%;bottom:10%;transform:translate(0,0)">
+    <div class="bubble outer" id="bubble-growth" style="left:74%;top:80%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-life" style="left:8%;bottom:10%;transform:translate(0,0)">
+    <div class="bubble outer" id="bubble-life" style="left:26%;top:80%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-health" style="left:1%;top:14%;transform:translate(0,0)">
+    <div class="bubble outer" id="bubble-health" style="left:12%;top:18%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
