@@ -221,6 +221,124 @@ img { max-width: 100%; }
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 }
 
+/* ═══ IMMERSION — breathing life across the entire site ═══ */
+
+/* Body ambient warmth — subtle shifting radial glow */
+@keyframes siteAmbient {
+    0%,100% { background: radial-gradient(ellipse at 30% 35%, rgba(233,69,96,0.015) 0%, transparent 65%), radial-gradient(ellipse at 70% 60%, rgba(116,185,255,0.010) 0%, transparent 60%), var(--bg); }
+    33% { background: radial-gradient(ellipse at 45% 50%, rgba(116,185,255,0.018) 0%, transparent 65%), radial-gradient(ellipse at 65% 30%, rgba(179,136,255,0.010) 0%, transparent 60%), var(--bg); }
+    66% { background: radial-gradient(ellipse at 25% 40%, rgba(179,136,255,0.015) 0%, transparent 65%), radial-gradient(ellipse at 75% 65%, rgba(233,69,96,0.008) 0%, transparent 60%), var(--bg); }
+}
+body { animation: siteAmbient 25s ease-in-out infinite; }
+
+/* Immersive vignette */
+body::before {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; z-index: 0;
+    background:
+        radial-gradient(ellipse at 35% 45%, transparent 40%, rgba(0,0,0,0.08) 100%),
+        radial-gradient(circle at 75% 25%, rgba(233,69,96,0.015) 0%, transparent 50%),
+        radial-gradient(circle at 20% 75%, rgba(116,185,255,0.012) 0%, transparent 50%);
+}
+body::after {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; z-index: 0;
+    background:
+        radial-gradient(circle at 80% 55%, rgba(179,136,255,0.018) 0%, transparent 40%),
+        radial-gradient(circle at 35% 50%, rgba(77,208,184,0.012) 0%, transparent 45%);
+    animation: siteOrbs 30s ease-in-out infinite;
+}
+@keyframes siteOrbs { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.nav, .hero, .section, .footer { position: relative; z-index: 1; }
+
+/* Nav border breathing */
+@keyframes navBreathe {
+    0%,100% { border-bottom-color: var(--border); }
+    50% { border-bottom-color: rgba(233,69,96,0.2); }
+}
+.nav { animation: navBreathe 6s ease-in-out infinite; }
+
+/* Hero CTA button breathing glow */
+@keyframes btnPrimaryBreathe {
+    0%,100% { box-shadow: 0 0 10px rgba(233,69,96,0.20), 0 0 25px rgba(233,69,96,0.06); }
+    50% { box-shadow: 0 0 22px rgba(233,69,96,0.45), 0 0 50px rgba(233,69,96,0.12); }
+}
+.btn-primary { animation: btnPrimaryBreathe 3s ease-in-out infinite; }
+
+/* Hero agent bubbles — breathing neon glows matching dashboard pentagon */
+@keyframes breatheNodeBoss {
+    0%,100% { box-shadow: 0 0 30px rgba(255,255,255,0.25), 0 0 60px rgba(255,255,255,0.10), inset 0 0 20px rgba(255,255,255,0.04); }
+    50% { box-shadow: 0 0 45px rgba(255,255,255,0.40), 0 0 90px rgba(255,255,255,0.15), inset 0 0 30px rgba(255,255,255,0.06); }
+}
+.node-boss { animation: breatheNodeBoss 3s ease-in-out infinite; }
+@keyframes breatheNodeTeal {
+    0%,100% { box-shadow: 0 0 25px rgba(77,208,184,0.30), 0 0 60px rgba(77,208,184,0.10), 0 0 90px rgba(77,208,184,0.04); }
+    50% { box-shadow: 0 0 40px rgba(77,208,184,0.55), 0 0 80px rgba(77,208,184,0.20), 0 0 120px rgba(77,208,184,0.08); }
+}
+.node-family { animation: breatheNodeTeal 2.5s ease-in-out infinite; }
+@keyframes breatheNodePurple {
+    0%,100% { box-shadow: 0 0 25px rgba(179,136,255,0.30), 0 0 60px rgba(179,136,255,0.10), 0 0 90px rgba(179,136,255,0.04); }
+    50% { box-shadow: 0 0 40px rgba(179,136,255,0.55), 0 0 80px rgba(179,136,255,0.20), 0 0 120px rgba(179,136,255,0.08); }
+}
+.node-muse { animation: breatheNodePurple 2.5s ease-in-out 0.5s infinite; }
+@keyframes breatheNodeGreen {
+    0%,100% { box-shadow: 0 0 25px rgba(102,217,122,0.30), 0 0 60px rgba(102,217,122,0.10), 0 0 90px rgba(102,217,122,0.04); }
+    50% { box-shadow: 0 0 40px rgba(102,217,122,0.55), 0 0 80px rgba(102,217,122,0.20), 0 0 120px rgba(102,217,122,0.08); }
+}
+.node-health { animation: breatheNodeGreen 2.5s ease-in-out 1s infinite; }
+@keyframes breatheNodeOrange {
+    0%,100% { box-shadow: 0 0 25px rgba(255,171,87,0.30), 0 0 60px rgba(255,171,87,0.10), 0 0 90px rgba(255,171,87,0.04); }
+    50% { box-shadow: 0 0 40px rgba(255,171,87,0.55), 0 0 80px rgba(255,171,87,0.20), 0 0 120px rgba(255,171,87,0.08); }
+}
+.node-growth { animation: breatheNodeOrange 2.5s ease-in-out 1.5s infinite; }
+@keyframes breatheNodeBlue {
+    0%,100% { box-shadow: 0 0 25px rgba(100,181,246,0.30), 0 0 60px rgba(100,181,246,0.10), 0 0 90px rgba(100,181,246,0.04); }
+    50% { box-shadow: 0 0 40px rgba(100,181,246,0.55), 0 0 80px rgba(100,181,246,0.20), 0 0 120px rgba(100,181,246,0.08); }
+}
+.node-life { animation: breatheNodeBlue 2.5s ease-in-out 2s infinite; }
+
+/* Feature cards — gentle breathing border glow, cycling one at a time */
+@keyframes cardBreathe {
+    0%,25%,100% { border-color: var(--border); box-shadow: none; }
+    12.5% { border-color: rgba(233,69,96,0.35); box-shadow: 0 0 15px rgba(233,69,96,0.10), 0 0 30px rgba(233,69,96,0.04); }
+}
+.feature-card { animation: cardBreathe 10s ease-in-out infinite; }
+.feature-card:nth-child(2) { animation-delay: 2.5s; }
+.feature-card:nth-child(3) { animation-delay: 5s; }
+.feature-card:nth-child(4) { animation-delay: 7.5s; }
+
+/* Step numbers — gentle glow pulse */
+@keyframes stepPulse {
+    0%,100% { box-shadow: 0 0 10px rgba(233,69,96,0.20), 0 0 25px rgba(233,69,96,0.06); }
+    50% { box-shadow: 0 0 20px rgba(233,69,96,0.40), 0 0 45px rgba(233,69,96,0.12); }
+}
+.step-number { animation: stepPulse 3.5s ease-in-out infinite; }
+.step:nth-child(2) .step-number { animation-delay: 1.2s; }
+.step:nth-child(3) .step-number { animation-delay: 2.4s; }
+
+/* Privacy badge section — gentle lock breathing */
+@keyframes privacyGlow {
+    0%,100% { text-shadow: 0 0 8px rgba(233,69,96,0.15); }
+    50% { text-shadow: 0 0 18px rgba(233,69,96,0.35); }
+}
+
+/* Footer brand breathing */
+@keyframes footerBreathe {
+    0%,100% { border-top-color: var(--border); }
+    50% { border-top-color: rgba(233,69,96,0.15); }
+}
+.footer { animation: footerBreathe 7s ease-in-out infinite; }
+
+/* Hero demo scene border breathing */
+@keyframes demoBreathe {
+    0%,100% { border-color: rgba(255,255,255,0.08); box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 80px rgba(233,69,96,0.06); }
+    50% { border-color: rgba(233,69,96,0.15); box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 100px rgba(233,69,96,0.12); }
+}
+.hd-scene { animation: demoBreathe 5s ease-in-out infinite; }
+
+/* ═══ END IMMERSION ═══ */
+
 /* --- Circle Diagram (BIG & Bold) --- */
 .hero-visual {
     display: flex;
@@ -585,9 +703,9 @@ img { max-width: 100%; }
 .hd-progress {
     bottom: 0; left: 0; height: 2px; width: 0;
     background: linear-gradient(90deg, var(--highlight), rgba(233,69,96,0.5));
-    animation: hdProgress 15s linear forwards;
+    animation: hdProgress 17s linear infinite;
 }
-@keyframes hdProgress { to { width: 100%; } }
+@keyframes hdProgress { 0% { width: 0; } 88.2% { width: 100%; } 100% { width: 0; } }
 
 /* Branding */
 .hd-brand {
