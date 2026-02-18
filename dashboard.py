@@ -198,9 +198,26 @@ a{color:var(--ac);text-decoration:none}
 
 /* ── Time pills ── */
 .time-bar{
-  display:flex;gap:6px;justify-content:center;
-  padding:16px 16px 0;flex-wrap:wrap;
+  display:flex;gap:8px;justify-content:flex-start;
+  padding:10px 16px 8px;flex-wrap:wrap;align-items:center;
 }
+@media(min-width:768px){
+  .time-bar{margin-left:60px}
+}
+
+/* Day/Night toggle */
+.day-night-toggle{
+  display:flex;gap:2px;margin-left:16px;
+  background:var(--bg);border-radius:20px;padding:2px;border:1px solid var(--bd);
+}
+.dn-btn{
+  padding:5px 12px;border-radius:18px;font-size:.85rem;
+  border:none;background:transparent;color:var(--mu);
+  cursor:pointer;transition:all .2s;min-height:32px;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.dn-btn:hover{color:var(--tx)}
+.dn-btn.active{background:var(--bd);color:var(--tx)}
 .time-pill{
   padding:6px 16px;border-radius:20px;font-size:.8rem;
   border:1px solid var(--bd);background:transparent;color:var(--mu);
@@ -463,6 +480,28 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
   50%{border-color:rgba(88,166,255,0.4);color:#7dc4ff}
 }
 .btn-add{animation:addTeamBreathe 5s ease-in-out infinite}
+
+/* Wizard card — alive purple breathing */
+.wizard-card{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 16px;margin:0 0 16px;
+  background:var(--sf);border:1px solid rgba(179,136,255,0.35);border-radius:var(--r);
+  cursor:pointer;transition:border-color .3s,box-shadow .3s;
+  animation:wizardBreathe 3.5s ease-in-out infinite;
+}
+.wizard-card:hover{
+  border-color:rgba(179,136,255,0.7);
+  box-shadow:0 0 25px rgba(179,136,255,0.35),0 0 50px rgba(179,136,255,0.12);
+}
+@keyframes wizardBreathe{
+  0%,100%{box-shadow:0 0 10px rgba(179,136,255,0.20),0 0 25px rgba(179,136,255,0.06);border-color:rgba(179,136,255,0.35)}
+  50%{box-shadow:0 0 20px rgba(179,136,255,0.40),0 0 45px rgba(179,136,255,0.12);border-color:rgba(179,136,255,0.6)}
+}
+.wizard-icon{font-size:1.8rem}
+.wizard-info{flex:1}
+.wizard-title{font-size:.9rem;font-weight:700;color:var(--tx)}
+.wizard-sub{font-size:.7rem;color:var(--mu)}
+.wizard-status{flex-shrink:0}
 
 /* Trust + Burnout beneath circle */
 .indicators{
@@ -1067,6 +1106,12 @@ function setTimePeriod(p,el){
   document.querySelectorAll('.time-pill').forEach(function(b){b.classList.remove('active')});
   if(el)el.classList.add('active');
   loadCircle();
+}
+
+function setDayNight(mode,el){
+  document.querySelectorAll('.dn-btn').forEach(function(b){b.classList.remove('active')});
+  if(el)el.classList.add('active');
+  // Future: toggle day/night color scheme
 }
 
 // FIX 3: Trust/Burnout popup instead of old sliders
@@ -1761,19 +1806,22 @@ def _build_html():
   <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
-  <button class="nav-pill" onclick="openHelpAgent()" title="Help" style="font-size:1rem;padding:5px 10px">?</button>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
 <div id="view-crew" class="view active">
+<div class="time-bar">
+  <button class="time-pill active" onclick="setTimePeriod('today',this)">Today</button>
+  <button class="time-pill" onclick="setTimePeriod('3days',this)">3 Days</button>
+  <button class="time-pill" onclick="setTimePeriod('week',this)">Week</button>
+  <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
+  <div class="day-night-toggle">
+    <button class="dn-btn active" onclick="setDayNight('day',this)" title="Day mode">\u2600\uFE0F</button>
+    <button class="dn-btn" onclick="setDayNight('night',this)" title="Night mode">\U0001f319</button>
+  </div>
+</div>
 <div class="main-layout">
 <div class="main-left">
-  <div class="time-bar">
-    <button class="time-pill active" onclick="setTimePeriod('today',this)">Today</button>
-    <button class="time-pill" onclick="setTimePeriod('3days',this)">3 Days</button>
-    <button class="time-pill" onclick="setTimePeriod('week',this)">Week</button>
-    <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
-  </div>
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 540 490" preserveAspectRatio="xMidYMid meet">
       <!-- 5-point star: center(270,260) to pentagon vertices R=185 -->
@@ -1821,6 +1869,11 @@ def _build_html():
   </div>
 </div>
 <div class="main-right">
+  <div class="wizard-card" onclick="openHelpAgent()">
+    <div class="wizard-icon">\U0001f9d9\u200D\u2642\uFE0F</div>
+    <div class="wizard-info"><div class="wizard-title">Wizard</div><div class="wizard-sub">Your guide & helper</div></div>
+    <div class="wizard-status"><span class="status-dot dot-green" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--gn)"></span></div>
+  </div>
   <div class="teams-section">
     <div class="teams-header"><h2>Teams</h2>
       <button class="btn-add" onclick="openTemplatePicker()">+ Add Team</button>
