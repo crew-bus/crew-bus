@@ -3276,6 +3276,25 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 db_path=self.db_path)
             return _json_response(self, result)
 
+        # ── Crew Load API (hot-reload YAML) ──
+
+        if path == "/api/crew/load":
+            config_path = data.get("config", "").strip()
+            if not config_path:
+                return _json_response(self, {"error": "config path required"}, 400)
+            from pathlib import Path as _P
+            if not _P(config_path).exists():
+                return _json_response(self, {"error": f"file not found: {config_path}"}, 404)
+            try:
+                result = bus.load_hierarchy(config_path, db_path=self.db_path)
+                return _json_response(self, {
+                    "ok": True,
+                    "crew": result["org"],
+                    "agents_loaded": result["agents_loaded"],
+                })
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
         _json_response(self, {"error": "not found"}, 404)
 
 

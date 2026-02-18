@@ -624,10 +624,13 @@ def load_hierarchy(config_path: str, db_path: Optional[Path] = None) -> dict:
             },
         }
         return _load_v2_hierarchy(wrapped, config_path, db_path)
+    elif "crew_boss" in config and "agents" in config:
+        # Crew format: crew/crew_boss/agents (example crew YAMLs)
+        return _load_crew_format(config, config_path, db_path)
     elif "agents" in config:
         return _load_v1_hierarchy(config, config_path, db_path)
     else:
-        raise ValueError("Unrecognized config format: needs 'hierarchy', 'human', or 'agents' key")
+        raise ValueError("Unrecognized config format: needs 'hierarchy', 'human', 'crew_boss', or 'agents' key")
 
 
 def _load_v2_hierarchy(config: dict, config_path: str,
@@ -939,6 +942,117 @@ def _upsert_timing_rule(conn: sqlite3.Connection, agent_id: int,
             (agent_id, rule_type, config_json),
         )
         return cur.lastrowid
+
+
+def _load_crew_format(config: dict, config_path: str,
+                      db_path: Optional[Path] = None) -> dict:
+    """Load the crew YAML format (crew/crew_boss/agents).
+
+    This is the friendly format used by example crew YAMLs like
+    family-crew.yaml, artist-passion-crew.yaml, launch-crew.yaml, etc.
+    """
+    conn = get_conn(db_path)
+    created = []
+
+    crew_def = config.get("crew", {})
+    crew_name = crew_def.get("name", "My Crew")
+
+    # --- Human (auto-create if missing) ---
+    human_name = config.get("human", {}).get("name", "Human")
+    human_id = _upsert_agent(conn, {
+        "name": human_name,
+        "agent_type": "human",
+        "channel": "console",
+        "description": "The human — always in charge.",
+    })
+    created.append(human_name)
+
+    # --- Quiet hours (apply to human) ---
+    qh = config.get("quiet_hours", {})
+    if qh.get("enabled"):
+        _upsert_timing_rule(conn, human_id, "quiet_hours", {
+            "start": qh.get("start", "22:00"),
+            "end": qh.get("end", "07:00"),
+            "exceptions": qh.get("exceptions", ["urgent"]),
+            "message": qh.get("message", ""),
+        })
+
+    # --- Crew Boss ---
+    boss_def = config.get("crew_boss", {})
+    boss_name = boss_def.get("name", "Crew Boss")
+    boss_trust = boss_def.get("trust", 8)
+    boss_desc = boss_def.get("description", "Your friendly right-hand assistant.")
+    boss_id = _upsert_agent(conn, {
+        "name": boss_name,
+        "agent_type": "right_hand",
+        "channel": "console",
+        "trust_score": boss_trust,
+        "parent": human_name,
+        "description": boss_desc.strip() if isinstance(boss_desc, str) else str(boss_desc),
+    })
+    created.append(boss_name)
+
+    # --- Agents ---
+    for agent_def in config.get("agents", []):
+        name = agent_def["name"]
+        role = agent_def.get("role", "worker")
+        trust = agent_def.get("trust", 5)
+        desc = agent_def.get("description", "")
+        icon = agent_def.get("icon", "")
+        color = agent_def.get("color", "")
+
+        agent_id = _upsert_agent(conn, {
+            "name": name,
+            "agent_type": role,
+            "channel": "console",
+            "trust_score": trust,
+            "parent": boss_name,
+            "description": desc.strip() if isinstance(desc, str) else str(desc),
+            "capabilities": [c for c in agent_def.get("features", {}).keys()
+                             if agent_def["features"].get(c)],
+        })
+        created.append(name)
+
+        # Burnout rule from agent-level config
+        burnout_def = agent_def.get("burnout", {})
+        if burnout_def:
+            _upsert_timing_rule(conn, agent_id, "burnout_threshold", {
+                "threshold_minutes": burnout_def.get("threshold_minutes", 180),
+                "nudge_style": burnout_def.get("nudge_style", "gentle"),
+                "message": burnout_def.get("message", ""),
+            })
+
+    # --- Global burnout config ---
+    global_burnout = config.get("burnout", {})
+    if global_burnout.get("enabled"):
+        _upsert_timing_rule(conn, human_id, "burnout_threshold", {
+            "threshold_minutes": global_burnout.get("threshold_minutes", 180),
+            "nudge_style": global_burnout.get("nudge_style", "warm"),
+            "message": global_burnout.get("message", ""),
+            "hard_limit_minutes": global_burnout.get("hard_limit_minutes"),
+            "hard_limit_action": global_burnout.get("hard_limit_action"),
+        })
+
+    # --- Help agent ---
+    _upsert_agent(conn, {
+        "name": "Help",
+        "agent_type": "help",
+        "channel": "console",
+        "parent": boss_name,
+        "description": "Your guide to crew-bus. Ask me anything about how your crew works.",
+    })
+    created.append("Help")
+
+    _audit(conn, "hierarchy_loaded", None, {
+        "config": config_path,
+        "org": crew_name,
+        "agents": created,
+        "format": "crew",
+    })
+
+    conn.commit()
+    conn.close()
+    return {"org": crew_name, "agents_loaded": created}
 
 
 def _load_v1_hierarchy(config: dict, config_path: str,

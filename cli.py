@@ -70,6 +70,22 @@ def cmd_init(args):
     print(f"Database: {bus.DB_PATH}")
 
 
+def cmd_load(args):
+    """Load (or reload) a crew YAML into the running database."""
+    config_path = args.config
+    if not Path(config_path).exists():
+        print(f"Error: Config file '{config_path}' not found.", file=sys.stderr)
+        sys.exit(1)
+
+    bus.init_db()
+    result = bus.load_hierarchy(config_path)
+    print(f"Loaded crew: {result['org']}")
+    print(f"Agents: {', '.join(result['agents_loaded'])}")
+    print(f"Database: {bus.DB_PATH}")
+    print()
+    print("Crew is live! Open http://localhost:8080 to see your dashboard.")
+
+
 def cmd_send(args):
     """Send a message between agents."""
     sender = _resolve_agent(args.sender)
@@ -847,6 +863,11 @@ def main():
     p = sub.add_parser("init", help="Initialize DB and load hierarchy")
     p.add_argument("config", help="Path to YAML config file")
     p.set_defaults(func=cmd_init)
+
+    # load
+    p = sub.add_parser("load", help="Load a crew YAML (hot-reload, no restart needed)")
+    p.add_argument("config", help="Path to YAML config file")
+    p.set_defaults(func=cmd_load)
 
     # send
     p = sub.add_parser("send", help="Send a message")
