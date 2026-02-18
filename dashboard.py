@@ -870,6 +870,36 @@ tr.override td{background:rgba(210,153,34,.08)}
   font-size:.6rem;min-width:16px;height:16px;line-height:16px;text-align:center;
   border-radius:50%;font-weight:700}
 
+/* Team card mailbox indicator */
+.team-mailbox{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.tm-icon{font-size:1.1rem}
+.tm-empty{opacity:0.25;font-size:0.9rem}
+.tm-count{
+  font-size:.7rem;font-weight:700;
+  min-width:20px;height:20px;line-height:20px;
+  text-align:center;border-radius:10px;
+}
+.tm-info{
+  background:rgba(88,166,255,0.15);color:var(--ac);
+  animation:mailPulse 2s ease-in-out infinite;
+}
+.tm-warning{
+  background:rgba(209,134,22,0.15);color:var(--yl);
+  animation:mailPulse 2s ease-in-out infinite;
+}
+.tm-critical{
+  background:rgba(248,81,73,0.15);color:var(--rd);
+  animation:mailPulseRed 1.5s ease-in-out infinite;
+}
+@keyframes mailPulse{
+  0%,100%{box-shadow:none}
+  50%{box-shadow:0 0 8px rgba(88,166,255,0.3)}
+}
+@keyframes mailPulseRed{
+  0%,100%{box-shadow:none;transform:scale(1)}
+  50%{box-shadow:0 0 10px rgba(248,81,73,0.4);transform:scale(1.1)}
+}
+
 /* ── Team mailbox section ── */
 .mailbox-section{margin-top:16px;padding:16px;background:var(--sf);border-radius:var(--r);border:1px solid var(--bd)}
 .mailbox-section h3{font-size:1rem;margin-bottom:10px;color:var(--mu)}
@@ -1357,16 +1387,21 @@ async function loadTeams(){
   Promise.all(summaryPromises).then(function(summaries){
     el.innerHTML=teamsData.map(function(t,i){
       var s=summaries[i]||{};
-      var dotCls='dot-green';
-      var badgeHtml='';
-      if(s.code_red_count>0){dotCls='mailbox-dot-red'}
-      else if(s.warning_count>0){dotCls='mailbox-dot-yellow'}
-      else if(s.unread_count>0){dotCls='mailbox-dot-blue';badgeHtml='<span class="mailbox-badge">'+s.unread_count+'</span>'}
-      return '<div class="team-card" onclick="openTeamDash('+t.id+')" style="position:relative">'+
+      var total=s.unread_count||0;
+      var mailHtml='';
+      if(total>0){
+        var sev='info';
+        if(s.code_red_count>0)sev='critical';
+        else if(s.warning_count>0)sev='warning';
+        mailHtml='<div class="team-mailbox"><span class="tm-icon">\u{1F4EC}</span><span class="tm-count tm-'+sev+'">'+total+'</span></div>';
+      }else{
+        mailHtml='<div class="team-mailbox"><span class="tm-icon tm-empty">\u{1F4ED}</span></div>';
+      }
+      return '<div class="team-card" onclick="openTeamDash('+t.id+')">'+
         '<span class="team-icon">'+esc(t.icon||'\u{1F4C1}')+'</span>'+
         '<div class="team-info"><div class="team-name">'+esc(t.name)+'</div>'+
         '<div class="team-meta">'+t.agent_count+' agents</div></div>'+
-        '<span class="status-dot '+dotCls+'" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;position:relative">'+badgeHtml+'</span></div>';
+        mailHtml+'</div>';
     }).join('');
   });
 }
