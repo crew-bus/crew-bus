@@ -788,6 +788,12 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   cursor:pointer;display:flex;align-items:center;justify-content:center;
 }
 .team-dash-title{font-weight:700;font-size:1.2rem;flex:1}
+.btn-delete-team{
+  padding:6px 12px;font-size:.75rem;border-radius:var(--r);
+  border:1px solid #e94560;background:transparent;color:#e94560;
+  cursor:pointer;font-weight:600;transition:all .2s;
+}
+.btn-delete-team:hover{background:#e94560;color:#fff}
 .team-hierarchy{position:relative;padding:16px 0}
 .team-mgr-wrap{text-align:center;margin-bottom:16px}
 .team-mgr-bubble{
@@ -1685,6 +1691,15 @@ async function createTeam(name){
   }catch(e){closeTemplatePicker();showToast('Error creating team','error')}
 }
 
+async function deleteTeam(teamId,teamName){
+  if(!confirm('Delete team "'+teamName+'" and all its agents? This cannot be undone.'))return;
+  try{
+    var r=await apiPost('/api/teams/'+teamId+'/delete',{});
+    if(r.ok){showToast('Team deleted ('+r.deleted_count+' agents removed)');showView('crew');loadTeams();}
+    else{showToast(r.error||'Failed to delete team','error')}
+  }catch(e){showToast('Error deleting team','error')}
+}
+
 // ══════════ TEAM DASHBOARD (FIX 1) ══════════
 
 async function openTeamDash(teamId){
@@ -1708,7 +1723,8 @@ async function openTeamDash(teamId){
   var html='<div class="team-dash-header">'+
     '<button class="team-dash-back" onclick="showView(\'crew\')">\u2190</button>'+
     '<span class="team-dash-title">'+esc(team.name)+'</span>'+
-    '<span class="badge badge-active">'+team.agent_count+' agents</span></div>';
+    '<span class="badge badge-active">'+team.agent_count+' agents</span>'+
+    '<button class="btn-delete-team" onclick="deleteTeam('+teamId+',\''+esc(team.name).replace(/'/g,"\\'")+'\')">Delete Team</button></div>';
 
   // Manager bubble
   if(mgr){
@@ -3284,6 +3300,12 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)
+
+        m = re.match(r"^/api/teams/(\d+)/delete$", path)
+        if m:
+            team_id = int(m.group(1))
+            result = bus.delete_team(team_id, db_path=self.db_path)
+            return _json_response(self, result, 200 if result.get("ok") else 400)
 
         if path == "/api/message":
             required = ("from_agent", "to_agent", "message_type", "subject", "body")

@@ -1037,6 +1037,55 @@ def create_team(team_name: str, manager_name: str = "",
         conn.close()
 
 
+def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
+    """Delete a team by terminating the manager and all its workers.
+
+    Returns {ok, deleted_count} or {ok, error}.
+    """
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        mgr = conn.execute(
+            "SELECT * FROM agents WHERE id=? AND agent_type='manager'",
+            (manager_id,),
+        ).fetchone()
+        if not mgr:
+            return {"ok": False, "error": "Team not found"}
+
+        workers = conn.execute(
+            "SELECT id FROM agents WHERE parent_agent_id=?",
+            (manager_id,),
+        ).fetchall()
+
+        deleted = 0
+        for w in workers:
+            conn.execute(
+                "UPDATE messages SET status='archived' "
+                "WHERE from_agent_id=? OR to_agent_id=?",
+                (w["id"], w["id"]),
+            )
+            conn.execute("DELETE FROM agents WHERE id=?", (w["id"],))
+            deleted += 1
+
+        conn.execute(
+            "UPDATE messages SET status='archived' "
+            "WHERE from_agent_id=? OR to_agent_id=?",
+            (manager_id, manager_id),
+        )
+        conn.execute("DELETE FROM agents WHERE id=?", (manager_id,))
+        deleted += 1
+
+        _audit(conn, "team_deleted", manager_id, {
+            "name": mgr["name"], "workers_deleted": deleted - 1,
+        })
+        conn.commit()
+        return {"ok": True, "deleted_count": deleted}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Crew config (model keys, settings)
 # ---------------------------------------------------------------------------
