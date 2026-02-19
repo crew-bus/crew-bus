@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Crew Bus — Your Friendly AI Crew, Built for Real Life</title>
-    <meta name="description" content="Crew Bus is your personal AI crew — a friendly Crew Boss and helpful agents for family, creativity, and health. Free forever, 100% private on your computer.">
+    <meta name="description" content="Crew Bus is your personal AI crew — a friendly Crew Boss and helpful agents for everyone. Free forever, 100% private on your computer. Teams for business, freelance, and more.">
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
@@ -41,7 +41,7 @@
             "priceCurrency": "USD",
             "description": "Your full AI crew — free and open source forever"
         },
-        "description": "The personal AI crew for everyone. One friendly Crew Boss, helpful agents for family, creativity, and health. 100% private on your computer.",
+        "description": "The personal AI crew for everyone. One friendly Crew Boss, helpful agents for family, creativity, business, and more. 100% private on your computer.",
         "url": "https://crew-bus.dev",
         "downloadUrl": "https://github.com/crew-bus/crew-bus",
         "softwareVersion": "1.0",
@@ -60,7 +60,7 @@
 <div class="magic-particles" id="magicParticles"></div>
 
 <!-- ============================================================
-     NAVIGATION (simplified)
+     NAVIGATION
      ============================================================ -->
 <nav class="nav" id="nav">
     <div class="nav-inner">
@@ -73,8 +73,8 @@
         <div class="nav-links" id="navLinks">
             <a href="#crew">Your Crew</a>
             <a href="#how-it-works">How It Works</a>
+            <a href="/pricing">Pricing</a>
             <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
-            <a href="/auth/login.html" class="btn btn-sm btn-primary">Sign In</a>
         </div>
     </div>
 </nav>
@@ -113,24 +113,20 @@
                 </div>
                 <div class="circle-ring">
                     <div class="circle-node node-family" style="--angle: 0deg;">
-                        <span class="node-icon">&#127968;</span>
-                        <span class="node-label">Friend &amp; Family Helper</span>
+                        <span class="node-icon">&#128737;</span>
+                        <span class="node-label">Guard</span>
                     </div>
-                    <div class="circle-node node-muse" style="--angle: 72deg;">
-                        <span class="node-icon">&#127912;</span>
-                        <span class="node-label">Muse</span>
-                    </div>
-                    <div class="circle-node node-health" style="--angle: 144deg;">
+                    <div class="circle-node node-muse" style="--angle: 90deg;">
                         <span class="node-icon">&#128154;</span>
-                        <span class="node-label">Health Buddy</span>
+                        <span class="node-label">Wellness</span>
                     </div>
-                    <div class="circle-node node-growth" style="--angle: 216deg;">
-                        <span class="node-icon">&#127793;</span>
-                        <span class="node-label">Growth Coach</span>
+                    <div class="circle-node node-health" style="--angle: 180deg;">
+                        <span class="node-icon">&#128161;</span>
+                        <span class="node-label">Ideas</span>
                     </div>
-                    <div class="circle-node node-life" style="--angle: 288deg;">
-                        <span class="node-icon">&#9889;</span>
-                        <span class="node-label">Life Assistant</span>
+                    <div class="circle-node node-growth" style="--angle: 270deg;">
+                        <span class="node-icon">&#128176;</span>
+                        <span class="node-label">Wallet</span>
                     </div>
                 </div>
             </div>
@@ -138,7 +134,6 @@
     </div>
 </header>
 
-<!-- TODO: Ryan can replace with real Loom/GIF later if preferred -->
 <!-- ============================================================
      HERO DEMO — inline animated 15-second dashboard preview
      ============================================================ -->
@@ -160,30 +155,25 @@
                     <div class="hd-line hd-line-muse"></div>
                     <div class="hd-line hd-line-health"></div>
                     <div class="hd-line hd-line-growth"></div>
-                    <div class="hd-line hd-line-life"></div>
                     <div class="hd-boss">
                         <span class="hd-boss-icon">&#10025;</span>
                         <span class="hd-boss-label">Crew Boss</span>
                     </div>
                     <div class="hd-agent hd-family">
-                        <span class="hd-agent-icon">&#127968;</span>
-                        <span class="hd-agent-label">Friend &amp; Family Helper</span>
+                        <span class="hd-agent-icon">&#128737;</span>
+                        <span class="hd-agent-label">Guard</span>
                     </div>
                     <div class="hd-agent hd-muse">
-                        <span class="hd-agent-icon">&#127912;</span>
-                        <span class="hd-agent-label">Muse</span>
+                        <span class="hd-agent-icon">&#128154;</span>
+                        <span class="hd-agent-label">Wellness</span>
                     </div>
                     <div class="hd-agent hd-health">
-                        <span class="hd-agent-icon">&#128154;</span>
-                        <span class="hd-agent-label">Health Buddy</span>
+                        <span class="hd-agent-icon">&#128161;</span>
+                        <span class="hd-agent-label">Ideas</span>
                     </div>
                     <div class="hd-agent hd-growth">
-                        <span class="hd-agent-icon">&#127793;</span>
-                        <span class="hd-agent-label">Growth Coach</span>
-                    </div>
-                    <div class="hd-agent hd-life">
-                        <span class="hd-agent-icon">&#9889;</span>
-                        <span class="hd-agent-label">Life Assistant</span>
+                        <span class="hd-agent-icon">&#128176;</span>
+                        <span class="hd-agent-label">Wallet</span>
                     </div>
                 </div>
                 <!-- Chat panel -->
@@ -222,33 +212,83 @@
 </section>
 
 <!-- ============================================================
-     MEET YOUR CREW — 4 big friendly cards
+     MEET YOUR CREW — 5 core agents
      ============================================================ -->
 <section class="section" id="crew">
     <div class="container">
         <h2 class="section-title">Meet Your Crew</h2>
-        <p class="section-sub">Four friendly helpers who work together so you can focus on what matters.</p>
+        <p class="section-sub">Five core agents who work together so you can focus on what matters.</p>
         <div class="feature-grid">
             <div class="feature-card">
-                <div class="feature-icon">&#9733;</div>
+                <div class="feature-icon">&#10025;</div>
                 <h3>Crew Boss</h3>
                 <p>Your friendly right-hand who handles 80% of everything so you don't have to. Rename him Buddy, Sis, or whatever feels right.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#9825;</div>
-                <h3>Friend &amp; Family Helper</h3>
-                <p>Shared chores, kid reminders, homework nudge, family calendar — keeps everyone on the same page.</p>
+                <div class="feature-icon">&#128737;</div>
+                <h3>Guard</h3>
+                <p>Security monitoring, anomaly detection, and threat awareness. Watches over your crew and escalates when something's off.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#9835;</div>
-                <h3>Muse</h3>
-                <p>Creative sidekick for drawing, music, writing, hobbies. Gives prompts, tracks your streak, and cheers you on.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#9829;</div>
-                <h3>Health Buddy</h3>
+                <div class="feature-icon">&#128154;</div>
+                <h3>Wellness</h3>
                 <p>Watches your energy, gentle burnout nudges, quiet hours, and steps in if you really need a break.</p>
             </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128161;</div>
+                <h3>Ideas</h3>
+                <p>Strategy and brainstorming partner. Helps you think through decisions, plan projects, and explore new directions.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128176;</div>
+                <h3>Wallet</h3>
+                <p>Financial tracking and awareness. Keeps an eye on budgets, expenses, and helps you stay on top of money matters.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     TEAMS — paid add-on templates
+     ============================================================ -->
+<section class="section section-dark" id="teams">
+    <div class="container">
+        <h2 class="section-title">Build Your Teams</h2>
+        <p class="section-sub">3 free templates to start. 5 paid templates for business, freelance, and more. Each team gets a manager + up to 9 workers.</p>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">&#128218;</div>
+                <h3>School <span style="font-size:.7rem;color:var(--success)">FREE</span></h3>
+                <p>Tutor, Research Assistant, Study Planner. Perfect for students of all ages.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#127928;</div>
+                <h3>Passion Project <span style="font-size:.7rem;color:var(--success)">FREE</span></h3>
+                <p>Project Planner, Skill Coach, Progress Tracker. For artists, musicians, makers.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#127968;</div>
+                <h3>Household <span style="font-size:.7rem;color:var(--success)">FREE</span></h3>
+                <p>Meal Planner, Budget Tracker, Schedule Keeper. Run your home smoothly.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#127970;</div>
+                <h3>Business Management <span style="font-size:.7rem;color:var(--highlight)">$50/yr</span></h3>
+                <p>Operations Lead, HR, Finance, Strategy, Comms. Full business crew.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128188;</div>
+                <h3>Freelance <span style="font-size:.7rem;color:var(--highlight)">$30/yr</span></h3>
+                <p>Lead Finder, Invoice Bot, Client Follow-up. Everything a freelancer needs.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128176;</div>
+                <h3>Side Hustle <span style="font-size:.7rem;color:var(--highlight)">$30/yr</span></h3>
+                <p>Market Scout, Content Creator, Sales Tracker. Launch and grow your idea.</p>
+            </div>
+        </div>
+        <div class="text-center" style="margin-top: 2rem;">
+            <a href="/pricing" class="btn btn-primary btn-lg">See All Pricing</a>
         </div>
     </div>
 </section>
@@ -256,7 +296,7 @@
 <!-- ============================================================
      HOW IT WORKS — 3 simple icons
      ============================================================ -->
-<section class="section section-dark" id="how-it-works">
+<section class="section" id="how-it-works">
     <div class="container">
         <h2 class="section-title">Up and Running in 5 Minutes</h2>
         <p class="section-sub">No tech skills needed. Three easy steps.</p>
@@ -269,7 +309,7 @@
             <div class="step">
                 <div class="step-number">2</div>
                 <h3>Meet Your Crew</h3>
-                <p>A friendly wizard asks a few questions — what you need help with, what to call your Crew Boss. Done.</p>
+                <p>A friendly Wizard asks a few questions — pick your AI model, name your Crew Boss, choose a team template. Done.</p>
             </div>
             <div class="step">
                 <div class="step-number">3</div>
@@ -296,7 +336,7 @@
 </section>
 
 <!-- ============================================================
-     FOOTER (simplified)
+     FOOTER
      ============================================================ -->
 <footer class="footer">
     <div class="container">
@@ -309,6 +349,7 @@
                 <h4>Product</h4>
                 <ul>
                     <li><a href="#crew">Your Crew</a></li>
+                    <li><a href="/pricing">Pricing</a></li>
                     <li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li>
                 </ul>
             </div>
@@ -321,7 +362,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2025 Crew Bus. MIT License. One human at the top, always.</p>
+            <p>&copy; 2025-2026 Crew Bus. MIT License. One human at the top, always.</p>
         </div>
     </div>
 </footer>

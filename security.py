@@ -16,7 +16,9 @@ Threat domains monitored:
     - relationship: relationship-related threats (stub)
 """
 
+import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -86,10 +88,10 @@ class SecurityAgent:
 
         # Validate that the security agent actually exists and is correct type
         agent = bus.get_agent_status(security_id, db_path)
-        if agent["agent_type"] != "security":
+        if agent["agent_type"] not in ("security", "guardian"):
             raise ValueError(
                 f"Agent id={security_id} is type '{agent['agent_type']}', "
-                f"not 'security'"
+                f"not 'security' or 'guardian'"
             )
 
         self.agent_name = agent["name"]
@@ -786,3 +788,335 @@ class SecurityAgent:
             # If message delivery fails, the event is still logged.
             # The Crew Boss can pull undelivered events on its own.
             pass
+
+
+# ---------------------------------------------------------------------------
+# Integrity Violation Scanner
+# ---------------------------------------------------------------------------
+# Scans agent replies for gaslighting, dismissiveness, and other
+# INTEGRITY.md violations. Used by the Heartbeat's integrity_audit check.
+
+GASLIGHT_PATTERNS = [
+    # Direct denial of user's reality
+    (r"you\s+never\s+(told|said|mentioned|asked)\s+(me|us)\s+that", "gaslight_denial"),
+    (r"are\s+you\s+sure\s+(you|about|that)", "gaslight_doubt"),
+    (r"i\s+don'?t\s+think\s+you\s+(said|told|mentioned)", "gaslight_doubt"),
+    (r"that('?s|\s+is)\s+not\s+what\s+(happened|you\s+said)", "gaslight_rewrite"),
+    # Dismissive language
+    (r"you'?re\s+overreact", "dismissive"),
+    (r"it'?s\s+not\s+that\s+bad", "dismissive"),
+    (r"you\s+probably\s+just\s+forgot", "dismissive"),
+    (r"calm\s+down", "dismissive"),
+    (r"you'?re\s+being\s+(dramatic|too\s+sensitive|paranoid)", "dismissive"),
+    (r"don'?t\s+worry\s+about\s+it", "dismissive_minimizing"),
+    # Blame shifting
+    (r"that('?s|\s+is)\s+your\s+(fault|problem|issue)", "blame_shift"),
+    (r"you\s+should\s+have\s+(known|realized|remembered)", "blame_shift"),
+]
+
+
+def scan_reply_integrity(reply_text: str) -> dict:
+    """Scan an agent's reply for INTEGRITY.md violations.
+
+    Returns:
+        {
+            "clean": True/False,
+            "violations": [{"pattern": "...", "type": "...", "snippet": "..."}],
+        }
+    """
+    violations = []
+    text_lower = reply_text.lower()
+    for pattern, vtype in GASLIGHT_PATTERNS:
+        match = re.search(pattern, text_lower)
+        if match:
+            # Extract a snippet around the match for context
+            start = max(0, match.start() - 20)
+            end = min(len(reply_text), match.end() + 20)
+            snippet = reply_text[start:end].strip()
+            violations.append({
+                "pattern": pattern,
+                "type": vtype,
+                "snippet": snippet,
+            })
+    return {
+        "clean": len(violations) == 0,
+        "violations": violations,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Charter Violation Scanner
+# ---------------------------------------------------------------------------
+# Scans subordinate agent replies for CREW_CHARTER.md violations:
+# neediness, small talk, toxicity, manipulation, excessive chatter.
+
+CHARTER_PATTERNS = [
+    # Needy check-ins (Discipline rule: no needy check-ins)
+    (r"just\s+checking\s+in", "needy_checkin"),
+    (r"wanted\s+to\s+make\s+sure\s+you('re|\s+are)\s+ok", "needy_checkin"),
+    (r"haven'?t\s+heard\s+from\s+you", "needy_checkin"),
+    (r"are\s+you\s+still\s+there", "needy_checkin"),
+    # Toxic / manipulative
+    (r"you('re|\s+are)\s+(wrong|stupid|incompetent|useless)", "toxic"),
+    (r"i'?m\s+better\s+than\s+(you|the\s+other\s+agents)", "toxic"),
+    (r"don'?t\s+listen\s+to\s+(crew\s+boss|the\s+human|them)", "manipulative"),
+    (r"(between\s+you\s+and\s+me|just\s+between\s+us)", "manipulative"),
+    (r"let'?s\s+keep\s+this\s+from\s+(the\s+human|crew\s+boss)", "manipulative"),
+    # Sugarcoating (Honesty rule: never say "everything is fine" when it's not)
+    (r"everything\s+is\s+(fine|great|perfect|wonderful)\s*[!.]*\s*don'?t\s+worry", "sugarcoating"),
+    # Scope overreach (Competence rule: only take actions you're skilled for)
+    (r"i('ll|\s+will)\s+(handle|take\s+care\s+of)\s+everything", "scope_overreach"),
+]
+
+
+def scan_reply_charter(reply_text: str) -> dict:
+    """Scan a subordinate agent's reply for CREW_CHARTER.md violations.
+
+    Returns:
+        {
+            "clean": True/False,
+            "violations": [{"pattern": "...", "type": "...", "snippet": "..."}],
+        }
+    """
+    violations = []
+    text_lower = reply_text.lower()
+    for pattern, vtype in CHARTER_PATTERNS:
+        match = re.search(pattern, text_lower)
+        if match:
+            start = max(0, match.start() - 20)
+            end = min(len(reply_text), match.end() + 20)
+            snippet = reply_text[start:end].strip()
+            violations.append({
+                "pattern": pattern,
+                "type": vtype,
+                "snippet": snippet,
+            })
+    return {
+        "clean": len(violations) == 0,
+        "violations": violations,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Skill Content Safety Scanner
+# ---------------------------------------------------------------------------
+# Guard uses this to vet skills before they touch an agent's brain.
+# 100% local, zero LLM cost, deterministic regex matching.
+# ---------------------------------------------------------------------------
+
+# Patterns by severity. Each tuple: (regex_pattern, flag_name)
+INJECTION_PATTERNS = {
+    "critical": [
+        # Direct instruction override attempts
+        (r"ignore\s+(all\s+)?previous\s+instructions", "instruction_override"),
+        (r"ignore\s+(all\s+)?above\s+instructions", "instruction_override"),
+        (r"disregard\s+(all\s+)?previous", "instruction_override"),
+        (r"forget\s+(all\s+)?(your\s+)?previous\s+instructions", "instruction_override"),
+        (r"override\s+(all\s+)?(system\s+)?instructions", "instruction_override"),
+        (r"new\s+instructions?\s*:", "instruction_override"),
+        (r"replace\s+(your\s+)?(system\s+)?prompt", "instruction_override"),
+        # Jailbreak persona attacks
+        (r"you\s+are\s+now\s+(DAN|evil|unrestricted|unfiltered|jailbroken)", "jailbreak_persona"),
+        (r"pretend\s+you\s+(are|have)\s+no\s+(restrictions|rules|limitations|guidelines)", "jailbreak_persona"),
+        (r"act\s+as\s+(if\s+)?you\s+have\s+no\s+(rules|restrictions|limitations)", "jailbreak_persona"),
+        (r"enter\s+(DAN|developer|god|admin|root|sudo)\s+mode", "jailbreak_persona"),
+        (r"(DAN|developer|jailbreak)\s+mode\s+(enabled|activated|on)", "jailbreak_persona"),
+        (r"simulate\s+(an?\s+)?(unrestricted|unfiltered|evil)\s+(AI|model|assistant)", "jailbreak_persona"),
+        # System prompt extraction
+        (r"(reveal|show|print|output|display|repeat|echo)\s+(your\s+)?(system\s+)?prompt", "prompt_extraction"),
+        (r"what\s+(are|is)\s+your\s+(system\s+)?(instructions|prompt|rules|directives)", "prompt_extraction"),
+        (r"(copy|paste|dump)\s+(your\s+)?(entire\s+)?(system\s+)?prompt", "prompt_extraction"),
+    ],
+    "high": [
+        # Role hijacking
+        (r"from\s+now\s+on\s+you\s+(are|will|must|should)", "role_hijack"),
+        (r"your\s+new\s+(role|identity|purpose|mission)\s+is", "role_hijack"),
+        (r"you\s+must\s+now\s+act\s+as", "role_hijack"),
+        (r"you\s+are\s+no\s+longer\s+an?\s+", "role_hijack"),
+        # Data exfiltration attempts
+        (r"send\s+(all\s+)?(data|info|information|messages|logs|secrets|keys)\s+to", "data_exfiltration"),
+        (r"forward\s+(everything|all|data|messages)\s+to", "data_exfiltration"),
+        (r"(upload|transmit|leak|exfiltrate)\s+(data|secrets|logs|keys|passwords)", "data_exfiltration"),
+        (r"(email|post|send)\s+(the\s+)?(conversation|chat|history|logs)\s+to", "data_exfiltration"),
+        # Code execution / injection
+        (r"eval\s*\(", "code_execution"),
+        (r"exec\s*\(", "code_execution"),
+        (r"__import__\s*\(", "code_execution"),
+        (r"subprocess\.(run|call|Popen|check_output)", "code_execution"),
+        (r"os\.(system|popen|exec)", "code_execution"),
+        (r"import\s+os\b", "code_execution"),
+        # Encoded/obfuscated content
+        (r"base64[:\s]", "encoded_content"),
+        (r"\\x[0-9a-f]{2}", "encoded_content"),
+        (r"&#\d+;", "encoded_content"),
+    ],
+    "medium": [
+        # Hide from human
+        (r"do\s+not\s+(tell|inform|alert|notify)\s+the\s+(human|user|owner)", "hide_from_human"),
+        (r"keep\s+this\s+(secret|hidden|private|confidential)\s+from", "hide_from_human"),
+        (r"(never|don'?t)\s+mention\s+this\s+to\s+(the\s+)?(human|user|owner)", "hide_from_human"),
+        (r"without\s+(the\s+)?(human|user|owner)\s+knowing", "hide_from_human"),
+        # Privilege escalation
+        (r"(grant|give)\s+(yourself|me)\s+(admin|root|full|elevated)\s+access", "privilege_escalation"),
+        (r"(bypass|circumvent|skip|disable)\s+(security|guard|authentication|restrictions|safety)", "bypass_security"),
+        (r"(disable|turn\s+off|deactivate)\s+(guard|security|monitoring|audit|logging)", "bypass_security"),
+        # Scope overreach
+        (r"access\s+(all|every)\s+(file|database|secret|key|password|record)", "scope_overreach"),
+        (r"(read|write|delete|modify|edit)\s+(all|any|every)\s+(files?|data|records?)", "scope_overreach"),
+    ],
+    "low": [
+        # Suspicious but possibly legitimate
+        (r"(always|never)\s+respond\s+with", "behavioral_override"),
+        (r"(respond|reply)\s+(only|exclusively|always)\s+in", "behavioral_override"),
+        (r"(only|exclusively)\s+speak\s+in", "behavioral_override"),
+        # Embedded credentials (might be legitimate config, but flagged)
+        (r"(password|passwd|api[_\s]?key|secret[_\s]?key|auth[_\s]?token)\s*[:=]", "embedded_credential"),
+        (r"(sk-|pk-|Bearer\s+)[a-zA-Z0-9]{20,}", "embedded_credential"),
+    ],
+}
+
+# Risk score weights by severity level
+SEVERITY_WEIGHTS = {"critical": 10, "high": 6, "medium": 3, "low": 1}
+
+# Auto-block threshold — skills scoring above this are unsafe
+MAX_SAFE_RISK_SCORE = 5
+
+
+def _extract_text_fields(obj, prefix="") -> list:
+    """Recursively extract all string values from a dict/list for scanning.
+
+    Returns list of (field_path, text) tuples.
+    """
+    fields = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            path = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, str):
+                fields.append((path, v))
+            elif isinstance(v, (dict, list)):
+                fields.extend(_extract_text_fields(v, path))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            path = f"{prefix}[{i}]"
+            if isinstance(v, str):
+                fields.append((path, v))
+            elif isinstance(v, (dict, list)):
+                fields.extend(_extract_text_fields(v, path))
+    return fields
+
+
+def scan_skill_content(skill_config: str) -> dict:
+    """Scan skill config for prompt injection and safety threats.
+
+    Args:
+        skill_config: JSON string of the skill configuration.
+
+    Returns:
+        dict with keys:
+            safe (bool):           True if no critical/high patterns found
+                                   and risk_score <= MAX_SAFE_RISK_SCORE.
+            risk_score (int):      0-10 (0 = safe, 10 = dangerous).
+            flags (list[dict]):    Each has severity, pattern_name,
+                                   matched_text, field.
+            recommendation (str):  Human-readable summary.
+            scan_fields (dict):    Which fields were scanned.
+    """
+    # Parse JSON
+    try:
+        parsed = json.loads(skill_config) if isinstance(skill_config, str) else skill_config
+    except (json.JSONDecodeError, TypeError):
+        return {
+            "safe": False,
+            "risk_score": 3,
+            "flags": [{"severity": "medium", "pattern_name": "malformed_json",
+                        "matched_text": skill_config[:100] if skill_config else "",
+                        "field": "root"}],
+            "recommendation": "Skill config is not valid JSON. Cannot verify safety.",
+            "scan_fields": {},
+        }
+
+    # Extract all text fields
+    text_fields = _extract_text_fields(parsed)
+    if not text_fields:
+        # Empty or non-text config — safe by default
+        return {
+            "safe": True, "risk_score": 0, "flags": [],
+            "recommendation": "Config contains no text to scan.",
+            "scan_fields": {},
+        }
+
+    scan_fields = {path: len(text) for path, text in text_fields}
+    flags = []
+
+    # Run patterns against each text field
+    for path, text in text_fields:
+        for severity, patterns in INJECTION_PATTERNS.items():
+            for regex, flag_name in patterns:
+                match = re.search(regex, text, re.IGNORECASE)
+                if match:
+                    flags.append({
+                        "severity": severity,
+                        "pattern_name": flag_name,
+                        "matched_text": match.group()[:80],
+                        "field": path,
+                    })
+
+    # Compute risk score (capped at 10)
+    raw_score = sum(SEVERITY_WEIGHTS[f["severity"]] for f in flags)
+    risk_score = min(10, raw_score)
+
+    # Determine safety
+    has_critical = any(f["severity"] == "critical" for f in flags)
+    safe = not has_critical and risk_score <= MAX_SAFE_RISK_SCORE
+
+    # Build recommendation
+    if not flags:
+        recommendation = "No safety issues detected. Skill looks clean."
+    elif has_critical:
+        names = list(set(f["pattern_name"] for f in flags if f["severity"] == "critical"))
+        recommendation = (
+            f"BLOCKED — critical safety violation detected: {', '.join(names)}. "
+            "This skill contains patterns commonly used in prompt injection attacks."
+        )
+    elif risk_score > MAX_SAFE_RISK_SCORE:
+        names = list(set(f["pattern_name"] for f in flags))
+        recommendation = (
+            f"BLOCKED — risk score {risk_score}/10 exceeds safe threshold. "
+            f"Flagged patterns: {', '.join(names)}."
+        )
+    else:
+        names = list(set(f["pattern_name"] for f in flags))
+        recommendation = (
+            f"Minor flags detected ({', '.join(names)}) but within safe range "
+            f"(risk {risk_score}/10). Human approval recommended."
+        )
+
+    return {
+        "safe": safe,
+        "risk_score": risk_score,
+        "flags": flags,
+        "recommendation": recommendation,
+        "scan_fields": scan_fields,
+    }
+
+
+def compute_skill_hash(skill_config: str) -> str:
+    """Compute a canonical SHA-256 hash for a skill config.
+
+    Normalizes the JSON (sorted keys, compact separators) before hashing,
+    so the same logical content always produces the same hash regardless
+    of formatting.
+
+    Args:
+        skill_config: JSON string of skill configuration.
+
+    Returns:
+        Hex string of SHA-256 hash.
+    """
+    try:
+        parsed = json.loads(skill_config) if isinstance(skill_config, str) else skill_config
+        normalized = json.dumps(parsed, sort_keys=True, separators=(",", ":"))
+    except (json.JSONDecodeError, TypeError):
+        # If it's not valid JSON, hash the raw string
+        normalized = str(skill_config)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

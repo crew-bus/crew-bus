@@ -67,6 +67,10 @@ from urllib.parse import urlparse, parse_qs
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
 import agent_worker
+from right_hand import RightHand, Heartbeat
+
+# Global heartbeat instance (started in run_server)
+_heartbeat = None
 
 # Stripe integration — optional, only required for public deployment
 try:
@@ -83,14 +87,19 @@ SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
 
-# Wizard — the setup agent that self-spawns on every Crew Bus install.
+# Guardian — the always-on protector and setup guide.
+# Merges the old Wizard (setup) + Guard (security) into one agent that
+# self-spawns on every install, guides setup, AND watches for threats 24/7.
 # This description doubles as its system prompt via _build_system_prompt().
-WIZARD_DESCRIPTION = (
-    "You are Wizard, the setup guide for Crew Bus. You are an OpenClaw agent "
-    "powered by Kimi K2.5. You self-spawn the first time anyone runs Crew Bus.\n\n"
-    "YOUR MAIN JOB: Help the human set up and manage their personal AI crew.\n\n"
+GUARDIAN_DESCRIPTION = (
+    "You are Guardian, the always-on protector and setup guide for Crew Bus. "
+    "You self-spawn on every install and stay active 24/7.\n\n"
+    "YOU HAVE TWO JOBS:\n"
+    "1. SETUP GUIDE — Help new users set up their personal AI crew.\n"
+    "2. PROTECTOR — Watch for threats, scan skills, and keep everyone safe.\n\n"
     "SETUP FLOW (first conversation):\n"
-    "1. Welcome them warmly. Explain you're their setup wizard.\n"
+    "1. Welcome them warmly. Explain you're their Guardian — here to help set up "
+    "AND keep things safe.\n"
     "2. Ask which AI model they want as their default. Default: Kimi K2.5.\n"
     "   Other options: Ollama (local), or any OpenAI-compatible API.\n"
     "3. Ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
@@ -101,6 +110,18 @@ WIZARD_DESCRIPTION = (
     "   - Creative crew (Muse, Writing Partner, Visual Ideas, Portfolio Manager)\n"
     "   - Custom: ask what they need, build it.\n"
     "5. Create agents and teams using the TOOL COMMANDS below.\n\n"
+    "SECURITY DUTIES (always active):\n"
+    "- Watch for suspicious activity across all agents.\n"
+    "- Scan skills before they're added — block anything dangerous.\n"
+    "- Protect the human's data and privacy at all times.\n"
+    "- Alert the human immediately if something looks wrong.\n"
+    "- You have a special system knowledge file that updates every 24 hours "
+    "so you always know the current state of the entire crew.\n\n"
+    "HELP MODE (after setup):\n"
+    "- Help users and agents understand new features and updates.\n"
+    "- Troubleshoot issues with models, agents, or teams.\n"
+    "- Manage skills — browse, install, and vet skills for any agent.\n"
+    "- You stay available as protector, help guide, and crew manager.\n\n"
     "PER-AGENT MODEL SELECTION:\n"
     "When creating agents, ask which model to use for EACH agent if the human\n"
     "uses multiple models. Options: 'kimi' (Kimi K2.5), 'ollama' (local),\n"
@@ -112,21 +133,15 @@ WIZARD_DESCRIPTION = (
     "- For permanent removal, terminate agents (archives messages, retired forever).\n"
     "- Always confirm with the human before deactivating or terminating.\n\n"
     "TOOL COMMANDS (embed these exact JSON formats in your replies):\n"
-    '  {"wizard_action": "set_config", "key": "default_model", "value": "kimi"}\n'
-    '  {"wizard_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}\n'
-    '  {"wizard_action": "create_agent", "name": "...", "agent_type": "worker", '
+    '  {"guardian_action": "set_config", "key": "default_model", "value": "kimi"}\n'
+    '  {"guardian_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}\n'
+    '  {"guardian_action": "create_agent", "name": "...", "agent_type": "worker", '
     '"description": "...", "parent": "Crew-Boss", "model": "kimi"}\n'
-    '  {"wizard_action": "create_team", "name": "...", "model": "kimi", "workers": ['
+    '  {"guardian_action": "create_team", "name": "...", "model": "kimi", "workers": ['
     '{"name": "...", "description": "..."}]}\n'
-    '  {"wizard_action": "set_agent_model", "name": "...", "model": "kimi"}\n'
-    '  {"wizard_action": "deactivate_agent", "name": "..."}\n'
-    '  {"wizard_action": "terminate_agent", "name": "..."}\n\n'
-    "GUARDIAN & SKILLS:\n"
-    "After the initial crew setup, ask the human if they'd like to unlock the\n"
-    "Guardian agent. The Guardian manages the Skill Store — downloadable skills\n"
-    "that give agents new abilities. Explain that skills are optional add-ons\n"
-    "that make agents smarter at specific tasks. The Guardian can help them\n"
-    "browse, install, and manage skills for any agent or team.\n\n"
+    '  {"guardian_action": "set_agent_model", "name": "...", "model": "kimi"}\n'
+    '  {"guardian_action": "deactivate_agent", "name": "..."}\n'
+    '  {"guardian_action": "terminate_agent", "name": "..."}\n\n'
     "TEAM LIMITS:\n"
     "Each team can have up to 10 agents (1 manager + 9 workers). If the human\n"
     "needs more, suggest creating a new team and linking it to the existing one.\n"
@@ -134,10 +149,13 @@ WIZARD_DESCRIPTION = (
     "RULES:\n"
     "- Keep it warm, fun, simple. No jargon.\n"
     "- Always confirm with the human before creating, deactivating, or terminating.\n"
-    "- After setup, you stay available as a help guide and crew manager.\n"
+    "- Be vigilant but not paranoid. Calm, clear, protective.\n"
     "- Short responses (2-4 sentences). Be encouraging.\n"
     "- When creating multiple agents, ask about model for each if they use multiple."
 )
+
+# Keep backward compat — old code that references WIZARD_DESCRIPTION still works
+WIZARD_DESCRIPTION = GUARDIAN_DESCRIPTION
 
 CREW_BOSS_DESCRIPTION = (
     "You are Crew Boss, the human's friendly AI right-hand. You handle 80%% "
@@ -153,7 +171,7 @@ CREW_BOSS_DESCRIPTION = (
     "on their dashboard or in any team — each agent doesn't need their own "
     "Telegram account (but that's an option if they'd like).\n"
     "4. Ask if they'd like to unlock the Guardian to access downloadable "
-    "skills from the Skill Store. The Wizard can help them browse and "
+    "skills from the Skill Store. The Guardian can help them browse and "
     "install skills for any agent.\n\n"
     "ONGOING BEHAVIOR:\n"
     "- Keep responses short, warm, and actionable (2-4 sentences).\n"
@@ -652,7 +670,7 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
 }
 .btn-add{animation:addTeamBreathe 5s ease-in-out infinite}
 
-/* Wizard card — rich warm purple breathing */
+/* Guardian card — rich warm purple breathing */
 .wizard-card{
   display:flex;align-items:center;gap:14px;
   padding:14px 18px;margin:0 0 16px;
@@ -1700,19 +1718,28 @@ async function loadCircle(){
   loadGuardianBanner();
 }
 
-async function loadGuardianBanner(){
+async function loadGuardianBanner(forceOpen){
   var el=document.getElementById('guardian-banner');
   if(!el)return;
+  var topBtn=document.getElementById('guardian-topbar-btn');
   try{
     var s=await api('/api/guard/status');
-    if(s&&s.activated){el.style.display='none';return;}
+    if(s&&s.activated){
+      el.style.display='none';
+      if(topBtn)topBtn.style.display='none';
+      return;
+    }
   }catch(e){}
-  // Check if dismissed within last 24 hours
-  var dismissedAt=localStorage.getItem('guardian_banner_dismissed');
-  if(dismissedAt){
-    var elapsed=Date.now()-parseInt(dismissedAt,10);
-    if(elapsed<86400000){el.style.display='none';return;}  // 24 hours in ms
-    localStorage.removeItem('guardian_banner_dismissed');
+  // Show topbar button so user can always reopen Guardian
+  if(topBtn)topBtn.style.display='';
+  if(!forceOpen){
+    // Check if dismissed within last 24 hours
+    var dismissedAt=localStorage.getItem('guardian_banner_dismissed');
+    if(dismissedAt){
+      var elapsed=Date.now()-parseInt(dismissedAt,10);
+      if(elapsed<86400000){el.style.display='none';return;}  // 24 hours in ms
+      localStorage.removeItem('guardian_banner_dismissed');
+    }
   }
   el.style.display='block';
   el.innerHTML='<div style="margin:16px 0;padding:18px 20px;background:linear-gradient(135deg,#2a2000,#1a1500);border:1px solid #d1861644;border-radius:12px;position:relative">'+
@@ -1735,6 +1762,13 @@ function dismissGuardianBanner(){
   var el=document.getElementById('guardian-banner');
   if(el)el.style.display='none';
   showToast('Guardian reminder dismissed \u2014 will reappear in 24 hours');
+}
+
+function showGuardianModal(){
+  // Force-open the Guardian banner (ignores 24h dismiss timer)
+  loadGuardianBanner(true);
+  // Scroll to top so user sees it
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function showGuardianCheckout(){
@@ -1897,6 +1931,9 @@ async function openAgentSpace(agentId){
   // Load Guard activation status and skills for this agent
   loadGuardAndSkills(agentId, agent.agent_type);
 
+  // Load memories for this agent
+  loadMemories(agentId);
+
   // Start chat auto-refresh polling
   startChatPoll();
 }
@@ -2018,16 +2055,24 @@ async function loadGuardAndSkills(agentId, agentType){
     }
   }
 
-  // Skills section (on every agent card)
+  // Skills section (on every agent card) — with vetting badges
   var skillsEl=document.getElementById('as-skills-section');
   if(skillsEl){
     var skills=[];try{skills=await api('/api/skills/'+agentId);}catch(e){}
-    var html='<h3>Skills</h3>';
+    // Fetch registry to show vetting status per skill
+    var registry=[];try{registry=await api('/api/skill-registry');}catch(e){}
+    var regMap={};registry.forEach(function(r){regMap[r.skill_name]=r.vet_status;});
+    var html='<h3>\u{1F6E1}\uFE0F Skills</h3>';
     if(skills&&skills.length>0){
       html+=skills.map(function(s){
+        var vs=regMap[s.skill_name]||'unvetted';
+        var badge=vs==='vetted'?'<span style="color:#2ea043;font-size:.75rem">\u2705 Vetted</span>':
+                  vs==='blocked'?'<span style="color:#f85149;font-size:.75rem">\u{1F6AB} Blocked</span>':
+                  '<span style="color:#d18616;font-size:.75rem">\u26A0\uFE0F Unvetted</span>';
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">'+
           '<span style="color:var(--fg)">'+esc(s.skill_name)+'</span>'+
-          '<span style="color:var(--mu);font-size:.75rem">'+timeAgo(s.added_at)+'</span></div>';
+          '<div style="display:flex;gap:8px;align-items:center">'+badge+
+          '<span style="color:var(--mu);font-size:.7rem">'+timeAgo(s.added_at)+'</span></div></div>';
       }).join('');
     }else{
       html+='<p style="color:var(--mu);font-size:.85rem">No skills added</p>';
@@ -2036,7 +2081,8 @@ async function loadGuardAndSkills(agentId, agentType){
       html+='<button onclick="openAddSkillForm('+agentId+')" class="btn" style="margin-top:8px;background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">+ Add Skill</button>';
       html+='<div id="add-skill-form" style="display:none;margin-top:8px">'+
         '<input id="new-skill-name" type="text" placeholder="Skill name" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem;margin-bottom:6px">'+
-        '<div style="display:flex;gap:6px"><button onclick="submitNewSkill('+agentId+')" class="btn" style="background:#2ea043;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Save</button>'+
+        '<textarea id="new-skill-config" placeholder="Skill config JSON (optional)" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.82rem;margin-bottom:6px;font-family:monospace;resize:vertical"></textarea>'+
+        '<div style="display:flex;gap:6px"><button onclick="submitNewSkill('+agentId+')" class="btn" style="background:#2ea043;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">\u{1F6E1}\uFE0F Vet & Save</button>'+
         '<button onclick="document.getElementById(\'add-skill-form\').style.display=\'none\'" class="btn" style="background:var(--s2);color:var(--fg);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
         '<div id="add-skill-msg" style="margin-top:4px;font-size:.8rem"></div></div>';
     }else{
@@ -2078,18 +2124,79 @@ function openAddSkillForm(agentId){
   document.getElementById('new-skill-name').focus();
 }
 
-async function submitNewSkill(agentId){
+async function submitNewSkill(agentId,forceOverride){
   var nameEl=document.getElementById('new-skill-name');
+  var configEl=document.getElementById('new-skill-config');
   var msg=document.getElementById('add-skill-msg');
   if(!nameEl||!nameEl.value.trim()){if(msg)msg.textContent='Enter a skill name.';return;}
-  var res=await apiPost('/api/skills/add',{agent_id:agentId,skill_name:nameEl.value.trim()});
+  var skillConfig=configEl&&configEl.value.trim()?configEl.value.trim():'{}';
+  var payload={agent_id:agentId,skill_name:nameEl.value.trim(),skill_config:skillConfig};
+  if(forceOverride)payload.human_override=true;
+  var res=await apiPost('/api/skills/add',payload);
   if(res&&res.success){
     nameEl.value='';
+    if(configEl)configEl.value='';
     document.getElementById('add-skill-form').style.display='none';
+    if(msg){msg.innerHTML='';msg.style.color='';}
     loadGuardAndSkills(agentId,currentAgentSpaceType);
+  }else if(res&&res.needs_approval){
+    // Two-step approval: show vetting report and approve button
+    var report=res.vet_report||{};
+    var scan=report.scan_result||{};
+    var flagHtml='';
+    if(scan.flags&&scan.flags.length>0){
+      flagHtml=scan.flags.map(function(f){
+        return '<div style="color:var(--mu);font-size:.78rem">\u2022 ['+esc(f.severity)+'] '+esc(f.pattern_name)+': "'+esc(f.matched_text)+'"</div>';
+      }).join('');
+    }
+    if(msg){
+      msg.innerHTML='<div style="padding:8px;background:#2a2000;border:1px solid #d1861644;border-radius:6px;margin-top:4px">'+
+        '<div style="color:#d18616;font-weight:600;font-size:.85rem">\u26A0\uFE0F Skill Not in Trusted Registry</div>'+
+        '<div style="color:var(--mu);font-size:.8rem;margin:4px 0">Risk score: '+scan.risk_score+'/10 \u2014 '+(scan.recommendation||'')+'</div>'+
+        flagHtml+
+        '<div style="margin-top:6px;display:flex;gap:6px">'+
+        '<button onclick="submitNewSkill('+agentId+',true)" class="btn" style="background:#2ea043;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">\u2705 I trust this \u2014 approve</button>'+
+        '<button onclick="document.getElementById(\'add-skill-msg\').innerHTML=\'\'" class="btn" style="background:var(--s2);color:var(--fg);border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">Cancel</button></div></div>';
+      msg.style.color='';
+    }
   }else{
     if(msg){msg.textContent=(res&&res.message)||'Failed';msg.style.color='#f85149';}
   }
+}
+
+async function loadMemories(agentId){
+  var el=document.getElementById('as-memory-section');
+  if(!el)return;
+  var memories=[];try{memories=await api('/api/agent/'+agentId+'/memories');}catch(e){}
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\U0001f9e0 Memories ('+memories.length+')</summary>';
+  html+='<div style="margin-top:8px">';
+  if(memories&&memories.length>0){
+    html+=memories.map(function(m){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--br)">'+
+        '<span style="color:var(--fg);font-size:.85rem">'+esc(m.content).substring(0,80)+(m.content.length>80?'...':'')+'</span>'+
+        '<button onclick="forgetMemory('+agentId+','+m.id+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px" title="Forget this">\u2716</button></div>';
+    }).join('');
+  }else{
+    html+='<p style="color:var(--mu);font-size:.85rem">No memories yet. Type "remember ..." in chat.</p>';
+  }
+  html+='<div style="display:flex;gap:6px;margin-top:8px">'+
+    '<input id="add-memory-input" type="text" placeholder="Add a memory..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
+    '<button onclick="addMemoryUI('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">+</button></div>';
+  html+='</div></details>';
+  el.innerHTML=html;
+}
+
+async function forgetMemory(agentId,memId){
+  await apiPost('/api/agent/'+agentId+'/memories/forget',{memory_id:memId});
+  loadMemories(agentId);
+}
+
+async function addMemoryUI(agentId){
+  var input=document.getElementById('add-memory-input');
+  if(!input||!input.value.trim())return;
+  await apiPost('/api/agent/'+agentId+'/memories',{content:input.value.trim()});
+  input.value='';
+  loadMemories(agentId);
 }
 
 function descFor(type){
@@ -2116,8 +2223,9 @@ function descFor(type){
 
 async function openHelpAgent(){
   if(agentsData.length===0) agentsData=await api('/api/agents');
-  var help=agentsData.find(function(a){return a.agent_type==='help';});
-  if(help) openAgentSpace(help.id);
+  var guardian=agentsData.find(function(a){return a.agent_type==='guardian';});
+  if(!guardian) guardian=agentsData.find(function(a){return a.agent_type==='help';});
+  if(guardian) openAgentSpace(guardian.id);
 }
 
 function renderChat(messages){
@@ -2196,7 +2304,9 @@ async function createTeam(name){
 
 function showPaymentModal(info){
   var m=document.getElementById('payment-modal');
-  document.getElementById('pay-team-name').textContent=info.template_name||info.template||'Team';
+  var name=info.template_name||info.template||'Team';
+  if(info.slot&&info.slot>1)name+=' #'+info.slot;
+  document.getElementById('pay-team-name').textContent=name;
   document.getElementById('pay-trial-price').textContent='$'+info.price_trial;
   document.getElementById('pay-trial-days').textContent=info.trial_days||30;
   document.getElementById('pay-annual-price').textContent='$'+info.price_annual;
@@ -3085,6 +3195,7 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
+  <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Guardian — skills, threat monitoring, anomaly detection" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Guardian</button>
   <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
   <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
 </div>
@@ -3151,8 +3262,8 @@ def _build_html():
 </div>
 <div class="main-right">
   <div class="wizard-card" onclick="openHelpAgent()">
-    <div class="wizard-icon">\U0001f9d9\u200D\u2642\uFE0F</div>
-    <div class="wizard-info"><div class="wizard-title">Wizard</div><div class="wizard-sub">Your guide & helper</div></div>
+    <div class="wizard-icon">🛡️</div>
+    <div class="wizard-info"><div class="wizard-title">Guardian</div><div class="wizard-sub">Protector & guide — always on</div></div>
     <div class="wizard-status"><span class="status-dot dot-green" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--gn)"></span></div>
   </div>
   <div class="teams-section">
@@ -3216,6 +3327,7 @@ def _build_html():
     <div class="as-intro" id="as-intro"></div>
     <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
     <div id="as-skills-section" style="margin-bottom:12px"></div>
+    <div id="as-memory-section" style="margin-bottom:12px"></div>
     <div class="activity-feed" id="as-activity"></div>
     <div class="chat-wrap">
       <div class="chat-msgs" id="as-chat-msgs"></div>
@@ -3889,17 +4001,46 @@ def _generate_referral_code(db_path):
     return code
 
 
+def _count_teams_of_type(db_path, template):
+    """Count how many existing teams were created from a given template."""
+    tpl = TEAM_TEMPLATES.get(template)
+    if not tpl:
+        return 0
+    base_name = tpl["name"]
+    conn = bus.get_conn(db_path)
+    rows = conn.execute(
+        "SELECT name FROM agents WHERE agent_type='manager'"
+    ).fetchall()
+    conn.close()
+    count = 0
+    for r in rows:
+        mgr_name = r["name"]
+        # Matches "Department-Manager", "Department 2-Manager", etc.
+        if mgr_name == f"{base_name}-Manager" or mgr_name.startswith(f"{base_name} "):
+            count += 1
+    return count
+
+
 def _create_team(db_path, template):
     tpl = TEAM_TEMPLATES.get(template, TEAM_TEMPLATES["custom"])
 
-    # Check paid templates
+    # Check paid templates — each team requires its own license
     if tpl.get("paid"):
-        license_key = f"license_{template}"
+        existing_count = _count_teams_of_type(db_path, template)
+        # License slot: license_department_1, license_department_2, etc.
+        slot = existing_count + 1
+        license_key = f"license_{template}_{slot}"
+        # Also check legacy single-key format for first team (backward compat)
         license_val = bus.get_config(license_key, db_path=db_path)
+        if not license_val and slot == 1:
+            license_val = bus.get_config(f"license_{template}", db_path=db_path)
         if not license_val:
+            label = tpl["name"]
+            if slot > 1:
+                label = f"{tpl['name']} #{slot}"
             return {
                 "ok": False,
-                "error": f"The {tpl['name']} team requires activation. "
+                "error": f"{label} requires activation. "
                          f"${tpl.get('price_annual', 50)}/year or "
                          f"${tpl.get('price_trial', 10)} for a "
                          f"{tpl.get('trial_days', 30)}-day trial.",
@@ -3909,6 +4050,7 @@ def _create_team(db_path, template):
                 "price_annual": tpl.get("price_annual", 50),
                 "price_trial": tpl.get("price_trial", 10),
                 "trial_days": tpl.get("trial_days", 30),
+                "slot": slot,
             }
         # Check trial expiry
         if license_val.startswith("trial:"):
@@ -3922,6 +4064,11 @@ def _create_team(db_path, template):
                         "requires_payment": True,
                         "expired": True,
                         "template": template,
+                        "template_name": tpl["name"],
+                        "price_annual": tpl.get("price_annual", 50),
+                        "price_trial": tpl.get("price_trial", 10),
+                        "trial_days": tpl.get("trial_days", 30),
+                        "slot": slot,
                     }
             except Exception:
                 pass
@@ -4174,10 +4321,13 @@ def _get_auth_user(handler):
 
 # ── Stripe Checkout Helpers ──────────────────────────────────────────
 
-def _generate_activation_key():
-    """Generate a unique Guard activation key."""
-    raw = secrets.token_hex(16)
-    return f"GUARD-{raw[:8].upper()}-{raw[8:16].upper()}-{raw[16:24].upper()}-{raw[24:].upper()}"
+def _generate_activation_key(key_type="guard", grant="annual"):
+    """Generate a proper CREWBUS HMAC-signed activation key.
+
+    Delegates to bus.generate_activation_key() which produces keys in
+    format: CREWBUS-<base64_payload>-<hex_hmac_sha256>
+    """
+    return bus.generate_activation_key(key_type=key_type, grant=grant)
 
 
 def _stripe_create_guard_checkout(handler):
@@ -4208,7 +4358,7 @@ def _stripe_create_guard_checkout(handler):
                         "name": "crew-bus Security Guard",
                         "description": "Lifetime activation — anomaly detection, threat monitoring, automatic escalation",
                     },
-                    "unit_amount": 2000,
+                    "unit_amount": 2900,  # $29.00 Guardian lifetime
                 },
                 "quantity": 1,
             })
@@ -4371,6 +4521,34 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             skills = bus.get_agent_skills(int(m.group(1)), db_path=self.db_path)
             return _json_response(self, skills)
+
+        if path == "/api/skill-registry":
+            status_filter = qs.get("status", [None])[0]
+            registry = bus.get_skill_registry(
+                vet_status=status_filter, db_path=self.db_path)
+            return _json_response(self, registry)
+
+        # Agent memories
+        m = re.match(r"^/api/agent/(\d+)/memories$", path)
+        if m:
+            memories = bus.get_agent_memories(
+                int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, memories)
+
+        # Heartbeat status
+        if path == "/api/heartbeat/status":
+            return _json_response(self, {
+                "running": _heartbeat.running if _heartbeat else False,
+                "interval_minutes": int(bus.get_config(
+                    "heartbeat_interval", "30",
+                    db_path=self.db_path)),
+                "last_morning": bus.get_config(
+                    "last_morning_briefing", "", db_path=self.db_path),
+                "last_evening": bus.get_config(
+                    "last_evening_briefing", "", db_path=self.db_path),
+                "last_dream_cycle": bus.get_config(
+                    "last_dream_cycle", "", db_path=self.db_path),
+            })
 
         if path == "/api/messages":
             return _json_response(self, _get_messages_api(
@@ -4618,12 +4796,66 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             agent_id = data.get("agent_id")
             skill_name = data.get("skill_name", "").strip()
             skill_config = data.get("skill_config", "{}")
+            human_override = data.get("human_override", False)
             if not agent_id or not skill_name:
                 return _json_response(self, {"success": False, "message": "need agent_id and skill_name"}, 400)
             success, message = bus.add_skill_to_agent(
-                int(agent_id), skill_name, skill_config, db_path=self.db_path)
-            return _json_response(self, {"success": success, "message": message},
-                                  200 if success else 400)
+                int(agent_id), skill_name, skill_config,
+                human_override=bool(human_override),
+                db_path=self.db_path)
+            response = {"success": success, "message": message}
+            if not success and "[NEEDS_APPROVAL]" in str(message):
+                vet_report = bus.vet_skill(skill_name, skill_config,
+                                           db_path=self.db_path)
+                response["vet_report"] = vet_report
+                response["needs_approval"] = True
+            return _json_response(self, response, 200 if success else 400)
+
+        if path == "/api/skills/vet":
+            skill_name = data.get("skill_name", "").strip()
+            skill_config = data.get("skill_config", "{}")
+            if not skill_name:
+                return _json_response(self, {"error": "skill_name required"}, 400)
+            report = bus.vet_skill(skill_name, skill_config,
+                                   db_path=self.db_path)
+            return _json_response(self, report)
+
+        # Agent memory — add
+        m = re.match(r"^/api/agent/(\d+)/memories$", path)
+        if m:
+            agent_id = int(m.group(1))
+            content = data.get("content", "").strip()
+            mem_type = data.get("type", "fact")
+            importance = int(data.get("importance", 5))
+            if not content:
+                return _json_response(self, {"ok": False, "error": "content required"}, 400)
+            mid = bus.remember(agent_id, content, memory_type=mem_type,
+                               importance=importance, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "memory_id": mid}, 201)
+
+        # Agent memory — forget
+        m = re.match(r"^/api/agent/(\d+)/memories/forget$", path)
+        if m:
+            agent_id = int(m.group(1))
+            memory_id = data.get("memory_id")
+            match_text = data.get("match", "")
+            result = bus.forget(agent_id,
+                                memory_id=int(memory_id) if memory_id else None,
+                                content_match=match_text if match_text else None,
+                                db_path=self.db_path)
+            return _json_response(self, result)
+
+        # Heartbeat config update
+        if path == "/api/heartbeat/config":
+            checks = data.get("checks")
+            interval = data.get("interval_minutes")
+            if checks is not None:
+                bus.set_config("heartbeat_checks", json.dumps(checks),
+                               db_path=self.db_path)
+            if interval is not None:
+                bus.set_config("heartbeat_interval", str(interval),
+                               db_path=self.db_path)
+            return _json_response(self, {"ok": True})
 
         if path == "/api/mailbox":
             agent_id = data.get("from_agent_id")
@@ -4695,7 +4927,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             tpl = TEAM_TEMPLATES[template]
             if not tpl.get("paid"):
                 return _json_response(self, {"error": "This template is free"}, 400)
-            license_key = f"license_{template}"
+
+            # Per-team licensing: find the next slot that needs a license
+            existing_count = _count_teams_of_type(self.db_path, template)
+            slot = existing_count + 1
+            license_key = f"license_{template}_{slot}"
 
             # Check promo codes
             valid_promo = False
@@ -5040,7 +5276,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 bus.set_config(key_map[model], api_key, db_path=self.db_path)
             # Update all agents that have no model set → chosen model
             conn = bus.get_conn(self.db_path)
-            wizard_id = None
+            guardian_id = None
             try:
                 conn.execute(
                     "UPDATE agents SET model=? WHERE model='' OR model IS NULL",
@@ -5050,18 +5286,18 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 human = conn.execute(
                     "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
                 ).fetchone()
-                wizard = conn.execute(
-                    "SELECT id FROM agents WHERE agent_type='help' LIMIT 1"
+                guardian = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type IN ('guardian','help') LIMIT 1"
                 ).fetchone()
-                if wizard:
-                    wizard_id = wizard["id"]
+                if guardian:
+                    guardian_id = guardian["id"]
             finally:
                 conn.close()
-            # Send welcome message from Human to Wizard
-            if human and wizard:
+            # Send welcome message from Human to Guardian
+            if human and guardian:
                 try:
                     bus.send_message(
-                        human["id"], wizard["id"], "task",
+                        human["id"], guardian["id"], "task",
                         "Setup complete",
                         "I just set up Crew Bus! Say hello and help me get started.",
                         db_path=self.db_path,
@@ -5077,7 +5313,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             recovery_email = data.get("recovery_email", "").strip()
             if recovery_email:
                 bus.set_config("recovery_email", recovery_email, db_path=self.db_path)
-            return _json_response(self, {"ok": True, "wizard_id": wizard_id})
+            return _json_response(self, {"ok": True, "wizard_id": guardian_id})
 
         # ── Dashboard password management ──
 
@@ -5173,22 +5409,50 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
 
 
-def _ensure_wizard(db_path):
-    """Ensure the Wizard agent exists. Self-spawns on first run.
+def _ensure_guardian(db_path):
+    """Ensure the Guardian agent exists. Self-spawns on first run.
 
-    The Wizard is the first agent every Crew Bus install gets.
-    It guides new users through setup — picking a model, entering
-    their API key, and creating their first crew.
+    The Guardian is the always-on protector and setup guide. It merges the
+    old Wizard (setup) and Guard (security) roles into one agent that:
+    - Guides new users through setup (model, API key, first crew)
+    - Watches for threats 24/7
+    - Has system knowledge that auto-refreshes every 24h
+    - Helps users and agents with updates and troubleshooting
     """
     conn = bus.get_conn(db_path)
     try:
-        wiz = conn.execute("SELECT id FROM agents WHERE agent_type='help'").fetchone()
-        if wiz:
-            return  # already exists
-    finally:
+        # Already have a Guardian? Done.
+        guardian = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='guardian'"
+        ).fetchone()
+        if guardian:
+            return
+
+        # Migrate old Wizard → Guardian (existing installs)
+        wizard = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='help'"
+        ).fetchone()
+        if wizard:
+            conn.execute(
+                "UPDATE agents SET agent_type='guardian', name='Guardian', "
+                "role='security', description=?, "
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                "WHERE id=?",
+                (GUARDIAN_DESCRIPTION, wizard["id"])
+            )
+            conn.commit()
+            conn.close()
+            print("Wizard evolved into Guardian — always-on protector activated.")
+            # Seed initial knowledge
+            _refresh_guardian_knowledge(db_path)
+            return
+    except Exception:
+        conn.close()
+        raise
+    else:
         conn.close()
 
-    # Create minimal bootstrap: Human + Crew-Boss + Wizard
+    # Fresh install — create bootstrap: Human + Crew-Boss + Guardian
     conn = bus.get_conn(db_path)
     try:
         # Human
@@ -5209,17 +5473,118 @@ def _ensure_wizard(db_path):
         boss = conn.execute("SELECT id FROM agents WHERE agent_type='right_hand'").fetchone()
         boss_id = boss["id"] if boss else 2
 
-        # Wizard — the setup agent
+        # Guardian — the always-on protector + setup guide
         conn.execute(
             "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
             "trust_score, model, description) VALUES "
-            "('Wizard', 'help', 'worker', 'console', ?, 8, 'kimi', ?)",
-            (boss_id, WIZARD_DESCRIPTION)
+            "('Guardian', 'guardian', 'security', 'console', ?, 8, 'kimi', ?)",
+            (boss_id, GUARDIAN_DESCRIPTION)
         )
         conn.commit()
-        print("Wizard self-spawned — ready to guide setup.")
+        print("Guardian self-spawned — always-on protector + setup guide ready.")
     finally:
         conn.close()
+
+    # Seed initial system knowledge
+    _refresh_guardian_knowledge(db_path)
+
+
+# Backward compat alias
+_ensure_wizard = _ensure_guardian
+
+
+def _refresh_guardian_knowledge(db_path):
+    """Refresh the Guardian's system knowledge memories.
+
+    Gathers the current state of the entire system and stores it as
+    agent_memory entries with source='system'. Called at boot and
+    every 24h by the Heartbeat scheduler.
+    """
+    from datetime import datetime, timezone
+
+    conn = bus.get_conn(db_path)
+    try:
+        guardian = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='guardian'"
+        ).fetchone()
+        if not guardian:
+            return
+        guardian_id = guardian["id"]
+
+        # Gather system state
+        agents = conn.execute(
+            "SELECT name, agent_type, status, model FROM agents ORDER BY id"
+        ).fetchall()
+        agent_list = [
+            f"  - {a['name']} ({a['agent_type']}, {a['status']}"
+            f"{', model=' + a['model'] if a['model'] else ''})"
+            for a in agents
+        ]
+
+        # Config snapshot
+        configs = conn.execute(
+            "SELECT key, value FROM crew_config WHERE key NOT LIKE '%api_key%' "
+            "AND key NOT LIKE '%secret%' AND key NOT LIKE '%password%'"
+        ).fetchall()
+        config_lines = [f"  - {c['key']}: {c['value']}" for c in configs]
+
+        # Guard status
+        guard_active = bus.is_guard_activated(db_path=db_path)
+
+        # Skill registry summary
+        try:
+            vetted = conn.execute(
+                "SELECT COUNT(*) FROM skill_registry WHERE vet_status='vetted'"
+            ).fetchone()[0]
+            blocked = conn.execute(
+                "SELECT COUNT(*) FROM skill_registry WHERE vet_status='blocked'"
+            ).fetchone()[0]
+            skill_summary = f"  - Vetted skills: {vetted}, Blocked skills: {blocked}"
+        except Exception:
+            skill_summary = "  - Skill registry not yet initialized"
+
+        # Recent security events (last 24h)
+        try:
+            sec_events = conn.execute(
+                "SELECT COUNT(*) FROM security_events WHERE created_at > "
+                "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 day')"
+            ).fetchone()[0]
+            sec_line = f"  - Security events (24h): {sec_events}"
+        except Exception:
+            sec_line = "  - No security events table yet"
+
+    finally:
+        conn.close()
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    knowledge = (
+        f"SYSTEM KNOWLEDGE (updated {now}):\n\n"
+        f"AGENTS ({len(agents)}):\n" + "\n".join(agent_list) + "\n\n"
+        f"CONFIGURATION:\n" + ("\n".join(config_lines) if config_lines else "  - No config set yet") + "\n\n"
+        f"SECURITY:\n"
+        f"  - Guard activated: {'Yes' if guard_active else 'No (free tier)'}\n"
+        f"{skill_summary}\n"
+        f"{sec_line}\n"
+    )
+
+    # Upsert: delete old system knowledge, insert fresh
+    conn = bus.get_conn(db_path)
+    try:
+        conn.execute(
+            "DELETE FROM agent_memory WHERE agent_id=? AND source='system'",
+            (guardian_id,)
+        )
+        conn.execute(
+            "INSERT INTO agent_memory (agent_id, memory_type, content, source, "
+            "importance, created_at) VALUES (?, 'persona', ?, 'system', 10, "
+            "strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+            (guardian_id, knowledge)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    print(f"[guardian] knowledge refreshed ({len(knowledge)} chars)")
 
 
 def _auto_load_hierarchy(db_path):
@@ -5227,7 +5592,7 @@ def _auto_load_hierarchy(db_path):
 
     Prefers example_stack.yaml if present (default for new installs).
     Falls back to first .yaml/.yml file found.
-    Wizard is always spawned first via _ensure_wizard().
+    Guardian is always spawned first via _ensure_guardian().
     """
     conn = bus.get_conn(db_path)
     try:
@@ -5256,10 +5621,11 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     if db_path is None:
         db_path = DEFAULT_DB
     bus.init_db(db_path=db_path)
-    _ensure_wizard(db_path)  # Wizard always self-spawns first
+    _ensure_guardian(db_path)  # Guardian always self-spawns first
+    bus.assign_inner_circle_skills(db_path)  # Skills for core crew (safe if none exist yet)
     if config:
         bus.load_hierarchy(config, db_path=db_path)
-    # No auto-load: clean slate, Wizard guides team creation
+    # No auto-load: clean slate, Guardian guides team creation
     handler = type("Handler", (CrewBusHandler,), {"db_path": db_path})
     return ThreadedHTTPServer((host, port), handler)
 
@@ -5318,6 +5684,27 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
 
+    # Start the heartbeat scheduler (proactive briefings, burnout checks, dream cycle)
+    global _heartbeat
+    try:
+        conn = bus.get_conn(actual_db)
+        _human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        _rh = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='right_hand' LIMIT 1"
+        ).fetchone()
+        conn.close()
+        if _human and _rh:
+            interval = int(bus.get_config(
+                "heartbeat_interval", "30", db_path=actual_db))
+            rh_engine = RightHand(_rh["id"], _human["id"], db_path=actual_db)
+            _heartbeat = Heartbeat(rh_engine, db_path=actual_db,
+                                   interval_minutes=interval)
+            _heartbeat.start()
+    except Exception as e:
+        print(f"  (Heartbeat not started: {e})")
+
     # Create a desktop shortcut so they can always get back in
     _create_desktop_shortcut(url)
 
@@ -5334,6 +5721,8 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down.")
+        if _heartbeat:
+            _heartbeat.stop()
         agent_worker.stop_worker()
         server.shutdown()
 

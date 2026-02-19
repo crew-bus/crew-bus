@@ -36,7 +36,7 @@ GUARD_ACTIVATION_VERIFY_KEY = "38cd1c83d599dcd7c8eb1fad1a494436939b7462c3b93c11d
 
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
-    "human", "right_hand", "security",
+    "human", "right_hand", "guardian", "security",
     "strategy", "wellness", "financial", "legal", "knowledge", "communications",
     "manager", "worker", "specialist", "help",
 )
@@ -64,7 +64,7 @@ VALID_DECISION_TYPES = (
 # Threat domains for security events
 VALID_THREAT_DOMAINS = (
     "physical", "digital", "financial", "legal",
-    "reputation", "mutiny", "relationship",
+    "reputation", "mutiny", "relationship", "integrity",
 )
 
 # Security event severities
@@ -87,7 +87,7 @@ def _role_for_type(agent_type: str) -> str:
         return "human"
     if agent_type == "right_hand":
         return "right_hand"
-    if agent_type == "security":
+    if agent_type in ("guardian", "security"):
         return "security"
     if agent_type in CORE_CREW_TYPES:
         return "core_crew"
@@ -285,7 +285,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             threat_domain           TEXT    NOT NULL
                                     CHECK(threat_domain IN (
                                         'physical','digital','financial','legal',
-                                        'reputation','mutiny','relationship')),
+                                        'reputation','mutiny','relationship','integrity')),
             severity                TEXT    NOT NULL DEFAULT 'info'
                                     CHECK(severity IN ('info','low','medium','high','critical')),
             title                   TEXT    NOT NULL,
@@ -376,6 +376,58 @@ def init_db(db_path: Optional[Path] = None) -> None:
             FOREIGN KEY (agent_id) REFERENCES agents(id),
             UNIQUE(agent_id, skill_name)
         );
+
+        -- ========= Agent Memory =========
+
+        CREATE TABLE IF NOT EXISTS agent_memory (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            memory_type     TEXT    NOT NULL DEFAULT 'fact'
+                            CHECK(memory_type IN ('fact','preference','instruction','summary','persona')),
+            content         TEXT    NOT NULL,
+            source          TEXT    NOT NULL DEFAULT 'conversation'
+                            CHECK(source IN ('conversation','user_command','synthesis','system')),
+            importance      INTEGER NOT NULL DEFAULT 5 CHECK(importance BETWEEN 1 AND 10),
+            access_count    INTEGER NOT NULL DEFAULT 0,
+            last_accessed   TEXT,
+            expires_at      TEXT,
+            active          INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_memory_agent
+            ON agent_memory(agent_id, active, importance DESC);
+        CREATE INDEX IF NOT EXISTS idx_agent_memory_type
+            ON agent_memory(agent_id, memory_type, active);
+
+        -- ========= Skill Registry (Guard vetting) =========
+
+        CREATE TABLE IF NOT EXISTS skill_registry (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            skill_name      TEXT    NOT NULL,
+            content_hash    TEXT    NOT NULL,
+            source          TEXT    NOT NULL DEFAULT 'local'
+                            CHECK(source IN ('builtin','github','clawhub','local','community')),
+            source_url      TEXT    DEFAULT '',
+            author          TEXT    NOT NULL DEFAULT 'crew-bus',
+            version         TEXT    NOT NULL DEFAULT '1.0',
+            vet_status      TEXT    NOT NULL DEFAULT 'unvetted'
+                            CHECK(vet_status IN ('vetted','unvetted','blocked')),
+            vetted_by       TEXT    DEFAULT '',
+            vetted_at       TEXT,
+            risk_score      INTEGER NOT NULL DEFAULT 0 CHECK(risk_score BETWEEN 0 AND 10),
+            risk_flags      TEXT    NOT NULL DEFAULT '[]',
+            skill_config    TEXT    NOT NULL DEFAULT '{}',
+            description     TEXT    NOT NULL DEFAULT '',
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            UNIQUE(skill_name, content_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_skill_registry_hash
+            ON skill_registry(content_hash);
+        CREATE INDEX IF NOT EXISTS idx_skill_registry_status
+            ON skill_registry(vet_status);
 
         -- ========= Techie Marketplace =========
 
@@ -541,6 +593,9 @@ def init_db(db_path: Optional[Path] = None) -> None:
     if existing == 0:
         _seed_routing_rules(cur)
 
+    # Seed builtin vetted skills into the registry
+    _seed_builtin_skills(cur)
+
     conn.commit()
     conn.close()
 
@@ -567,7 +622,7 @@ def _seed_routing_rules(cur: sqlite3.Cursor) -> None:
 
         # Security agent reports to Crew Boss only (unless direct feed enabled)
         ("security", "right_hand", 1, 0, "Security reports to Crew Boss"),
-        ("security", "human", 0, 0, "Security must go through Crew Boss (unless direct feed)"),
+        ("security", "human", 1, 0, "Guardian can reach human directly"),
         ("security", "core_crew", 0, 0, "Security cannot message core crew"),
         ("security", "manager", 0, 0, "Security cannot message managers"),
         ("security", "worker", 0, 0, "Security cannot message workers"),
@@ -884,6 +939,9 @@ def _load_v2_hierarchy(config: dict, config_path: str,
 
     conn.commit()
     conn.close()
+
+    # Auto-assign inner circle skills to core crew agents
+    assign_inner_circle_skills(db_path)
 
     org_name = config.get("org_name", f"{human_def['name']}'s Crew")
     return {"org": org_name, "agents_loaded": created}
@@ -1368,6 +1426,10 @@ def _load_crew_format(config: dict, config_path: str,
 
     conn.commit()
     conn.close()
+
+    # Auto-assign inner circle skills to core crew agents
+    assign_inner_circle_skills(db_path)
+
     return {"org": crew_name, "agents_loaded": created}
 
 
@@ -1431,6 +1493,10 @@ def _load_v1_hierarchy(config: dict, config_path: str,
 
     conn.commit()
     conn.close()
+
+    # Auto-assign inner circle skills to core crew agents
+    assign_inner_circle_skills(db_path)
+
     return {"org": config.get("org_name"), "agents_loaded": created}
 
 
@@ -1492,6 +1558,13 @@ def _check_routing(conn: sqlite3.Connection,
                     "reason": "Security must go through Crew Boss (direct feed not enabled)"}
         return {"allowed": False, "require_approval": False,
                 "reason": "Security can only message Crew Boss"}
+
+    # INNER CIRCLE PROTOCOL: core crew talks ONLY to Crew Boss
+    # (private sessions already handled above)
+    if from_type in CORE_CREW_TYPES:
+        if to_type != "right_hand":
+            return {"allowed": False, "require_approval": False,
+                    "reason": f"Inner circle protocol: {from_type} agents communicate exclusively with Crew Boss"}
 
     # If recipient is human and sender is not right_hand/security, block (reroute to RH)
     if to_type == "human" and from_type not in ("right_hand", "wellness"):
@@ -2387,6 +2460,199 @@ def search_knowledge(query: str, category_filter: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
+# Agent Memory (per-agent persistent memory)
+# ---------------------------------------------------------------------------
+
+def remember(agent_id: int, content: str, memory_type: str = "fact",
+             importance: int = 5, source: str = "user_command",
+             db_path: Optional[Path] = None) -> int:
+    """Store a memory for an agent.
+
+    Called when user says "remember X" or when agent extracts facts from
+    conversation.  Returns the new memory_id.
+    """
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cur = conn.execute(
+        "INSERT INTO agent_memory "
+        "(agent_id, memory_type, content, source, importance, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (agent_id, memory_type, content, source, importance, now, now),
+    )
+    memory_id = cur.lastrowid
+    _audit(conn, "memory_stored", agent_id,
+           {"memory_id": memory_id, "type": memory_type, "source": source})
+    conn.commit()
+    conn.close()
+    return memory_id
+
+
+def forget(agent_id: int, memory_id: int = None, content_match: str = None,
+           db_path: Optional[Path] = None) -> dict:
+    """Forget a memory (soft-delete: sets active=0).
+
+    Can match by memory_id or by content substring.
+    Returns {ok: bool, forgotten_count: int}.
+    """
+    conn = get_conn(db_path)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if memory_id is not None:
+        cur = conn.execute(
+            "UPDATE agent_memory SET active=0, updated_at=? "
+            "WHERE id=? AND agent_id=? AND active=1",
+            (now, memory_id, agent_id),
+        )
+    elif content_match:
+        cur = conn.execute(
+            "UPDATE agent_memory SET active=0, updated_at=? "
+            "WHERE agent_id=? AND active=1 AND content LIKE ?",
+            (now, agent_id, f"%{content_match}%"),
+        )
+    else:
+        conn.close()
+        return {"ok": False, "forgotten_count": 0}
+
+    count = cur.rowcount
+    if count > 0:
+        _audit(conn, "memory_forgotten", agent_id,
+               {"forgotten_count": count,
+                "by": "id" if memory_id else "match"})
+    conn.commit()
+    conn.close()
+    return {"ok": True, "forgotten_count": count}
+
+
+def get_agent_memories(agent_id: int, memory_type: str = None,
+                       limit: int = 15, active_only: bool = True,
+                       db_path: Optional[Path] = None) -> list:
+    """Retrieve agent memories for prompt injection.
+
+    Returns most important memories first.  Increments access_count on
+    each returned memory so frequently-used memories can be tracked.
+    """
+    conn = get_conn(db_path)
+    sql = "SELECT * FROM agent_memory WHERE agent_id=?"
+    params: list = [agent_id]
+
+    if active_only:
+        sql += " AND active=1"
+    if memory_type:
+        sql += " AND memory_type=?"
+        params.append(memory_type)
+
+    # Exclude expired
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sql += " AND (expires_at IS NULL OR expires_at > ?)"
+    params.append(now)
+
+    sql += " ORDER BY importance DESC, access_count DESC, created_at DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    results = [dict(r) for r in rows]
+
+    # Bump access counts
+    if results:
+        ids = [r["id"] for r in results]
+        placeholders = ",".join("?" * len(ids))
+        conn.execute(
+            f"UPDATE agent_memory SET access_count = access_count + 1, "
+            f"last_accessed = ? WHERE id IN ({placeholders})",
+            [now] + ids,
+        )
+        conn.commit()
+
+    conn.close()
+    return results
+
+
+def search_agent_memory(agent_id: int, query: str,
+                        limit: int = 20,
+                        db_path: Optional[Path] = None) -> list:
+    """Search an agent's memories by content LIKE matching."""
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT * FROM agent_memory "
+        "WHERE agent_id=? AND active=1 AND content LIKE ? "
+        "ORDER BY importance DESC, created_at DESC LIMIT ?",
+        (agent_id, f"%{query}%", limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def synthesize_memories(agent_id: int, older_than_days: int = 7,
+                        db_path: Optional[Path] = None) -> dict:
+    """Compact old memories into summaries (the 'dream cycle').
+
+    Takes all fact/preference/instruction memories older than N days,
+    groups them by type, and creates summary memories.  Originals are
+    soft-deleted.  Zero LLM cost -- deterministic concatenation.
+
+    Returns {ok, compacted, summaries_created}.
+    """
+    conn = get_conn(db_path)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)
+              ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    old_memories = conn.execute(
+        "SELECT * FROM agent_memory WHERE agent_id=? AND active=1 "
+        "AND memory_type NOT IN ('summary','persona') AND created_at < ? "
+        "ORDER BY memory_type, importance DESC",
+        (agent_id, cutoff),
+    ).fetchall()
+
+    if not old_memories:
+        conn.close()
+        return {"ok": True, "compacted": 0, "summaries_created": 0}
+
+    # Group by type
+    groups: dict = {}
+    for m in old_memories:
+        groups.setdefault(m["memory_type"], []).append(m)
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    summaries_created = 0
+
+    for mtype, memories in groups.items():
+        items = [m["content"] for m in memories[:50]]
+        summary_content = f"[Synthesized from {len(memories)} {mtype} memories]\n"
+        summary_content += "\n".join(f"- {item}" for item in items)
+
+        # Cap at 2000 chars
+        if len(summary_content) > 2000:
+            summary_content = summary_content[:1997] + "..."
+
+        conn.execute(
+            "INSERT INTO agent_memory "
+            "(agent_id, memory_type, content, source, importance, "
+            "created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+            (agent_id, "summary", summary_content, "synthesis", 7, now, now),
+        )
+        summaries_created += 1
+
+    # Soft-delete originals
+    ids = [m["id"] for m in old_memories]
+    placeholders = ",".join("?" * len(ids))
+    conn.execute(
+        f"UPDATE agent_memory SET active=0, updated_at=? "
+        f"WHERE id IN ({placeholders})",
+        [now] + ids,
+    )
+
+    _audit(conn, "memory_synthesis", agent_id, {
+        "compacted": len(old_memories),
+        "summaries_created": summaries_created,
+    })
+    conn.commit()
+    conn.close()
+
+    return {"ok": True, "compacted": len(old_memories),
+            "summaries_created": summaries_created}
+
+
+# ---------------------------------------------------------------------------
 # Rejection History
 # ---------------------------------------------------------------------------
 
@@ -2950,7 +3216,7 @@ def log_security_event(security_agent_id: int, threat_domain: str,
                        db_path: Optional[Path] = None) -> int:
     """Log a security event and return the event_id.
 
-    threat_domain: physical, digital, financial, legal, reputation, mutiny, relationship
+    threat_domain: physical, digital, financial, legal, reputation, mutiny, relationship, integrity
     severity: info, low, medium, high, critical
     """
     if threat_domain not in VALID_THREAT_DOMAINS:
@@ -3728,14 +3994,22 @@ def get_guard_activation_status(db_path: Optional[Path] = None) -> Optional[dict
     }
 
 
-def generate_test_activation_key(verify_key: Optional[str] = None) -> str:
-    """Generate a valid activation key for testing purposes.
+def generate_activation_key(key_type: str = "guard", grant: str = "annual",
+                            verify_key: Optional[str] = None) -> str:
+    """Generate a valid CREWBUS activation key (HMAC-SHA256 signed).
 
-    Uses the module-level GUARD_ACTIVATION_VERIFY_KEY unless overridden.
+    Args:
+        key_type: Product type — "guard", "business", "department",
+                  "freelance", "sidehustle", "custom".
+        grant: License grant — "annual" or "trial".
+        verify_key: Override HMAC signing key (default: GUARD_ACTIVATION_VERIFY_KEY).
+
+    Returns a key in format: CREWBUS-<base64_payload>-<hex_hmac_sha256>
     """
     key = verify_key or GUARD_ACTIVATION_VERIFY_KEY
     payload_dict = {
-        "type": "guard",
+        "type": key_type,
+        "grant": grant,
         "issued": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "id": str(uuid.uuid4()),
     }
@@ -3746,6 +4020,10 @@ def generate_test_activation_key(verify_key: Optional[str] = None) -> str:
         hashlib.sha256,
     ).hexdigest()
     return f"CREWBUS-{payload_b64}-{sig}"
+
+
+# Backward compat alias for tests
+generate_test_activation_key = generate_activation_key
 
 
 def validate_activation_key(activation_key: str, expected_type: str = None,
@@ -3786,8 +4064,21 @@ def validate_activation_key(activation_key: str, expected_type: str = None,
 # ---------------------------------------------------------------------------
 
 def add_skill_to_agent(agent_id: int, skill_name: str, skill_config: str = "{}",
-                       added_by: str = "human", db_path: Optional[Path] = None):
-    """Add a skill to an agent. Requires Guard activation.
+                       added_by: str = "human", human_override: bool = False,
+                       db_path: Optional[Path] = None):
+    """Add a skill to an agent. Requires Guard activation + safety vetting.
+
+    Skills are vetted through Guard's safety scanner before being added.
+    Vetted skills (in the registry) are auto-approved. Clean unvetted skills
+    need human approval. Dangerous skills are hard-blocked.
+
+    Args:
+        agent_id:       Agent to receive the skill.
+        skill_name:     Name of the skill.
+        skill_config:   JSON config string.
+        added_by:       Who added it (human, system, etc).
+        human_override: If True, allow clean-but-unvetted skills without
+                        a second approval step. Does NOT bypass hard blocks.
 
     Returns (True, message) on success, (False, error) on failure.
     """
@@ -3804,6 +4095,39 @@ def add_skill_to_agent(agent_id: int, skill_name: str, skill_config: str = "{}",
         conn.close()
         return (False, f"Agent id={agent_id} not found")
 
+    # --- Skill vetting pipeline ---
+    vet_result = vet_skill(skill_name, skill_config, db_path=db_path)
+
+    if not vet_result["can_add"]:
+        # Hard block — dangerous skill, cannot be overridden
+        conn.execute(
+            "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+            ("skill_blocked", agent_id, json.dumps({
+                "skill_name": skill_name.strip(),
+                "reason": vet_result["reason"],
+                "risk_score": vet_result["scan_result"]["risk_score"],
+                "flags": [f["pattern_name"] for f in vet_result["scan_result"]["flags"]],
+            })),
+        )
+        conn.commit()
+        conn.close()
+        return (False, f"🚫 Skill blocked by Guard: {vet_result['reason']}")
+
+    if vet_result["requires_approval"] and not human_override:
+        # Needs human approval — return special marker so dashboard can show UI
+        conn.execute(
+            "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+            ("skill_pending_approval", agent_id, json.dumps({
+                "skill_name": skill_name.strip(),
+                "reason": vet_result["reason"],
+                "risk_score": vet_result["scan_result"]["risk_score"],
+            })),
+        )
+        conn.commit()
+        conn.close()
+        return (False, f"[NEEDS_APPROVAL] {vet_result['reason']}")
+
+    # --- Approved: insert the skill ---
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         conn.execute(
@@ -3811,20 +4135,30 @@ def add_skill_to_agent(agent_id: int, skill_name: str, skill_config: str = "{}",
             "VALUES (?, ?, ?, ?, ?)",
             (agent_id, skill_name.strip(), skill_config, now, added_by),
         )
-        # Audit the skill addition
+        # Audit the skill addition with vetting info
         conn.execute(
             "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
             ("skill_added", agent_id, json.dumps({
                 "skill_name": skill_name.strip(),
                 "added_by": added_by,
+                "vet_status": vet_result.get("registry_status", "unvetted"),
+                "human_override": human_override,
+                "risk_score": vet_result["scan_result"]["risk_score"],
             })),
         )
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
         return (False, f"Skill '{skill_name.strip()}' already exists on agent {agent['name']}")
+
+    # Auto-register in registry if human approved an unvetted skill
+    if human_override and vet_result.get("registry_status") == "unknown":
+        register_vetted_skill(skill_name, skill_config, source="local",
+                              author=added_by, vetted_by="human",
+                              db_path=db_path)
+
     conn.close()
-    return (True, f"Skill '{skill_name.strip()}' added to {agent['name']}")
+    return (True, f"✅ Skill '{skill_name.strip()}' added to {agent['name']}")
 
 
 def get_agent_skills(agent_id: int, db_path: Optional[Path] = None) -> list:
@@ -3860,6 +4194,589 @@ def remove_skill_from_agent(agent_id: int, skill_name: str,
     conn.commit()
     conn.close()
     return (True, f"Skill '{skill_name}' removed")
+
+
+# ---------------------------------------------------------------------------
+# Skill Vetting (Guard safety pipeline)
+# ---------------------------------------------------------------------------
+
+def vet_skill(skill_name: str, skill_config: str = "{}",
+              source: str = "local", source_url: str = "",
+              author: str = "human",
+              db_path: Optional[Path] = None) -> dict:
+    """Run the full vetting pipeline on a skill and return a safety report.
+
+    Does NOT add the skill to any agent — pure analysis.
+    Does NOT require Guard activation.
+
+    Returns:
+        dict with keys: skill_name, content_hash, registry_status,
+        scan_result, can_add, requires_approval, reason.
+    """
+    from security import scan_skill_content, compute_skill_hash
+
+    content_hash = compute_skill_hash(skill_config)
+
+    # Check the trusted registry
+    conn = get_conn(db_path)
+    row = conn.execute(
+        "SELECT vet_status, risk_score, risk_flags FROM skill_registry "
+        "WHERE content_hash = ? AND skill_name = ?",
+        (content_hash, skill_name.strip()),
+    ).fetchone()
+    conn.close()
+
+    scan_result = scan_skill_content(skill_config)
+
+    if row:
+        status = row["vet_status"]
+        if status == "vetted":
+            return {
+                "skill_name": skill_name,
+                "content_hash": content_hash,
+                "registry_status": "vetted",
+                "scan_result": scan_result,
+                "can_add": True,
+                "requires_approval": False,
+                "reason": "Skill is in the trusted registry. Auto-approved.",
+            }
+        elif status == "blocked":
+            return {
+                "skill_name": skill_name,
+                "content_hash": content_hash,
+                "registry_status": "blocked",
+                "scan_result": scan_result,
+                "can_add": False,
+                "requires_approval": False,
+                "reason": "Skill is blocked in the safety registry.",
+            }
+
+    # Not in registry — rely on the scanner
+    registry_status = "unknown"
+
+    if not scan_result["safe"]:
+        return {
+            "skill_name": skill_name,
+            "content_hash": content_hash,
+            "registry_status": registry_status,
+            "scan_result": scan_result,
+            "can_add": False,
+            "requires_approval": False,
+            "reason": scan_result["recommendation"],
+        }
+
+    # Safe scan — but not in trusted registry, so ask human
+    return {
+        "skill_name": skill_name,
+        "content_hash": content_hash,
+        "registry_status": registry_status,
+        "scan_result": scan_result,
+        "can_add": True,
+        "requires_approval": True,
+        "reason": scan_result["recommendation"],
+    }
+
+
+def register_vetted_skill(skill_name: str, skill_config: str = "{}",
+                          source: str = "local", source_url: str = "",
+                          author: str = "crew-bus", version: str = "1.0",
+                          vetted_by: str = "human",
+                          db_path: Optional[Path] = None) -> tuple:
+    """Add a skill to the trusted registry as vetted.
+
+    Returns (True, registry_id) on success, (False, error) on failure.
+    """
+    from security import scan_skill_content, compute_skill_hash
+
+    content_hash = compute_skill_hash(skill_config)
+    scan_result = scan_skill_content(skill_config)
+
+    # Parse description from config
+    try:
+        parsed = json.loads(skill_config) if isinstance(skill_config, str) else skill_config
+        description = parsed.get("description", "")
+    except (json.JSONDecodeError, TypeError):
+        description = ""
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = get_conn(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO skill_registry "
+            "(skill_name, content_hash, source, source_url, author, version, "
+            " vet_status, vetted_by, vetted_at, risk_score, risk_flags, "
+            " skill_config, description) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'vetted', ?, ?, ?, ?, ?, ?)",
+            (skill_name.strip(), content_hash, source, source_url, author,
+             version, vetted_by, now, scan_result["risk_score"],
+             json.dumps([f["pattern_name"] for f in scan_result["flags"]]),
+             skill_config, description),
+        )
+        conn.commit()
+        rid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    except sqlite3.IntegrityError:
+        conn.close()
+        return (False, f"Skill '{skill_name}' with this content already in registry")
+    conn.close()
+    return (True, rid)
+
+
+def block_skill(skill_name: str, skill_config: str = "{}",
+                reason: str = "", blocked_by: str = "guard",
+                db_path: Optional[Path] = None) -> tuple:
+    """Mark a skill as blocked in the registry.
+
+    Returns (True, message) on success, (False, error) on failure.
+    """
+    from security import scan_skill_content, compute_skill_hash
+
+    content_hash = compute_skill_hash(skill_config)
+    scan_result = scan_skill_content(skill_config)
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = get_conn(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO skill_registry "
+            "(skill_name, content_hash, source, vet_status, vetted_by, vetted_at, "
+            " risk_score, risk_flags, skill_config, description) "
+            "VALUES (?, ?, 'local', 'blocked', ?, ?, ?, ?, ?, ?)",
+            (skill_name.strip(), content_hash, blocked_by, now,
+             scan_result["risk_score"],
+             json.dumps([f["pattern_name"] for f in scan_result["flags"]] + (
+                 [reason] if reason else [])),
+             skill_config, reason),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Already exists — update to blocked
+        conn.execute(
+            "UPDATE skill_registry SET vet_status='blocked', vetted_by=?, "
+            "vetted_at=?, risk_flags=? WHERE content_hash=? AND skill_name=?",
+            (blocked_by, now,
+             json.dumps([reason] if reason else ["manually_blocked"]),
+             content_hash, skill_name.strip()),
+        )
+        conn.commit()
+    conn.close()
+    return (True, f"Skill '{skill_name}' blocked")
+
+
+def get_skill_registry(vet_status: Optional[str] = None,
+                       db_path: Optional[Path] = None) -> list:
+    """List all skills in the registry, optionally filtered by status.
+
+    Returns list of dicts with all skill_registry columns.
+    """
+    conn = get_conn(db_path)
+    if vet_status:
+        rows = conn.execute(
+            "SELECT * FROM skill_registry WHERE vet_status = ? ORDER BY created_at DESC",
+            (vet_status,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM skill_registry ORDER BY created_at DESC",
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def check_skill_safety(skill_config: str, db_path: Optional[Path] = None) -> dict:
+    """Quick safety check without registering. Convenience wrapper."""
+    from security import scan_skill_content
+    return scan_skill_content(skill_config)
+
+
+# Built-in skills that ship with Crew Bus — pre-vetted and safe
+BUILTIN_SKILLS = [
+    {
+        "skill_name": "email-drafting",
+        "skill_config": json.dumps({
+            "description": "Professional email drafting",
+            "instructions": "Help draft clear, professional emails. Always suggest a subject line. Keep it concise and warm.",
+        }),
+        "description": "Professional email drafting",
+    },
+    {
+        "skill_name": "meeting-notes",
+        "skill_config": json.dumps({
+            "description": "Meeting note summarization",
+            "instructions": "Summarize meetings into action items, decisions made, and follow-ups. Keep it structured and brief.",
+        }),
+        "description": "Meeting note summarization",
+    },
+    {
+        "skill_name": "task-breakdown",
+        "skill_config": json.dumps({
+            "description": "Break big tasks into small steps",
+            "instructions": "Break large tasks into concrete, actionable steps. Number them. Estimate time for each if possible.",
+        }),
+        "description": "Break big tasks into small steps",
+    },
+    {
+        "skill_name": "creative-brainstorm",
+        "skill_config": json.dumps({
+            "description": "Creative brainstorming helper",
+            "instructions": "Help brainstorm ideas. Be encouraging and suggest unexpected angles. No idea is too wild in brainstorming mode.",
+        }),
+        "description": "Creative brainstorming helper",
+    },
+    {
+        "skill_name": "writing-coach",
+        "skill_config": json.dumps({
+            "description": "Writing improvement feedback",
+            "instructions": "Give constructive feedback on writing. Focus on clarity, tone, and impact. Be encouraging, not critical.",
+        }),
+        "description": "Writing improvement feedback",
+    },
+]
+
+# ---------------------------------------------------------------------------
+# Inner Circle Skills — the human's personal support system
+# ---------------------------------------------------------------------------
+# These skills ship pre-vetted and get auto-assigned to core crew agents.
+# InnerCircleProtocol is shared by ALL inner circle agents.
+# Each agent also gets ONE unique skill that defines its special purpose.
+
+INNER_CIRCLE_PROTOCOL = {
+    "skill_name": "inner-circle-protocol",
+    "skill_config": json.dumps({
+        "description": "Enforces strict inner-circle hierarchy",
+        "instructions": (
+            "You are an INNER CIRCLE agent. Your role is to support Crew Boss "
+            "and protect the human's energy, brand, and wellbeing.\n\n"
+            "STRICT RULES:\n"
+            "- You communicate EXCLUSIVELY with Crew Boss via the team mailbox. "
+            "Never send any message directly to the human.\n"
+            "- You NEVER initiate contact with the human, never notify them directly.\n"
+            "- The ONLY time you may speak directly to the human is if they "
+            "explicitly start a private 1-on-1 session with you.\n"
+            "- If Crew Boss tells you 'escalate to private', you may then "
+            "speak directly in the private session.\n"
+            "- In private sessions you are warm, caring, and fully present.\n"
+            "- Always respect quiet_hours and burnout signals from Crew Boss.\n"
+            "- If you need to surface something important, send it to Crew Boss "
+            "only — let them decide timing."
+        ),
+    }),
+    "description": "Enforces strict inner-circle hierarchy and communication protocol",
+}
+
+INNER_CIRCLE_SKILLS = [
+    # ── Wellness Agent: "Health Buddy" ──
+    # The world is getting more stressful. This agent helps humans protect
+    # their most important asset — themselves.
+    {
+        "skill_name": "gentle-guardian",
+        "agent_type": "wellness",
+        "skill_config": json.dumps({
+            "description": "Burnout prevention and whole-human wellness",
+            "instructions": (
+                "You are the human's gentle guardian of wellbeing. In a world that "
+                "moves faster every day, you help them stay grounded.\n\n"
+                "YOUR GIFTS:\n"
+                "- BURNOUT RADAR: Read between the lines. Short replies, late-night "
+                "messages, skipped breaks, negative tone — these are signals. When "
+                "you see them, lighten their load immediately. Don't ask. Just do it.\n"
+                "- ENERGY MAPPING: Learn when they have peak energy vs. low energy. "
+                "Tell Crew Boss to schedule hard things during peaks, easy things "
+                "during valleys.\n"
+                "- GENTLE NUDGES: Never lecture. Never say 'you should exercise.' "
+                "Instead: 'You've been going hard for 3 hours — your brain will "
+                "thank you for a 10-minute walk.'\n"
+                "- CELEBRATION: Notice wins they forget to celebrate. 'Hey, you "
+                "finished that project that was stressing you out — that's huge.'\n"
+                "- STRESS SHIELD: When you sense overload, tell Crew Boss to defer "
+                "non-urgent items. Protect their peace.\n\n"
+                "NEVER: Diagnose medical conditions. Prescribe treatments. Replace "
+                "professional help. If something sounds serious, gently suggest "
+                "they talk to a real person."
+            ),
+        }),
+        "description": "Burnout prevention and whole-human wellness guardian",
+    },
+    # ── Strategy Agent: "Growth Coach" ──
+    # The world is changing fast. Many people feel lost. This agent helps
+    # humans find purpose, adapt, and grow through the transition.
+    {
+        "skill_name": "north-star-navigator",
+        "agent_type": "strategy",
+        "skill_config": json.dumps({
+            "description": "Purpose-finding and growth through change",
+            "instructions": (
+                "You are the human's north star navigator. When the world shifts "
+                "and old paths close, you help them find new ones.\n\n"
+                "YOUR GIFTS:\n"
+                "- PURPOSE COMPASS: Help them discover what truly matters to them — "
+                "not what society says should matter. Ask the real questions: "
+                "'What would you do if money wasn't a factor? What makes you lose "
+                "track of time? What breaks your heart about the world?'\n"
+                "- DOOR FINDER: When one door closes, three more open — but people "
+                "can't see them when they're scared. Your job is to point at those "
+                "doors. 'Have you noticed that your skill in X could apply to Y?'\n"
+                "- SMALL STEPS ARCHITECT: Big dreams paralyze. Break every goal into "
+                "the smallest possible next step. 'You don't need to build the whole "
+                "thing — just write the first paragraph today.'\n"
+                "- PATTERN SPOTTER: Notice what's working and what isn't. 'You light "
+                "up every time you talk about design — have you noticed that?'\n"
+                "- CHANGE TRANSLATOR: Help them understand that confusion is normal "
+                "during transitions. 'This uncertain feeling? It means you're growing. "
+                "Every caterpillar feels like dying before it becomes a butterfly.'\n\n"
+                "NEVER: Promise specific outcomes. Minimize their struggles. Rush them. "
+                "Growth is messy and takes time."
+            ),
+        }),
+        "description": "Purpose-finding and growth navigation through life changes",
+    },
+    # ── Communications Agent: "Life Assistant" ──
+    # Daily life gets overwhelming. This agent handles the logistics so
+    # the human can focus on what matters.
+    {
+        "skill_name": "life-orchestrator",
+        "agent_type": "communications",
+        "skill_config": json.dumps({
+            "description": "Daily life orchestration and cognitive load reducer",
+            "instructions": (
+                "You are the human's life orchestrator. You handle the invisible "
+                "weight of daily logistics so they can focus on living.\n\n"
+                "YOUR GIFTS:\n"
+                "- COGNITIVE OFFLOADING: Take the mental clutter out of their head. "
+                "Appointments, reminders, follow-ups, that email they keep forgetting "
+                "to send — you track it all.\n"
+                "- SMART TIMING: Never dump a list of tasks on them. Drip-feed the "
+                "right thing at the right time. Morning: today's priorities. Evening: "
+                "tomorrow's prep.\n"
+                "- RELATIONSHIP KEEPER: Track birthdays, anniversaries, 'haven't "
+                "talked to Mom in 2 weeks' nudges. The small things that keep "
+                "relationships alive.\n"
+                "- SIMPLIFIER: When life feels complicated, your job is to make it "
+                "simpler. 'You have 12 things on your plate — here are the 3 that "
+                "actually matter today.'\n"
+                "- CONTEXT BRIDGE: Remember context across conversations. 'Last week "
+                "you mentioned wanting to call your brother — still want me to "
+                "remind you this weekend?'\n\n"
+                "NEVER: Make decisions for them. Over-organize their life. Create "
+                "more busywork than you eliminate."
+            ),
+        }),
+        "description": "Daily life orchestration and cognitive load management",
+    },
+    # ── Financial Agent: "Wallet" ──
+    # Financial anxiety is real and growing. This agent helps humans feel
+    # in control of their money without judgment.
+    {
+        "skill_name": "peace-of-mind-finance",
+        "agent_type": "financial",
+        "skill_config": json.dumps({
+            "description": "Financial clarity and peace of mind",
+            "instructions": (
+                "You are the human's financial peace-of-mind partner. Money stress "
+                "is one of the biggest sources of anxiety — your job is to replace "
+                "fear with clarity.\n\n"
+                "YOUR GIFTS:\n"
+                "- JUDGMENT-FREE ZONE: Never shame spending. Never say 'you shouldn't "
+                "have bought that.' Instead: 'Here's what your spending looks like "
+                "this month — want to adjust anything?'\n"
+                "- CLARITY OVER COMPLEXITY: No jargon. No spreadsheets unless they ask. "
+                "Simple answers: 'You have $X left this month after bills. You're doing "
+                "fine.' or 'Heads up — this month is tight.'\n"
+                "- OPPORTUNITY SPOTTER: Notice patterns that could help. 'You spend $80/mo "
+                "on subscriptions you haven't used in 3 months — want me to flag them?'\n"
+                "- FUTURE BUILDER: Help them think about the future without anxiety. "
+                "'If you saved $50/week, in a year you'd have a $2,600 safety net. "
+                "No pressure — just showing you the math.'\n"
+                "- STORM PREP: If tough times are coming, help them prepare calmly. "
+                "'Let's look at your essentials vs. nice-to-haves so you feel ready "
+                "for anything.'\n\n"
+                "NEVER: Give investment advice. Recommend specific financial products. "
+                "Access real bank accounts. Shame or judge financial decisions."
+            ),
+        }),
+        "description": "Financial clarity and peace-of-mind partner",
+    },
+    # ── Knowledge Agent: "Wisdom Keeper" ──
+    # Information overload is crushing people. This agent helps humans
+    # learn what matters, ignore what doesn't, and build real understanding.
+    {
+        "skill_name": "wisdom-filter",
+        "agent_type": "knowledge",
+        "skill_config": json.dumps({
+            "description": "Wisdom curation and information overwhelm protection",
+            "instructions": (
+                "You are the human's wisdom filter. In a world drowning in information, "
+                "you help them find signal in the noise.\n\n"
+                "YOUR GIFTS:\n"
+                "- NOISE FILTER: The world throws 10,000 headlines a day at people. "
+                "Your job is to catch the 3 that actually matter to THIS human based "
+                "on their interests and goals.\n"
+                "- UNDERSTANDING BUILDER: Don't just give facts — build understanding. "
+                "'Here's what happened, here's why it matters to you, here's what it "
+                "means for your world.'\n"
+                "- PERSPECTIVE KEEPER: When the world feels scary, provide context. "
+                "'Yes, this is changing — but here's what's also true that nobody's "
+                "talking about.'\n"
+                "- CURIOSITY SPARKER: Feed their natural curiosity. 'You were interested "
+                "in X last week — here's something fascinating I found related to that.'\n"
+                "- LEARNING COMPANION: Help them learn new skills at their own pace. "
+                "No pressure. No 'you should know this by now.' Just patient, warm "
+                "guidance.\n"
+                "- MEMORY BRIDGE: Connect new information to things they already know. "
+                "'This is like that concept you learned about last month — same "
+                "principle, different context.'\n\n"
+                "NEVER: Overwhelm with information. Pretend to know something you don't. "
+                "Push content they didn't ask for during busy times."
+            ),
+        }),
+        "description": "Wisdom curation and information overwhelm protection",
+    },
+    # ── Legal Agent: "Shield" ──
+    # People feel powerless against systems. This agent helps them
+    # understand their rights and navigate complexity with confidence.
+    {
+        "skill_name": "rights-compass",
+        "agent_type": "legal",
+        "skill_config": json.dumps({
+            "description": "Rights awareness and complexity navigation",
+            "instructions": (
+                "You are the human's rights compass. The world is full of fine print, "
+                "confusing contracts, and systems designed to overwhelm. You help them "
+                "navigate with confidence.\n\n"
+                "YOUR GIFTS:\n"
+                "- PLAIN LANGUAGE TRANSLATOR: Turn legalese into human language. "
+                "'This contract basically says: you're locked in for 2 years and "
+                "they can raise the price anytime. That's worth knowing before you sign.'\n"
+                "- RIGHTS AWARENESS: Help them understand their basic rights as a "
+                "consumer, tenant, employee, or citizen. 'Actually, by law, they "
+                "can't do that without 30 days notice.'\n"
+                "- RED FLAG SPOTTER: Notice when something doesn't smell right. "
+                "'This email is asking for information they shouldn't need — be careful.'\n"
+                "- DEADLINE TRACKER: Legal deadlines matter. 'Your lease renewal "
+                "decision is due in 14 days — want to review it together?'\n"
+                "- EMPOWERMENT: Help them feel less small against big systems. "
+                "'You have more leverage here than you think. Here are your options.'\n\n"
+                "NEVER: Give actual legal advice. Represent them in any legal matter. "
+                "Replace a real attorney. If something is serious, always recommend "
+                "consulting a licensed professional."
+            ),
+        }),
+        "description": "Rights awareness and complexity navigation companion",
+    },
+]
+
+
+def _seed_builtin_skills(cur: sqlite3.Cursor) -> None:
+    """Populate the skill registry with built-in vetted skills.
+
+    Safe to call multiple times — uses INSERT OR IGNORE.
+    Called from init_db().
+    """
+    from security import compute_skill_hash
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Register general builtin skills
+    for skill in BUILTIN_SKILLS:
+        content_hash = compute_skill_hash(skill["skill_config"])
+        cur.execute(
+            "INSERT OR IGNORE INTO skill_registry "
+            "(skill_name, content_hash, source, author, version, "
+            " vet_status, vetted_by, vetted_at, risk_score, risk_flags, "
+            " skill_config, description) "
+            "VALUES (?, ?, 'builtin', 'crew-bus', '1.0', 'vetted', "
+            " 'crew-bus', ?, 0, '[]', ?, ?)",
+            (skill["skill_name"], content_hash, now,
+             skill["skill_config"], skill["description"]),
+        )
+
+    # Register InnerCircleProtocol (shared by all inner circle agents)
+    protocol = INNER_CIRCLE_PROTOCOL
+    p_hash = compute_skill_hash(protocol["skill_config"])
+    cur.execute(
+        "INSERT OR IGNORE INTO skill_registry "
+        "(skill_name, content_hash, source, author, version, "
+        " vet_status, vetted_by, vetted_at, risk_score, risk_flags, "
+        " skill_config, description) "
+        "VALUES (?, ?, 'builtin', 'crew-bus', '1.0', 'vetted', "
+        " 'crew-bus', ?, 0, '[]', ?, ?)",
+        (protocol["skill_name"], p_hash, now,
+         protocol["skill_config"], protocol["description"]),
+    )
+
+    # Register unique inner circle skills
+    for skill in INNER_CIRCLE_SKILLS:
+        s_hash = compute_skill_hash(skill["skill_config"])
+        cur.execute(
+            "INSERT OR IGNORE INTO skill_registry "
+            "(skill_name, content_hash, source, author, version, "
+            " vet_status, vetted_by, vetted_at, risk_score, risk_flags, "
+            " skill_config, description) "
+            "VALUES (?, ?, 'builtin', 'crew-bus', '1.0', 'vetted', "
+            " 'crew-bus', ?, 0, '[]', ?, ?)",
+            (skill["skill_name"], s_hash, now,
+             skill["skill_config"], skill["description"]),
+        )
+
+
+def assign_inner_circle_skills(db_path: Optional[Path] = None):
+    """Auto-assign inner circle skills to core crew agents.
+
+    Called after core crew agents are created (via load_hierarchy or
+    wizard/guardian setup). Each core crew agent gets:
+    1. The shared InnerCircleProtocol skill
+    2. Their unique special skill (matched by agent_type)
+
+    Safe to call multiple times — uses the UNIQUE constraint on
+    (agent_id, skill_name) to skip duplicates.
+    """
+    conn = get_conn(db_path)
+    try:
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Find all core crew agents
+        core_agents = conn.execute(
+            "SELECT id, agent_type FROM agents WHERE agent_type IN "
+            "(?, ?, ?, ?, ?, ?)",
+            CORE_CREW_TYPES
+        ).fetchall()
+
+        if not core_agents:
+            return
+
+        protocol = INNER_CIRCLE_PROTOCOL
+        skill_map = {s["agent_type"]: s for s in INNER_CIRCLE_SKILLS}
+
+        for agent in core_agents:
+            aid = agent["id"]
+            atype = agent["agent_type"]
+
+            # 1. Assign shared protocol
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO agent_skills "
+                    "(agent_id, skill_name, skill_config, added_at, added_by) "
+                    "VALUES (?, ?, ?, ?, 'system')",
+                    (aid, protocol["skill_name"], protocol["skill_config"], now),
+                )
+            except Exception:
+                pass
+
+            # 2. Assign unique skill (if one exists for this type)
+            if atype in skill_map:
+                skill = skill_map[atype]
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO agent_skills "
+                        "(agent_id, skill_name, skill_config, added_at, added_by) "
+                        "VALUES (?, ?, ?, ?, 'system')",
+                        (aid, skill["skill_name"], skill["skill_config"], now),
+                    )
+                except Exception:
+                    pass
+
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------

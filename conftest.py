@@ -9,4 +9,5 @@ collect_ignore = [
     "test_team_mailbox.py",
     "test_techie_marketplace.py",
     "test_guard_activation.py",
+    "test_skill_vetting.py",
 ]

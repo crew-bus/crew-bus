@@ -28,27 +28,32 @@ On first launch, a setup Wizard walks you through configuration — pick your AI
 
 ## Features
 
-- **Crew Boss** — Your AI chief of staff. Powered by Kimi K2.5, Ollama, Claude, Groq, Gemini, or any OpenAI-compatible model.
+- **Crew Boss** — Your AI chief of staff. Powered by Kimi K2.5, Ollama, Claude, OpenAI, Groq, Gemini, or any OpenAI-compatible model.
 - **5 core agents** — Crew Boss, Guard, Wellness, Ideas, Wallet. Pre-configured and orbiting the center of your dashboard.
 - **Setup Wizard** — Guides new users through model selection, API key setup, and first team creation. Runs automatically on first launch.
-- **Team templates** — Business Management, Department, Freelance, Side Hustle, or Custom. Pick one, name it, and your team is live with a manager and workers.
+- **8 team templates** — 3 free (School, Passion Project, Household) + 5 paid (Business Management, Department, Freelance, Side Hustle, Custom). Pick one, name it, and your team is live.
+- **Up to 10 agents per team** — Each team gets a manager + up to 9 workers. Hire and terminate agents anytime.
+- **6 LLM providers** — Kimi K2.5 (free tier), Claude, OpenAI, Groq, Gemini, or Ollama (fully local). Per-agent model picker.
 - **Trust score (1–10)** — Controls how much Crew Boss handles autonomously. 1 = see everything. 10 = morning brief only.
 - **Burnout awareness** — When you're running hot, non-urgent messages get held for better timing.
 - **Private sessions** — Talk directly with any agent. 🔒 means private — not even Crew Boss sees the content.
 - **Team mailbox** — Any agent can escalate directly to you if something critical is being ignored. No message gets silenced.
-- **Dashboard PIN lock** — Optional PIN protects against accidental deletion. Auto-locks after idle. Kid-proof.
+- **Dashboard PIN lock** — Optional PIN protects against accidental deletion and unauthorized changes. Auto-locks after idle. Kid-proof.
+- **Guardian activation** — Unlock the Skill Store with a $29 one-time key. Adds threat monitoring, anomaly detection, and audit hardening.
+- **Auto-update** — One-click update button in the topbar + silent auto-updates every 24 hours.
 - **Desktop shortcut** — Auto-created on first launch. Works on macOS, Windows, and Linux.
 - **Visual dashboard** — Circle layout with status dots. Mobile-first. Auto-opens in your browser on startup.
+- **Activity time filters** — Today, 3-Day, Week, and Month views to see agent activity across different time windows.
 - **Full audit trail** — Every message, every decision, every routing event. Logged locally in SQLite.
 - **Runs on anything** — Python + SQLite. Works on a Raspberry Pi, a laptop, or a server.
 
 ## Pricing
 
-crew-bus itself is **free and open-source** (MIT). Paid add-ons unlock extra capabilities:
+crew-bus itself is **free and open-source** (MIT). Paid add-ons unlock extra team templates and capabilities:
 
 | Tier | Price | What You Get |
 |------|-------|-------------|
-| **Core** | **Free forever** | Full message bus, Crew Boss, 5 core agents, dashboard, private sessions, team mailbox, Wizard setup. MIT License. |
+| **Core** | **Free forever** | Full message bus, Crew Boss, 5 core agents, dashboard, private sessions, team mailbox, Wizard setup, 3 free team templates (School, Passion Project, Household). MIT License. |
 | **Guardian** | **$29 one-time** | Unlock the Skill Store — downloadable skills that make your agents smarter. Threat monitoring, anomaly detection, audit hardening. Lifetime activation key. |
 | **Business Management** | **$50/yr or $10 trial** | Full business team — Operations Lead, HR Coordinator, Finance Monitor, Strategy Advisor, Comms Manager. |
 | **Department** | **$25/yr or $5 trial** | Add-on department with manager + workers (Task Runner, Research Aide). |
@@ -56,7 +61,7 @@ crew-bus itself is **free and open-source** (MIT). Paid add-ons unlock extra cap
 | **Side Hustle** | **$30/yr or $5 trial** | Market Scout, Content Creator, Sales Tracker — launch and grow your idea. |
 | **Custom Team** | **$50/yr or $10 trial** | Build your own team from scratch with any agents you want. |
 
-No subscriptions on core. No cloud fees. No hidden charges. Payments via Stripe.
+Each team license covers one team. Need 3 departments? That's 3 licenses. No subscriptions on core. No cloud fees. No hidden charges. Payments via Stripe.
 
 ## Quick Start
 
@@ -146,16 +151,22 @@ Tap any agent to open their private space with activity feed and chat.
 
 ```
 crew-bus/
-├── bus.py              # Core message bus engine
-├── dashboard.py        # Web dashboard (localhost:8080)
-├── agent_worker.py     # LLM integration (Kimi, Ollama, Claude, Groq, Gemini)
-├── security.py         # Encryption & trust model
-├── cli.py              # Command-line interface
+├── bus.py              # Core message bus engine (~4,300 LOC)
+├── dashboard.py        # Web dashboard — localhost:8080 (~5,200 LOC)
+├── agent_worker.py     # LLM integration — 6 providers (~630 LOC)
+├── right_hand.py       # Crew Boss decision engine (~750 LOC)
+├── security.py         # Encryption & trust model (~790 LOC)
+├── cli.py              # CLI with 50+ commands (~1,100 LOC)
+├── agent_bridge.py     # OpenClaw agent bridge (~420 LOC)
+├── delivery.py         # Message delivery backends (~435 LOC)
+├── email_formatter.py  # Briefing email templates (~270 LOC)
 ├── configs/            # Agent hierarchy configs
 ├── examples/           # Ready-to-use crew configs
+├── deploy/             # Server deployment (nginx, etc.)
+├── public/             # Website (crew-bus.dev)
 ├── templates/          # HTML templates
 ├── conftest.py         # Pytest configuration
-├── test_agent_worker.py # Agent worker tests
+├── test_agent_worker.py # Agent worker tests (6 tests)
 └── README.md           # You are here
 ```
 
@@ -174,7 +185,7 @@ MIT — do whatever you want with it.
 
 ## Status
 
-Live and actively developed. Core bus, dashboard, private sessions, teams, Wizard setup, Guardian activation, Stripe payments, and desktop shortcuts are all working.
+Live and actively developed. Core bus, dashboard, private sessions, teams, Wizard setup, Guardian activation, Stripe payments, auto-updates, per-team licensing, and desktop shortcuts are all working.
 
 ---
 

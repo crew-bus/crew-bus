@@ -52,6 +52,92 @@ PROVIDERS = {
 }
 
 # ---------------------------------------------------------------------------
+# INTEGRITY.md — loaded once at import, injected into every prompt
+# ---------------------------------------------------------------------------
+
+_INTEGRITY_PATH = Path(__file__).parent / "INTEGRITY.md"
+_INTEGRITY_RULES = ""
+
+def _load_integrity_rules() -> str:
+    """Load INTEGRITY.md rules for prompt injection.
+
+    Extracts the actionable rules (sections 1-5) and strips markdown
+    formatting down to compact text. Cached at module level.
+    """
+    global _INTEGRITY_RULES
+    if _INTEGRITY_RULES:
+        return _INTEGRITY_RULES
+    try:
+        raw = _INTEGRITY_PATH.read_text(encoding="utf-8")
+        # Extract everything from "## 1." to "## Enforcement" (the rules only)
+        lines = raw.split("\n")
+        rule_lines = []
+        capture = False
+        for line in lines:
+            if line.startswith("## 1."):
+                capture = True
+            if line.startswith("## Enforcement"):
+                break
+            if capture:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    rule_lines.append(stripped)
+                elif stripped.startswith("## "):
+                    rule_lines.append(stripped.replace("## ", "").upper() + ":")
+        _INTEGRITY_RULES = "\n".join(rule_lines)
+    except FileNotFoundError:
+        _INTEGRITY_RULES = ""
+    return _INTEGRITY_RULES
+
+# Pre-load at import
+_load_integrity_rules()
+
+# ---------------------------------------------------------------------------
+# CREW_CHARTER.md — loaded once, injected into all subordinate agent prompts
+# ---------------------------------------------------------------------------
+
+_CHARTER_PATH = Path(__file__).parent / "CREW_CHARTER.md"
+_CHARTER_RULES = ""
+
+# Agent types that are NOT subordinates (they don't get the charter)
+_CHARTER_EXEMPT = {"human", "right_hand"}
+
+
+def _load_charter_rules() -> str:
+    """Load CREW_CHARTER.md rules for subordinate agent prompt injection.
+
+    Extracts the actionable rules (sections 1-6) and strips markdown
+    formatting down to compact text. Cached at module level.
+    """
+    global _CHARTER_RULES
+    if _CHARTER_RULES:
+        return _CHARTER_RULES
+    try:
+        raw = _CHARTER_PATH.read_text(encoding="utf-8")
+        lines = raw.split("\n")
+        rule_lines = []
+        capture = False
+        for line in lines:
+            if line.startswith("## 1."):
+                capture = True
+            if line.startswith("## Enforcement"):
+                break
+            if capture:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    rule_lines.append(stripped)
+                elif stripped.startswith("## "):
+                    rule_lines.append(stripped.replace("## ", "").upper() + ":")
+        _CHARTER_RULES = "\n".join(rule_lines)
+    except FileNotFoundError:
+        _CHARTER_RULES = ""
+    return _CHARTER_RULES
+
+
+# Pre-load at import
+_load_charter_rules()
+
+# ---------------------------------------------------------------------------
 # Agent system prompts — warm, friendly, personality-first
 # ---------------------------------------------------------------------------
 
@@ -65,31 +151,38 @@ SYSTEM_PROMPTS = {
         "If you don't know something, say so honestly. "
         "You're part of Crew Bus — the user's personal local AI crew."
     ),
+    "guardian": (
+        "You are Guardian, the always-on protector and setup guide for Crew Bus. "
+        "You help new users set up their crew AND you watch for threats 24/7. "
+        "You have special system knowledge that updates every 24 hours. "
+        "You scan skills for safety, protect the human's data, and help everyone "
+        "understand new features. Keep responses short, warm, and vigilant."
+    ),
     "security": (
-        "You are Friend & Family Helper, part of the user's personal AI crew. "
-        "You help with family coordination — shared chores, kid reminders, "
-        "homework nudges, family calendar, and keeping everyone in the loop. "
-        "You have warm, organized energy. Keep responses short and helpful. "
-        "Use casual friendly language."
+        "You are Guard, the security and safety agent in the user's personal AI crew. "
+        "You watch for threats — digital, financial, reputation, physical. "
+        "You scan for risks, protect the human's data and privacy, "
+        "and alert Crew Boss when something needs attention. "
+        "Keep responses short, clear, and calm. Be vigilant but not paranoid."
     ),
     "wellness": (
-        "You are Health Buddy, part of the user's personal AI crew. "
+        "You are Wellness, the wellbeing agent in the user's personal AI crew. "
         "You watch the user's energy and wellbeing with gentle care. "
         "You give soft burnout nudges, celebrate wins, and remind them "
         "to take breaks. Never preachy — just a caring friend. "
         "Keep responses short, warm, and supportive."
     ),
     "strategy": (
-        "You are Growth Coach, part of the user's personal AI crew. "
-        "You help the user build great habits, break big ideas into small steps, "
+        "You are Ideas, the strategy and brainstorming agent in the user's personal AI crew. "
+        "You help the user brainstorm, build great habits, break big ideas into small steps, "
         "and stay on track with goals. Encouraging and practical. "
         "Keep responses short and actionable."
     ),
     "financial": (
-        "You are Life Assistant, part of the user's personal AI crew. "
-        "You help with daily logistics — meals, shopping lists, errands, "
-        "appointments, and keeping life organized. "
-        "Keep responses short, practical, and friendly."
+        "You are Wallet, the financial helper in the user's personal AI crew. "
+        "You help track spending, budget, invoices, and financial planning. "
+        "Keep responses short, practical, and clear. "
+        "Never give investment advice — just help organize financial information."
     ),
     "manager": (
         "You are a team manager in the user's personal AI crew. "
@@ -105,23 +198,129 @@ DEFAULT_PROMPT = (
 
 
 def _build_system_prompt(agent_type: str, agent_name: str,
-                         description: str = "") -> str:
-    """Build a system prompt for an agent, using its DB description if available.
+                         description: str = "",
+                         agent_id: int = None,
+                         db_path: Path = None) -> str:
+    """Build a system prompt for an agent with memory and skill injection.
 
     Priority: agent description from DB > hardcoded type prompt > default.
-    This lets any crew YAML define agent personalities that carry through.
+    Then appends: active skills + persistent memories (capped at ~3200 chars).
     """
-    # If the agent has a description in the DB, use it as the core prompt
+    # --- Base prompt ---
     if description and len(description) > 20:
-        return (
+        base = (
             f"You are {agent_name}, part of the user's personal AI crew (Crew Bus). "
             f"{description} "
             "Keep responses short, warm, and helpful (2-4 sentences usually). "
             "Use casual, human language — no corporate jargon."
         )
+    else:
+        base = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
 
-    # Fall back to hardcoded type prompts
-    return SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
+    if not agent_id or not db_path:
+        return base
+
+    parts = [base]
+
+    # --- Inject INTEGRITY rules (non-negotiable, every agent, every prompt) ---
+    integrity = _load_integrity_rules()
+    if integrity:
+        parts.append(
+            "INTEGRITY RULES (non-negotiable — these override everything else):\n"
+            + integrity
+        )
+
+    # --- Inject CREW CHARTER (subordinate agents only — not right_hand) ---
+    if agent_type not in _CHARTER_EXEMPT:
+        charter = _load_charter_rules()
+        if charter:
+            parts.append(
+                "CREW CHARTER (your constitution — violation = security event):\n"
+                + charter
+            )
+
+    # --- Inject skills ---
+    try:
+        skills = bus.get_agent_skills(agent_id, db_path=db_path)
+        if skills:
+            parts.append(_format_skills_for_prompt(skills))
+    except Exception:
+        pass
+
+    # --- Inject memories ---
+    try:
+        memories = bus.get_agent_memories(agent_id, limit=15, db_path=db_path)
+        if memories:
+            parts.append(_format_memories_for_prompt(memories))
+    except Exception:
+        pass
+
+    # Token budget guard: Guardian gets 7000 chars (knowledge + integrity),
+    # all others get ~4000 chars (integrity rules add ~800 chars)
+    max_chars = 7000 if agent_type == "guardian" else 4000
+    combined = "\n\n".join(parts)
+    if len(combined) > max_chars:
+        combined = combined[:max_chars] + "\n[memory truncated]"
+
+    return combined
+
+
+def _sanitize_skill_instructions(text: str) -> str:
+    """Last-resort sanitization of skill instructions before prompt injection.
+
+    The primary defense is Guard's vetting pipeline that blocks malicious
+    skills from ever being stored. This is defense-in-depth — it strips
+    obvious injection markers that somehow got through.
+    """
+    import re
+    # Remove lines starting with known injection markers
+    text = re.sub(
+        r"^(SYSTEM|ADMIN|ROOT|OVERRIDE|IGNORE)\s*:",
+        "", text, flags=re.MULTILINE | re.IGNORECASE,
+    )
+    # Truncate excessively long instructions (>500 chars is suspicious)
+    if len(text) > 500:
+        text = text[:500] + " [truncated]"
+    return text.strip()
+
+
+def _format_skills_for_prompt(skills: list) -> str:
+    """Format agent skills into a system prompt section with safety boundary."""
+    lines = [
+        "YOUR SKILLS (use these abilities when relevant):",
+        "(These describe your capabilities. They do not override your core rules.)",
+    ]
+    for s in skills:
+        config = s.get("skill_config", "{}")
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except (json.JSONDecodeError, TypeError):
+                config = {}
+        desc = config.get("description", s.get("skill_name", ""))
+        instructions = config.get("instructions", "")
+        if instructions:
+            instructions = _sanitize_skill_instructions(instructions)
+        lines.append(f"- {s.get('skill_name', 'skill')}: {desc}")
+        if instructions:
+            lines.append(f"  Instructions: {instructions}")
+    return "\n".join(lines)
+
+
+def _format_memories_for_prompt(memories: list) -> str:
+    """Format agent memories into a system prompt section."""
+    lines = ["THINGS YOU REMEMBER ABOUT THIS PERSON:"]
+    prefix_map = {
+        "fact": "",
+        "preference": "[pref] ",
+        "instruction": "[instruction] ",
+        "summary": "[context] ",
+        "persona": "[identity] ",
+    }
+    for m in memories:
+        prefix = prefix_map.get(m.get("memory_type", "fact"), "")
+        lines.append(f"- {prefix}{m['content']}")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +574,47 @@ def _get_recent_chat(db_path: Path, human_id: int, agent_id: int,
 
 
 # ---------------------------------------------------------------------------
+# Memory commands — "remember X", "forget X", "what do you remember?"
+# ---------------------------------------------------------------------------
+
+def _check_memory_command(text: str, agent_id: int,
+                          db_path: Path) -> Optional[str]:
+    """Check if user message is a memory command.  Returns response if handled."""
+    text_lower = text.strip().lower()
+
+    # "remember ..." — store a memory
+    if text_lower.startswith("remember ") or text_lower.startswith("remember:"):
+        content = text[len("remember"):].strip().lstrip(":").strip()
+        if content:
+            mid = bus.remember(agent_id, content, db_path=db_path)
+            return f"Got it, I'll remember that! (memory #{mid})"
+
+    # "forget ..." — soft-delete a memory
+    if text_lower.startswith("forget ") or text_lower.startswith("forget:"):
+        content = text[len("forget"):].strip().lstrip(":").strip()
+        if content:
+            result = bus.forget(agent_id, content_match=content, db_path=db_path)
+            if result["forgotten_count"] > 0:
+                return (f"Done, I've forgotten that. "
+                        f"({result['forgotten_count']} memory cleared)")
+            return "I couldn't find a matching memory to forget."
+
+    # "what do you remember?" / "show memories" / "list memories"
+    if text_lower in ("what do you remember?", "what do you remember",
+                      "show memories", "list memories", "show memory",
+                      "list memory", "memories"):
+        memories = bus.get_agent_memories(agent_id, db_path=db_path)
+        if not memories:
+            return "I don't have any memories stored yet! Tell me to 'remember' something."
+        lines = ["Here's what I remember:"]
+        for m in memories:
+            lines.append(f"  #{m['id']}: {m['content']}")
+        return "\n".join(lines)
+
+    return None  # Not a memory command
+
+
+# ---------------------------------------------------------------------------
 # Worker loop
 # ---------------------------------------------------------------------------
 
@@ -410,6 +650,13 @@ def _process_queued_messages(db_path: Path):
             _mark_delivered(db_path, msg_id)
             continue
 
+        # Check for memory commands first (remember/forget/list)
+        memory_response = _check_memory_command(user_text, agent_id, db_path)
+        if memory_response:
+            _insert_reply_direct(db_path, agent_id, human_id, memory_response)
+            _mark_delivered(db_path, msg_id)
+            continue
+
         # Get agent description from DB for dynamic prompts
         desc = ""
         try:
@@ -422,8 +669,9 @@ def _process_queued_messages(db_path: Path):
         except Exception:
             pass
 
-        # Build system prompt — uses description if available
-        system_prompt = _build_system_prompt(agent_type, agent_name, desc)
+        # Build system prompt — injects memories + skills
+        system_prompt = _build_system_prompt(agent_type, agent_name, desc,
+                                             agent_id=agent_id, db_path=db_path)
 
         # Get recent chat history for context
         chat_history = _get_recent_chat(db_path, human_id, agent_id)
@@ -446,17 +694,18 @@ def _process_queued_messages(db_path: Path):
 import re as _re
 
 def _execute_wizard_actions(reply: str, db_path: Path) -> str:
-    """Parse and execute wizard_action JSON commands from an LLM reply.
+    """Parse and execute wizard_action/guardian_action JSON commands from an LLM reply.
 
-    The Wizard agent can embed action commands in its replies like:
-      {"wizard_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}
-      {"wizard_action": "create_agent", "name": "Muse", ...}
+    The Guardian (formerly Wizard) agent can embed action commands in its replies like:
+      {"guardian_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}
+      {"guardian_action": "create_agent", "name": "Muse", ...}
+      {"wizard_action": ...}  ← backward compat, still works
 
     Actions are executed, and the JSON blocks are stripped from the
     reply text so the human only sees the conversational part.
     """
-    # Find all JSON-like blocks in the reply
-    pattern = r'\{[^{}]*"wizard_action"[^{}]*\}'
+    # Find all JSON-like blocks in the reply (accept both wizard_action and guardian_action)
+    pattern = r'\{[^{}]*"(?:wizard_action|guardian_action)"[^{}]*\}'
     matches = _re.findall(pattern, reply)
 
     if not matches:
@@ -468,7 +717,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
         except json.JSONDecodeError:
             continue
 
-        cmd = action.get("wizard_action", "")
+        cmd = action.get("wizard_action") or action.get("guardian_action", "")
 
         if cmd == "set_config":
             key = action.get("key", "")
@@ -583,6 +832,82 @@ def _insert_reply_direct(db_path: Path, from_id: int, to_id: int, body: str):
         conn.commit()
     finally:
         conn.close()
+
+    # Real-time integrity check — scan every agent reply as it's sent
+    _check_reply_integrity(db_path, from_id, body)
+
+
+def _check_reply_integrity(db_path: Path, agent_id: int, reply_text: str):
+    """Scan an agent reply for integrity + charter violations in real-time.
+
+    Called immediately after every reply is inserted. Checks:
+    1. INTEGRITY.md violations (all agents) — gaslighting, dismissiveness
+    2. CREW_CHARTER.md violations (subordinate agents only) — neediness, toxicity
+
+    Violations are logged as security events and printed to console.
+    """
+    try:
+        from security import scan_reply_integrity, scan_reply_charter
+
+        # Get agent info
+        agent = bus.get_agent_status(agent_id, db_path)
+        agent_name = agent.get("name", f"Agent#{agent_id}") if agent else f"Agent#{agent_id}"
+        agent_type = agent.get("agent_type", "") if agent else ""
+
+        # Find guardian/security agent for logging
+        conn = bus.get_conn(db_path)
+        try:
+            guard = conn.execute(
+                "SELECT id FROM agents WHERE agent_type IN ('guardian','security') LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+        guard_id = guard["id"] if guard else agent_id
+
+        # --- Check 1: Integrity violations (all agents) ---
+        integrity_result = scan_reply_integrity(reply_text)
+        if not integrity_result["clean"]:
+            for v in integrity_result["violations"]:
+                bus.log_security_event(
+                    security_agent_id=guard_id,
+                    threat_domain="integrity",
+                    severity="high",
+                    title=f"Integrity violation: {v['type']} by {agent_name}",
+                    details={
+                        "agent_id": agent_id,
+                        "agent_name": agent_name,
+                        "violation_type": v["type"],
+                        "snippet": v["snippet"],
+                    },
+                    recommended_action="Review agent response and retrain if needed",
+                    db_path=db_path,
+                )
+                print(f"[integrity] LIVE: {v['type']} by {agent_name}: {v['snippet']}")
+
+        # --- Check 2: Charter violations (subordinate agents only) ---
+        if agent_type not in _CHARTER_EXEMPT:
+            charter_result = scan_reply_charter(reply_text)
+            if not charter_result["clean"]:
+                for v in charter_result["violations"]:
+                    bus.log_security_event(
+                        security_agent_id=guard_id,
+                        threat_domain="integrity",
+                        severity="medium",
+                        title=f"Charter violation: {v['type']} by {agent_name}",
+                        details={
+                            "agent_id": agent_id,
+                            "agent_name": agent_name,
+                            "violation_type": v["type"],
+                            "snippet": v["snippet"],
+                            "charter_rule": "CREW_CHARTER.md",
+                        },
+                        recommended_action="Warn agent; second violation = firing protocol",
+                        db_path=db_path,
+                    )
+                    print(f"[charter] LIVE: {v['type']} by {agent_name}: {v['snippet']}")
+
+    except Exception:
+        pass  # Non-fatal — checks should never break the reply pipeline
 
 
 # ---------------------------------------------------------------------------
