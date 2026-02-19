@@ -1651,6 +1651,53 @@ async function loadCircle(){
   if(td)td.textContent=stats.trust_score||1;
 
   loadTeams();
+  loadGuardianBanner();
+}
+
+async function loadGuardianBanner(){
+  var el=document.getElementById('guardian-banner');
+  if(!el)return;
+  try{
+    var s=await api('/api/guard/status');
+    if(s&&s.activated){el.style.display='none';return;}
+  }catch(e){}
+  el.style.display='block';
+  el.innerHTML='<div style="margin:16px 0;padding:18px 20px;background:linear-gradient(135deg,#2a2000,#1a1500);border:1px solid #d1861644;border-radius:12px">'+
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'+
+    '<span style="font-size:1.8rem">\u{1F6E1}\uFE0F</span>'+
+    '<div><div style="font-size:1rem;font-weight:700;color:#d18616">Unlock the Guardian</div>'+
+    '<div style="font-size:.8rem;color:var(--mu)">Access the Skill Store \u2014 downloadable skills that make your agents smarter</div></div></div>'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+    '<button onclick="showGuardianCheckout()" style="background:#d18616;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">\u{1F6D2} Buy Guardian \u2014 $29 one-time</button>'+
+    '<div style="display:flex;gap:6px;flex:1;min-width:200px">'+
+    '<input id="guardian-key-main" type="text" placeholder="Have an activation key? Paste here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 12px;color:var(--fg);font-size:.85rem">'+
+    '<button onclick="activateGuardianFromBanner()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div></div>'+
+    '<div id="guardian-banner-msg" style="margin-top:8px;font-size:.8rem;min-height:1em"></div></div>';
+}
+
+function showGuardianCheckout(){
+  var msgEl=document.getElementById('guardian-banner-msg');
+  if(msgEl)msgEl.innerHTML='<span style="color:var(--ac)">Opening checkout\u2026</span>';
+  window.open('https://crew-bus.dev/checkout/guardian/one-time','_blank');
+  if(msgEl)msgEl.innerHTML='<span style="color:var(--ac)">\u2197\uFE0F Checkout opened in new tab. After paying, paste your activation key above and click Activate.</span>';
+  var keyEl=document.getElementById('guardian-key-main');
+  if(keyEl){keyEl.placeholder='Paste activation key here...';keyEl.focus();}
+}
+
+async function activateGuardianFromBanner(){
+  var keyEl=document.getElementById('guardian-key-main');
+  var msgEl=document.getElementById('guardian-banner-msg');
+  var key=(keyEl?keyEl.value:'').trim();
+  if(!key){if(msgEl)msgEl.innerHTML='<span style="color:#e55">Please paste your activation key.</span>';return;}
+  try{
+    var r=await apiPost('/api/guard/activate',{key:key});
+    if(r&&r.ok){
+      showToast('\u{1F6E1}\uFE0F Guardian activated! Skills unlocked.');
+      loadGuardianBanner();
+    }else{
+      if(msgEl)msgEl.innerHTML='<span style="color:#e55">'+(r.error||'Invalid key. Check for typos.')+'</span>';
+    }
+  }catch(e){if(msgEl)msgEl.innerHTML='<span style="color:#e55">Connection error.</span>';}
 }
 
 function renderBubble(id,agent,sub){
@@ -2089,8 +2136,15 @@ async function activateLicense(type){
   // If no promo code, open Stripe checkout on crew-bus.dev
   if(!promo){
     var url='https://crew-bus.dev/checkout/'+encodeURIComponent(template)+'/'+encodeURIComponent(type);
-    window.open(url,'_blank');
-    errEl.innerHTML='<span style="color:var(--ac)">\u2197\ufe0f Payment page opened in new tab.</span><br>After paying, paste your activation key below and click a plan again.';
+    // Show purchase instructions with a clear link — don't auto-open
+    var price=type==='annual'?document.getElementById('pay-annual-price').textContent:document.getElementById('pay-trial-price').textContent;
+    errEl.innerHTML='<div style="color:var(--fg);text-align:left;padding:10px;background:var(--bg);border-radius:8px;margin:4px 0">'+
+      '<div style="font-weight:600;margin-bottom:6px">\u{1F6D2} How to activate:</div>'+
+      '<div style="font-size:.8rem;color:var(--mu);line-height:1.5">'+
+      '1. <a href="'+url+'" target="_blank" style="color:var(--ac);text-decoration:underline;font-weight:600">Click here to purchase ('+price+')</a><br>'+
+      '2. Complete payment on the checkout page<br>'+
+      '3. Paste your activation key below<br>'+
+      '4. Click the plan again to activate</div></div>';
     // Switch to activation key mode
     var promoEl=document.getElementById('pay-promo');
     promoEl.placeholder='Paste activation key here...';
@@ -2889,6 +2943,8 @@ def _build_html():
     </div>
     <div id="teams-list"></div>
   </div>
+  <!-- Guardian unlock banner (hidden when activated) -->
+  <div id="guardian-banner" style="display:none"></div>
 </div>
 </div>
 <!-- ══════════ COMPOSE BAR ══════════ -->
