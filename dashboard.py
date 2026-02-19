@@ -1946,6 +1946,9 @@ async function loadDrafts(){
       html+='<button onclick="updateDraftStatus('+d.id+',\'rejected\')" style="background:#f85149;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2717 Reject</button>';
     }
     if(d.status==='approved'){
+      if(d.platform==='twitter'){
+        html+='<button onclick="postDraftToX('+d.id+')" style="background:#1d9bf0;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\U0001d54f Post to X</button>';
+      }
       html+='<button onclick="updateDraftStatus('+d.id+',\'posted\')" style="background:#388bfd;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Mark Posted</button>';
     }
     html+='</div></div>';
@@ -1967,6 +1970,26 @@ async function copyDraft(id){
 async function updateDraftStatus(id,status){
   await apiPost('/api/social/drafts/'+id+'/status',{status:status});
   loadDrafts();
+}
+
+async function postDraftToX(id){
+  if(!confirm('Post this draft live to X/Twitter?'))return;
+  try{
+    var r=await apiPost('/api/twitter/draft/'+id+'/post',{});
+    if(r.ok){showToast('Posted to X! Tweet ID: '+r.tweet_id)}
+    else{showToast('Error: '+(r.error||'unknown'))}
+    loadDrafts();
+  }catch(e){showToast('Failed: '+e.message)}
+}
+
+async function postAllApprovedToX(){
+  if(!confirm('Post ALL approved Twitter drafts to X?'))return;
+  try{
+    var r=await apiPost('/api/twitter/post-all-approved',{});
+    if(r.ok){showToast('Posted '+r.posted+' tweets to X!')}
+    else{showToast('Error: '+(r.error||'unknown'))}
+    loadDrafts();
+  }catch(e){showToast('Failed: '+e.message)}
 }
 
 function showToast(msg){
@@ -5025,6 +5048,14 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             return _json_response(self, bus.get_social_drafts(
                 platform=platform, status=status, db_path=self.db_path))
 
+        # ── Twitter Bridge (GET) ──
+        if path == "/api/twitter/status":
+            try:
+                import twitter_bridge
+                return _json_response(self, twitter_bridge.status(self.db_path))
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
         _json_response(self, {"error": "not found"}, 404)
 
     def do_POST(self):
@@ -5844,6 +5875,135 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, result)
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Twitter Bridge endpoints ─────────────────────────────
+        if path == "/api/twitter/status":
+            try:
+                import twitter_bridge
+                return _json_response(self, twitter_bridge.status(self.db_path))
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/setup":
+            # Store Twitter API keys
+            api_key = data.get("api_key", "")
+            api_secret = data.get("api_secret", "")
+            access_token = data.get("access_token", "")
+            access_secret = data.get("access_secret", "")
+            bearer_token = data.get("bearer_token", "")
+            if not all([api_key, api_secret, access_token, access_secret]):
+                return _json_response(self, {
+                    "error": "api_key, api_secret, access_token, access_secret required"
+                }, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.setup_twitter_keys(
+                    api_key, api_secret, access_token, access_secret,
+                    bearer_token, self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/tweet":
+            text = data.get("text", "")
+            reply_to = data.get("reply_to")
+            if not text:
+                return _json_response(self, {"error": "text required"}, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.post_tweet(text, reply_to=reply_to, db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/thread":
+            tweets = data.get("tweets", [])
+            if not tweets or not isinstance(tweets, list):
+                return _json_response(self, {"error": "tweets array required"}, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.post_thread(tweets, db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        m = re.match(r"^/api/twitter/draft/(\d+)/post$", path)
+        if m:
+            draft_id = int(m.group(1))
+            try:
+                import twitter_bridge
+                result = twitter_bridge.post_approved_draft(draft_id, self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/post-all-approved":
+            try:
+                import twitter_bridge
+                result = twitter_bridge.post_all_approved(self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/follow":
+            usernames = data.get("usernames", [])
+            username = data.get("username", "")
+            if username:
+                usernames = [username]
+            if not usernames:
+                return _json_response(self, {"error": "username or usernames required"}, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.follow_users(usernames, self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/like":
+            tweet_id = data.get("tweet_id", "")
+            if not tweet_id:
+                return _json_response(self, {"error": "tweet_id required"}, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.like_tweet(tweet_id, self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/profile":
+            try:
+                import twitter_bridge
+                result = twitter_bridge.update_profile(
+                    name=data.get("name"),
+                    description=data.get("description"),
+                    url=data.get("url"),
+                    location=data.get("location"),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/profile-image":
+            file_path = data.get("file_path", "")
+            if not file_path:
+                return _json_response(self, {"error": "file_path required"}, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.update_profile_image(file_path, self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/twitter/profile-banner":
+            file_path = data.get("file_path", "")
+            if not file_path:
+                return _json_response(self, {"error": "file_path required"}, 400)
+            try:
+                import twitter_bridge
+                result = twitter_bridge.update_profile_banner(file_path, self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
 
         _json_response(self, {"error": "not found"}, 404)
 
