@@ -1892,10 +1892,10 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<a href="https://crew-bus.dev/activate" target="_blank" class="btn" style="display:block;text-align:center;background:#d18616;color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;text-decoration:none">Activate Guard \u2014 $5 one-time</a>'+
+          '<button onclick="window.open(\'https://crew-bus.dev/pricing?plan=guardian&type=one-time\',\'_blank\')" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $5 one-time</button>'+
           '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
-          '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Submit</button></div>'+
-          '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem"></div></div>';
+          '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
+          '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">After purchasing, paste your activation key above.</div></div>';
       }
     }else{
       guardEl.style.display='none';
@@ -2072,8 +2072,10 @@ function showPaymentModal(info){
   document.getElementById('pay-trial-price').textContent='$'+info.price_trial;
   document.getElementById('pay-trial-days').textContent=info.trial_days||30;
   document.getElementById('pay-annual-price').textContent='$'+info.price_annual;
-  document.getElementById('pay-error').textContent='';
-  document.getElementById('pay-promo').value='';
+  var errEl=document.getElementById('pay-error');
+  errEl.textContent='';errEl.innerHTML='';
+  var promoEl=document.getElementById('pay-promo');
+  promoEl.value='';promoEl.placeholder='Have a promo or activation key? Paste here';
   m.dataset.template=info.template;
   m.classList.add('open');
 }
@@ -2084,6 +2086,17 @@ async function activateLicense(type){
   var promo=document.getElementById('pay-promo').value.trim();
   var errEl=document.getElementById('pay-error');
   errEl.textContent='';
+  // If no promo code, open Stripe checkout on crew-bus.dev
+  if(!promo){
+    var url='https://crew-bus.dev/pricing?plan='+encodeURIComponent(template)+'&type='+encodeURIComponent(type);
+    window.open(url,'_blank');
+    errEl.innerHTML='Complete payment, then paste your activation key below.';
+    // Switch to activation key mode
+    var promoEl=document.getElementById('pay-promo');
+    promoEl.placeholder='Paste activation key here...';
+    promoEl.focus();
+    return;
+  }
   try{
     var r=await apiPost('/api/teams/activate-license',{template:template,license_type:type,promo_code:promo});
     if(r.ok){
@@ -3138,24 +3151,27 @@ def _build_html():
 
 <!-- ══════════ PAYMENT MODAL ══════════ -->
 <div class="confirm-overlay" id="payment-modal">
-  <div class="confirm-box" style="max-width:400px;text-align:center">
-    <h3>\U0001f513 Unlock <span id="pay-team-name">Team</span></h3>
-    <div style="display:flex;gap:10px;margin:16px 0">
-      <div style="flex:1;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:14px;cursor:pointer" onclick="activateLicense('trial')">
-        <div style="font-size:1.3rem;font-weight:700;color:var(--ac)" id="pay-trial-price">$10</div>
-        <div style="font-size:.75rem;color:var(--mu)"><span id="pay-trial-days">30</span>-day trial</div>
-      </div>
-      <div style="flex:1;background:var(--sf);border:2px solid var(--ac);border-radius:8px;padding:14px;cursor:pointer" onclick="activateLicense('annual')">
-        <div style="font-size:1.3rem;font-weight:700;color:var(--ac)" id="pay-annual-price">$50</div>
-        <div style="font-size:.75rem;color:var(--mu)">per year</div>
-        <div style="font-size:.6rem;color:var(--ac);margin-top:2px">BEST VALUE</div>
-      </div>
+  <div class="confirm-box" style="max-width:420px;text-align:center">
+    <h3 style="margin-bottom:4px">\U0001f513 Unlock <span id="pay-team-name">Team</span></h3>
+    <p style="color:var(--mu);font-size:.8rem;margin:0 0 14px">Choose a plan to get started</p>
+    <div style="display:flex;gap:12px;margin:0 0 14px">
+      <button onclick="activateLicense('trial')" style="flex:1;background:var(--sf);border:2px solid var(--br);border-radius:10px;padding:18px 10px;cursor:pointer;transition:border-color .2s,transform .15s;color:inherit" onmouseover="this.style.borderColor='var(--ac)';this.style.transform='scale(1.03)'" onmouseout="this.style.borderColor='var(--br)';this.style.transform='scale(1)'">
+        <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-trial-price">$10</div>
+        <div style="font-size:.85rem;color:var(--fg);margin:4px 0"><span id="pay-trial-days">30</span>-day trial</div>
+        <div style="font-size:.7rem;color:var(--mu)">Try it out</div>
+      </button>
+      <button onclick="activateLicense('annual')" style="flex:1;background:var(--sf);border:2px solid var(--ac);border-radius:10px;padding:18px 10px;cursor:pointer;transition:transform .15s;color:inherit;position:relative" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+        <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--ac);color:#000;font-size:.6rem;font-weight:700;padding:2px 10px;border-radius:10px;white-space:nowrap">BEST VALUE</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-annual-price">$50</div>
+        <div style="font-size:.85rem;color:var(--fg);margin:4px 0">per year</div>
+        <div style="font-size:.7rem;color:var(--mu)">Save over 50%</div>
+      </button>
     </div>
-    <div style="margin:10px 0">
-      <input class="setup-key" id="pay-promo" type="text" placeholder="Promo code (optional)" style="text-align:center;font-size:.85rem">
+    <div style="margin:0 0 8px">
+      <input class="setup-key" id="pay-promo" type="text" placeholder="Have a promo or activation key? Paste here" style="text-align:center;font-size:.85rem">
     </div>
-    <div class="setup-error" id="pay-error"></div>
-    <button class="confirm-cancel" onclick="closePaymentModal()" style="margin-top:8px;width:100%">Cancel</button>
+    <div id="pay-error" style="font-size:.8rem;color:#e55;min-height:1.2em;margin-bottom:6px"></div>
+    <button class="confirm-cancel" onclick="closePaymentModal()" style="width:100%">Cancel</button>
   </div>
 </div>
 
@@ -4300,11 +4316,12 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     return _json_response(self, {"ok": False, "error": result.get("error", "Invalid promo code")}, 400)
 
             if not valid_promo:
-                # No valid promo — require payment (placeholder for Stripe)
-                # For now, reject without promo or payment
+                # No valid promo — direct to Stripe checkout on crew-bus.dev
+                checkout_url = f"https://crew-bus.dev/pricing?plan={template}&type={license_type}"
                 return _json_response(self, {
                     "ok": False,
-                    "error": "Payment required. Enter a promo code or visit crew-bus.dev/pricing to purchase."
+                    "checkout_url": checkout_url,
+                    "error": "Complete payment at crew-bus.dev, then paste your activation key."
                 }, 402)
 
             if license_type == "trial":
