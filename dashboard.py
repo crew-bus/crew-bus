@@ -1536,16 +1536,23 @@ async function checkForUpdates(){
   }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='\U0001f504 Update';}
 }
 
-// Check for updates silently on load
-setTimeout(async function(){
+// Auto-update: check on load + every 24 hours, apply silently
+async function _autoUpdateCheck(){
   try{
     var r=await api('/api/update/check');
     if(r&&r.update_available){
       var dot=document.getElementById('update-dot');
       if(dot)dot.style.display='block';
+      var u=await apiPost('/api/update/apply',{});
+      if(u&&u.ok){
+        showToast('\U0001f504 Crew Bus updated! Reloading...');
+        setTimeout(function(){location.reload()},2000);
+      }
     }
   }catch(e){}
-},5000);
+}
+setTimeout(_autoUpdateCheck,5000);
+setInterval(_autoUpdateCheck,86400000);
 
 function openFeedback(){
   document.getElementById('feedback-modal').classList.add('open');
