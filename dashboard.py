@@ -1892,7 +1892,7 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<button onclick="window.open(\'https://crew-bus.dev/pricing?plan=guardian&type=one-time\',\'_blank\')" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $5 one-time</button>'+
+          '<button onclick="window.open(\'https://crew-bus.dev/pricing?plan=guardian&type=one-time\',\'_blank\')" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button>'+
           '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
           '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
           '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">After purchasing, paste your activation key above.</div></div>';
