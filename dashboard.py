@@ -5622,7 +5622,8 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
         db_path = DEFAULT_DB
     bus.init_db(db_path=db_path)
     _ensure_guardian(db_path)  # Guardian always self-spawns first
-    bus.assign_inner_circle_skills(db_path)  # Skills for core crew (safe if none exist yet)
+    bus.assign_inner_circle_skills(db_path)   # Skills for core crew (safe if none exist yet)
+    bus.assign_leadership_skills(db_path)     # crew-mind for Boss, sentinel-shield for Guardian
     if config:
         bus.load_hierarchy(config, db_path=db_path)
     # No auto-load: clean slate, Guardian guides team creation

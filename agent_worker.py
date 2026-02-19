@@ -230,10 +230,18 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             + integrity
         )
 
-    # --- Inject CREW CHARTER (subordinate agents only — not right_hand) ---
-    if agent_type not in _CHARTER_EXEMPT:
-        charter = _load_charter_rules()
-        if charter:
+    # --- Inject CREW CHARTER ---
+    # Subordinate agents: this IS their constitution (they must follow it)
+    # Crew Boss: gets it as reference material (they ENFORCE it on others)
+    charter = _load_charter_rules()
+    if charter:
+        if agent_type == "right_hand":
+            parts.append(
+                "CREW CHARTER (you enforce this on all subordinate agents — "
+                "two violations = firing recommendation to the human):\n"
+                + charter
+            )
+        elif agent_type not in _CHARTER_EXEMPT:
             parts.append(
                 "CREW CHARTER (your constitution — violation = security event):\n"
                 + charter
@@ -255,9 +263,16 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
-    # Token budget guard: Guardian gets 7000 chars (knowledge + integrity),
-    # all others get ~4000 chars (integrity rules add ~800 chars)
-    max_chars = 7000 if agent_type == "guardian" else 4000
+    # Token budget guard — tiered by agent importance:
+    # Crew Boss: 9000 chars (highest IQ, runs on best model, needs full crew awareness)
+    # Guardian:  7000 chars (system knowledge + integrity + sentinel duties)
+    # Everyone:  4000 chars (integrity rules + charter + skill + memories)
+    if agent_type == "right_hand":
+        max_chars = 9000
+    elif agent_type == "guardian":
+        max_chars = 7000
+    else:
+        max_chars = 4000
     combined = "\n\n".join(parts)
     if len(combined) > max_chars:
         combined = combined[:max_chars] + "\n[memory truncated]"
