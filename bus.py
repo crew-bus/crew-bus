@@ -408,7 +408,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             skill_name      TEXT    NOT NULL,
             content_hash    TEXT    NOT NULL,
             source          TEXT    NOT NULL DEFAULT 'local'
-                            CHECK(source IN ('builtin','github','clawhub','local','community')),
+                            CHECK(source IN ('builtin','github','clawhub','local','community','agent_drafted')),
             source_url      TEXT    DEFAULT '',
             author          TEXT    NOT NULL DEFAULT 'crew-bus',
             version         TEXT    NOT NULL DEFAULT '1.0',
@@ -587,6 +587,14 @@ def init_db(db_path: Optional[Path] = None) -> None:
     cols = [r[1] for r in cur.execute("PRAGMA table_info(agents)").fetchall()]
     if "model" not in cols:
         cur.execute("ALTER TABLE agents ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+
+    # Migrate: add extended_profile column to human_profile for self-learning
+    hp_cols = [r[1] for r in cur.execute("PRAGMA table_info(human_profile)").fetchall()]
+    if "extended_profile" not in hp_cols:
+        cur.execute(
+            "ALTER TABLE human_profile ADD COLUMN "
+            "extended_profile TEXT NOT NULL DEFAULT '{}'"
+        )
 
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
@@ -3040,6 +3048,91 @@ def get_human_profile(human_id: int,
         if d.get(key):
             d[key] = json.loads(d[key])
     return d
+
+
+# ---------------------------------------------------------------------------
+# Extended Human Profile (self-learning)
+# ---------------------------------------------------------------------------
+
+def get_extended_profile(human_id: int,
+                         db_path: Optional[Path] = None) -> dict:
+    """Return the human's extended self-learning profile.
+
+    Returns a dict with keys like display_name, age, pronouns, life_situation,
+    current_priorities, communication_style, sensitivities, etc.
+    Returns empty dict if no profile exists.
+    """
+    conn = get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT extended_profile FROM human_profile WHERE human_id=?",
+            (human_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row or not row["extended_profile"]:
+        return {}
+    try:
+        return json.loads(row["extended_profile"])
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def update_extended_profile(human_id: int, updates: dict,
+                            db_path: Optional[Path] = None) -> None:
+    """Merge updates into the human's extended profile.
+
+    Deep-merges: dict fields merge keys, list fields append without duplicates.
+    Always updates last_updated timestamp.
+
+    If no human_profile row exists, creates one with defaults first.
+    """
+    conn = get_conn(db_path)
+    try:
+        # Ensure row exists
+        existing = conn.execute(
+            "SELECT extended_profile FROM human_profile WHERE human_id=?",
+            (human_id,),
+        ).fetchone()
+
+        if not existing:
+            # Create default profile row first
+            conn.execute(
+                "INSERT INTO human_profile (human_id) VALUES (?)",
+                (human_id,),
+            )
+            profile = {}
+        else:
+            try:
+                profile = json.loads(existing["extended_profile"] or "{}")
+            except (json.JSONDecodeError, TypeError):
+                profile = {}
+
+        # Deep merge
+        for key, value in updates.items():
+            if isinstance(value, dict) and isinstance(profile.get(key), dict):
+                profile[key].update(value)
+            elif isinstance(value, list) and isinstance(profile.get(key), list):
+                # Append without duplicates
+                for item in value:
+                    if item not in profile[key]:
+                        profile[key].append(item)
+            else:
+                profile[key] = value
+
+        profile["last_updated"] = datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+
+        conn.execute(
+            "UPDATE human_profile SET extended_profile=?, "
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+            "WHERE human_id=?",
+            (json.dumps(profile), human_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------

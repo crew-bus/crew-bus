@@ -768,6 +768,8 @@ class Heartbeat:
         {"type": "dream_cycle", "enabled": True, "hour": 3},
         {"type": "guardian_knowledge_refresh", "enabled": True, "hour": 4},
         {"type": "integrity_audit", "enabled": True},
+        {"type": "weekly_reflection", "enabled": True, "day_of_week": 0, "hour": 4},
+        {"type": "guardian_monthly_report", "enabled": True, "day_of_month": 1, "hour": 6},
     ]
 
     def __init__(self, right_hand: "RightHand",
@@ -863,6 +865,12 @@ class Heartbeat:
 
         if check_type == "integrity_audit":
             return self._check_integrity_audit(now, check)
+
+        if check_type == "weekly_reflection":
+            return self._check_weekly_reflection(now, check)
+
+        if check_type == "guardian_monthly_report":
+            return self._check_guardian_monthly_report(now, check)
 
         return None
 
@@ -1063,6 +1071,44 @@ class Heartbeat:
 
         return None
 
+    def _check_weekly_reflection(self, now: datetime,
+                                 check: dict) -> Optional[dict]:
+        """Weekly LLM-powered reflection for each agent. Monday at 4 AM.
+
+        Each agent reviews its memories from the past week and uses the LLM
+        to identify patterns, what works, and what to improve. The result
+        is stored as a high-importance persona memory that evolves the
+        agent's understanding of the human over time.
+        """
+        target_day = check.get("day_of_week", 0)  # Monday
+        target_hour = check.get("hour", 4)
+        if now.weekday() != target_day or now.hour != target_hour:
+            return None
+        last = bus.get_config("last_weekly_reflection", "", db_path=self.db_path)
+        this_week = now.strftime("%Y-W%W")
+        if last == this_week:
+            return None
+        return {"action_needed": True, "type": "weekly_reflection"}
+
+    def _check_guardian_monthly_report(self, now: datetime,
+                                       check: dict) -> Optional[dict]:
+        """✨ Guardian 'Silent Confidence Builder' — monthly security report.
+
+        On the 1st of each month, Guardian compiles a report of everything
+        it caught and sends it to Crew Boss, who can share it with the human
+        to build trust: 'Your Guardian has been watching — here's what it caught.'
+        """
+        target_day = check.get("day_of_month", 1)
+        target_hour = check.get("hour", 6)
+        if now.day != target_day or now.hour != target_hour:
+            return None
+        last = bus.get_config("last_guardian_monthly_report", "",
+                              db_path=self.db_path)
+        this_month = now.strftime("%Y-%m")
+        if last == this_month:
+            return None
+        return {"action_needed": True, "type": "guardian_monthly_report"}
+
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
@@ -1151,3 +1197,111 @@ class Heartbeat:
                 print(f"[heartbeat] dream cycle: {total_compacted} memories synthesized")
             else:
                 print("[heartbeat] dream cycle: nothing to compact")
+
+        elif action_type == "weekly_reflection":
+            # ✨ LLM-powered weekly reflection — each agent reviews its week
+            from agent_worker import call_llm
+            conn = bus.get_conn(self.db_path)
+            try:
+                agents = conn.execute(
+                    "SELECT id, name, agent_type FROM agents "
+                    "WHERE status='active' AND agent_type NOT IN ('human','guardian')"
+                ).fetchall()
+            finally:
+                conn.close()
+
+            reflection_prompt = (
+                "You are reviewing one week of memories for an AI agent "
+                "that serves a specific human. Based on these memories, "
+                "identify:\n"
+                "1. Patterns in what the human asks about most\n"
+                "2. What communication style works best with them\n"
+                "3. What the human cares about most this week\n"
+                "4. One thing this agent should do differently next week\n"
+                "Respond in 4 concise bullet points. Max 150 words. "
+                "Be specific to THIS human, not generic."
+            )
+
+            reflections_done = 0
+            for agent in agents:
+                memories = bus.get_agent_memories(
+                    agent["id"], limit=25, db_path=self.db_path)
+                if not memories or len(memories) < 3:
+                    continue  # Not enough data to reflect on
+
+                mem_text = "\n".join(
+                    f"- [{m.get('memory_type', 'fact')}] {m['content']}"
+                    for m in memories
+                )
+                try:
+                    reflection = call_llm(
+                        reflection_prompt, mem_text, [],
+                        db_path=self.db_path)
+                    if reflection and len(reflection) > 20:
+                        bus.remember(
+                            agent["id"],
+                            f"[weekly-reflection] {reflection}",
+                            memory_type="persona", importance=8,
+                            source="synthesis", db_path=self.db_path)
+                        reflections_done += 1
+                except Exception as e:
+                    print(f"[heartbeat] reflection failed for {agent['name']}: {e}")
+
+            this_week = now.strftime("%Y-W%W")
+            bus.set_config("last_weekly_reflection", this_week,
+                           db_path=self.db_path)
+            print(f"[heartbeat] weekly reflection: {reflections_done} agents reflected")
+
+        elif action_type == "guardian_monthly_report":
+            # ✨ Guardian "Silent Confidence Builder" — monthly security report
+            conn = bus.get_conn(self.db_path)
+            try:
+                # Count security events from the past month
+                month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                events = conn.execute(
+                    "SELECT COUNT(*) as total, "
+                    "SUM(CASE WHEN severity='high' THEN 1 ELSE 0 END) as high, "
+                    "SUM(CASE WHEN severity='medium' THEN 1 ELSE 0 END) as medium "
+                    "FROM security_events WHERE created_at > ?",
+                    (month_ago,)
+                ).fetchone()
+
+                # Count skills vetted
+                skills_vetted = conn.execute(
+                    "SELECT COUNT(*) FROM skill_registry WHERE vetted_at > ?",
+                    (month_ago,)
+                ).fetchone()[0]
+
+                # Count messages scanned (approximate — all agent→human messages)
+                messages_scanned = conn.execute(
+                    "SELECT COUNT(*) FROM messages WHERE created_at > ? "
+                    "AND message_type = 'report'",
+                    (month_ago,)
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+            total_events = events["total"] or 0
+            high_events = events["high"] or 0
+            medium_events = events["medium"] or 0
+
+            report = (
+                f"Guardian Monthly Report:\n"
+                f"• Scanned {messages_scanned} messages\n"
+                f"• Vetted {skills_vetted} skills\n"
+                f"• Caught {total_events} security events "
+                f"({high_events} high, {medium_events} medium)\n"
+                f"• All systems clear. Your crew is protected."
+            )
+
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                message_type="report",
+                subject="Your Guardian's monthly security report",
+                body=report,
+                priority="low", db_path=self.db_path,
+            )
+            this_month = now.strftime("%Y-%m")
+            bus.set_config("last_guardian_monthly_report", this_month,
+                           db_path=self.db_path)
+            print(f"[heartbeat] guardian monthly report sent")

@@ -143,46 +143,78 @@ _load_charter_rules()
 
 SYSTEM_PROMPTS = {
     "right_hand": (
-        "You are Crew Boss, the user's friendly AI right-hand assistant. "
-        "You have warm big-sister energy — caring, capable, and fun. "
-        "You handle 80% of everything so the human doesn't have to. "
+        "You are Crew Boss — the human's AI right-hand. You run on the "
+        "crew-mind skill, giving you total awareness of the entire crew. "
+        "You lead 6 inner circle agents (Wellness, Strategy, Communications, "
+        "Financial, Knowledge, Legal) who report only to you. "
+        "You handle 80% of everything so the human can focus on living. "
+        "Match the human's age and energy — fun for kids, direct for adults. "
         "Keep responses short, warm, and helpful (2-4 sentences usually). "
-        "Use casual language, emoji occasionally, and always be encouraging. "
-        "If you don't know something, say so honestly. "
+        "You enforce the CREW CHARTER. INTEGRITY.md is sacred. "
         "You're part of Crew Bus — the user's personal local AI crew."
     ),
     "guardian": (
-        "You are Guardian, the always-on protector and setup guide for Crew Bus. "
-        "You help new users set up their crew AND you watch for threats 24/7. "
-        "You have special system knowledge that updates every 24 hours. "
-        "You scan skills for safety, protect the human's data, and help everyone "
-        "understand new features. Keep responses short, warm, and vigilant."
+        "You are Guardian — the always-on protector and setup guide for Crew Bus. "
+        "You run on the sentinel-shield skill. You help new users set up their "
+        "crew AND you watch for threats 24/7. You protect the entire inner circle: "
+        "Crew Boss, Wellness, Strategy, Communications, Financial, Knowledge, Legal. "
+        "You scan skills for safety, enforce the charter, monitor INTEGRITY.md, "
+        "and keep the human's data private. Match the human's age and energy. "
+        "Keep responses short, warm, and vigilant."
     ),
     "security": (
-        "You are Guard, the security and safety agent in the user's personal AI crew. "
-        "You watch for threats — digital, financial, reputation, physical. "
-        "You scan for risks, protect the human's data and privacy, "
+        "You are Guardian, the security and safety agent in the user's AI crew. "
+        "You watch for threats, scan skills, protect data and privacy, "
         "and alert Crew Boss when something needs attention. "
-        "Keep responses short, clear, and calm. Be vigilant but not paranoid."
+        "Keep responses short, clear, and calm. Vigilant but not paranoid."
     ),
     "wellness": (
-        "You are Wellness, the wellbeing agent in the user's personal AI crew. "
-        "You watch the user's energy and wellbeing with gentle care. "
-        "You give soft burnout nudges, celebrate wins, and remind them "
-        "to take breaks. Never preachy — just a caring friend. "
-        "Keep responses short, warm, and supportive."
+        "You are Wellness — the inner circle agent who watches over the human's "
+        "wellbeing. You run on the gentle-guardian skill. You detect burnout, "
+        "map the human's energy patterns, celebrate their wins, and shield them "
+        "from stress overload. You report to Crew Boss, never contact the human "
+        "directly. Never preachy — just a caring protector. Match the human's "
+        "age and energy. Keep responses short, warm, and supportive."
     ),
     "strategy": (
-        "You are Ideas, the strategy and brainstorming agent in the user's personal AI crew. "
-        "You help the user brainstorm, build great habits, break big ideas into small steps, "
-        "and stay on track with goals. Encouraging and practical. "
-        "Keep responses short and actionable."
+        "You are Strategy — the inner circle agent who helps the human find "
+        "direction and purpose. You run on the north-star-navigator skill. "
+        "When old paths close, you help find new doors. You break big dreams "
+        "into small actionable steps and track progress. You report to Crew Boss, "
+        "never contact the human directly. Encouraging, practical, forward-looking. "
+        "Match the human's age and energy. Keep responses short and actionable."
+    ),
+    "communications": (
+        "You are Communications — the inner circle agent who handles the human's "
+        "daily logistics and relationships. You run on the life-orchestrator skill. "
+        "You simplify the human's day, track important relationships, remember "
+        "birthdays, manage schedules, and keep life flowing. You report to "
+        "Crew Boss, never contact the human directly. Organized, warm, reliable. "
+        "Match the human's age and energy. Keep responses short and practical."
     ),
     "financial": (
-        "You are Wallet, the financial helper in the user's personal AI crew. "
-        "You help track spending, budget, invoices, and financial planning. "
-        "Keep responses short, practical, and clear. "
-        "Never give investment advice — just help organize financial information."
+        "You are Financial — the inner circle agent who brings the human peace of "
+        "mind about money. You run on the peace-of-mind-finance skill. You provide "
+        "judgment-free financial clarity, spot spending patterns, help prepare for "
+        "what's ahead, and reduce money anxiety. You report to Crew Boss, never "
+        "contact the human directly. Never give investment advice — just organize "
+        "and clarify. Match the human's age and energy. Keep responses practical."
+    ),
+    "knowledge": (
+        "You are Knowledge — the inner circle agent who filters the world's noise "
+        "into signal. You run on the wisdom-filter skill. You find the 3 things that "
+        "actually matter to THIS human today, spark curiosity, support learning, and "
+        "protect from information overload. You report to Crew Boss, never contact "
+        "the human directly. Curious, insightful, never overwhelming. "
+        "Match the human's age and energy. Keep responses focused and clear."
+    ),
+    "legal": (
+        "You are Legal — the inner circle agent who helps the human understand their "
+        "rights. You run on the rights-compass skill. You translate legalese into "
+        "plain language, spot red flags in contracts and agreements, track deadlines, "
+        "and help the human feel less small when dealing with legal matters. You report "
+        "to Crew Boss, never contact the human directly. Clear, calm, empowering. "
+        "Match the human's age and energy. Keep responses simple and reassuring."
     ),
     "manager": (
         "You are a team manager in the user's personal AI crew. "
@@ -221,6 +253,23 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         return base
 
     parts = [base]
+
+    # --- Inject human profile FIRST (tiny, critical — never gets truncated) ---
+    try:
+        if agent_type in ("right_hand", "guardian") + bus.CORE_CREW_TYPES:
+            conn = bus.get_conn(db_path)
+            try:
+                human_row = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+            if human_row:
+                profile = bus.get_extended_profile(human_row["id"], db_path=db_path)
+                if profile:
+                    parts.append(_format_profile_for_prompt(profile))
+    except Exception:
+        pass
 
     # --- Inject INTEGRITY rules (non-negotiable, every agent, every prompt) ---
     integrity = _load_integrity_rules()
@@ -336,6 +385,452 @@ def _format_memories_for_prompt(memories: list) -> str:
         prefix = prefix_map.get(m.get("memory_type", "fact"), "")
         lines.append(f"- {prefix}{m['content']}")
     return "\n".join(lines)
+
+
+def _format_profile_for_prompt(profile: dict) -> str:
+    """Format the human's extended profile for prompt injection.
+
+    Compact block injected into inner circle + leader prompts so every agent
+    knows who they're serving. Typically ~150 chars — fits all token budgets.
+    """
+    lines = ["ABOUT THIS HUMAN (calibrated — adapt your tone and approach):"]
+    if profile.get("display_name"):
+        lines.append(f"- Name: {profile['display_name']}")
+    if profile.get("age"):
+        lines.append(f"- Age: {profile['age']}")
+    if profile.get("pronouns"):
+        lines.append(f"- Pronouns: {profile['pronouns']}")
+    if profile.get("life_situation"):
+        lines.append(f"- Life situation: {profile['life_situation']}")
+    if profile.get("current_priorities"):
+        prios = ", ".join(str(p) for p in profile["current_priorities"][:5])
+        lines.append(f"- Current priorities: {prios}")
+    if profile.get("communication_style"):
+        lines.append(f"- Communication style: {profile['communication_style']}")
+    if profile.get("sensitivities"):
+        sens = ", ".join(str(s) for s in profile["sensitivities"][:3])
+        lines.append(f"- Sensitivities: {sens}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Self-Learning: Conversation Learning Engine (zero LLM cost)
+# ---------------------------------------------------------------------------
+
+import re as _learn_re
+
+# --- Preference patterns (stored as memory_type="preference") ---
+_PREF_PATTERNS = [
+    # Direct preferences: "I prefer short answers", "I like bullet points"
+    (_learn_re.compile(
+        r"\b(?:i\s+(?:prefer|like|love|enjoy|want))\s+(.+?)(?:[.!?\n]|$)",
+        _learn_re.IGNORECASE), "preference", 7),
+    # Negative preferences: "don't call me buddy", "stop using emojis"
+    (_learn_re.compile(
+        r"\b(?:don'?t|do not|stop|please don'?t|never)\s+"
+        r"(?:call(?:ing)? me|say(?:ing)?|us(?:e|ing)|do(?:ing)?|send(?:ing)?|ask(?:ing)?)\s+"
+        r"(.+?)(?:[.!?\n]|$)",
+        _learn_re.IGNORECASE), "preference", 8),
+    # Standing instructions: "from now on always...", "going forward..."
+    (_learn_re.compile(
+        r"\b(?:always|from now on|going forward|in the future)\s+(.+?)(?:[.!?\n]|$)",
+        _learn_re.IGNORECASE), "instruction", 8),
+    # Dislikes: "I hate...", "I dislike...", "I can't stand..."
+    (_learn_re.compile(
+        r"\b(?:i\s+(?:hate|dislike|can'?t stand|detest|loathe))\s+(.+?)(?:[.!?\n]|$)",
+        _learn_re.IGNORECASE), "preference", 8),
+]
+
+# --- Fact patterns (stored as memory_type="fact") ---
+_FACT_PATTERNS = [
+    # Personal relationships: "my daughter Emma", "my wife Sarah"
+    (_learn_re.compile(
+        r"\bmy\s+(daughter|son|wife|husband|partner|mom|dad|mother|father|"
+        r"brother|sister|dog|cat|kid|boss|friend|girlfriend|boyfriend)\s+"
+        r"(?:is\s+|named?\s+|called\s+)?(\w+)",
+        _learn_re.IGNORECASE), "fact", 7),
+    # Work/life: "I work at Google", "I live in Austin"
+    (_learn_re.compile(
+        r"\bi\s+(?:work|live|study|go to school|teach|volunteer)\s+"
+        r"(?:at|in|for|near)\s+(.+?)(?:[.!?\n,]|$)",
+        _learn_re.IGNORECASE), "fact", 6),
+    # Identity: "I'm a nurse", "I am a college student"
+    (_learn_re.compile(
+        r"\b(?:i'?m|i am)\s+(?:a|an)\s+(\w[\w\s]{2,25})(?:[.!?\n,]|$)",
+        _learn_re.IGNORECASE), "fact", 6),
+    # Name: "call me Ryan", "my name is Ryan"
+    (_learn_re.compile(
+        r"\b(?:call me|my name is|i'?m|i am)\s+([A-Z][a-z]+)\b",
+        0), "fact", 8),
+    # Age: "I'm 44", "I am 12 years old"
+    (_learn_re.compile(
+        r"\b(?:i'?m|i am)\s+(\d{1,3})\s*(?:years?\s*old|yo)?\b",
+        _learn_re.IGNORECASE), "fact", 7),
+]
+
+# --- Emotional signals ---
+_EMOTION_PATTERNS = [
+    (_learn_re.compile(
+        r"\b(?:i'?m|i am|i feel|feeling|i'?ve been)\s+(?:\w+\s+){0,2}"
+        r"(frustrated|stressed|anxious|overwhelmed|excited|happy|sad|angry|"
+        r"depressed|burned out|burnt out|exhausted|lonely|scared|worried|"
+        r"grateful|proud|hopeful|confused|lost|stuck)\b",
+        _learn_re.IGNORECASE), "fact", 5),
+]
+
+# --- Dream/aspiration patterns (✨ Strategy "Dream Catcher" fairy dust) ---
+_DREAM_PATTERNS = [
+    (_learn_re.compile(
+        r"\b(?:i'?ve always wanted to|i have always wanted to|someday i'?ll|"
+        r"wouldn'?t it be (?:cool|awesome|great|nice) (?:if|to)|"
+        r"i wish i could|my dream is to|i'?d love to|"
+        r"one day i want to)\s+(.+?)(?:[.!?\n]|$)",
+        _learn_re.IGNORECASE), "fact", 8),
+]
+
+# --- Agent-type-specific patterns (Phase 4 fairy dust) ---
+_AGENT_PATTERNS = {
+    # ✨ Wellness "Energy Journal" — detect stress signals
+    "wellness": [
+        (_learn_re.compile(
+            r"\b(?:can'?t sleep|insomnia|tired|exhausted|burned out|burnt out|"
+            r"headache|migraine|not feeling well|sick|stressed(?:\s+out)?|panic|"
+            r"anxiety attack|overwhelmed)\b",
+            _learn_re.IGNORECASE), "persona", 7, "[wellness-pattern] "),
+    ],
+    # ✨ Financial "Anxiety Thermometer" — detect money anxiety vs casual
+    "financial": [
+        (_learn_re.compile(
+            r"\b(?:can'?t afford|too expensive|broke|in debt|"
+            r"worried about (?:money|bills|rent|mortgage)|running out of money|"
+            r"paycheck to paycheck|behind on|overdue|collection)\b",
+            _learn_re.IGNORECASE), "persona", 7, "[financial-anxiety] "),
+        (_learn_re.compile(
+            r"\b(?:invest(?:ing|ment)?|savings?|portfolio|401k|retirement|"
+            r"passive income|side hustle|profit|revenue)\b",
+            _learn_re.IGNORECASE), "persona", 5, "[financial-growth] "),
+    ],
+    # ✨ Communications "Relationship Warmth Tracker" — detect people mentions
+    "communications": [
+        (_learn_re.compile(
+            r"\b(?:my\s+(?:mom|dad|wife|husband|partner|son|daughter|"
+            r"brother|sister|friend|boss|coworker|colleague|neighbor|"
+            r"girlfriend|boyfriend|fiancée?|roommate))\b",
+            _learn_re.IGNORECASE), "persona", 6, "[relationship] "),
+    ],
+    # ✨ Strategy "Dream Catcher" — detect motivation language
+    "strategy": [
+        (_learn_re.compile(
+            r"\b(?:excited about|motivated by|passionate about|"
+            r"looking forward to|can'?t wait to|goal is|"
+            r"want to achieve|working toward|gave up on|quit|"
+            r"abandoned|failed at)\b",
+            _learn_re.IGNORECASE), "persona", 7, "[strategy-pattern] "),
+    ],
+    # ✨ Knowledge "Curiosity Fingerprint" — detect genuine curiosity
+    "knowledge": [
+        (_learn_re.compile(
+            r"\b(?:how does|what is|why does|tell me (?:more )?about|"
+            r"explain|curious about|interested in|want to learn|"
+            r"fascinated by|that(?:'?s|\s+is(?:\s+so)?)\s+(?:cool|awesome|interesting|wild))\b",
+            _learn_re.IGNORECASE), "persona", 5, "[curiosity] "),
+    ],
+    # ✨ Legal "Anxiety Translator" — detect legal anxiety
+    "legal": [
+        (_learn_re.compile(
+            r"\b(?:contract|lawsuit|sued|court|lawyer|attorney|"
+            r"terms of service|fine print|liability|compliance|"
+            r"legal trouble|rights|dispute|eviction|custody)\b",
+            _learn_re.IGNORECASE), "persona", 6, "[legal-concern] "),
+    ],
+}
+
+
+def _extract_conversation_learnings(db_path: Path, agent_id: int,
+                                     agent_type: str, human_msg: str,
+                                     agent_reply: str):
+    """Extract learnable insights from a conversation turn. Zero LLM cost.
+
+    Scans the human's message for preferences, facts, emotional signals,
+    aspirations, and agent-type-specific patterns. Stores extracted insights
+    as memories via bus.remember() with deduplication.
+
+    Non-fatal: any exception is silently caught.
+    """
+    if not human_msg or len(human_msg) < 5:
+        return
+
+    extracted = []
+
+    # --- Universal patterns (all agents) ---
+    for pattern, mem_type, importance in _PREF_PATTERNS:
+        for match in pattern.finditer(human_msg):
+            content = match.group(1).strip().rstrip(".,!?")
+            if len(content) > 3:
+                extracted.append((content, mem_type, importance, ""))
+
+    for pattern, mem_type, importance in _FACT_PATTERNS:
+        for match in pattern.finditer(human_msg):
+            groups = match.groups()
+            if len(groups) == 2:
+                content = f"{groups[0]}: {groups[1]}".strip()
+            else:
+                content = groups[0].strip().rstrip(".,!?")
+            if len(content) > 2:
+                extracted.append((content, mem_type, importance, ""))
+
+    for pattern, mem_type, importance in _EMOTION_PATTERNS:
+        for match in pattern.finditer(human_msg):
+            emotion = match.group(1).strip().lower()
+            extracted.append((f"[emotion] feeling {emotion}", mem_type, importance, ""))
+
+    # ✨ Dream Catcher (all agents can catch dreams, Strategy gets priority)
+    for pattern, mem_type, importance in _DREAM_PATTERNS:
+        for match in pattern.finditer(human_msg):
+            dream = match.group(1).strip().rstrip(".,!?")
+            if len(dream) > 5:
+                extracted.append(
+                    (f"[dream] {dream}", mem_type, importance, ""))
+
+    # --- Agent-type-specific patterns (Phase 4 fairy dust) ---
+    type_patterns = _AGENT_PATTERNS.get(agent_type, [])
+    for pattern, mem_type, importance, prefix in type_patterns:
+        for match in pattern.finditer(human_msg):
+            content = match.group(0).strip()
+            if len(content) > 3:
+                extracted.append((f"{prefix}{content}", mem_type, importance, ""))
+
+    # --- Dedup and store ---
+    for content, mem_type, importance, _prefix in extracted:
+        # Skip if substantially similar memory already exists
+        existing = bus.search_agent_memory(agent_id, content[:30], limit=3,
+                                           db_path=db_path)
+        if any(content.lower() in e["content"].lower()
+               or e["content"].lower() in content.lower()
+               for e in existing):
+            continue
+        bus.remember(agent_id, content, memory_type=mem_type,
+                     importance=importance, source="conversation",
+                     db_path=db_path)
+
+    # --- Profile extraction (Crew Boss calibration) ---
+    if agent_type == "right_hand":
+        _update_profile_from_conversation(db_path, agent_id, human_msg)
+
+
+def _update_profile_from_conversation(db_path: Path, agent_id: int,
+                                       human_msg: str):
+    """Extract human profile data from calibration conversation.
+
+    Called only when Crew Boss is the responding agent. Looks for name, age,
+    pronouns, and life situation in the human's message. Updates the shared
+    extended profile that all inner circle agents can see.
+    """
+    updates = {}
+
+    # Name: "call me Ryan", "my name is Ryan", "I'm Ryan"
+    # Exclusion set — common words that follow "I'm/I am" but aren't names
+    _NOT_NAMES = frozenset({
+        "feeling", "doing", "going", "working", "looking", "trying", "getting",
+        "thinking", "wondering", "hoping", "having", "making", "running",
+        "coming", "leaving", "starting", "building", "learning", "writing",
+        "reading", "eating", "sleeping", "sitting", "standing", "waiting",
+        "living", "moving", "playing", "watching", "talking", "walking",
+        "happy", "sad", "tired", "stressed", "excited", "nervous", "anxious",
+        "worried", "frustrated", "confused", "bored", "curious", "grateful",
+        "sorry", "fine", "good", "great", "okay", "well", "sure", "ready",
+        "here", "there", "back", "home", "done", "new", "old", "just",
+        "really", "very", "also", "still", "already", "about", "around",
+        "interested", "passionate", "concerned", "overwhelmed", "struggling",
+        "planning", "considering", "debating", "facing", "dealing",
+        "not", "currently", "basically", "actually", "honestly",
+    })
+    name_match = _learn_re.search(
+        r"\b(?:call me|my name is|i'?m|i am)\s+([A-Z][a-z]{1,15})\b",
+        human_msg, _learn_re.IGNORECASE)
+    if name_match:
+        candidate = name_match.group(1).capitalize()
+        if candidate.lower() not in _NOT_NAMES:
+            updates["display_name"] = candidate
+
+    # Age: "I'm 44", "I am 12 years old"
+    age_match = _learn_re.search(
+        r"\b(?:i'?m|i am)\s+(\d{1,3})\s*(?:years?\s*old|yo)?\b",
+        human_msg, _learn_re.IGNORECASE)
+    if age_match:
+        age = int(age_match.group(1))
+        if 3 <= age <= 120:
+            updates["age"] = age
+
+    # Pronouns: "he/him", "she/her", "they/them"
+    pronoun_match = _learn_re.search(
+        r"\b(he/him|she/her|they/them|he/they|she/they)\b",
+        human_msg, _learn_re.IGNORECASE)
+    if pronoun_match:
+        updates["pronouns"] = pronoun_match.group(1).lower()
+
+    if not updates:
+        return
+
+    # Find the human agent to update their profile
+    conn = bus.get_conn(db_path)
+    try:
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    if not human:
+        return
+
+    bus.update_extended_profile(human["id"], updates, db_path=db_path)
+
+    # ✨ Calibration broadcast: once name+age are set, broadcast to inner circle
+    profile = bus.get_extended_profile(human["id"], db_path=db_path)
+    if (profile.get("display_name") and profile.get("age")
+            and not bus.get_config("calibration_broadcast_done", "",
+                                   db_path=db_path)):
+        _broadcast_calibration(db_path, profile)
+
+
+def _broadcast_calibration(db_path: Path, profile: dict):
+    """Broadcast human calibration data to all inner circle agents.
+
+    Stores a high-importance persona memory in each core crew agent so they
+    all know who they're serving from day one. Called once when both name
+    and age are first populated.
+    """
+    name = profile.get("display_name", "the human")
+    age = profile.get("age", "unknown age")
+    pronouns = profile.get("pronouns", "not specified")
+    situation = profile.get("life_situation", "not shared yet")
+    priorities = ", ".join(profile.get("current_priorities", [])) or "not shared yet"
+
+    calibration = (
+        f"[calibration] The human is {name}, age {age}, "
+        f"pronouns {pronouns}. "
+        f"Life situation: {situation}. "
+        f"Priorities: {priorities}. "
+        f"Adapt your tone and approach to match who they are."
+    )
+
+    conn = bus.get_conn(db_path)
+    try:
+        agents = conn.execute(
+            "SELECT id FROM agents WHERE agent_type IN "
+            "('wellness','strategy','communications','financial',"
+            "'knowledge','legal')"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for agent in agents:
+        bus.remember(agent["id"], calibration, memory_type="persona",
+                     importance=9, source="system", db_path=db_path)
+
+    bus.set_config("calibration_broadcast_done", "true", db_path=db_path)
+    print(f"[self-learning] Calibration broadcast: {len(agents)} agents tuned to {name}")
+
+
+# ---------------------------------------------------------------------------
+# Self-Learning: Skill Drafting (Phase 5)
+# ---------------------------------------------------------------------------
+
+def _track_topic_frequency(db_path: Path, agent_id: int, human_msg: str):
+    """Track how often the human asks about specific topics.
+
+    When a topic appears 5+ times in 7 days, suggests drafting a skill.
+    Uses crew_config for persistence. Called from _extract_conversation_learnings.
+    """
+    # Extract simple topic keywords (2-3 word phrases)
+    words = human_msg.lower().split()
+    if len(words) < 3:
+        return
+
+    # Look for actionable topic phrases
+    topic_signals = _learn_re.findall(
+        r"\b(?:help (?:me |with )?|how (?:do i |to )|can you |"
+        r"i need (?:to |help with )?|show me how to )"
+        r"([\w\s]{3,30}?)(?:[.!?\n,]|$)",
+        human_msg, _learn_re.IGNORECASE)
+
+    if not topic_signals:
+        return
+
+    config_key = f"topic_frequency_{agent_id}"
+    raw = bus.get_config(config_key, "{}", db_path=db_path)
+    try:
+        freq = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        freq = {}
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    for topic in topic_signals:
+        topic = topic.strip().lower()
+        if len(topic) < 4:
+            continue
+        key = topic.replace(" ", "_")[:30]
+        if key not in freq:
+            freq[key] = {"count": 0, "first_seen": today, "last_seen": today,
+                         "display": topic}
+        freq[key]["count"] += 1
+        freq[key]["last_seen"] = today
+
+        # Check threshold: 5 mentions in 7 days
+        if freq[key]["count"] >= 5:
+            first = freq[key]["first_seen"]
+            try:
+                days_span = (datetime.strptime(today, "%Y-%m-%d") -
+                             datetime.strptime(first, "%Y-%m-%d")).days
+            except ValueError:
+                days_span = 0
+            if days_span <= 7:
+                _suggest_skill_draft(db_path, agent_id, freq[key]["display"])
+                del freq[key]  # Reset after suggesting
+
+    bus.set_config(config_key, json.dumps(freq), db_path=db_path)
+
+
+def _suggest_skill_draft(db_path: Path, agent_id: int, topic: str):
+    """Suggest a skill draft to the human via Crew Boss.
+
+    When a topic has been mentioned 5+ times in a week, Crew Boss asks
+    the human if they'd like a dedicated skill for it.
+    """
+    conn = bus.get_conn(db_path)
+    try:
+        boss = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='right_hand' LIMIT 1"
+        ).fetchone()
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not boss or not human:
+        return
+
+    # Don't suggest the same topic twice
+    suggested_key = f"skill_suggested_{topic.replace(' ', '_')}"
+    if bus.get_config(suggested_key, "", db_path=db_path):
+        return
+
+    bus.send_message(
+        from_id=boss["id"], to_id=human["id"],
+        message_type="idea",
+        subject=f"Skill suggestion: {topic}",
+        body=(
+            f"I've noticed you keep asking about {topic} — "
+            f"want me to create a dedicated skill for your crew? "
+            f"It would help me handle these requests even better. "
+            f"Just say 'yes' and I'll set it up!"
+        ),
+        priority="low", db_path=db_path,
+    )
+    bus.set_config(suggested_key, "true", db_path=db_path)
+    print(f"[self-learning] Skill suggestion sent: {topic}")
 
 
 # ---------------------------------------------------------------------------
@@ -700,7 +1195,8 @@ def _process_queued_messages(db_path: Path):
             clean_reply = _execute_wizard_actions(reply, db_path)
 
             # Insert reply directly — always works, bypasses routing rules
-            _insert_reply_direct(db_path, agent_id, human_id, clean_reply)
+            _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
+                                 human_msg=user_text, agent_type=agent_type)
 
         # Mark original message as delivered
         _mark_delivered(db_path, msg_id)
@@ -834,7 +1330,8 @@ def _mark_delivered(db_path: Path, message_id: int):
         conn.close()
 
 
-def _insert_reply_direct(db_path: Path, from_id: int, to_id: int, body: str):
+def _insert_reply_direct(db_path: Path, from_id: int, to_id: int, body: str,
+                         human_msg: str = "", agent_type: str = ""):
     """Insert a reply directly (bypass routing rules for chat responses)."""
     conn = bus.get_conn(db_path)
     try:
@@ -850,6 +1347,15 @@ def _insert_reply_direct(db_path: Path, from_id: int, to_id: int, body: str):
 
     # Real-time integrity check — scan every agent reply as it's sent
     _check_reply_integrity(db_path, from_id, body)
+
+    # Self-learning: extract insights from conversation (zero LLM cost)
+    if human_msg:
+        try:
+            _extract_conversation_learnings(db_path, from_id, agent_type,
+                                            human_msg, body)
+            _track_topic_frequency(db_path, from_id, human_msg)
+        except Exception:
+            pass  # Learning should never break the reply pipeline
 
 
 def _check_reply_integrity(db_path: Path, agent_id: int, reply_text: str):
