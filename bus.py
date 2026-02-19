@@ -581,6 +581,22 @@ def init_db(db_path: Optional[Path] = None) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_team_links_a ON team_links(team_a_id);
         CREATE INDEX IF NOT EXISTS idx_team_links_b ON team_links(team_b_id);
+
+        -- Social content drafts: agents draft, humans copy-paste to platforms
+        CREATE TABLE IF NOT EXISTS social_drafts (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id    INTEGER NOT NULL REFERENCES agents(id),
+            platform    TEXT NOT NULL CHECK(platform IN (
+                'reddit','twitter','hackernews','discord','linkedin','producthunt','other')),
+            title       TEXT NOT NULL DEFAULT '',
+            body        TEXT NOT NULL,
+            target      TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'draft'
+                        CHECK(status IN ('draft','approved','posted','rejected')),
+            created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            approved_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_drafts(status, platform);
     """)
 
     # Migrate existing DBs: add model column to agents if missing
@@ -3993,6 +4009,69 @@ def get_team_mailbox_summary(team_id: int,
         "warning_count": warning,
         "latest_severity": latest,
     }
+
+
+# ---------------------------------------------------------------------------
+# Social Content Drafts
+# ---------------------------------------------------------------------------
+
+VALID_PLATFORMS = ("reddit", "twitter", "hackernews", "discord", "linkedin", "producthunt", "other")
+VALID_DRAFT_STATUSES = ("draft", "approved", "posted", "rejected")
+
+
+def create_social_draft(agent_id: int, platform: str, body: str,
+                        title: str = "", target: str = "",
+                        db_path: Optional[Path] = None) -> dict:
+    """Create a social media draft for human review."""
+    if platform not in VALID_PLATFORMS:
+        return {"ok": False, "error": f"Invalid platform '{platform}'"}
+    conn = get_conn(db_path)
+    cur = conn.execute(
+        "INSERT INTO social_drafts (agent_id, platform, title, body, target) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (agent_id, platform, title, body, target),
+    )
+    draft_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return {"ok": True, "draft_id": draft_id, "platform": platform}
+
+
+def get_social_drafts(platform: str = "", status: str = "",
+                      db_path: Optional[Path] = None) -> list:
+    """Return social drafts, optionally filtered by platform and/or status."""
+    conn = get_conn(db_path)
+    sql = ("SELECT sd.*, a.name AS agent_name FROM social_drafts sd "
+           "JOIN agents a ON sd.agent_id = a.id WHERE 1=1")
+    params = []
+    if platform:
+        sql += " AND sd.platform=?"
+        params.append(platform)
+    if status:
+        sql += " AND sd.status=?"
+        params.append(status)
+    sql += " ORDER BY sd.created_at DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_draft_status(draft_id: int, status: str,
+                        db_path: Optional[Path] = None) -> dict:
+    """Update a draft's status (approve, reject, mark posted)."""
+    if status not in VALID_DRAFT_STATUSES:
+        return {"ok": False, "error": f"Invalid status '{status}'"}
+    conn = get_conn(db_path)
+    approved_clause = ""
+    if status == "approved":
+        approved_clause = ", approved_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+    conn.execute(
+        f"UPDATE social_drafts SET status=?{approved_clause} WHERE id=?",
+        (status, draft_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "draft_id": draft_id, "status": status}
 
 
 # ---------------------------------------------------------------------------

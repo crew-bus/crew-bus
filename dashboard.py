@@ -667,6 +667,7 @@ a{color:var(--ac);text-decoration:none}
 .dot-green{background:var(--gn)}
 .dot-yellow{background:var(--yl)}
 .dot-red{background:var(--rd)}
+.dot-orange{background:#f0883e}
 .bubble-label{
   margin-top:8px;font-size:.78rem;font-weight:700;color:rgba(255,255,255,0.92);
   text-align:center;white-space:nowrap;letter-spacing:0.04em;
@@ -1788,22 +1789,17 @@ async function checkForUpdates(){
   }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='\U0001f504 Update';}
 }
 
-// Auto-update: check on load + every 24 hours, apply silently
+// Auto-update: check on load + every 24 hours, show dot only (never auto-apply)
 async function _autoUpdateCheck(){
   try{
     var r=await api('/api/update/check');
     if(r&&r.update_available){
       var dot=document.getElementById('update-dot');
       if(dot)dot.style.display='block';
-      var u=await apiPost('/api/update/apply',{});
-      if(u&&u.ok){
-        showToast('\U0001f504 Crew Bus updated! Reloading...');
-        setTimeout(function(){location.reload()},2000);
-      }
     }
   }catch(e){}
 }
-setTimeout(_autoUpdateCheck,5000);
+setTimeout(_autoUpdateCheck,30000);
 setInterval(_autoUpdateCheck,86400000);
 
 function openFeedback(){
@@ -1847,7 +1843,8 @@ async function apiPost(path,data){
     body:JSON.stringify(data||{})})).json();
 }
 
-function dotClass(status,agent_type,checkIn){
+function dotClass(status,agent_type,checkIn,active){
+  if(active===0||active===false)return 'dot-orange';
   if(status==='quarantined')return 'dot-yellow';
   if(status==='terminated')return 'dot-red';
   if(agent_type==='security'&&checkIn){
@@ -1909,7 +1906,75 @@ function loadCurrentView(){
   else if(currentView==='messages')loadMessages();
   else if(currentView==='decisions')loadDecisions();
   else if(currentView==='audit')loadAudit();
+  else if(currentView==='drafts')loadDrafts();
   else if(currentView==='team'){}  // team dash loads separately
+}
+
+// ══════════ SOCIAL DRAFTS ══════════
+
+var platformIcons={reddit:'\U0001f4e2',twitter:'\U0001f426',hackernews:'\U0001f4f0',discord:'\U0001f4ac',linkedin:'\U0001f4bc',producthunt:'\U0001f680',other:'\U0001f4cb'};
+var statusColors={draft:'#d18616',approved:'#2ea043',posted:'#388bfd',rejected:'#f85149'};
+
+async function loadDrafts(){
+  var pf=document.getElementById('drafts-platform-filter').value;
+  var sf=document.getElementById('drafts-status-filter').value;
+  var url='/api/social/drafts?';
+  if(pf)url+='platform='+pf+'&';
+  if(sf)url+='status='+sf+'&';
+  var drafts=await api(url);
+  var el=document.getElementById('drafts-list');
+  if(!drafts||!drafts.length){el.innerHTML='<p style="color:var(--mu);text-align:center;padding:40px 0">No drafts yet. Your Content Creator and Website Manager will add them here.</p>';return}
+  var html='';
+  drafts.forEach(function(d){
+    var icon=platformIcons[d.platform]||'\U0001f4cb';
+    var sc=statusColors[d.status]||'var(--mu)';
+    html+='<div style="background:var(--sf);border:1px solid var(--br);border-radius:10px;padding:16px;margin-bottom:12px">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    html+='<div style="display:flex;align-items:center;gap:8px">';
+    html+='<span style="font-size:1.2rem">'+icon+'</span>';
+    html+='<span style="font-weight:600;color:var(--fg)">'+esc(d.platform)+'</span>';
+    if(d.target)html+='<span style="color:var(--mu);font-size:.8rem">\u2192 '+esc(d.target)+'</span>';
+    html+='</div>';
+    html+='<span style="background:'+sc+';color:#fff;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600">'+d.status+'</span>';
+    html+='</div>';
+    if(d.title)html+='<div style="font-weight:600;margin-bottom:6px;color:var(--fg)">'+esc(d.title)+'</div>';
+    html+='<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:12px;font-size:.82rem;color:var(--fg);max-height:300px;overflow-y:auto;margin:0 0 10px">'+esc(d.body)+'</pre>';
+    html+='<div style="display:flex;gap:6px;justify-content:flex-end">';
+    html+='<button onclick="copyDraft('+d.id+')" style="background:var(--ac);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\U0001f4cb Copy</button>';
+    if(d.status==='draft'){
+      html+='<button onclick="updateDraftStatus('+d.id+',\'approved\')" style="background:#2ea043;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Approve</button>';
+      html+='<button onclick="updateDraftStatus('+d.id+',\'rejected\')" style="background:#f85149;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2717 Reject</button>';
+    }
+    if(d.status==='approved'){
+      html+='<button onclick="updateDraftStatus('+d.id+',\'posted\')" style="background:#388bfd;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Mark Posted</button>';
+    }
+    html+='</div></div>';
+  });
+  el.innerHTML=html;
+}
+
+async function copyDraft(id){
+  var drafts=await api('/api/social/drafts');
+  var d=drafts.find(function(x){return x.id===id});
+  if(!d)return;
+  var text=d.title?d.title+'\\n\\n'+d.body:d.body;
+  try{await navigator.clipboard.writeText(text);showToast('Copied to clipboard!')}
+  catch(e){
+    var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Copied!')
+  }
+}
+
+async function updateDraftStatus(id,status){
+  await apiPost('/api/social/drafts/'+id+'/status',{status:status});
+  loadDrafts();
+}
+
+function showToast(msg){
+  var t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--ac);color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:.85rem;animation:fadeIn .2s';
+  document.body.appendChild(t);
+  setTimeout(function(){t.remove()},2000);
 }
 
 // ══════════ MAIN CIRCLE ══════════
@@ -2045,7 +2110,7 @@ function renderBubble(id,agent,sub){
   }
   el.onclick=function(){openAgentSpace(agent.id)};
   var dot=el.querySelector('.status-dot');
-  if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null);
+  if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
   var countEl=el.querySelector('.bubble-count');
   if(countEl){var c=agent.period_count||agent.unread_count||0;countEl.textContent=c>0?c+' msgs':''}
   var subEl=el.querySelector('.bubble-sub');
@@ -2119,7 +2184,7 @@ async function openAgentSpace(agentId){
   document.getElementById('as-name').textContent=name;
   document.getElementById('as-name').style.color=color;
   var asDot=document.getElementById('as-status-dot');
-  asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null);
+  asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
 
   var intro=document.getElementById('as-intro');
   intro.style.borderColor=color+'44';
@@ -2139,7 +2204,12 @@ async function openAgentSpace(agentId){
     '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
     '</select></div>'+
     (agent.agent_type==='worker'||agent.agent_type==='manager'?
-      '<div style="margin-top:10px"><button onclick="terminateAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\',\''+agent.agent_type+'\')" style="background:none;border:1px solid #f8514944;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f8514922\'" onmouseout="this.style.background=\'none\'">Terminate Agent</button></div>':'');
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+      (agent.active?
+        '<button onclick="pauseAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\','+(agent.agent_type==='manager'?'true':'false')+')" style="background:none;border:1px solid #f0883e66;color:#f0883e;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f0883e22\'" onmouseout="this.style.background=\'none\'">Pause'+(agent.agent_type==='manager'?' Team':'')+'</button>':
+        '<button onclick="resumeAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\','+(agent.agent_type==='manager'?'true':'false')+')" style="background:none;border:1px solid #3fb95066;color:#3fb950;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#3fb95022\'" onmouseout="this.style.background=\'none\'">Resume'+(agent.agent_type==='manager'?' Team':'')+'</button>')+
+      '<button onclick="terminateAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\',\''+agent.agent_type+'\')" style="background:none;border:1px solid #f8514944;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f8514922\'" onmouseout="this.style.background=\'none\'">Terminate</button>'+
+      '</div>':'');
 
   var feedEl=document.getElementById('as-activity');
   if(!activity||activity.length===0){
@@ -2755,6 +2825,48 @@ async function terminateAgent(agentId,agentName,agentType){
   }catch(e){showToast('Error terminating agent.','error');}
 }
 
+// ══════════ PAUSE / RESUME AGENT ══════════
+
+async function pauseAgent(agentId,agentName,isManager){
+  var msg=isManager
+    ?'Pause "'+agentName+'" and all workers in this team? They won\'t consume tokens while paused.'
+    :'Pause "'+agentName+'"? It won\'t consume tokens while paused.';
+  if(!await showConfirm('Pause Agent',msg,'Pause'))return;
+  try{
+    var r=await apiPost('/api/agent/'+agentId+'/deactivate',{});
+    if(!r.ok){showToast(r.error||'Failed to pause.','error');return;}
+    if(isManager){
+      var team=await api('/api/teams/'+agentId+'/agents');
+      for(var i=0;i<team.length;i++){
+        if(team[i].id!==agentId&&team[i].active)
+          await apiPost('/api/agent/'+team[i].id+'/deactivate',{});
+      }
+    }
+    showToast(agentName+(isManager?' and team':'')+' paused.');
+    closeAgentSpace();loadAgents();loadTeams();
+  }catch(e){showToast('Error pausing agent.','error');}
+}
+
+async function resumeAgent(agentId,agentName,isManager){
+  var msg=isManager
+    ?'Resume "'+agentName+'" and all workers in this team?'
+    :'Resume "'+agentName+'"?';
+  if(!await showConfirm('Resume Agent',msg,'Resume'))return;
+  try{
+    var r=await apiPost('/api/agent/'+agentId+'/activate',{});
+    if(!r.ok){showToast(r.error||'Failed to resume.','error');return;}
+    if(isManager){
+      var team=await api('/api/teams/'+agentId+'/agents');
+      for(var i=0;i<team.length;i++){
+        if(team[i].id!==agentId&&!team[i].active)
+          await apiPost('/api/agent/'+team[i].id+'/activate',{});
+      }
+    }
+    showToast(agentName+(isManager?' and team':'')+' resumed.');
+    closeAgentSpace();loadAgents();loadTeams();
+  }catch(e){showToast('Error resuming agent.','error');}
+}
+
 // ══════════ RENAME TEAM ══════════
 
 function startRenameTeam(){
@@ -2823,7 +2935,7 @@ async function openTeamDash(teamId){
   // Manager bubble — click to open, double-click name to rename
   if(mgr){
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
-      '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
+      '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
       '<span class="team-mgr-label">'+esc(mgr.name)+' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span>'+
       '<span class="team-mgr-sub">Manager</span></div></div>';
   }
@@ -2844,7 +2956,7 @@ async function openTeamDash(teamId){
   html+='<div class="team-workers">';
   workers.forEach(function(w){
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
-      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
+      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
       '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
   // Hire Agent button (if under max)
@@ -3428,6 +3540,7 @@ def _build_html():
   <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
+  <button class="nav-pill" data-view="drafts" onclick="showView('drafts')">Drafts</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
   <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Unlock Skills</button>
   <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
@@ -3611,6 +3724,34 @@ def _build_html():
   <table><thead><tr>
     <th>ID</th><th>Event</th><th>Agent</th><th>Details</th><th>Time</th>
   </tr></thead><tbody id="audit-body"></tbody></table>
+</div></div>
+
+<!-- ══════════ SOCIAL DRAFTS VIEW ══════════ -->
+<div id="view-drafts" class="view" data-page="drafts">
+<div class="legacy-container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h1 style="margin:0">Social Drafts</h1>
+    <div style="display:flex;gap:8px">
+      <select id="drafts-platform-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
+        <option value="">All Platforms</option>
+        <option value="reddit">Reddit</option>
+        <option value="twitter">Twitter/X</option>
+        <option value="hackernews">Hacker News</option>
+        <option value="discord">Discord</option>
+        <option value="linkedin">LinkedIn</option>
+        <option value="producthunt">Product Hunt</option>
+        <option value="other">Other</option>
+      </select>
+      <select id="drafts-status-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
+        <option value="">All Status</option>
+        <option value="draft">Draft</option>
+        <option value="approved">Approved</option>
+        <option value="posted">Posted</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+  </div>
+  <div id="drafts-list"></div>
 </div></div>
 
 <!-- ══════════ TEAM DASHBOARD VIEW (FIX 1) ══════════ -->
@@ -4672,7 +4813,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         # Pages — SPA serves same HTML for all routes
-        if path in ("/", "/messages", "/decisions", "/audit") or path.startswith("/team/"):
+        if path in ("/", "/messages", "/decisions", "/audit", "/drafts") or path.startswith("/team/"):
             return _html_response(self, PAGE_HTML)
 
         if path == "/api/stats":
@@ -4876,6 +5017,13 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/dashboard/has-password":
             stored = bus.get_config("dashboard_password", db_path=self.db_path)
             return _json_response(self, {"has_password": bool(stored)})
+
+        # ── Social Drafts API (GET) ──
+        if path == "/api/social/drafts":
+            platform = qs.get("platform", [""])[0]
+            status = qs.get("status", [""])[0]
+            return _json_response(self, bus.get_social_drafts(
+                platform=platform, status=status, db_path=self.db_path))
 
         _json_response(self, {"error": "not found"}, 404)
 
@@ -5429,6 +5577,17 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
+        # ── Activate (resume) a paused agent ──
+
+        m = re.match(r"^/api/agent/(\d+)/activate$", path)
+        if m:
+            agent_id = int(m.group(1))
+            try:
+                result = bus.activate_agent(agent_id, db_path=self.db_path)
+                return _json_response(self, {"ok": True, "agent": result})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
         # ── Terminate agent (project complete, retire it) ──
 
         m = re.match(r"^/api/agent/(\d+)/terminate$", path)
@@ -5586,6 +5745,27 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
             bus.set_config("feedback_log", json.dumps(log), db_path=self.db_path)
+
+            # Route feedback to Launch HQ team mailbox via Feedback Manager
+            try:
+                _conn = bus.get_conn(self.db_path)
+                # Find the Feedback Manager (worker in first manager's team)
+                feedback_mgr = _conn.execute(
+                    "SELECT id FROM agents WHERE name='Feedback Manager' LIMIT 1"
+                ).fetchone()
+                _conn.close()
+                if feedback_mgr:
+                    _sev = "warning" if fb_type == "bug" else "info"
+                    bus.send_to_team_mailbox(
+                        from_agent_id=feedback_mgr["id"],
+                        subject=f"[{fb_type.upper()}] New user feedback",
+                        body=fb_text,
+                        severity=_sev,
+                        db_path=self.db_path,
+                    )
+            except Exception:
+                pass  # Feedback saved even if routing fails
+
             return _json_response(self, {"ok": True})
 
         if path == "/api/dashboard/reset-pin":
@@ -5630,6 +5810,38 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     "crew": result["org"],
                     "agents_loaded": result["agents_loaded"],
                 })
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Social Drafts API (POST) ──
+        if path == "/api/social/drafts":
+            agent_id = data.get("agent_id")
+            platform = data.get("platform", "")
+            body = data.get("body", "")
+            title = data.get("title", "")
+            target = data.get("target", "")
+            if not agent_id or not platform or not body:
+                return _json_response(self, {"error": "agent_id, platform, body required"}, 400)
+            try:
+                draft = bus.create_social_draft(
+                    agent_id=int(agent_id), platform=platform,
+                    body=body, title=title, target=target,
+                    db_path=self.db_path)
+                return _json_response(self, draft)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        m = re.match(r"^/api/social/drafts/(\d+)/status$", path)
+        if m:
+            draft_id = int(m.group(1))
+            new_status = data.get("status", "")
+            if not new_status:
+                return _json_response(self, {"error": "status required"}, 400)
+            try:
+                result = bus.update_draft_status(
+                    draft_id=draft_id, status=new_status,
+                    db_path=self.db_path)
+                return _json_response(self, result)
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
