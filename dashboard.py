@@ -128,7 +128,7 @@ WIZARD_DESCRIPTION = (
     "that make agents smarter at specific tasks. The Guardian can help them\n"
     "browse, install, and manage skills for any agent or team.\n\n"
     "TEAM LIMITS:\n"
-    "Each team can have up to 8 agents (1 manager + 7 workers). If the human\n"
+    "Each team can have up to 10 agents (1 manager + 9 workers). If the human\n"
     "needs more, suggest creating a new team and linking it to the existing one.\n"
     "Teams can link their leaders so departments can communicate.\n\n"
     "RULES:\n"
@@ -1823,7 +1823,9 @@ async function openAgentSpace(agentId){
     '<option value="groq"'+(curModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
     '<option value="gemini"'+(curModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
     '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
-    '</select></div>';
+    '</select></div>'+
+    (agent.agent_type==='worker'||agent.agent_type==='manager'?
+      '<div style="margin-top:10px"><button onclick="terminateAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\',\''+agent.agent_type+'\')" style="background:none;border:1px solid #f8514944;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f8514922\'" onmouseout="this.style.background=\'none\'">Terminate Agent</button></div>':'');
 
   var feedEl=document.getElementById('as-activity');
   if(!activity||activity.length===0){
@@ -2332,6 +2334,37 @@ async function submitHire(teamId){
   }catch(e){if(msgEl){msgEl.textContent='Error hiring agent.';msgEl.style.color='#e55';}}
 }
 
+// ══════════ TERMINATE AGENT ══════════
+
+async function terminateAgent(agentId,agentName,agentType){
+  var ok=await showConfirm(
+    'Terminate Agent',
+    'Terminate "'+agentName+'"? This retires the agent permanently and archives all messages.',
+    'Terminate'
+  );
+  if(!ok)return;
+  // Require PIN if set
+  try{
+    var hasPass=await api('/api/dashboard/has-password');
+    if(hasPass.has_password){
+      var pin=await showPasswordPrompt('Enter your PIN to terminate '+agentName);
+      if(!pin)return;
+      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
+      if(!verify.valid){showToast('Wrong PIN. Termination cancelled.','error');return;}
+    }
+  }catch(e){}
+  try{
+    var r=await apiPost('/api/agent/'+agentId+'/terminate',{});
+    if(r.ok){
+      showToast(agentName+' has been terminated.');
+      closeAgentSpace();
+      loadAgents();loadTeams();
+    }else{
+      showToast(r.error||'Failed to terminate agent.','error');
+    }
+  }catch(e){showToast('Error terminating agent.','error');}
+}
+
 // ══════════ RENAME TEAM ══════════
 
 function startRenameTeam(){
@@ -2425,7 +2458,7 @@ async function openTeamDash(teamId){
       '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
   // Hire Agent button (if under max)
-  if(mgr&&teamAgents.length<8){
+  if(mgr&&teamAgents.length<10){
     html+='<div class="team-worker-bubble" onclick="showHireForm('+teamId+',\''+esc(mgr.name)+'\')" style="cursor:pointer;opacity:.7;border:2px dashed var(--br);border-radius:12px;padding:8px">'+
       '<div class="team-worker-circle" style="background:var(--s2)">\u2795</div>'+
       '<span class="team-worker-label" style="color:var(--mu)">Hire Agent</span></div>';
