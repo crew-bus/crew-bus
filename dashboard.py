@@ -2059,11 +2059,64 @@ async function createTeam(name){
     closeTemplatePicker();
     if(r.ok){showToast('Team "'+r.team_name+'" created with '+(r.worker_ids?r.worker_ids.length:0)+' agents')}
     else if(r.requires_payment){
-      showToast(r.error,'info');
+      showPaymentModal(r);
     }
     else{showToast(r.error||'Failed to create team','error')}
     await loadTeams();
   }catch(e){closeTemplatePicker();showToast('Error creating team','error')}
+}
+
+function showPaymentModal(info){
+  var m=document.getElementById('payment-modal');
+  document.getElementById('pay-team-name').textContent=info.template_name||info.template||'Team';
+  document.getElementById('pay-trial-price').textContent='$'+info.price_trial;
+  document.getElementById('pay-trial-days').textContent=info.trial_days||30;
+  document.getElementById('pay-annual-price').textContent='$'+info.price_annual;
+  document.getElementById('pay-error').textContent='';
+  document.getElementById('pay-promo').value='';
+  m.dataset.template=info.template;
+  m.classList.add('open');
+}
+function closePaymentModal(){document.getElementById('payment-modal').classList.remove('open')}
+async function activateLicense(type){
+  var m=document.getElementById('payment-modal');
+  var template=m.dataset.template;
+  var promo=document.getElementById('pay-promo').value.trim();
+  var errEl=document.getElementById('pay-error');
+  errEl.textContent='';
+  try{
+    var r=await apiPost('/api/teams/activate-license',{template:template,license_type:type,promo_code:promo});
+    if(r.ok){
+      closePaymentModal();
+      showToast('License activated! Creating your team...');
+      var team=await apiPost('/api/teams',{template:template});
+      if(team.ok){showToast('Team "'+team.team_name+'" created!')}
+      else{showToast(team.error||'Team creation failed','error')}
+      await loadTeams();
+      // Show referral code for business management
+      if(template==='business'){
+        try{
+          var ref=await api('/api/referral/code');
+          if(ref.ok&&ref.code){
+            showReferralCode(ref.code);
+          }
+        }catch(e){}
+      }
+    }else{
+      errEl.textContent=r.error||'Activation failed.';
+    }
+  }catch(e){errEl.textContent='Connection error.';}
+}
+function showReferralCode(code){
+  showToast('Referral code: '+code+' \u2014 share it to give friends a free 30-day trial!');
+  // Also show in a confirm-style dialog with copy button
+  var msg='Share this with friends to give them a free 30-day Business Management trial:';
+  var ok=showConfirm('\u{1F517} Your Referral Code',msg+' '+code,'Copy Code');
+  ok.then(function(r){
+    if(r&&navigator.clipboard){
+      navigator.clipboard.writeText(code).then(function(){showToast('Copied!')});
+    }
+  });
 }
 
 async function deleteTeam(teamId,teamName){
@@ -2148,9 +2201,10 @@ async function openTeamDash(teamId){
   var mgr=teamAgents.find(function(a){return a.agent_type==='manager'});
   var workers=teamAgents.filter(function(a){return a.agent_type!=='manager'});
 
+  var canRename=!team.locked_name;
   var html='<div class="team-dash-header">'+
     '<button class="team-dash-back" onclick="showView(\'crew\')">\u2190</button>'+
-    '<span class="team-dash-title" id="team-dash-name" data-team-id="'+teamId+'" onclick="startRenameTeam()" title="Click to rename">'+esc(team.name)+' <span class="edit-icon">\u270F\uFE0F</span></span>'+
+    '<span class="team-dash-title" id="team-dash-name" data-team-id="'+teamId+'"'+(canRename?' onclick="startRenameTeam()" title="Click to rename"':'')+'>'+esc(team.name)+(canRename?' <span class="edit-icon">\u270F\uFE0F</span>':'')+'</span>'+
     '<span class="badge badge-active">'+team.agent_count+' agents</span>'+
     '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
@@ -2934,15 +2988,15 @@ def _build_html():
   <div class="modal-sheet">
     <div class="handle"></div>
     <h3>Add a Team</h3>
-    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">\U0001f3e2</span><div><div class="template-name">Business</div><div class="template-desc">Strategy, Sales, Operations + Workers</div></div></div>
-    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">\U0001f3d7\ufe0f</span><div><div class="template-name">New Department</div><div class="template-desc">Manager + Workers</div></div></div>
-    <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">\U0001f4bc</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Client Follow-up</div></div></div>
-    <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">\U0001f4b0</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content Creator, Sales Tracker</div></div></div>
-    <div class="template-card" onclick="createTeam('school')"><span class="template-icon">\U0001f4da</span><div><div class="template-name">School</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
-    <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">\U0001f3b8</span><div><div class="template-name">Passion Project</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
-    <div class="template-card" onclick="createTeam('household')"><span class="template-icon">\U0001f3e0</span><div><div class="template-name">Household</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
-    <div class="template-card" onclick="createTeam('management')"><span class="template-icon">\U0001f4ca</span><div><div class="template-name">Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">PRO</span></div></div></div>
-    <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents</div></div></div>
+    <div style="font-size:.65rem;color:var(--mu);text-align:center;margin-bottom:8px">\u2714 Free &nbsp; | &nbsp; \U0001f4b3 Paid (trial available)</div>
+    <div class="template-card" onclick="createTeam('school')"><span class="template-icon">\U0001f4da</span><div><div class="template-name">School \u2714</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
+    <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">\U0001f3b8</span><div><div class="template-name">Passion Project \u2714</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
+    <div class="template-card" onclick="createTeam('household')"><span class="template-icon">\U0001f3e0</span><div><div class="template-name">Household \u2714</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
+    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">\U0001f3e2</span><div><div class="template-name">Business Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">\U0001f3d7\ufe0f</span><div><div class="template-name">Department</div><div class="template-desc">Task Runner, Research Aide <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $25/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">\U0001f4bc</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Follow-up <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">\U0001f4b0</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content, Sales <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
     <button class="btn" onclick="closeTemplatePicker()" style="width:100%;margin-top:8px">Cancel</button>
   </div>
 </div>
@@ -3077,6 +3131,29 @@ def _build_html():
       <button class="confirm-cancel" onclick="closeFeedback()">Cancel</button>
       <button class="setup-btn" onclick="submitFeedback()" style="padding:8px 18px;font-size:.85rem">Send Feedback</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════════ PAYMENT MODAL ══════════ -->
+<div class="confirm-overlay" id="payment-modal">
+  <div class="confirm-box" style="max-width:400px;text-align:center">
+    <h3>\U0001f513 Unlock <span id="pay-team-name">Team</span></h3>
+    <div style="display:flex;gap:10px;margin:16px 0">
+      <div style="flex:1;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:14px;cursor:pointer" onclick="activateLicense('trial')">
+        <div style="font-size:1.3rem;font-weight:700;color:var(--ac)" id="pay-trial-price">$10</div>
+        <div style="font-size:.75rem;color:var(--mu)"><span id="pay-trial-days">30</span>-day trial</div>
+      </div>
+      <div style="flex:1;background:var(--sf);border:2px solid var(--ac);border-radius:8px;padding:14px;cursor:pointer" onclick="activateLicense('annual')">
+        <div style="font-size:1.3rem;font-weight:700;color:var(--ac)" id="pay-annual-price">$50</div>
+        <div style="font-size:.75rem;color:var(--mu)">per year</div>
+        <div style="font-size:.6rem;color:var(--ac);margin-top:2px">BEST VALUE</div>
+      </div>
+    </div>
+    <div style="margin:10px 0">
+      <input class="setup-key" id="pay-promo" type="text" placeholder="Promo code (optional)" style="text-align:center;font-size:.85rem">
+    </div>
+    <div class="setup-error" id="pay-error"></div>
+    <button class="confirm-cancel" onclick="closePaymentModal()" style="margin-top:8px;width:100%">Cancel</button>
   </div>
 </div>
 
@@ -3319,10 +3396,18 @@ def _get_teams(db_path):
         for mgr in managers:
             workers = conn.execute("SELECT COUNT(*) FROM agents WHERE parent_agent_id=?",
                                    (mgr["id"],)).fetchone()[0]
+            team_name = mgr["name"].replace("-Manager", "").replace("Manager", "Team")
+            # Check if name is locked (free team)
+            is_locked = False
+            for tpl in TEAM_TEMPLATES.values():
+                if tpl["name"] == team_name and tpl.get("locked_name"):
+                    is_locked = True
+                    break
             teams.append({"id": mgr["id"],
-                          "name": mgr["name"].replace("-Manager", "").replace("Manager", "Team"),
+                          "name": team_name,
                           "icon": "\U0001f3e2", "agent_count": workers + 1,
-                          "manager": mgr["name"], "status": mgr["status"]})
+                          "manager": mgr["name"], "status": mgr["status"],
+                          "locked_name": is_locked})
         return teams
     finally:
         conn.close()
@@ -3346,68 +3431,16 @@ def _get_team_agents(db_path, team_id):
         conn.close()
 
 
+# Free teams: no rename allowed. Paid teams: rename OK.
+# "locked_name": True means the team title cannot be changed.
 TEAM_TEMPLATES = {
     "business": {
-        "name": "Business",
-        "workers": [
-            ("Strategy Lead", "Analyzes market trends, competitors, and growth opportunities."),
-            ("Sales Bot", "Tracks leads, drafts outreach, and follows up on prospects."),
-            ("Ops Coordinator", "Manages schedules, tasks, and day-to-day operations."),
-        ],
-    },
-    "department": {
-        "name": "Department",
-        "workers": [
-            ("Task Runner", "Handles assigned tasks and reports progress."),
-            ("Research Aide", "Gathers information and summarizes findings."),
-        ],
-    },
-    "freelance": {
-        "name": "Freelance",
-        "workers": [
-            ("Lead Finder", "Scans job boards and communities for freelance gigs."),
-            ("Invoice Bot", "Drafts invoices, tracks payments, and sends reminders."),
-            ("Client Follow-up", "Sends check-ins and nurtures client relationships."),
-        ],
-    },
-    "sidehustle": {
-        "name": "Side Hustle",
-        "workers": [
-            ("Market Scout", "Researches demand, pricing, and competition for your idea."),
-            ("Content Creator", "Drafts posts, product descriptions, and marketing copy."),
-            ("Sales Tracker", "Tracks revenue, expenses, and profit margins."),
-        ],
-    },
-    "school": {
-        "name": "School",
-        "workers": [
-            ("Tutor", "Explains concepts, answers homework questions, quizzes you."),
-            ("Research Assistant", "Finds sources, summarizes papers, checks citations."),
-            ("Study Planner", "Builds study schedules, tracks deadlines, sends reminders."),
-        ],
-    },
-    "passion": {
-        "name": "Passion Project",
-        "workers": [
-            ("Project Planner", "Breaks your project into milestones and tracks progress."),
-            ("Skill Coach", "Suggests exercises, tutorials, and practice routines."),
-            ("Progress Tracker", "Logs what you've done and celebrates streaks."),
-        ],
-    },
-    "household": {
-        "name": "Household",
-        "workers": [
-            ("Meal Planner", "Suggests meals, builds grocery lists, tracks nutrition."),
-            ("Budget Tracker", "Tracks household spending and flags overspending."),
-            ("Schedule Keeper", "Manages family calendar, appointments, and chores."),
-        ],
-    },
-    "management": {
-        "name": "Management",
+        "name": "Business Management",
         "paid": True,
         "price_annual": 50,
         "price_trial": 10,
         "trial_days": 30,
+        "referral_enabled": True,
         "workers": [
             ("Operations Lead", "Oversees day-to-day operations and coordinates departments."),
             ("HR Coordinator", "Manages hiring pipelines, onboarding, and team health."),
@@ -3416,13 +3449,125 @@ TEAM_TEMPLATES = {
             ("Comms Manager", "Handles internal communications between departments."),
         ],
     },
+    "department": {
+        "name": "Department",
+        "paid": True,
+        "price_annual": 25,
+        "price_trial": 5,
+        "trial_days": 30,
+        "workers": [
+            ("Task Runner", "Handles assigned tasks and reports progress."),
+            ("Research Aide", "Gathers information and summarizes findings."),
+        ],
+    },
+    "freelance": {
+        "name": "Freelance",
+        "paid": True,
+        "price_annual": 30,
+        "price_trial": 5,
+        "trial_days": 30,
+        "workers": [
+            ("Lead Finder", "Scans job boards and communities for freelance gigs."),
+            ("Invoice Bot", "Drafts invoices, tracks payments, and sends reminders."),
+            ("Client Follow-up", "Sends check-ins and nurtures client relationships."),
+        ],
+    },
+    "sidehustle": {
+        "name": "Side Hustle",
+        "paid": True,
+        "price_annual": 30,
+        "price_trial": 5,
+        "trial_days": 30,
+        "workers": [
+            ("Market Scout", "Researches demand, pricing, and competition for your idea."),
+            ("Content Creator", "Drafts posts, product descriptions, and marketing copy."),
+            ("Sales Tracker", "Tracks revenue, expenses, and profit margins."),
+        ],
+    },
     "custom": {
         "name": "Custom Team",
+        "paid": True,
+        "price_annual": 50,
+        "price_trial": 10,
+        "trial_days": 30,
         "workers": [
             ("Assistant", "A general-purpose helper for your custom team."),
         ],
     },
+    "school": {
+        "name": "School",
+        "locked_name": True,
+        "workers": [
+            ("Tutor", "Explains concepts, answers homework questions, quizzes you."),
+            ("Research Assistant", "Finds sources, summarizes papers, checks citations."),
+            ("Study Planner", "Builds study schedules, tracks deadlines, sends reminders."),
+        ],
+    },
+    "passion": {
+        "name": "Passion Project",
+        "locked_name": True,
+        "workers": [
+            ("Project Planner", "Breaks your project into milestones and tracks progress."),
+            ("Skill Coach", "Suggests exercises, tutorials, and practice routines."),
+            ("Progress Tracker", "Logs what you've done and celebrates streaks."),
+        ],
+    },
+    "household": {
+        "name": "Household",
+        "locked_name": True,
+        "workers": [
+            ("Meal Planner", "Suggests meals, builds grocery lists, tracks nutrition."),
+            ("Budget Tracker", "Tracks household spending and flags overspending."),
+            ("Schedule Keeper", "Manages family calendar, appointments, and chores."),
+        ],
+    },
 }
+
+
+# Ryan's master promo code — unlocks any template, annual
+MASTER_PROMO = "CREWBUS-RYAN-2026"
+
+
+def _validate_promo(code, template, db_path):
+    """Validate a promo code. Returns {valid, grant_type} or {valid, error}."""
+    code_upper = code.upper().strip()
+
+    # Master promo — Ryan's personal code
+    if code_upper == MASTER_PROMO:
+        return {"valid": True, "grant_type": "annual"}
+
+    # Referral codes: format "REF-<hash>" — grants 30-day trial on business
+    if code_upper.startswith("REF-") and template == "business":
+        ref_code = code_upper
+        # Check if this referral is valid (exists in config)
+        stored = bus.get_config(f"referral_{ref_code}", db_path=db_path)
+        if stored:
+            # Check if already redeemed by this install
+            redeemed = bus.get_config(f"redeemed_{ref_code}", db_path=db_path)
+            if redeemed:
+                return {"valid": False, "error": "This referral code has already been used on this install."}
+            bus.set_config(f"redeemed_{ref_code}", "yes", db_path=db_path)
+            return {"valid": True, "grant_type": "trial"}
+        # Check if it's a well-formed referral from another user
+        # Referral codes are self-validating: REF-<8char hex>
+        if len(ref_code) == 12:  # "REF-" + 8 chars
+            bus.set_config(f"redeemed_{ref_code}", "yes", db_path=db_path)
+            return {"valid": True, "grant_type": "trial"}
+        return {"valid": False, "error": "Invalid referral code."}
+
+    return {"valid": False, "error": "Invalid promo code. Check for typos or visit crew-bus.dev/pricing."}
+
+
+def _generate_referral_code(db_path):
+    """Generate a unique referral code for this install."""
+    existing = bus.get_config("my_referral_code", db_path=db_path)
+    if existing:
+        return existing
+    code = "REF-" + secrets.token_hex(4).upper()
+    bus.set_config("my_referral_code", code, db_path=db_path)
+    # Mark it as valid so it works when entered on another install
+    bus.set_config(f"referral_{code}", "active", db_path=db_path)
+    return code
 
 
 def _create_team(db_path, template):
@@ -3441,6 +3586,7 @@ def _create_team(db_path, template):
                          f"{tpl.get('trial_days', 30)}-day trial.",
                 "requires_payment": True,
                 "template": template,
+                "template_name": tpl["name"],
                 "price_annual": tpl.get("price_annual", 50),
                 "price_trial": tpl.get("price_trial", 10),
                 "trial_days": tpl.get("trial_days", 30),
@@ -3813,6 +3959,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             unread = qs.get("unread", ["0"])[0] == "1"
             return _json_response(self, bus.get_team_mailbox(int(m.group(1)), unread_only=unread, db_path=self.db_path))
 
+        if path == "/api/referral/code":
+            code = _generate_referral_code(self.db_path)
+            return _json_response(self, {"ok": True, "code": code})
+
         if path == "/api/guard/checkin":
             return _json_response(self, _get_guard_checkin(self.db_path))
 
@@ -4102,6 +4252,13 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     (team_id,)).fetchone()
                 if not mgr:
                     return _json_response(self, {"error": "team not found"}, 404)
+                # Check if this is a free team with locked name
+                current_name = mgr["name"].replace("-Manager", "")
+                for tpl_key, tpl in TEAM_TEMPLATES.items():
+                    if tpl["name"] == current_name and tpl.get("locked_name"):
+                        return _json_response(self, {
+                            "error": "Free teams can't be renamed. Upgrade to a paid team to unlock renaming."
+                        }, 403)
                 # Manager name pattern: "<TeamName>-Manager"
                 new_mgr_name = new_name + "-Manager"
                 # Check for name collision
@@ -4122,12 +4279,32 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/teams/activate-license":
             template = data.get("template", "").strip()
             license_type = data.get("license_type", "trial").strip()
+            promo_code = data.get("promo_code", "").strip()
             if template not in TEAM_TEMPLATES:
                 return _json_response(self, {"error": "Unknown template"}, 400)
             tpl = TEAM_TEMPLATES[template]
             if not tpl.get("paid"):
                 return _json_response(self, {"error": "This template is free"}, 400)
             license_key = f"license_{template}"
+
+            # Check promo codes
+            valid_promo = False
+            if promo_code:
+                result = _validate_promo(promo_code, template, self.db_path)
+                if result.get("valid"):
+                    valid_promo = True
+                    license_type = result.get("grant_type", license_type)
+                else:
+                    return _json_response(self, {"ok": False, "error": result.get("error", "Invalid promo code")}, 400)
+
+            if not valid_promo:
+                # No valid promo — require payment (placeholder for Stripe)
+                # For now, reject without promo or payment
+                return _json_response(self, {
+                    "ok": False,
+                    "error": "Payment required. Enter a promo code or visit crew-bus.dev/pricing to purchase."
+                }, 402)
+
             if license_type == "trial":
                 trial_days = tpl.get("trial_days", 30)
                 expiry = datetime.now(timezone.utc) + timedelta(days=trial_days)

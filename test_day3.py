@@ -620,8 +620,8 @@ print(f"\n{'='*60}")
 print(f"  DAY 3 RESULTS: {passed} passed, {failed} failed")
 print(f"{'='*60}")
 
-if failed > 0:
-    sys.exit(1)
+if __name__ == "__main__":
+    sys.exit(1 if failed > 0 else 0)
 else:
-    print("\n  All tests passed. Day 3 is complete.")
-    sys.exit(0)
+    if failed == 0:
+        print("\n  All tests passed. Day 3 is complete.")
