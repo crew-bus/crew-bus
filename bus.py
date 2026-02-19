@@ -44,7 +44,7 @@ VALID_AGENT_TYPES = (
 # Role is now derived from agent_type for routing purposes
 VALID_ROLES = ("human", "right_hand", "security", "core_crew", "manager", "worker")
 
-MAX_TEAM_AGENTS = 8  # Max agents per team (1 manager + 7 workers)
+MAX_TEAM_AGENTS = 10  # Max agents per team (1 manager + 9 workers)
 
 VALID_STATUSES = ("active", "quarantined", "terminated")
 VALID_CHANNELS = ("telegram", "signal", "email", "console")

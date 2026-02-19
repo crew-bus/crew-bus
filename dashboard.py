@@ -128,7 +128,7 @@ WIZARD_DESCRIPTION = (
     "that make agents smarter at specific tasks. The Guardian can help them\n"
     "browse, install, and manage skills for any agent or team.\n\n"
     "TEAM LIMITS:\n"
-    "Each team can have up to 8 agents (1 manager + 7 workers). If the human\n"
+    "Each team can have up to 10 agents (1 manager + 9 workers). If the human\n"
     "needs more, suggest creating a new team and linking it to the existing one.\n"
     "Teams can link their leaders so departments can communicate.\n\n"
     "RULES:\n"
@@ -1508,6 +1508,52 @@ function resetPin(){
   }).catch(function(){errEl.textContent='Connection error.';});
 }
 
+// ══════════ UPDATE CHECK ══════════
+
+async function checkForUpdates(){
+  var btn=document.getElementById('update-btn');
+  btn.textContent='\U0001f504 Checking...';
+  try{
+    var r=await api('/api/update/check');
+    if(r&&r.update_available){
+      var ok=await showConfirm('Update Available','A new version of Crew Bus is available. Update now? The dashboard will restart.','Update Now');
+      if(ok){
+        btn.textContent='\U0001f504 Updating...';
+        var u=await apiPost('/api/update/apply',{});
+        if(u&&u.ok){
+          showToast('Updated! Restarting dashboard...');
+          setTimeout(function(){location.reload()},2000);
+        }else{
+          showToast(u.error||'Update failed.','error');
+          btn.innerHTML='\U0001f504 Update';
+        }
+      }else{btn.innerHTML='\U0001f504 Update';}
+    }else{
+      showToast('You\u2019re on the latest version.');
+      btn.innerHTML='\U0001f504 Update';
+      var dot=document.getElementById('update-dot');if(dot)dot.style.display='none';
+    }
+  }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='\U0001f504 Update';}
+}
+
+// Auto-update: check on load + every 24 hours, apply silently
+async function _autoUpdateCheck(){
+  try{
+    var r=await api('/api/update/check');
+    if(r&&r.update_available){
+      var dot=document.getElementById('update-dot');
+      if(dot)dot.style.display='block';
+      var u=await apiPost('/api/update/apply',{});
+      if(u&&u.ok){
+        showToast('\U0001f504 Crew Bus updated! Reloading...');
+        setTimeout(function(){location.reload()},2000);
+      }
+    }
+  }catch(e){}
+}
+setTimeout(_autoUpdateCheck,5000);
+setInterval(_autoUpdateCheck,86400000);
+
 function openFeedback(){
   document.getElementById('feedback-modal').classList.add('open');
   document.getElementById('feedback-text').value='';
@@ -1823,7 +1869,9 @@ async function openAgentSpace(agentId){
     '<option value="groq"'+(curModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
     '<option value="gemini"'+(curModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
     '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
-    '</select></div>';
+    '</select></div>'+
+    (agent.agent_type==='worker'||agent.agent_type==='manager'?
+      '<div style="margin-top:10px"><button onclick="terminateAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\',\''+agent.agent_type+'\')" style="background:none;border:1px solid #f8514944;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f8514922\'" onmouseout="this.style.background=\'none\'">Terminate Agent</button></div>':'');
 
   var feedEl=document.getElementById('as-activity');
   if(!activity||activity.length===0){
@@ -2301,6 +2349,68 @@ async function deleteTeam(teamId,teamName){
   }catch(e){showToast('Error deleting team','error')}
 }
 
+// ══════════ HIRE AGENT ══════════
+
+function showHireForm(teamId,mgrName){
+  var f=document.getElementById('hire-form-'+teamId);
+  if(f){f.style.display='block';f.dataset.mgrName=mgrName;
+    var inp=document.getElementById('hire-name-'+teamId);if(inp){inp.value='';inp.focus();}
+    var d=document.getElementById('hire-desc-'+teamId);if(d)d.value='';
+    var m=document.getElementById('hire-msg-'+teamId);if(m)m.textContent='';}
+}
+
+async function submitHire(teamId){
+  var nameEl=document.getElementById('hire-name-'+teamId);
+  var descEl=document.getElementById('hire-desc-'+teamId);
+  var msgEl=document.getElementById('hire-msg-'+teamId);
+  var formEl=document.getElementById('hire-form-'+teamId);
+  var name=(nameEl?nameEl.value:'').trim();
+  if(!name){if(msgEl){msgEl.textContent='Name is required.';msgEl.style.color='#e55';}return;}
+  var mgrName=formEl?formEl.dataset.mgrName:'';
+  if(msgEl){msgEl.textContent='Hiring...';msgEl.style.color='var(--mu)';}
+  try{
+    var r=await apiPost('/api/agents/create',{name:name,agent_type:'worker',parent:mgrName,description:(descEl?descEl.value:'').trim()});
+    if(r.ok){
+      showToast(name+' hired!');
+      formEl.style.display='none';
+      openTeamDash(teamId);
+    }else{
+      if(msgEl){msgEl.textContent=r.error||'Failed to hire agent.';msgEl.style.color='#e55';}
+    }
+  }catch(e){if(msgEl){msgEl.textContent='Error hiring agent.';msgEl.style.color='#e55';}}
+}
+
+// ══════════ TERMINATE AGENT ══════════
+
+async function terminateAgent(agentId,agentName,agentType){
+  var ok=await showConfirm(
+    'Terminate Agent',
+    'Terminate "'+agentName+'"? This retires the agent permanently and archives all messages.',
+    'Terminate'
+  );
+  if(!ok)return;
+  // Require PIN if set
+  try{
+    var hasPass=await api('/api/dashboard/has-password');
+    if(hasPass.has_password){
+      var pin=await showPasswordPrompt('Enter your PIN to terminate '+agentName);
+      if(!pin)return;
+      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
+      if(!verify.valid){showToast('Wrong PIN. Termination cancelled.','error');return;}
+    }
+  }catch(e){}
+  try{
+    var r=await apiPost('/api/agent/'+agentId+'/terminate',{});
+    if(r.ok){
+      showToast(agentName+' has been terminated.');
+      closeAgentSpace();
+      loadAgents();loadTeams();
+    }else{
+      showToast(r.error||'Failed to terminate agent.','error');
+    }
+  }catch(e){showToast('Error terminating agent.','error');}
+}
+
 // ══════════ RENAME TEAM ══════════
 
 function startRenameTeam(){
@@ -2393,7 +2503,22 @@ async function openTeamDash(teamId){
       '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
       '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
+  // Hire Agent button (if under max)
+  if(mgr&&teamAgents.length<10){
+    html+='<div class="team-worker-bubble" onclick="showHireForm('+teamId+',\''+esc(mgr.name)+'\')" style="cursor:pointer;opacity:.7;border:2px dashed var(--br);border-radius:12px;padding:8px">'+
+      '<div class="team-worker-circle" style="background:var(--s2)">\u2795</div>'+
+      '<span class="team-worker-label" style="color:var(--mu)">Hire Agent</span></div>';
+  }
   html+='</div>';
+  // Hire agent form (hidden by default)
+  html+='<div id="hire-form-'+teamId+'" style="display:none;margin:12px auto;max-width:340px;padding:16px;background:var(--sf);border:1px solid var(--br);border-radius:10px">'+
+    '<div style="font-weight:700;margin-bottom:8px">Hire a new agent</div>'+
+    '<input id="hire-name-'+teamId+'" type="text" placeholder="Agent name" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;margin-bottom:6px;box-sizing:border-box">'+
+    '<input id="hire-desc-'+teamId+'" type="text" placeholder="What does this agent do? (optional)" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;margin-bottom:8px;box-sizing:border-box">'+
+    '<div style="display:flex;gap:6px">'+
+    '<button onclick="submitHire('+teamId+')" style="background:var(--ac);color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:.85rem">Hire</button>'+
+    '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--s2);color:var(--fg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
+    '<div id="hire-msg-'+teamId+'" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
 
   // Mailbox section
   html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
@@ -2960,6 +3085,7 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
+  <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
   <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
 </div>
 
@@ -3800,8 +3926,27 @@ def _create_team(db_path, template):
             except Exception:
                 pass
 
-    team_name = tpl["name"]
-    worker_names = [w[0] for w in tpl["workers"]]
+    base_name = tpl["name"]
+    # Auto-number if a team with this name already exists
+    conn = bus.get_conn(db_path)
+    existing_mgr = conn.execute(
+        "SELECT name FROM agents WHERE agent_type='manager'"
+    ).fetchall()
+    conn.close()
+    mgr_names = [r["name"] for r in existing_mgr]
+    if f"{base_name}-Manager" in mgr_names:
+        # Find next available number
+        n = 2
+        while f"{base_name} {n}-Manager" in mgr_names:
+            n += 1
+        team_name = f"{base_name} {n}"
+        suffix = f" {n}"
+    else:
+        team_name = base_name
+        suffix = ""
+
+    # Add suffix to worker names so they're unique across duplicate teams
+    worker_names = [w[0] + suffix for w in tpl["workers"]]
     worker_descs = [w[1] for w in tpl["workers"]]
     result = bus.create_team(
         team_name=team_name,
@@ -3810,6 +3955,58 @@ def _create_team(db_path, template):
         db_path=db_path,
     )
     return result
+
+
+def _check_for_updates():
+    """Check if a newer version is available on GitHub."""
+    import subprocess
+    repo_dir = Path(__file__).parent
+    try:
+        # Fetch latest from remote (quiet, no merge)
+        subprocess.run(["git", "fetch", "--quiet"], cwd=repo_dir,
+                        capture_output=True, timeout=15)
+        # Compare local HEAD vs remote main
+        local = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir,
+                                capture_output=True, text=True, timeout=5)
+        remote = subprocess.run(["git", "rev-parse", "origin/main"], cwd=repo_dir,
+                                 capture_output=True, text=True, timeout=5)
+        local_sha = local.stdout.strip()
+        remote_sha = remote.stdout.strip()
+        if not local_sha or not remote_sha:
+            return {"update_available": False, "error": "Could not read git state"}
+        if local_sha != remote_sha:
+            # Get count of new commits
+            behind = subprocess.run(
+                ["git", "rev-list", "--count", f"{local_sha}..{remote_sha}"],
+                cwd=repo_dir, capture_output=True, text=True, timeout=5)
+            count = int(behind.stdout.strip()) if behind.stdout.strip() else 0
+            return {"update_available": True, "commits_behind": count,
+                    "local": local_sha[:8], "remote": remote_sha[:8]}
+        return {"update_available": False}
+    except Exception as e:
+        return {"update_available": False, "error": str(e)}
+
+
+def _apply_update():
+    """Pull latest code from GitHub and signal restart."""
+    import subprocess
+    repo_dir = Path(__file__).parent
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--ff-only", "origin", "main"],
+            cwd=repo_dir, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return {"ok": False, "error": result.stderr.strip() or "git pull failed"}
+        # Schedule a restart after response is sent
+        def _restart():
+            import time
+            time.sleep(1)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        t = threading.Thread(target=_restart, daemon=True)
+        t.start()
+        return {"ok": True, "output": result.stdout.strip()}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 def _get_guard_checkin(db_path):
@@ -4159,6 +4356,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/guard/checkin":
             return _json_response(self, _get_guard_checkin(self.db_path))
 
+        if path == "/api/update/check":
+            return _json_response(self, _check_for_updates())
+
         if path == "/api/guard/status":
             activated = bus.is_guard_activated(db_path=self.db_path)
             info = bus.get_guard_activation_status(db_path=self.db_path)
@@ -4434,6 +4634,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": "need from_agent_id, subject, body"}, 400)
             result = bus.send_to_team_mailbox(agent_id, subject, body, severity=severity, db_path=self.db_path)
             return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        if path == "/api/update/apply":
+            return _json_response(self, _apply_update())
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)
