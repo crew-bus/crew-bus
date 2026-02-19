@@ -1788,22 +1788,17 @@ async function checkForUpdates(){
   }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='\U0001f504 Update';}
 }
 
-// Auto-update: check on load + every 24 hours, apply silently
+// Auto-update: check on load + every 24 hours, show dot only (never auto-apply)
 async function _autoUpdateCheck(){
   try{
     var r=await api('/api/update/check');
     if(r&&r.update_available){
       var dot=document.getElementById('update-dot');
       if(dot)dot.style.display='block';
-      var u=await apiPost('/api/update/apply',{});
-      if(u&&u.ok){
-        showToast('\U0001f504 Crew Bus updated! Reloading...');
-        setTimeout(function(){location.reload()},2000);
-      }
     }
   }catch(e){}
 }
-setTimeout(_autoUpdateCheck,5000);
+setTimeout(_autoUpdateCheck,30000);
 setInterval(_autoUpdateCheck,86400000);
 
 function openFeedback(){
