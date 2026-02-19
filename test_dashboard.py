@@ -35,7 +35,8 @@ from right_hand import RightHand
 # ---------------------------------------------------------------------------
 
 DB_FILE = Path(__file__).parent / "crew_bus.db"
-CONFIG_FILE = Path(__file__).parent / "configs" / "ryan_stack.yaml"
+_configs = Path(__file__).parent / "configs"
+CONFIG_FILE = _configs / "ryan_stack.yaml" if (_configs / "ryan_stack.yaml").exists() else _configs / "example_stack.yaml"
 
 # Wipe old DB so we get a clean seed every time
 if DB_FILE.exists():
@@ -50,7 +51,7 @@ if DB_FILE.exists():
 print("[seed] Initializing database ...")
 bus.init_db(DB_FILE)
 
-print("[seed] Loading hierarchy from ryan_stack.yaml ...")
+print(f"[seed] Loading hierarchy from {CONFIG_FILE.name} ...")
 result = bus.load_hierarchy(str(CONFIG_FILE), DB_FILE)
 print(f"  Loaded {result.get('agents_loaded', '?')} agents (org: {result.get('org', '?')})")
 
@@ -63,8 +64,8 @@ conn.close()
 
 print(f"  Agents: {', '.join(sorted(agents.keys()))}")
 
-# Convenience IDs
-RYAN = agents["Ryan"]["id"]
+# Convenience IDs — prefer 'Ryan' (ryan_stack), fall back to 'Human' (example_stack)
+RYAN = agents.get("Ryan", agents.get("Human", {})).get("id", 1)
 CHIEF = agents["Crew-Boss"]["id"]
 
 
@@ -205,12 +206,13 @@ conn.close()
 
 print("[seed] Seeding messages ...")
 
-V4 = agents["V4"]["id"]
-QUANT = agents["Quant"]["id"]
-CFO = agents["CFO"]["id"]
-LEGAL = agents["Legal"]["id"]
-MEMORY = agents["Memory"]["id"]
-COMMS = agents["Comms"]["id"]
+# Agent IDs — prefer ryan_stack names, fall back to example_stack names
+V4 = agents.get("V4", agents.get("Ideas", {})).get("id", CHIEF)
+QUANT = agents.get("Quant", agents.get("Wallet", {})).get("id", CHIEF)
+CFO = agents.get("CFO", agents.get("Wallet", {})).get("id", CHIEF)
+LEGAL = agents.get("Legal", {}).get("id", CHIEF)
+MEMORY = agents.get("Memory", {}).get("id", CHIEF)
+COMMS = agents.get("Comms", {}).get("id", CHIEF)
 
 # Try to get department agents if they exist
 RJC_MGR = agents.get("RJC-Manager", {}).get("id")
@@ -620,7 +622,7 @@ print(f"  Created {k_count} knowledge entries")
 print("[seed] Seeding audit trail ...")
 
 audit_entries = [
-    ("hierarchy_loaded", RYAN, {"config": "ryan_stack.yaml", "agents": 15}, 3, 4),
+    ("hierarchy_loaded", RYAN, {"config": CONFIG_FILE.name, "agents": 15}, 3, 4),
     ("message_sent", V4, {"to": "Crew-Boss", "subject": "Weekly strategy review ready"}, 3, 2),
     ("message_delivered", CHIEF, {"to": "Ryan", "subject": "Morning briefing"}, 3, 0),
     ("message_sent", CFO, {"to": "Crew-Boss", "subject": "Unusual expense flagged"}, 2, 5),

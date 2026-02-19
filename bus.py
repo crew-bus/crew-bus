@@ -44,6 +44,8 @@ VALID_AGENT_TYPES = (
 # Role is now derived from agent_type for routing purposes
 VALID_ROLES = ("human", "right_hand", "security", "core_crew", "manager", "worker")
 
+MAX_TEAM_AGENTS = 8  # Max agents per team (1 manager + 7 workers)
+
 VALID_STATUSES = ("active", "quarantined", "terminated")
 VALID_CHANNELS = ("telegram", "signal", "email", "console")
 VALID_MESSAGE_TYPES = ("report", "task", "alert", "escalation", "idea", "briefing")
@@ -516,6 +518,17 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_jobs_postal        ON jobs(postal_code, status);
         CREATE INDEX IF NOT EXISTS idx_meet_techie        ON meet_requests(techie_id, status);
         CREATE INDEX IF NOT EXISTS idx_meet_client        ON meet_requests(client_user_id, status);
+
+        -- Team linking: lets managers of linked teams communicate
+        CREATE TABLE IF NOT EXISTS team_links (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_a_id   INTEGER NOT NULL,
+            team_b_id   INTEGER NOT NULL,
+            created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            UNIQUE(team_a_id, team_b_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_team_links_a ON team_links(team_a_id);
+        CREATE INDEX IF NOT EXISTS idx_team_links_b ON team_links(team_b_id);
     """)
 
     # Migrate existing DBs: add model column to agents if missing
@@ -961,6 +974,24 @@ def create_agent(name: str, agent_type: str = "worker",
         if existing:
             return {"ok": False, "error": f"Agent '{name}' already exists"}
 
+        # Enforce team agent limit when adding to a team
+        if parent_name:
+            parent = conn.execute(
+                "SELECT id, agent_type FROM agents WHERE name=?", (parent_name,)
+            ).fetchone()
+            if parent and parent["agent_type"] == "manager":
+                team_count = conn.execute(
+                    "SELECT COUNT(*) as c FROM agents WHERE parent_agent_id=?",
+                    (parent["id"],)
+                ).fetchone()["c"]
+                # +1 for the manager itself
+                if team_count + 1 >= MAX_TEAM_AGENTS:
+                    return {
+                        "ok": False,
+                        "error": f"Team is full ({MAX_TEAM_AGENTS} agents max). "
+                                 f"Create a new team and link it to this one.",
+                    }
+
         agent_def = {
             "name": name,
             "agent_type": agent_type,
@@ -997,6 +1028,10 @@ def create_team(team_name: str, manager_name: str = "",
 
     if not manager_name:
         manager_name = f"{team_name}-Manager"
+
+    # Enforce team agent limit (1 manager + workers)
+    if len(worker_names) > MAX_TEAM_AGENTS - 1:
+        return {"ok": False, "error": f"Teams can have at most {MAX_TEAM_AGENTS} agents (1 manager + {MAX_TEAM_AGENTS - 1} workers)"}
 
     try:
         # Create manager
@@ -1108,6 +1143,66 @@ def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
         return {"ok": True, "deleted_count": len(all_ids)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Team linking (department leaders communicate across teams)
+# ---------------------------------------------------------------------------
+
+def link_teams(team_a_id: int, team_b_id: int,
+               db_path: Optional[Path] = None) -> dict:
+    """Link two teams so their managers can communicate."""
+    if team_a_id == team_b_id:
+        return {"ok": False, "error": "Cannot link a team to itself"}
+    # Normalize order so (A,B) and (B,A) are the same link
+    a, b = min(team_a_id, team_b_id), max(team_a_id, team_b_id)
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO team_links (team_a_id, team_b_id) VALUES (?, ?)",
+            (a, b),
+        )
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def unlink_teams(team_a_id: int, team_b_id: int,
+                 db_path: Optional[Path] = None) -> dict:
+    """Remove a link between two teams."""
+    a, b = min(team_a_id, team_b_id), max(team_a_id, team_b_id)
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        conn.execute("DELETE FROM team_links WHERE team_a_id=? AND team_b_id=?", (a, b))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def get_linked_teams(team_id: int, db_path: Optional[Path] = None) -> list:
+    """Get IDs of all teams linked to this one."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        rows = conn.execute(
+            "SELECT team_a_id, team_b_id FROM team_links "
+            "WHERE team_a_id=? OR team_b_id=?",
+            (team_id, team_id),
+        ).fetchall()
+        linked = []
+        for r in rows:
+            linked.append(r["team_b_id"] if r["team_a_id"] == team_id else r["team_a_id"])
+        return linked
     finally:
         conn.close()
 

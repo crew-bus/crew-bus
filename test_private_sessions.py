@@ -40,7 +40,8 @@ import bus
 # ---------------------------------------------------------------------------
 
 TEST_DB = Path(__file__).parent / "test_private_sessions.db"
-CONFIG = Path(__file__).parent / "configs" / "ryan_stack.yaml"
+_configs = Path(__file__).parent / "configs"
+CONFIG = _configs / "ryan_stack.yaml" if (_configs / "ryan_stack.yaml").exists() else _configs / "example_stack.yaml"
 
 if TEST_DB.exists():
     os.remove(str(TEST_DB))

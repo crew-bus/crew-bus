@@ -42,7 +42,8 @@ from delivery import format_briefing_email
 # ---------------------------------------------------------------------------
 
 TEST_DB = Path(__file__).parent / "test_day2.db"
-CONFIG = Path(__file__).parent / "configs" / "ryan_stack.yaml"
+_configs = Path(__file__).parent / "configs"
+CONFIG = _configs / "ryan_stack.yaml" if (_configs / "ryan_stack.yaml").exists() else _configs / "example_stack.yaml"
 
 if TEST_DB.exists():
     os.remove(str(TEST_DB))
@@ -74,7 +75,7 @@ def section(name):
 # Step 1: Load hierarchy
 # ============================================================
 
-section("Step 1: Load ryan_stack.yaml")
+section(f"Step 1: Load {CONFIG.name}")
 s1_start = passed
 
 bus.init_db(TEST_DB)
@@ -88,16 +89,16 @@ check("1.1", len(agents_loaded) == 17,
 def get_agent(name):
     return bus.get_agent_by_name(name, TEST_DB)
 
-ryan = get_agent("Ryan")
+ryan = get_agent("Ryan") or get_agent("Human") or get_agent("Human")
 chief = get_agent("Crew-Boss")
-quant = get_agent("Quant")
-v4 = get_agent("V4")
-cfo = get_agent("CFO")
+quant = get_agent("Quant") or get_agent("Wallet")
+v4 = get_agent("V4") or get_agent("Ideas")
+cfo = get_agent("CFO") or get_agent("Wallet")
 legal = get_agent("Legal")
 memory = get_agent("Memory")
 comms = get_agent("Comms")
-rjc_mgr = get_agent("RJC-Manager")
-lead_tracker = get_agent("Lead-Tracker")
+rjc_mgr = get_agent("RJC-Manager") or get_agent("Home-Manager")
+lead_tracker = get_agent("Lead-Tracker") or get_agent("Budget-Tracker")
 
 check("1.2", ryan is not None and ryan["agent_type"] == "human",
       f"Ryan: {ryan['agent_type'] if ryan else 'NOT FOUND'}")
@@ -119,7 +120,7 @@ section("Step 2: Set burnout to 7 (high - long day yesterday)")
 s2_start = passed
 
 bus.update_burnout_score(ryan["id"], 7, TEST_DB)
-ryan = get_agent("Ryan")
+ryan = get_agent("Ryan") or get_agent("Human")
 
 check("2.1", ryan["burnout_score"] == 7,
       f"Burnout set to 7: {ryan['burnout_score']}")

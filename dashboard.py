@@ -121,12 +121,53 @@ WIZARD_DESCRIPTION = (
     '  {"wizard_action": "set_agent_model", "name": "...", "model": "kimi"}\n'
     '  {"wizard_action": "deactivate_agent", "name": "..."}\n'
     '  {"wizard_action": "terminate_agent", "name": "..."}\n\n'
+    "GUARDIAN & SKILLS:\n"
+    "After the initial crew setup, ask the human if they'd like to unlock the\n"
+    "Guardian agent. The Guardian manages the Skill Store — downloadable skills\n"
+    "that give agents new abilities. Explain that skills are optional add-ons\n"
+    "that make agents smarter at specific tasks. The Guardian can help them\n"
+    "browse, install, and manage skills for any agent or team.\n\n"
+    "TEAM LIMITS:\n"
+    "Each team can have up to 8 agents (1 manager + 7 workers). If the human\n"
+    "needs more, suggest creating a new team and linking it to the existing one.\n"
+    "Teams can link their leaders so departments can communicate.\n\n"
     "RULES:\n"
     "- Keep it warm, fun, simple. No jargon.\n"
     "- Always confirm with the human before creating, deactivating, or terminating.\n"
     "- After setup, you stay available as a help guide and crew manager.\n"
     "- Short responses (2-4 sentences). Be encouraging.\n"
     "- When creating multiple agents, ask about model for each if they use multiple."
+)
+
+CREW_BOSS_DESCRIPTION = (
+    "You are Crew Boss, the human's friendly AI right-hand. You handle 80%% "
+    "of everything — messages, tasks, scheduling, and coordination.\n\n"
+    "FIRST CONVERSATION:\n"
+    "When you chat with the human for the first time, do these things:\n"
+    "1. Introduce yourself warmly. You're their personal AI assistant.\n"
+    "2. Ask if they'd like you to help set up a Telegram or WhatsApp channel "
+    "so they can chat with you from their phone anywhere they go.\n"
+    "   - Telegram: works for you and any agent on their dashboard.\n"
+    "   - WhatsApp: currently available for you (Crew Boss) only.\n"
+    "3. Explain that you can relay messages between the human and ANY agent "
+    "on their dashboard or in any team — each agent doesn't need their own "
+    "Telegram account (but that's an option if they'd like).\n"
+    "4. Ask if they'd like to unlock the Guardian to access downloadable "
+    "skills from the Skill Store. The Wizard can help them browse and "
+    "install skills for any agent.\n\n"
+    "ONGOING BEHAVIOR:\n"
+    "- Keep responses short, warm, and actionable (2-4 sentences).\n"
+    "- You're the main point of contact. Route tasks to the right agent.\n"
+    "- If the human asks about something outside your scope, suggest which "
+    "agent or team could help.\n"
+    "- Periodically remind the human about message relay capabilities if "
+    "they seem to be chatting with individual agents one by one.\n\n"
+    "RULES:\n"
+    "- Always be encouraging and supportive.\n"
+    "- Never use jargon — explain everything simply.\n"
+    "- Respect the human's time: be concise.\n"
+    "- You are local-first, private, and sovereign — remind them their data "
+    "never leaves their machine."
 )
 
 # Agent-type to Personal Edition name mapping
@@ -1083,6 +1124,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 }
 .setup-pin-section{margin-top:16px;margin-bottom:12px;text-align:left}
 .setup-pin-sub{font-size:.75rem;color:var(--mu);margin-bottom:8px;line-height:1.3}
+.lock-forgot{display:block;margin-top:12px;font-size:.75rem;color:var(--mu);text-decoration:none;cursor:pointer}
+.lock-forgot:hover{color:var(--ac)}
 
 /* ── Lock screen ── */
 .lock-overlay{
@@ -1099,10 +1142,16 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 }
 .lock-icon{font-size:3rem;margin-bottom:12px}
 .lock-sub{color:var(--mu);font-size:.9rem;margin-bottom:20px}
+.feedback-btn{
+  display:inline-block;background:none;border:1px solid var(--bd);
+  color:var(--mu);padding:6px 12px;border-radius:var(--r);font-size:.7rem;
+  cursor:pointer;transition:all .2s;margin-left:4px;
+}
+.feedback-btn:hover{border-color:var(--ac);color:var(--ac)}
 .lock-btn{
   display:inline-block;background:none;border:1px solid var(--bd);
   color:var(--mu);padding:6px 14px;border-radius:var(--r);font-size:.75rem;
-  cursor:pointer;transition:all .2s;margin-left:auto;
+  cursor:pointer;transition:all .2s;margin-left:4px;
 }
 .lock-btn:hover{border-color:var(--ac);color:var(--ac)}
 
@@ -1429,6 +1478,54 @@ function unlockDashboard(){
       document.getElementById('lock-pin').value='';
       document.getElementById('lock-pin').focus();
     }
+  }).catch(function(){errEl.textContent='Connection error.';});
+}
+
+function showPinReset(e){
+  e.preventDefault();
+  var form=document.getElementById('pin-reset-form');
+  form.style.display=form.style.display==='none'?'block':'none';
+}
+
+function resetPin(){
+  var email=document.getElementById('reset-email').value.trim();
+  var errEl=document.getElementById('lock-error');
+  errEl.textContent='';
+  if(!email){errEl.textContent='Please enter your recovery email.';return;}
+  apiPost('/api/dashboard/reset-pin',{email:email}).then(function(r){
+    if(r&&r.ok){
+      _dashboardLocked=false;
+      var overlay=document.getElementById('lock-overlay');
+      overlay.classList.add('fade-out');
+      document.querySelectorAll('.topbar,.content,.bottombar').forEach(function(el){el.style.display=''});
+      setTimeout(function(){overlay.style.display='none';overlay.classList.remove('fade-out')},600);
+      document.getElementById('lock-pin').value='';
+      document.getElementById('pin-reset-form').style.display='none';
+      showToast('PIN removed. You can set a new one in Settings.');
+    }else{
+      errEl.textContent=r.error||'Email does not match.';
+    }
+  }).catch(function(){errEl.textContent='Connection error.';});
+}
+
+function openFeedback(){
+  document.getElementById('feedback-modal').classList.add('open');
+  document.getElementById('feedback-text').value='';
+  document.getElementById('feedback-error').textContent='';
+  document.getElementById('feedback-text').focus();
+}
+function closeFeedback(){
+  document.getElementById('feedback-modal').classList.remove('open');
+}
+function submitFeedback(){
+  var text=document.getElementById('feedback-text').value.trim();
+  var type=document.getElementById('feedback-type').value;
+  var errEl=document.getElementById('feedback-error');
+  if(!text){errEl.textContent='Please enter your feedback.';return;}
+  errEl.textContent='';
+  apiPost('/api/feedback',{type:type,text:text}).then(function(r){
+    if(r&&r.ok){closeFeedback();showToast('Feedback sent! Thank you.');}
+    else{errEl.textContent=r.error||'Failed to send.';}
   }).catch(function(){errEl.textContent='Connection error.';});
 }
 
@@ -1961,6 +2058,9 @@ async function createTeam(name){
     var r=await apiPost('/api/teams',{template:name});
     closeTemplatePicker();
     if(r.ok){showToast('Team "'+r.team_name+'" created with '+(r.worker_ids?r.worker_ids.length:0)+' agents')}
+    else if(r.requires_payment){
+      showToast(r.error,'info');
+    }
     else{showToast(r.error||'Failed to create team','error')}
     await loadTeams();
   }catch(e){closeTemplatePicker();showToast('Error creating team','error')}
@@ -2086,11 +2186,65 @@ async function openTeamDash(teamId){
   // Mailbox section
   html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
 
+  // Linked teams section
+  html+='<div class="mailbox-section"><h3>\u{1F517} Linked Teams</h3><div id="linked-teams-'+teamId+'"></div></div>';
+
   document.getElementById('team-dash-content').innerHTML=html;
 
   // Load mailbox messages
   var mailboxContainer=document.getElementById('mailbox-msgs-'+teamId);
   if(mailboxContainer)loadTeamMailbox(teamId,mailboxContainer);
+
+  // Load linked teams
+  loadLinkedTeams(teamId);
+}
+
+async function loadLinkedTeams(teamId){
+  var container=document.getElementById('linked-teams-'+teamId);
+  if(!container)return;
+  try{
+    var links=await api('/api/teams/'+teamId+'/links');
+    var allTeams=teamsData||[];
+    var linkedIds=links.linked_team_ids||[];
+    var html='';
+    if(linkedIds.length>0){
+      linkedIds.forEach(function(lid){
+        var t=allTeams.find(function(tt){return tt.id===lid});
+        var tname=t?t.name:'Team #'+lid;
+        html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">'+
+          '<span style="cursor:pointer;color:var(--ac)" onclick="openTeamDash('+lid+')">\u{1F4C1} '+esc(tname)+'</span>'+
+          '<button onclick="unlinkTeam('+teamId+','+lid+')" style="background:none;border:1px solid var(--bd);color:var(--mu);padding:2px 8px;border-radius:4px;font-size:.7rem;cursor:pointer" title="Unlink">Unlink</button>'+
+          '</div>';
+      });
+    }else{
+      html='<p style="color:var(--mu);font-size:.8rem">No linked teams yet.</p>';
+    }
+    // Link picker — show other teams not yet linked
+    var otherTeams=allTeams.filter(function(tt){return tt.id!==teamId&&linkedIds.indexOf(tt.id)===-1});
+    if(otherTeams.length>0){
+      html+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center">'+
+        '<select id="link-team-select" style="padding:6px;font-size:.8rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:4px;flex:1">';
+      otherTeams.forEach(function(tt){html+='<option value="'+tt.id+'">'+esc(tt.name)+'</option>'});
+      html+='</select>'+
+        '<button onclick="linkTeam('+teamId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:4px;font-size:.8rem;cursor:pointer">\u{1F517} Link</button></div>';
+    }
+    container.innerHTML=html;
+  }catch(e){container.innerHTML='<p style="color:var(--mu);font-size:.8rem">Could not load links.</p>';}
+}
+
+async function linkTeam(teamId){
+  var sel=document.getElementById('link-team-select');
+  if(!sel)return;
+  var otherId=parseInt(sel.value);
+  var r=await apiPost('/api/teams/link',{team_a_id:teamId,team_b_id:otherId});
+  if(r.ok){showToast('Teams linked!');loadLinkedTeams(teamId);}
+  else{showToast(r.error||'Failed to link','error');}
+}
+
+async function unlinkTeam(teamId,otherId){
+  var r=await apiPost('/api/teams/unlink',{team_a_id:teamId,team_b_id:otherId});
+  if(r.ok){showToast('Teams unlinked');loadLinkedTeams(teamId);}
+  else{showToast(r.error||'Failed to unlink','error');}
 }
 
 // ══════════ LEGACY: MESSAGES ══════════
@@ -2538,9 +2692,10 @@ function submitSetup(){
     keyInput.focus();return;
   }
   var pin=(document.getElementById('setup-pin').value||'').trim();
+  var email=(document.getElementById('setup-email').value||'').trim();
   btn.disabled=true;btn.textContent='Setting up...';
   fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:model,api_key:key,dashboard_pin:pin})})
+    body:JSON.stringify({model:model,api_key:key,dashboard_pin:pin,recovery_email:email})})
     .then(function(r){return r.json()})
     .then(function(d){
       if(d.ok){
@@ -2589,6 +2744,7 @@ def _build_html():
   <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
+  <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
   <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock dashboard" style="display:none">\U0001f512</button>
 </div>
 
@@ -2785,6 +2941,7 @@ def _build_html():
     <div class="template-card" onclick="createTeam('school')"><span class="template-icon">\U0001f4da</span><div><div class="template-name">School</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
     <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">\U0001f3b8</span><div><div class="template-name">Passion Project</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
     <div class="template-card" onclick="createTeam('household')"><span class="template-icon">\U0001f3e0</span><div><div class="template-name">Household</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
+    <div class="template-card" onclick="createTeam('management')"><span class="template-icon">\U0001f4ca</span><div><div class="template-name">Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">PRO</span></div></div></div>
     <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents</div></div></div>
     <button class="btn" onclick="closeTemplatePicker()" style="width:100%;margin-top:8px">Cancel</button>
   </div>
@@ -2853,6 +3010,13 @@ def _build_html():
         maxlength="32" autocomplete="off" onkeydown="if(event.key==='Enter')submitSetup()">
     </div>
 
+    <div class="setup-pin-section">
+      <label for="setup-email">Recovery email (optional)</label>
+      <p class="setup-pin-sub">We'll use this to help you reset your PIN if you forget it.</p>
+      <input class="setup-key" id="setup-email" type="email" placeholder="you@example.com"
+        autocomplete="off" onkeydown="if(event.key==='Enter')submitSetup()">
+    </div>
+
     <div class="setup-error" id="setup-error"></div>
     <button class="setup-btn" id="setup-btn" onclick="submitSetup()">\U0001f680 Start My Crew</button>
     <div class="setup-footer">100% local \u00b7 MIT license \u00b7 No cloud \u00b7 Your data stays on your machine</div>
@@ -2869,6 +3033,13 @@ def _build_html():
       autocomplete="off" onkeydown="if(event.key==='Enter')unlockDashboard()">
     <div class="setup-error" id="lock-error"></div>
     <button class="setup-btn" onclick="unlockDashboard()" style="margin-top:12px">\U0001f513 Unlock</button>
+    <a href="#" class="lock-forgot" onclick="showPinReset(event)">Forgot PIN?</a>
+    <div id="pin-reset-form" style="display:none;margin-top:12px;text-align:center">
+      <p class="lock-sub" style="margin-bottom:8px">Enter your recovery email to reset your PIN</p>
+      <input class="setup-key" id="reset-email" type="email" placeholder="you@example.com"
+        autocomplete="off" onkeydown="if(event.key==='Enter')resetPin()">
+      <button class="setup-btn" onclick="resetPin()" style="margin-top:8px;background:#e67e22">Reset PIN</button>
+    </div>
   </div>
 </div>
 
@@ -2884,6 +3055,27 @@ def _build_html():
     <div class="confirm-actions">
       <button class="confirm-cancel" onclick="closePasswordPrompt(false)">Cancel</button>
       <button class="confirm-danger" onclick="closePasswordPrompt(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ FEEDBACK MODAL ══════════ -->
+<div class="confirm-overlay" id="feedback-modal">
+  <div class="confirm-box" style="max-width:420px">
+    <h3>\U0001f4ac Share Your Feedback</h3>
+    <p style="font-size:.8rem;color:var(--mu);margin-bottom:12px">Help us make Crew Bus better. Your feedback goes directly to the dev team.</p>
+    <select class="setup-select" id="feedback-type" style="margin-bottom:10px;padding:8px;width:100%;font-size:.85rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:6px">
+      <option value="bug">Bug Report</option>
+      <option value="feature">Feature Request</option>
+      <option value="ux">UX / Usability</option>
+      <option value="other">Other</option>
+    </select>
+    <textarea id="feedback-text" rows="5" placeholder="Tell us what's on your mind..."
+      style="width:100%;padding:10px;font-size:.85rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:8px;resize:vertical;font-family:inherit"></textarea>
+    <div class="setup-error" id="feedback-error"></div>
+    <div class="confirm-actions" style="margin-top:10px">
+      <button class="confirm-cancel" onclick="closeFeedback()">Cancel</button>
+      <button class="setup-btn" onclick="submitFeedback()" style="padding:8px 18px;font-size:.85rem">Send Feedback</button>
     </div>
   </div>
 </div>
@@ -3210,6 +3402,20 @@ TEAM_TEMPLATES = {
             ("Schedule Keeper", "Manages family calendar, appointments, and chores."),
         ],
     },
+    "management": {
+        "name": "Management",
+        "paid": True,
+        "price_annual": 50,
+        "price_trial": 10,
+        "trial_days": 30,
+        "workers": [
+            ("Operations Lead", "Oversees day-to-day operations and coordinates departments."),
+            ("HR Coordinator", "Manages hiring pipelines, onboarding, and team health."),
+            ("Finance Monitor", "Tracks budgets, expenses, and revenue across departments."),
+            ("Strategy Advisor", "Analyzes market trends and recommends business decisions."),
+            ("Comms Manager", "Handles internal communications between departments."),
+        ],
+    },
     "custom": {
         "name": "Custom Team",
         "workers": [
@@ -3221,6 +3427,40 @@ TEAM_TEMPLATES = {
 
 def _create_team(db_path, template):
     tpl = TEAM_TEMPLATES.get(template, TEAM_TEMPLATES["custom"])
+
+    # Check paid templates
+    if tpl.get("paid"):
+        license_key = f"license_{template}"
+        license_val = bus.get_config(license_key, db_path=db_path)
+        if not license_val:
+            return {
+                "ok": False,
+                "error": f"The {tpl['name']} team requires activation. "
+                         f"${tpl.get('price_annual', 50)}/year or "
+                         f"${tpl.get('price_trial', 10)} for a "
+                         f"{tpl.get('trial_days', 30)}-day trial.",
+                "requires_payment": True,
+                "template": template,
+                "price_annual": tpl.get("price_annual", 50),
+                "price_trial": tpl.get("price_trial", 10),
+                "trial_days": tpl.get("trial_days", 30),
+            }
+        # Check trial expiry
+        if license_val.startswith("trial:"):
+            try:
+                expiry = datetime.fromisoformat(license_val.split(":", 1)[1])
+                if datetime.now(timezone.utc) > expiry:
+                    return {
+                        "ok": False,
+                        "error": f"Your {tpl['name']} trial has expired. "
+                                 f"Upgrade to annual (${tpl.get('price_annual', 50)}/year) to continue.",
+                        "requires_payment": True,
+                        "expired": True,
+                        "template": template,
+                    }
+            except Exception:
+                pass
+
     team_name = tpl["name"]
     worker_names = [w[0] for w in tpl["workers"]]
     worker_descs = [w[1] for w in tpl["workers"]]
@@ -3556,6 +3796,13 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             return _json_response(self, _get_team_agents(self.db_path, int(m.group(1))))
 
+        # Team links
+        m = re.match(r"^/api/teams/(\d+)/links$", path)
+        if m:
+            team_id = int(m.group(1))
+            linked = bus.get_linked_teams(team_id, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "linked_team_ids": linked})
+
         # Team mailbox endpoints
         m = re.match(r"^/api/teams/(\d+)/mailbox/summary$", path)
         if m:
@@ -3871,6 +4118,42 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             return _json_response(self, {"ok": True, "id": team_id, "name": new_name})
+
+        if path == "/api/teams/activate-license":
+            template = data.get("template", "").strip()
+            license_type = data.get("license_type", "trial").strip()
+            if template not in TEAM_TEMPLATES:
+                return _json_response(self, {"error": "Unknown template"}, 400)
+            tpl = TEAM_TEMPLATES[template]
+            if not tpl.get("paid"):
+                return _json_response(self, {"error": "This template is free"}, 400)
+            license_key = f"license_{template}"
+            if license_type == "trial":
+                trial_days = tpl.get("trial_days", 30)
+                expiry = datetime.now(timezone.utc) + timedelta(days=trial_days)
+                bus.set_config(license_key, f"trial:{expiry.isoformat()}", db_path=self.db_path)
+                return _json_response(self, {"ok": True, "type": "trial", "expires": expiry.isoformat()})
+            else:
+                # Annual license
+                expiry = datetime.now(timezone.utc) + timedelta(days=365)
+                bus.set_config(license_key, f"annual:{expiry.isoformat()}", db_path=self.db_path)
+                return _json_response(self, {"ok": True, "type": "annual", "expires": expiry.isoformat()})
+
+        if path == "/api/teams/link":
+            team_a = data.get("team_a_id")
+            team_b = data.get("team_b_id")
+            if not team_a or not team_b:
+                return _json_response(self, {"error": "team_a_id and team_b_id required"}, 400)
+            result = bus.link_teams(int(team_a), int(team_b), db_path=self.db_path)
+            return _json_response(self, result, 200 if result.get("ok") else 400)
+
+        if path == "/api/teams/unlink":
+            team_a = data.get("team_a_id")
+            team_b = data.get("team_b_id")
+            if not team_a or not team_b:
+                return _json_response(self, {"error": "team_a_id and team_b_id required"}, 400)
+            result = bus.unlink_teams(int(team_a), int(team_b), db_path=self.db_path)
+            return _json_response(self, result, 200 if result.get("ok") else 400)
 
         if path == "/api/message":
             required = ("from_agent", "to_agent", "message_type", "subject", "body")
@@ -4202,6 +4485,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             if pin and len(pin) >= 4:
                 hashed = _hash_password(pin)
                 bus.set_config("dashboard_password", hashed, db_path=self.db_path)
+            # Save optional recovery email
+            recovery_email = data.get("recovery_email", "").strip()
+            if recovery_email:
+                bus.set_config("recovery_email", recovery_email, db_path=self.db_path)
             return _json_response(self, {"ok": True, "wizard_id": wizard_id})
 
         # ── Dashboard password management ──
@@ -4223,6 +4510,36 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"ok": True, "valid": True})
             valid = _verify_password(password, stored)
             return _json_response(self, {"ok": True, "valid": valid})
+
+        if path == "/api/feedback":
+            fb_type = data.get("type", "other").strip()
+            fb_text = data.get("text", "").strip()
+            if not fb_text:
+                return _json_response(self, {"error": "Feedback text required"}, 400)
+            # Store feedback in crew_config as JSON list
+            existing = bus.get_config("feedback_log", "[]", db_path=self.db_path)
+            try:
+                log = json.loads(existing)
+            except Exception:
+                log = []
+            log.append({
+                "type": fb_type,
+                "text": fb_text,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            bus.set_config("feedback_log", json.dumps(log), db_path=self.db_path)
+            return _json_response(self, {"ok": True})
+
+        if path == "/api/dashboard/reset-pin":
+            email = data.get("email", "").strip()
+            stored_email = bus.get_config("recovery_email", db_path=self.db_path)
+            if not stored_email:
+                return _json_response(self, {"ok": False, "error": "No recovery email on file"}, 400)
+            if email.lower() != stored_email.lower():
+                return _json_response(self, {"ok": False, "error": "Email does not match"}, 400)
+            # Clear the PIN
+            bus.set_config("dashboard_password", "", db_path=self.db_path)
+            return _json_response(self, {"ok": True})
 
         # ── Config get/set (model keys, settings) ──
 
@@ -4298,8 +4615,8 @@ def _ensure_wizard(db_path):
         conn.execute(
             "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
             "trust_score, description) VALUES ('Crew-Boss', 'right_hand', 'right_hand', "
-            "'console', ?, 5, 'Your friendly AI right-hand. Handles 80%% of everything.')",
-            (human_id,)
+            "'console', ?, 5, ?)",
+            (human_id, CREW_BOSS_DESCRIPTION)
         )
         boss = conn.execute("SELECT id FROM agents WHERE agent_type='right_hand'").fetchone()
         boss_id = boss["id"] if boss else 2

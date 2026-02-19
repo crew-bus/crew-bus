@@ -36,7 +36,8 @@ from dashboard import create_server
 # ---------------------------------------------------------------------------
 
 TEST_DB = Path(__file__).parent / "test_day3.db"
-CONFIG = Path(__file__).parent / "configs" / "ryan_stack.yaml"
+_configs = Path(__file__).parent / "configs"
+CONFIG = _configs / "ryan_stack.yaml" if (_configs / "ryan_stack.yaml").exists() else _configs / "example_stack.yaml"
 PORT = 18932  # Use a random high port for testing
 
 if TEST_DB.exists():
@@ -77,13 +78,15 @@ agents_loaded = result.get("agents_loaded", [])
 check("setup.hierarchy", len(agents_loaded) >= 10,
       f"Loaded {len(agents_loaded)} agents: {agents_loaded}")
 
-# Get key agent references
-ryan = bus.get_agent_by_name("Ryan", TEST_DB)
+# Get key agent references — prefer ryan_stack, fall back to example_stack
+ryan = bus.get_agent_by_name("Ryan", TEST_DB) or bus.get_agent_by_name("Human", TEST_DB)
 chief = bus.get_agent_by_name("Crew-Boss", TEST_DB)
-quant = bus.get_agent_by_name("Quant", TEST_DB)
-v4 = bus.get_agent_by_name("V4", TEST_DB)
-rjc_mgr = bus.get_agent_by_name("RJC-Manager", TEST_DB)
-lead_tracker = bus.get_agent_by_name("Lead-Tracker", TEST_DB)
+quant = bus.get_agent_by_name("Quant", TEST_DB) or bus.get_agent_by_name("Wallet", TEST_DB)
+v4 = bus.get_agent_by_name("V4", TEST_DB) or bus.get_agent_by_name("Ideas", TEST_DB)
+rjc_mgr = bus.get_agent_by_name("RJC-Manager", TEST_DB) or bus.get_agent_by_name("Home-Manager", TEST_DB)
+lead_tracker = bus.get_agent_by_name("Lead-Tracker", TEST_DB) or bus.get_agent_by_name("Budget-Tracker", TEST_DB)
+memory = bus.get_agent_by_name("Memory", TEST_DB)
+cfo = bus.get_agent_by_name("CFO", TEST_DB) or bus.get_agent_by_name("Wallet", TEST_DB)
 
 check("setup.agents", all([ryan, chief, quant, v4, rjc_mgr, lead_tracker]),
       "All key agents exist")
@@ -176,7 +179,7 @@ except Exception as e:
 
 section("Test 3: CrewBridge report -> message feed")
 
-bridge_lt = CrewBridge("Lead-Tracker", db_path=TEST_DB)
+bridge_lt = CrewBridge(lead_tracker["name"], db_path=TEST_DB)
 check("3.1", bridge_lt.agent_id == lead_tracker["id"],
       f"Bridge resolved Lead-Tracker id={bridge_lt.agent_id}")
 
@@ -342,12 +345,12 @@ except Exception as e:
     check("7.1", False, f"Quarantine failed: {e}")
 
 # Verify Lead-Tracker agent status
-lt_agent = bus.get_agent_by_name("Lead-Tracker", TEST_DB)
+lt_agent = bus.get_agent_by_name(lead_tracker["name"], TEST_DB)
 check("7.2", lt_agent["status"] == "quarantined",
       f"Lead-Tracker status: {lt_agent['status']}")
 
 # Try to send message FROM quarantined agent - should be blocked
-bridge_lt_q = CrewBridge("Lead-Tracker", db_path=TEST_DB)
+bridge_lt_q = CrewBridge(lead_tracker["name"], db_path=TEST_DB)
 blocked = bridge_lt_q.report(
     subject="Should Be Blocked",
     body="This should not go through"
@@ -371,7 +374,7 @@ except Exception as e:
     check("7.4", False, f"Restore failed: {e}")
 
 # Verify restored agent can send
-bridge_lt_r = CrewBridge("Lead-Tracker", db_path=TEST_DB)
+bridge_lt_r = CrewBridge(lead_tracker["name"], db_path=TEST_DB)
 restored_msg = bridge_lt_r.report(
     subject="Back Online",
     body="Lead-Tracker restored and operational"
@@ -386,7 +389,7 @@ check("7.5", restored_msg.get("ok") is True,
 
 section("Test 8: Knowledge store and search")
 
-bridge_mem = CrewBridge("Memory", db_path=TEST_DB)
+bridge_mem = CrewBridge(memory["name"], db_path=TEST_DB)
 
 k_result = bridge_mem.post_knowledge(
     category="contact",
@@ -436,7 +439,7 @@ except Exception as e:
     before_count = 0
 
 # Send a new message via bridge
-bridge_v4 = CrewBridge("V4", db_path=TEST_DB)
+bridge_v4 = CrewBridge(v4["name"], db_path=TEST_DB)
 v4_result = bridge_v4.submit_idea(
     subject="YouTube Shorts for Lead Gen",
     body="Quick 30-second videos showing before/after of rural property jobs"
@@ -575,7 +578,7 @@ except Exception as e:
 
 section("Bonus: Wellness agent bridge")
 
-bridge_quant = CrewBridge("Quant", db_path=TEST_DB)
+bridge_quant = CrewBridge(quant["name"], db_path=TEST_DB)
 wellness_result = bridge_quant.update_wellness(
     burnout_score=7,
     notes="Long work week, multiple client emergencies"
@@ -584,12 +587,12 @@ check("wellness.1", wellness_result.get("ok") is True,
       f"Wellness update succeeded: burnout={wellness_result.get('burnout_score')}")
 
 # Verify burnout changed
-ryan_updated = bus.get_agent_by_name("Ryan", TEST_DB)
+ryan_updated = bus.get_agent_by_name(ryan["name"], TEST_DB)
 check("wellness.2", ryan_updated["burnout_score"] == 7,
       f"Ryan burnout updated to {ryan_updated['burnout_score']}")
 
 # Non-wellness agent should fail
-bridge_cfo = CrewBridge("CFO", db_path=TEST_DB)
+bridge_cfo = CrewBridge(cfo["name"], db_path=TEST_DB)
 bad_wellness = bridge_cfo.update_wellness(burnout_score=3)
 check("wellness.3", bad_wellness.get("ok") is False,
       f"Non-wellness agent blocked: {bad_wellness.get('error', '')[:50]}")
