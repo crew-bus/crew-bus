@@ -2301,6 +2301,37 @@ async function deleteTeam(teamId,teamName){
   }catch(e){showToast('Error deleting team','error')}
 }
 
+// ══════════ HIRE AGENT ══════════
+
+function showHireForm(teamId,mgrName){
+  var f=document.getElementById('hire-form-'+teamId);
+  if(f){f.style.display='block';f.dataset.mgrName=mgrName;
+    var inp=document.getElementById('hire-name-'+teamId);if(inp){inp.value='';inp.focus();}
+    var d=document.getElementById('hire-desc-'+teamId);if(d)d.value='';
+    var m=document.getElementById('hire-msg-'+teamId);if(m)m.textContent='';}
+}
+
+async function submitHire(teamId){
+  var nameEl=document.getElementById('hire-name-'+teamId);
+  var descEl=document.getElementById('hire-desc-'+teamId);
+  var msgEl=document.getElementById('hire-msg-'+teamId);
+  var formEl=document.getElementById('hire-form-'+teamId);
+  var name=(nameEl?nameEl.value:'').trim();
+  if(!name){if(msgEl){msgEl.textContent='Name is required.';msgEl.style.color='#e55';}return;}
+  var mgrName=formEl?formEl.dataset.mgrName:'';
+  if(msgEl){msgEl.textContent='Hiring...';msgEl.style.color='var(--mu)';}
+  try{
+    var r=await apiPost('/api/agents/create',{name:name,agent_type:'worker',parent:mgrName,description:(descEl?descEl.value:'').trim()});
+    if(r.ok){
+      showToast(name+' hired!');
+      formEl.style.display='none';
+      openTeamDash(teamId);
+    }else{
+      if(msgEl){msgEl.textContent=r.error||'Failed to hire agent.';msgEl.style.color='#e55';}
+    }
+  }catch(e){if(msgEl){msgEl.textContent='Error hiring agent.';msgEl.style.color='#e55';}}
+}
+
 // ══════════ RENAME TEAM ══════════
 
 function startRenameTeam(){
@@ -2393,7 +2424,22 @@ async function openTeamDash(teamId){
       '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
       '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
+  // Hire Agent button (if under max)
+  if(mgr&&teamAgents.length<8){
+    html+='<div class="team-worker-bubble" onclick="showHireForm('+teamId+',\''+esc(mgr.name)+'\')" style="cursor:pointer;opacity:.7;border:2px dashed var(--br);border-radius:12px;padding:8px">'+
+      '<div class="team-worker-circle" style="background:var(--s2)">\u2795</div>'+
+      '<span class="team-worker-label" style="color:var(--mu)">Hire Agent</span></div>';
+  }
   html+='</div>';
+  // Hire agent form (hidden by default)
+  html+='<div id="hire-form-'+teamId+'" style="display:none;margin:12px auto;max-width:340px;padding:16px;background:var(--sf);border:1px solid var(--br);border-radius:10px">'+
+    '<div style="font-weight:700;margin-bottom:8px">Hire a new agent</div>'+
+    '<input id="hire-name-'+teamId+'" type="text" placeholder="Agent name" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;margin-bottom:6px;box-sizing:border-box">'+
+    '<input id="hire-desc-'+teamId+'" type="text" placeholder="What does this agent do? (optional)" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;margin-bottom:8px;box-sizing:border-box">'+
+    '<div style="display:flex;gap:6px">'+
+    '<button onclick="submitHire('+teamId+')" style="background:var(--ac);color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:.85rem">Hire</button>'+
+    '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--s2);color:var(--fg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
+    '<div id="hire-msg-'+teamId+'" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
 
   // Mailbox section
   html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
@@ -3800,8 +3846,27 @@ def _create_team(db_path, template):
             except Exception:
                 pass
 
-    team_name = tpl["name"]
-    worker_names = [w[0] for w in tpl["workers"]]
+    base_name = tpl["name"]
+    # Auto-number if a team with this name already exists
+    conn = bus.get_conn(db_path)
+    existing_mgr = conn.execute(
+        "SELECT name FROM agents WHERE agent_type='manager'"
+    ).fetchall()
+    conn.close()
+    mgr_names = [r["name"] for r in existing_mgr]
+    if f"{base_name}-Manager" in mgr_names:
+        # Find next available number
+        n = 2
+        while f"{base_name} {n}-Manager" in mgr_names:
+            n += 1
+        team_name = f"{base_name} {n}"
+        suffix = f" {n}"
+    else:
+        team_name = base_name
+        suffix = ""
+
+    # Add suffix to worker names so they're unique across duplicate teams
+    worker_names = [w[0] + suffix for w in tpl["workers"]]
     worker_descs = [w[1] for w in tpl["workers"]]
     result = bus.create_team(
         team_name=team_name,
