@@ -1142,6 +1142,7 @@ def _process_queued_messages(db_path: Path):
             WHERE h.agent_type = 'human'
               AND m.status = 'queued'
               AND a.agent_type != 'human'
+              AND a.active = 1
             ORDER BY m.created_at ASC
         """).fetchall()
     finally:

@@ -667,6 +667,7 @@ a{color:var(--ac);text-decoration:none}
 .dot-green{background:var(--gn)}
 .dot-yellow{background:var(--yl)}
 .dot-red{background:var(--rd)}
+.dot-orange{background:#f0883e}
 .bubble-label{
   margin-top:8px;font-size:.78rem;font-weight:700;color:rgba(255,255,255,0.92);
   text-align:center;white-space:nowrap;letter-spacing:0.04em;
@@ -1842,7 +1843,8 @@ async function apiPost(path,data){
     body:JSON.stringify(data||{})})).json();
 }
 
-function dotClass(status,agent_type,checkIn){
+function dotClass(status,agent_type,checkIn,active){
+  if(active===0||active===false)return 'dot-orange';
   if(status==='quarantined')return 'dot-yellow';
   if(status==='terminated')return 'dot-red';
   if(agent_type==='security'&&checkIn){
@@ -2040,7 +2042,7 @@ function renderBubble(id,agent,sub){
   }
   el.onclick=function(){openAgentSpace(agent.id)};
   var dot=el.querySelector('.status-dot');
-  if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null);
+  if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
   var countEl=el.querySelector('.bubble-count');
   if(countEl){var c=agent.period_count||agent.unread_count||0;countEl.textContent=c>0?c+' msgs':''}
   var subEl=el.querySelector('.bubble-sub');
@@ -2114,7 +2116,7 @@ async function openAgentSpace(agentId){
   document.getElementById('as-name').textContent=name;
   document.getElementById('as-name').style.color=color;
   var asDot=document.getElementById('as-status-dot');
-  asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null);
+  asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
 
   var intro=document.getElementById('as-intro');
   intro.style.borderColor=color+'44';
@@ -2134,7 +2136,12 @@ async function openAgentSpace(agentId){
     '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
     '</select></div>'+
     (agent.agent_type==='worker'||agent.agent_type==='manager'?
-      '<div style="margin-top:10px"><button onclick="terminateAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\',\''+agent.agent_type+'\')" style="background:none;border:1px solid #f8514944;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f8514922\'" onmouseout="this.style.background=\'none\'">Terminate Agent</button></div>':'');
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+      (agent.active?
+        '<button onclick="pauseAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\','+(agent.agent_type==='manager'?'true':'false')+')" style="background:none;border:1px solid #f0883e66;color:#f0883e;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f0883e22\'" onmouseout="this.style.background=\'none\'">Pause'+(agent.agent_type==='manager'?' Team':'')+'</button>':
+        '<button onclick="resumeAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\','+(agent.agent_type==='manager'?'true':'false')+')" style="background:none;border:1px solid #3fb95066;color:#3fb950;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#3fb95022\'" onmouseout="this.style.background=\'none\'">Resume'+(agent.agent_type==='manager'?' Team':'')+'</button>')+
+      '<button onclick="terminateAgent('+agentId+',\''+esc(name).replace(/'/g,"\\'")+'\',\''+agent.agent_type+'\')" style="background:none;border:1px solid #f8514944;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;transition:background .15s" onmouseover="this.style.background=\'#f8514922\'" onmouseout="this.style.background=\'none\'">Terminate</button>'+
+      '</div>':'');
 
   var feedEl=document.getElementById('as-activity');
   if(!activity||activity.length===0){
@@ -2750,6 +2757,48 @@ async function terminateAgent(agentId,agentName,agentType){
   }catch(e){showToast('Error terminating agent.','error');}
 }
 
+// ══════════ PAUSE / RESUME AGENT ══════════
+
+async function pauseAgent(agentId,agentName,isManager){
+  var msg=isManager
+    ?'Pause "'+agentName+'" and all workers in this team? They won\'t consume tokens while paused.'
+    :'Pause "'+agentName+'"? It won\'t consume tokens while paused.';
+  if(!await showConfirm('Pause Agent',msg,'Pause'))return;
+  try{
+    var r=await apiPost('/api/agent/'+agentId+'/deactivate',{});
+    if(!r.ok){showToast(r.error||'Failed to pause.','error');return;}
+    if(isManager){
+      var team=await api('/api/teams/'+agentId+'/agents');
+      for(var i=0;i<team.length;i++){
+        if(team[i].id!==agentId&&team[i].active)
+          await apiPost('/api/agent/'+team[i].id+'/deactivate',{});
+      }
+    }
+    showToast(agentName+(isManager?' and team':'')+' paused.');
+    closeAgentSpace();loadAgents();loadTeams();
+  }catch(e){showToast('Error pausing agent.','error');}
+}
+
+async function resumeAgent(agentId,agentName,isManager){
+  var msg=isManager
+    ?'Resume "'+agentName+'" and all workers in this team?'
+    :'Resume "'+agentName+'"?';
+  if(!await showConfirm('Resume Agent',msg,'Resume'))return;
+  try{
+    var r=await apiPost('/api/agent/'+agentId+'/activate',{});
+    if(!r.ok){showToast(r.error||'Failed to resume.','error');return;}
+    if(isManager){
+      var team=await api('/api/teams/'+agentId+'/agents');
+      for(var i=0;i<team.length;i++){
+        if(team[i].id!==agentId&&!team[i].active)
+          await apiPost('/api/agent/'+team[i].id+'/activate',{});
+      }
+    }
+    showToast(agentName+(isManager?' and team':'')+' resumed.');
+    closeAgentSpace();loadAgents();loadTeams();
+  }catch(e){showToast('Error resuming agent.','error');}
+}
+
 // ══════════ RENAME TEAM ══════════
 
 function startRenameTeam(){
@@ -2818,7 +2867,7 @@ async function openTeamDash(teamId){
   // Manager bubble — click to open, double-click name to rename
   if(mgr){
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
-      '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
+      '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
       '<span class="team-mgr-label">'+esc(mgr.name)+' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span>'+
       '<span class="team-mgr-sub">Manager</span></div></div>';
   }
@@ -2839,7 +2888,7 @@ async function openTeamDash(teamId){
   html+='<div class="team-workers">';
   workers.forEach(function(w){
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
-      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null)+'"></span></div>'+
+      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
       '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
   // Hire Agent button (if under max)
@@ -5424,6 +5473,17 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
+        # ── Activate (resume) a paused agent ──
+
+        m = re.match(r"^/api/agent/(\d+)/activate$", path)
+        if m:
+            agent_id = int(m.group(1))
+            try:
+                result = bus.activate_agent(agent_id, db_path=self.db_path)
+                return _json_response(self, {"ok": True, "agent": result})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
         # ── Terminate agent (project complete, retire it) ──
 
         m = re.match(r"^/api/agent/(\d+)/terminate$", path)
@@ -5581,6 +5641,27 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
             bus.set_config("feedback_log", json.dumps(log), db_path=self.db_path)
+
+            # Route feedback to Launch HQ team mailbox via Feedback Manager
+            try:
+                _conn = bus.get_conn(self.db_path)
+                # Find the Feedback Manager (worker in first manager's team)
+                feedback_mgr = _conn.execute(
+                    "SELECT id FROM agents WHERE name='Feedback Manager' LIMIT 1"
+                ).fetchone()
+                _conn.close()
+                if feedback_mgr:
+                    _sev = "warning" if fb_type == "bug" else "info"
+                    bus.send_to_team_mailbox(
+                        from_agent_id=feedback_mgr["id"],
+                        subject=f"[{fb_type.upper()}] New user feedback",
+                        body=fb_text,
+                        severity=_sev,
+                        db_path=self.db_path,
+                    )
+            except Exception:
+                pass  # Feedback saved even if routing fails
+
             return _json_response(self, {"ok": True})
 
         if path == "/api/dashboard/reset-pin":
