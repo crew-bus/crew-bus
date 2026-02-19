@@ -1508,6 +1508,45 @@ function resetPin(){
   }).catch(function(){errEl.textContent='Connection error.';});
 }
 
+// ══════════ UPDATE CHECK ══════════
+
+async function checkForUpdates(){
+  var btn=document.getElementById('update-btn');
+  btn.textContent='\U0001f504 Checking...';
+  try{
+    var r=await api('/api/update/check');
+    if(r&&r.update_available){
+      var ok=await showConfirm('Update Available','A new version of Crew Bus is available. Update now? The dashboard will restart.','Update Now');
+      if(ok){
+        btn.textContent='\U0001f504 Updating...';
+        var u=await apiPost('/api/update/apply',{});
+        if(u&&u.ok){
+          showToast('Updated! Restarting dashboard...');
+          setTimeout(function(){location.reload()},2000);
+        }else{
+          showToast(u.error||'Update failed.','error');
+          btn.innerHTML='\U0001f504 Update';
+        }
+      }else{btn.innerHTML='\U0001f504 Update';}
+    }else{
+      showToast('You\u2019re on the latest version.');
+      btn.innerHTML='\U0001f504 Update';
+      var dot=document.getElementById('update-dot');if(dot)dot.style.display='none';
+    }
+  }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='\U0001f504 Update';}
+}
+
+// Check for updates silently on load
+setTimeout(async function(){
+  try{
+    var r=await api('/api/update/check');
+    if(r&&r.update_available){
+      var dot=document.getElementById('update-dot');
+      if(dot)dot.style.display='block';
+    }
+  }catch(e){}
+},5000);
+
 function openFeedback(){
   document.getElementById('feedback-modal').classList.add('open');
   document.getElementById('feedback-text').value='';
@@ -3039,6 +3078,7 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
+  <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
   <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
 </div>
 
@@ -3910,6 +3950,58 @@ def _create_team(db_path, template):
     return result
 
 
+def _check_for_updates():
+    """Check if a newer version is available on GitHub."""
+    import subprocess
+    repo_dir = Path(__file__).parent
+    try:
+        # Fetch latest from remote (quiet, no merge)
+        subprocess.run(["git", "fetch", "--quiet"], cwd=repo_dir,
+                        capture_output=True, timeout=15)
+        # Compare local HEAD vs remote main
+        local = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir,
+                                capture_output=True, text=True, timeout=5)
+        remote = subprocess.run(["git", "rev-parse", "origin/main"], cwd=repo_dir,
+                                 capture_output=True, text=True, timeout=5)
+        local_sha = local.stdout.strip()
+        remote_sha = remote.stdout.strip()
+        if not local_sha or not remote_sha:
+            return {"update_available": False, "error": "Could not read git state"}
+        if local_sha != remote_sha:
+            # Get count of new commits
+            behind = subprocess.run(
+                ["git", "rev-list", "--count", f"{local_sha}..{remote_sha}"],
+                cwd=repo_dir, capture_output=True, text=True, timeout=5)
+            count = int(behind.stdout.strip()) if behind.stdout.strip() else 0
+            return {"update_available": True, "commits_behind": count,
+                    "local": local_sha[:8], "remote": remote_sha[:8]}
+        return {"update_available": False}
+    except Exception as e:
+        return {"update_available": False, "error": str(e)}
+
+
+def _apply_update():
+    """Pull latest code from GitHub and signal restart."""
+    import subprocess
+    repo_dir = Path(__file__).parent
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--ff-only", "origin", "main"],
+            cwd=repo_dir, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return {"ok": False, "error": result.stderr.strip() or "git pull failed"}
+        # Schedule a restart after response is sent
+        def _restart():
+            import time
+            time.sleep(1)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        t = threading.Thread(target=_restart, daemon=True)
+        t.start()
+        return {"ok": True, "output": result.stdout.strip()}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def _get_guard_checkin(db_path):
     conn = bus.get_conn(db_path)
     try:
@@ -4257,6 +4349,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/guard/checkin":
             return _json_response(self, _get_guard_checkin(self.db_path))
 
+        if path == "/api/update/check":
+            return _json_response(self, _check_for_updates())
+
         if path == "/api/guard/status":
             activated = bus.is_guard_activated(db_path=self.db_path)
             info = bus.get_guard_activation_status(db_path=self.db_path)
@@ -4532,6 +4627,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": "need from_agent_id, subject, body"}, 400)
             result = bus.send_to_team_mailbox(agent_id, subject, body, severity=severity, db_path=self.db_path)
             return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        if path == "/api/update/apply":
+            return _json_response(self, _apply_update())
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)
