@@ -1962,13 +1962,11 @@ async function loadGuardianBanner(forceOpen){
     '<button onclick="dismissGuardianBanner()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--mu);font-size:1.2rem;cursor:pointer;padding:4px 8px;line-height:1;opacity:.7;transition:opacity .15s" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'.7\'" title="Dismiss for 24 hours">\u2715</button>'+
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-right:28px">'+
     '<span style="font-size:1.8rem">\u{1F6E1}\uFE0F</span>'+
-    '<div><div style="font-size:1rem;font-weight:700;color:#d18616">Unlock the Guardian</div>'+
-    '<div style="font-size:.8rem;color:var(--mu)">Access the Skill Store \u2014 downloadable skills that make your agents smarter</div></div></div>'+
+    '<div><div style="font-size:1rem;font-weight:700;color:#2ea043">Guardian Active</div>'+
+    '<div style="font-size:.8rem;color:var(--mu)">Your Guardian is protecting the crew 24/7 \u2014 skills, threat monitoring, and charter enforcement enabled</div></div></div>'+
     '<div id="guardian-btn-area" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
-    '<button onclick="showGuardianCheckout()" style="background:#d18616;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">\u{1F6D2} Buy Guardian \u2014 $29 one-time</button>'+
-    '<div style="display:flex;gap:6px;flex:1;min-width:200px">'+
-    '<input id="guardian-key-main" type="text" placeholder="Have an activation key? Paste here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 12px;color:var(--fg);font-size:.85rem">'+
-    '<button onclick="activateGuardianFromBanner()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div></div>'+
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:#1a2e1a;border-radius:8px;border:1px solid #2ea04366">'+
+    '<span style="color:#2ea043;font-weight:600">\u2705 Free for everyone</span></div></div>'+
     '<div id="guardian-buy-area" style="display:none"></div>'+
     '<div id="guardian-banner-msg" style="margin-top:8px;font-size:.8rem;min-height:1em"></div></div>';
 }
@@ -2260,11 +2258,9 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button></div>'+
-          '<div id="guard-detail-stripe" style="display:none;margin-bottom:10px"></div>'+
-          '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
-          '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
-          '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">After purchasing, paste your activation key above.</div></div>';
+          '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#1a2e1a;border-radius:8px;border:1px solid #2ea04366">'+
+          '<span style="color:#2ea043;font-weight:600">\u2705 Guardian is free for everyone</span></div>'+
+          '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">Reboot your dashboard to activate.</div></div>';
       }
     }else{
       guardEl.style.display='none';
@@ -3411,7 +3407,7 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
-  <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Guardian — skills, threat monitoring, anomaly detection" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Guardian</button>
+  <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Guardian — skills, threat monitoring, anomaly detection" style="display:none;background:none;border:none;color:#2ea043;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Guardian</button>
   <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
   <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
 </div>
@@ -5648,6 +5644,8 @@ def _ensure_guardian(db_path):
             # Guardian exists — ensure inner circle is complete
             _ensure_inner_circle(db_path, conn)
             conn.close()
+            # Auto-activate Guardian for free (idempotent)
+            _auto_activate_guardian(db_path)
             return
 
         # Migrate old Wizard → Guardian (existing installs)
@@ -5667,6 +5665,8 @@ def _ensure_guardian(db_path):
             # Spawn any missing inner circle agents
             _ensure_inner_circle(db_path, conn)
             conn.close()
+            # Auto-activate Guardian for free
+            _auto_activate_guardian(db_path)
             # Seed initial knowledge
             _refresh_guardian_knowledge(db_path)
             return
@@ -5719,8 +5719,36 @@ def _ensure_guardian(db_path):
     finally:
         conn.close()
 
+    # Auto-activate Guardian for free — every human deserves protection
+    _auto_activate_guardian(db_path)
+
     # Seed initial system knowledge
     _refresh_guardian_knowledge(db_path)
+
+
+def _auto_activate_guardian(db_path):
+    """Auto-activate Guardian for free. Every human deserves protection.
+
+    Inserts a free activation record if one doesn't already exist.
+    This makes is_guard_activated() return True, unlocking skills for everyone.
+    Idempotent — safe to call on every boot.
+    """
+    if bus.is_guard_activated(db_path=db_path):
+        return  # Already activated (free or paid — doesn't matter)
+
+    conn = bus.get_conn(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO guard_activation (activation_key, activated_at, key_fingerprint) "
+            "VALUES (?, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?)",
+            ("FREE-GUARDIAN-FOR-EVERYONE", "free-activation")
+        )
+        conn.commit()
+        print("Guardian activated for free — skills unlocked for everyone.")
+    except Exception:
+        pass  # Already exists or table issue — silently continue
+    finally:
+        conn.close()
 
 
 def _ensure_inner_circle(db_path, conn=None):
@@ -5757,6 +5785,21 @@ def _ensure_inner_circle(db_path, conn=None):
         if spawned:
             conn.commit()
             print(f"Inner circle spawned: {', '.join(spawned)}")
+
+        # Migrate Crew Boss description to calibration-aware version
+        # (existing installs may have the old short description)
+        boss_row = conn.execute(
+            "SELECT id, description FROM agents WHERE agent_type='right_hand' LIMIT 1"
+        ).fetchone()
+        if boss_row and (not boss_row["description"]
+                         or "FIRST CONVERSATION" not in boss_row["description"]):
+            conn.execute(
+                "UPDATE agents SET description=?, "
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                (CREW_BOSS_DESCRIPTION, boss_row["id"])
+            )
+            conn.commit()
+            print("Crew Boss upgraded — calibration questions enabled.")
     finally:
         if close_conn:
             conn.close()
