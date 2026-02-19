@@ -80,8 +80,8 @@ def test_process_queued_messages_mock():
     conn.close()
     assert len(queued) == 1
 
-    # Mock Ollama to return a canned response
-    with patch.object(agent_worker, "call_ollama",
+    # Mock the LLM router to return a canned response
+    with patch.object(agent_worker, "call_llm",
                       return_value="Hey! I'm doing great, thanks for asking!"):
         agent_worker._process_queued_messages(db_path)
 
