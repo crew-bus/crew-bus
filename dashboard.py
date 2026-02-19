@@ -6200,6 +6200,28 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     print(f"  \U0001f4c1 Database:  {actual_db}")
     print()
 
+    # Log startup / recovery (helps track power outage restarts)
+    try:
+        _sc = bus.get_conn(actual_db)
+        _sc.execute(
+            "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+            ("system_startup", 1, json.dumps({"port": port, "db": str(actual_db)})),
+        )
+        # Re-queue any messages stuck from a crash (shouldn't happen with WAL+FULL, but safety net)
+        stuck = _sc.execute(
+            "UPDATE messages SET status='queued' WHERE status='processing'"
+        ).rowcount
+        if stuck:
+            _sc.execute(
+                "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+                ("crash_recovery", 1, json.dumps({"requeued_messages": stuck})),
+            )
+            print(f"  \u26a0\ufe0f  Recovered {stuck} messages stuck from last shutdown")
+        _sc.commit()
+        _sc.close()
+    except Exception:
+        pass  # don't block startup
+
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
 
