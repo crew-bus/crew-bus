@@ -27,5 +27,10 @@ logs/
 
 # WhatsApp bridge
 whatsapp-bridge/
+wa-bridge/wa-session/
 .wwebjs_auth/
 .wwebjs_cache/
+
+# Embedded repos / worktrees
+.claude/worktrees/
+crew-bus/
