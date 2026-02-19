@@ -21,6 +21,9 @@ _tmp_*
 configs/ryan_stack.yaml
 crew_bus.db-shm
 crew_bus.db-wal
+*.db-shm
+*.db-wal
+logs/
 
 # WhatsApp bridge
 whatsapp-bridge/

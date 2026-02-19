@@ -1906,7 +1906,75 @@ function loadCurrentView(){
   else if(currentView==='messages')loadMessages();
   else if(currentView==='decisions')loadDecisions();
   else if(currentView==='audit')loadAudit();
+  else if(currentView==='drafts')loadDrafts();
   else if(currentView==='team'){}  // team dash loads separately
+}
+
+// ══════════ SOCIAL DRAFTS ══════════
+
+var platformIcons={reddit:'\U0001f4e2',twitter:'\U0001f426',hackernews:'\U0001f4f0',discord:'\U0001f4ac',linkedin:'\U0001f4bc',producthunt:'\U0001f680',other:'\U0001f4cb'};
+var statusColors={draft:'#d18616',approved:'#2ea043',posted:'#388bfd',rejected:'#f85149'};
+
+async function loadDrafts(){
+  var pf=document.getElementById('drafts-platform-filter').value;
+  var sf=document.getElementById('drafts-status-filter').value;
+  var url='/api/social/drafts?';
+  if(pf)url+='platform='+pf+'&';
+  if(sf)url+='status='+sf+'&';
+  var drafts=await api(url);
+  var el=document.getElementById('drafts-list');
+  if(!drafts||!drafts.length){el.innerHTML='<p style="color:var(--mu);text-align:center;padding:40px 0">No drafts yet. Your Content Creator and Website Manager will add them here.</p>';return}
+  var html='';
+  drafts.forEach(function(d){
+    var icon=platformIcons[d.platform]||'\U0001f4cb';
+    var sc=statusColors[d.status]||'var(--mu)';
+    html+='<div style="background:var(--sf);border:1px solid var(--br);border-radius:10px;padding:16px;margin-bottom:12px">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    html+='<div style="display:flex;align-items:center;gap:8px">';
+    html+='<span style="font-size:1.2rem">'+icon+'</span>';
+    html+='<span style="font-weight:600;color:var(--fg)">'+esc(d.platform)+'</span>';
+    if(d.target)html+='<span style="color:var(--mu);font-size:.8rem">\u2192 '+esc(d.target)+'</span>';
+    html+='</div>';
+    html+='<span style="background:'+sc+';color:#fff;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600">'+d.status+'</span>';
+    html+='</div>';
+    if(d.title)html+='<div style="font-weight:600;margin-bottom:6px;color:var(--fg)">'+esc(d.title)+'</div>';
+    html+='<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:12px;font-size:.82rem;color:var(--fg);max-height:300px;overflow-y:auto;margin:0 0 10px">'+esc(d.body)+'</pre>';
+    html+='<div style="display:flex;gap:6px;justify-content:flex-end">';
+    html+='<button onclick="copyDraft('+d.id+')" style="background:var(--ac);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\U0001f4cb Copy</button>';
+    if(d.status==='draft'){
+      html+='<button onclick="updateDraftStatus('+d.id+',\'approved\')" style="background:#2ea043;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Approve</button>';
+      html+='<button onclick="updateDraftStatus('+d.id+',\'rejected\')" style="background:#f85149;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2717 Reject</button>';
+    }
+    if(d.status==='approved'){
+      html+='<button onclick="updateDraftStatus('+d.id+',\'posted\')" style="background:#388bfd;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Mark Posted</button>';
+    }
+    html+='</div></div>';
+  });
+  el.innerHTML=html;
+}
+
+async function copyDraft(id){
+  var drafts=await api('/api/social/drafts');
+  var d=drafts.find(function(x){return x.id===id});
+  if(!d)return;
+  var text=d.title?d.title+'\\n\\n'+d.body:d.body;
+  try{await navigator.clipboard.writeText(text);showToast('Copied to clipboard!')}
+  catch(e){
+    var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Copied!')
+  }
+}
+
+async function updateDraftStatus(id,status){
+  await apiPost('/api/social/drafts/'+id+'/status',{status:status});
+  loadDrafts();
+}
+
+function showToast(msg){
+  var t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--ac);color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:.85rem;animation:fadeIn .2s';
+  document.body.appendChild(t);
+  setTimeout(function(){t.remove()},2000);
 }
 
 // ══════════ MAIN CIRCLE ══════════
@@ -3472,6 +3540,7 @@ def _build_html():
   <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
+  <button class="nav-pill" data-view="drafts" onclick="showView('drafts')">Drafts</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
   <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Unlock Skills</button>
   <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
@@ -3655,6 +3724,34 @@ def _build_html():
   <table><thead><tr>
     <th>ID</th><th>Event</th><th>Agent</th><th>Details</th><th>Time</th>
   </tr></thead><tbody id="audit-body"></tbody></table>
+</div></div>
+
+<!-- ══════════ SOCIAL DRAFTS VIEW ══════════ -->
+<div id="view-drafts" class="view" data-page="drafts">
+<div class="legacy-container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h1 style="margin:0">Social Drafts</h1>
+    <div style="display:flex;gap:8px">
+      <select id="drafts-platform-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
+        <option value="">All Platforms</option>
+        <option value="reddit">Reddit</option>
+        <option value="twitter">Twitter/X</option>
+        <option value="hackernews">Hacker News</option>
+        <option value="discord">Discord</option>
+        <option value="linkedin">LinkedIn</option>
+        <option value="producthunt">Product Hunt</option>
+        <option value="other">Other</option>
+      </select>
+      <select id="drafts-status-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
+        <option value="">All Status</option>
+        <option value="draft">Draft</option>
+        <option value="approved">Approved</option>
+        <option value="posted">Posted</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+  </div>
+  <div id="drafts-list"></div>
 </div></div>
 
 <!-- ══════════ TEAM DASHBOARD VIEW (FIX 1) ══════════ -->
@@ -4716,7 +4813,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         # Pages — SPA serves same HTML for all routes
-        if path in ("/", "/messages", "/decisions", "/audit") or path.startswith("/team/"):
+        if path in ("/", "/messages", "/decisions", "/audit", "/drafts") or path.startswith("/team/"):
             return _html_response(self, PAGE_HTML)
 
         if path == "/api/stats":
@@ -4920,6 +5017,13 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/dashboard/has-password":
             stored = bus.get_config("dashboard_password", db_path=self.db_path)
             return _json_response(self, {"has_password": bool(stored)})
+
+        # ── Social Drafts API (GET) ──
+        if path == "/api/social/drafts":
+            platform = qs.get("platform", [""])[0]
+            status = qs.get("status", [""])[0]
+            return _json_response(self, bus.get_social_drafts(
+                platform=platform, status=status, db_path=self.db_path))
 
         _json_response(self, {"error": "not found"}, 404)
 
@@ -5709,6 +5813,38 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
 
+        # ── Social Drafts API (POST) ──
+        if path == "/api/social/drafts":
+            agent_id = data.get("agent_id")
+            platform = data.get("platform", "")
+            body = data.get("body", "")
+            title = data.get("title", "")
+            target = data.get("target", "")
+            if not agent_id or not platform or not body:
+                return _json_response(self, {"error": "agent_id, platform, body required"}, 400)
+            try:
+                draft = bus.create_social_draft(
+                    agent_id=int(agent_id), platform=platform,
+                    body=body, title=title, target=target,
+                    db_path=self.db_path)
+                return _json_response(self, draft)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        m = re.match(r"^/api/social/drafts/(\d+)/status$", path)
+        if m:
+            draft_id = int(m.group(1))
+            new_status = data.get("status", "")
+            if not new_status:
+                return _json_response(self, {"error": "status required"}, 400)
+            try:
+                result = bus.update_draft_status(
+                    draft_id=draft_id, status=new_status,
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
         _json_response(self, {"error": "not found"}, 404)
 
 
@@ -6063,6 +6199,28 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     print(f"  \U0001f310 Dashboard: {url}")
     print(f"  \U0001f4c1 Database:  {actual_db}")
     print()
+
+    # Log startup / recovery (helps track power outage restarts)
+    try:
+        _sc = bus.get_conn(actual_db)
+        _sc.execute(
+            "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+            ("system_startup", 1, json.dumps({"port": port, "db": str(actual_db)})),
+        )
+        # Re-queue any messages stuck from a crash (shouldn't happen with WAL+FULL, but safety net)
+        stuck = _sc.execute(
+            "UPDATE messages SET status='queued' WHERE status='processing'"
+        ).rowcount
+        if stuck:
+            _sc.execute(
+                "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+                ("crash_recovery", 1, json.dumps({"requeued_messages": stuck})),
+            )
+            print(f"  \u26a0\ufe0f  Recovered {stuck} messages stuck from last shutdown")
+        _sc.commit()
+        _sc.close()
+    except Exception:
+        pass  # don't block startup
 
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
