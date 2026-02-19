@@ -770,6 +770,7 @@ class Heartbeat:
         {"type": "integrity_audit", "enabled": True},
         {"type": "weekly_reflection", "enabled": True, "day_of_week": 0, "hour": 4},
         {"type": "guardian_monthly_report", "enabled": True, "day_of_month": 1, "hour": 6},
+        {"type": "launch_hourly_report", "enabled": True},
     ]
 
     def __init__(self, right_hand: "RightHand",
@@ -871,6 +872,9 @@ class Heartbeat:
 
         if check_type == "guardian_monthly_report":
             return self._check_guardian_monthly_report(now, check)
+
+        if check_type == "launch_hourly_report":
+            return self._check_launch_hourly_report(now)
 
         return None
 
@@ -1109,6 +1113,130 @@ class Heartbeat:
             return None
         return {"action_needed": True, "type": "guardian_monthly_report"}
 
+    def _check_launch_hourly_report(self, now: datetime) -> Optional[dict]:
+        """Hourly launch progress + revenue report sent to Crew Boss."""
+        last = bus.get_config("last_launch_hourly_report", "",
+                              db_path=self.db_path)
+        this_hour = now.strftime("%Y-%m-%dT%H")
+        if last == this_hour:
+            return None
+
+        conn = bus.get_conn(self.db_path)
+        try:
+            # --- Agent activity ---
+            hour_ago = (now - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            msgs_sent = conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE created_at > ?",
+                (hour_ago,)
+            ).fetchone()[0]
+
+            msgs_delivered = conn.execute(
+                "SELECT COUNT(*) FROM messages "
+                "WHERE delivered_at > ? AND status='delivered'",
+                (hour_ago,)
+            ).fetchone()[0]
+
+            msgs_queued = conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE status='queued'"
+            ).fetchone()[0]
+
+            # --- Social drafts ---
+            drafts_total = conn.execute(
+                "SELECT COUNT(*) FROM social_drafts"
+            ).fetchone()[0]
+            drafts_by_status = conn.execute(
+                "SELECT status, COUNT(*) as cnt FROM social_drafts "
+                "GROUP BY status"
+            ).fetchall()
+            draft_summary = {r["status"]: r["cnt"] for r in drafts_by_status}
+
+            drafts_new = conn.execute(
+                "SELECT COUNT(*) FROM social_drafts WHERE created_at > ?",
+                (hour_ago,)
+            ).fetchone()[0]
+
+            # --- Revenue (guard activations = Skill Store sales) ---
+            total_activations = conn.execute(
+                "SELECT COUNT(*) FROM guard_activation"
+            ).fetchone()[0]
+            recent_activations = conn.execute(
+                "SELECT COUNT(*) FROM guard_activation WHERE activated_at > ?",
+                (hour_ago,)
+            ).fetchone()[0]
+
+            # --- Team health ---
+            active_agents = conn.execute(
+                "SELECT COUNT(*) FROM agents "
+                "WHERE active=1 AND agent_type NOT IN ('human','help')"
+            ).fetchone()[0]
+            paused_agents = conn.execute(
+                "SELECT COUNT(*) FROM agents WHERE active=0"
+            ).fetchone()[0]
+
+            # --- Feedback ---
+            feedback_total = conn.execute(
+                "SELECT COUNT(*) FROM feedback_log"
+            ).fetchone()[0] if self._table_exists(conn, "feedback_log") else 0
+            feedback_new = 0
+            if self._table_exists(conn, "feedback_log"):
+                feedback_new = conn.execute(
+                    "SELECT COUNT(*) FROM feedback_log WHERE created_at > ?",
+                    (hour_ago,)
+                ).fetchone()[0]
+
+            # --- Team mailbox ---
+            mailbox_unread = conn.execute(
+                "SELECT COUNT(*) FROM team_mailbox WHERE read_at IS NULL"
+            ).fetchone()[0]
+
+        finally:
+            conn.close()
+
+        # Build report
+        draft_line = ", ".join(
+            f"{v} {k}" for k, v in draft_summary.items()) or "none"
+        revenue_estimate = total_activations * 29  # $29 per Skill Store unlock
+
+        report = (
+            f"== HOURLY LAUNCH REPORT ==\n"
+            f"Time: {now.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+            f"ACTIVITY (last hour):\n"
+            f"  Messages sent: {msgs_sent}\n"
+            f"  Messages delivered: {msgs_delivered}\n"
+            f"  Messages still queued: {msgs_queued}\n\n"
+            f"SOCIAL DRAFTS:\n"
+            f"  Total: {drafts_total} ({draft_line})\n"
+            f"  New this hour: {drafts_new}\n\n"
+            f"REVENUE:\n"
+            f"  Skill Store unlocks (all time): {total_activations}\n"
+            f"  Skill Store unlocks (this hour): {recent_activations}\n"
+            f"  Estimated revenue: ${revenue_estimate}\n\n"
+            f"TEAM HEALTH:\n"
+            f"  Active agents: {active_agents}\n"
+            f"  Paused agents: {paused_agents}\n"
+            f"  Unread mailbox items: {mailbox_unread}\n\n"
+            f"FEEDBACK:\n"
+            f"  Total feedback: {feedback_total}\n"
+            f"  New this hour: {feedback_new}\n"
+        )
+
+        return {
+            "action_needed": True,
+            "type": "launch_hourly_report",
+            "data": report,
+            "config_key": "last_launch_hourly_report",
+            "this_hour": this_hour,
+        }
+
+    @staticmethod
+    def _table_exists(conn, table_name: str) -> bool:
+        r = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,)
+        ).fetchone()
+        return r is not None
+
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
@@ -1305,3 +1433,16 @@ class Heartbeat:
             bus.set_config("last_guardian_monthly_report", this_month,
                            db_path=self.db_path)
             print(f"[heartbeat] guardian monthly report sent")
+
+        elif action_type == "launch_hourly_report":
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.rh_id,
+                message_type="report",
+                subject="Hourly Launch Report",
+                body=result["data"],
+                priority="normal", db_path=self.db_path,
+            )
+            bus.set_config(
+                result["config_key"], result["this_hour"],
+                db_path=self.db_path)
+            print("[heartbeat] hourly launch report sent to Crew Boss")
