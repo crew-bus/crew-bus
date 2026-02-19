@@ -2721,6 +2721,8 @@ function bootDashboard(){
 function checkSetupNeeded(){
   fetch('/api/setup/status').then(function(r){return r.json()}).then(function(d){
     if(d.needs_setup){
+      // Clear all fields to defeat browser autofill
+      ['setup-key','setup-pin','setup-email'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
       document.getElementById('setup-overlay').style.display='flex';
       document.querySelectorAll('.topbar,.content,.bottombar').forEach(function(el){el.style.display='none'});
     } else {
@@ -3048,7 +3050,7 @@ def _build_html():
     <div id="setup-key-section">
       <label for="setup-key" id="setup-key-label">Paste your Moonshot API key</label>
       <div class="setup-key-wrap">
-        <input class="setup-key" id="setup-key" type="password" placeholder="sk-..." autocomplete="off"
+        <input class="setup-key" id="setup-key" type="password" placeholder="sk-..." autocomplete="new-password" data-lpignore="true" data-1p-ignore
           onkeydown="if(event.key==='Enter')submitSetup()">
         <button class="setup-key-toggle" onclick="toggleSetupKey()" title="Show/hide key">\U0001f441\ufe0f</button>
       </div>
@@ -3061,7 +3063,7 @@ def _build_html():
       <label for="setup-pin">Set a dashboard PIN (optional)</label>
       <p class="setup-pin-sub">Locks your dashboard and protects against accidental team deletion.</p>
       <input class="setup-key" id="setup-pin" type="password" placeholder="4+ characters..."
-        maxlength="32" autocomplete="off" onkeydown="if(event.key==='Enter')submitSetup()">
+        maxlength="32" autocomplete="new-password" data-lpignore="true" data-1p-ignore onkeydown="if(event.key==='Enter')submitSetup()">
     </div>
 
     <div class="setup-pin-section">
