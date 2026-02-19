@@ -1892,7 +1892,7 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<button onclick="window.open(\'https://crew-bus.dev/pricing?plan=guardian&type=one-time\',\'_blank\')" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button>'+
+          '<button onclick="window.open(\'https://crew-bus.dev/checkout/guardian/one-time\',\'_blank\')" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button>'+
           '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
           '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
           '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">After purchasing, paste your activation key above.</div></div>';
@@ -2088,9 +2088,9 @@ async function activateLicense(type){
   errEl.textContent='';
   // If no promo code, open Stripe checkout on crew-bus.dev
   if(!promo){
-    var url='https://crew-bus.dev/pricing?plan='+encodeURIComponent(template)+'&type='+encodeURIComponent(type);
+    var url='https://crew-bus.dev/checkout/'+encodeURIComponent(template)+'/'+encodeURIComponent(type);
     window.open(url,'_blank');
-    errEl.innerHTML='Complete payment, then paste your activation key below.';
+    errEl.innerHTML='<span style="color:var(--ac)">\u2197\ufe0f Payment page opened in new tab.</span><br>After paying, paste your activation key below and click a plan again.';
     // Switch to activation key mode
     var promoEl=document.getElementById('pay-promo');
     promoEl.placeholder='Paste activation key here...';
@@ -2814,7 +2814,7 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
-  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock dashboard" style="display:none">\U0001f512</button>
+  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
@@ -4317,7 +4317,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
             if not valid_promo:
                 # No valid promo — direct to Stripe checkout on crew-bus.dev
-                checkout_url = f"https://crew-bus.dev/pricing?plan={template}&type={license_type}"
+                checkout_url = f"https://crew-bus.dev/checkout/{template}/{license_type}"
                 return _json_response(self, {
                     "ok": False,
                     "checkout_url": checkout_url,
