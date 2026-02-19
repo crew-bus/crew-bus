@@ -1667,19 +1667,24 @@ async function loadGuardianBanner(){
     '<span style="font-size:1.8rem">\u{1F6E1}\uFE0F</span>'+
     '<div><div style="font-size:1rem;font-weight:700;color:#d18616">Unlock the Guardian</div>'+
     '<div style="font-size:.8rem;color:var(--mu)">Access the Skill Store \u2014 downloadable skills that make your agents smarter</div></div></div>'+
-    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+    '<div id="guardian-btn-area" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
     '<button onclick="showGuardianCheckout()" style="background:#d18616;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">\u{1F6D2} Buy Guardian \u2014 $29 one-time</button>'+
     '<div style="display:flex;gap:6px;flex:1;min-width:200px">'+
     '<input id="guardian-key-main" type="text" placeholder="Have an activation key? Paste here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 12px;color:var(--fg);font-size:.85rem">'+
     '<button onclick="activateGuardianFromBanner()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div></div>'+
+    '<div id="guardian-buy-area" style="display:none"></div>'+
     '<div id="guardian-banner-msg" style="margin-top:8px;font-size:.8rem;min-height:1em"></div></div>';
 }
 
 function showGuardianCheckout(){
-  var msgEl=document.getElementById('guardian-banner-msg');
-  if(msgEl)msgEl.innerHTML='<span style="color:var(--ac)">Opening checkout\u2026</span>';
-  window.open('https://crew-bus.dev/checkout/guardian/one-time','_blank');
-  if(msgEl)msgEl.innerHTML='<span style="color:var(--ac)">\u2197\uFE0F Checkout opened in new tab. After paying, paste your activation key above and click Activate.</span>';
+  var buyArea=document.getElementById('guardian-buy-area');
+  var btnArea=document.getElementById('guardian-btn-area');
+  if(btnArea)btnArea.style.display='none';
+  if(buyArea){
+    buyArea.innerHTML='<div style="margin:12px 0"><stripe-buy-button buy-button-id="'+STRIPE_BUTTONS.guardian+'" publishable-key="'+STRIPE_PK+'"></stripe-buy-button></div>'+
+      '<p style="color:var(--mu);font-size:.8rem;margin-top:8px">After paying, paste your activation key below and click Activate.</p>';
+    buyArea.style.display='block';
+  }
   var keyEl=document.getElementById('guardian-key-main');
   if(keyEl){keyEl.placeholder='Paste activation key here...';keyEl.focus();}
 }
@@ -1939,7 +1944,8 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<button onclick="window.open(\'https://crew-bus.dev/checkout/guardian/one-time\',\'_blank\')" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button>'+
+          '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button></div>'+
+          '<div id="guard-detail-stripe" style="display:none;margin-bottom:10px"></div>'+
           '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
           '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
           '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">After purchasing, paste your activation key above.</div></div>';
@@ -1990,6 +1996,18 @@ async function submitGuardKey(){
   }else{
     msg.textContent=(res&&res.message)||'Activation failed';msg.style.color='#f85149';
   }
+}
+
+function showGuardDetailCheckout(){
+  var btnArea=document.getElementById('guard-detail-btn');
+  var stripeArea=document.getElementById('guard-detail-stripe');
+  if(btnArea)btnArea.style.display='none';
+  if(stripeArea){
+    stripeArea.innerHTML='<stripe-buy-button buy-button-id="'+STRIPE_BUTTONS.guardian+'" publishable-key="'+STRIPE_PK+'"></stripe-buy-button>';
+    stripeArea.style.display='block';
+  }
+  var msg=document.getElementById('guard-key-msg');
+  if(msg){msg.textContent='After paying, paste your activation key above and click Activate.';msg.style.color='var(--ac)';}
 }
 
 function openAddSkillForm(agentId){
@@ -2126,29 +2144,62 @@ function showPaymentModal(info){
   m.dataset.template=info.template;
   m.classList.add('open');
 }
-function closePaymentModal(){document.getElementById('payment-modal').classList.remove('open')}
+function closePaymentModal(){
+  document.getElementById('payment-modal').classList.remove('open');
+  // Reset stripe checkout view
+  var sc=document.getElementById('pay-stripe-checkout');
+  if(sc){sc.style.display='none';sc.innerHTML='';}
+  var pc=document.getElementById('pay-plan-chooser');
+  if(pc)pc.style.display='';
+}
+
+var STRIPE_BUTTONS={
+  'business_trial':'buy_btn_1T2MkbBtzeOIyrgGrywdE6cR',
+  'business_annual':'buy_btn_1T2MluBtzeOIyrgG0R6HhQQp',
+  'department_trial':'buy_btn_1T2MmzBtzeOIyrgGW19oKuvz',
+  'department_annual':'buy_btn_1T2MnvBtzeOIyrgGuNTKEvrm',
+  'freelance_trial':'buy_btn_1T2Mp4BtzeOIyrgGYN3ewnVG',
+  'freelance_annual':'buy_btn_1T2MqIBtzeOIyrgGCVLxff2Z',
+  'sidehustle_trial':'buy_btn_1T2MrGBtzeOIyrgGAae7quiH',
+  'sidehustle_annual':'buy_btn_1T2MsRBtzeOIyrgG5ynqDNMz',
+  'custom_trial':'buy_btn_1T2MtABtzeOIyrgGPA1ALRO9',
+  'custom_annual':'buy_btn_1T2MeNBtzeOIyrgG4BcKZidk',
+  'guardian':'buy_btn_1T2MjBBtzeOIyrgGjhN2D4zG'
+};
+var STRIPE_PK='pk_live_RTviU0Xh2WU9mtvUSQGrKiNA';
+
+function showStripeButton(btnId,containerId){
+  var c=document.getElementById(containerId);
+  if(!c)return;
+  c.innerHTML='<stripe-buy-button buy-button-id="'+btnId+'" publishable-key="'+STRIPE_PK+'"></stripe-buy-button>';
+  c.style.display='block';
+}
+
 async function activateLicense(type){
   var m=document.getElementById('payment-modal');
   var template=m.dataset.template;
   var promo=document.getElementById('pay-promo').value.trim();
   var errEl=document.getElementById('pay-error');
-  errEl.textContent='';
-  // If no promo code, open Stripe checkout on crew-bus.dev
+  errEl.textContent='';errEl.innerHTML='';
+  // If no promo code, show Stripe buy button inline
   if(!promo){
-    var url='https://crew-bus.dev/checkout/'+encodeURIComponent(template)+'/'+encodeURIComponent(type);
-    // Show purchase instructions with a clear link — don't auto-open
-    var price=type==='annual'?document.getElementById('pay-annual-price').textContent:document.getElementById('pay-trial-price').textContent;
-    errEl.innerHTML='<div style="color:var(--fg);text-align:left;padding:10px;background:var(--bg);border-radius:8px;margin:4px 0">'+
-      '<div style="font-weight:600;margin-bottom:6px">\u{1F6D2} How to activate:</div>'+
-      '<div style="font-size:.8rem;color:var(--mu);line-height:1.5">'+
-      '1. <a href="'+url+'" target="_blank" style="color:var(--ac);text-decoration:underline;font-weight:600">Click here to purchase ('+price+')</a><br>'+
-      '2. Complete payment on the checkout page<br>'+
-      '3. Paste your activation key below<br>'+
-      '4. Click the plan again to activate</div></div>';
-    // Switch to activation key mode
-    var promoEl=document.getElementById('pay-promo');
-    promoEl.placeholder='Paste activation key here...';
-    promoEl.focus();
+    var key=template+'_'+type;
+    var btnId=STRIPE_BUTTONS[key];
+    if(btnId){
+      // Hide plan chooser, show Stripe checkout
+      document.getElementById('pay-plan-chooser').style.display='none';
+      var sc=document.getElementById('pay-stripe-checkout');
+      sc.innerHTML='<p style="color:var(--mu);font-size:.8rem;margin-bottom:10px">Complete payment below. After paying, you\'ll receive an activation key.</p>'+
+        '<stripe-buy-button buy-button-id="'+btnId+'" publishable-key="'+STRIPE_PK+'"></stripe-buy-button>'+
+        '<div style="margin-top:14px;border-top:1px solid var(--br);padding-top:12px">'+
+        '<p style="color:var(--mu);font-size:.8rem;margin-bottom:6px">Already paid? Paste your activation key:</p>'+
+        '<div style="display:flex;gap:6px"><input id="pay-key-after" type="text" placeholder="Paste activation key..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem">'+
+        '<button onclick="submitPayKey()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
+        '<div id="pay-key-msg" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
+      sc.style.display='block';
+    }else{
+      errEl.textContent='Payment not available for this plan.';
+    }
     return;
   }
   try{
@@ -2173,6 +2224,31 @@ async function activateLicense(type){
       errEl.textContent=r.error||'Activation failed.';
     }
   }catch(e){errEl.textContent='Connection error.';}
+}
+
+async function submitPayKey(){
+  var m=document.getElementById('payment-modal');
+  var template=m.dataset.template;
+  var keyEl=document.getElementById('pay-key-after');
+  var msgEl=document.getElementById('pay-key-msg');
+  var key=(keyEl?keyEl.value:'').trim();
+  if(!key){if(msgEl)msgEl.innerHTML='<span style="color:#e55">Please paste your activation key.</span>';return;}
+  try{
+    var r=await apiPost('/api/teams/activate-license',{template:template,license_type:'annual',promo_code:key});
+    if(r.ok){
+      closePaymentModal();
+      showToast('License activated! Creating your team...');
+      var team=await apiPost('/api/teams',{template:template});
+      if(team.ok){showToast('Team "'+team.team_name+'" created!')}
+      else{showToast(team.error||'Team creation failed','error')}
+      await loadTeams();
+      if(template==='business'){
+        try{var ref=await api('/api/referral/code');if(ref.ok&&ref.code)showReferralCode(ref.code);}catch(e){}
+      }
+    }else{
+      if(msgEl)msgEl.innerHTML='<span style="color:#e55">'+(r.error||'Invalid key.')+'</span>';
+    }
+  }catch(e){if(msgEl)msgEl.innerHTML='<span style="color:#e55">Connection error.</span>';}
 }
 function showReferralCode(code){
   showToast('Referral code: '+code+' \u2014 share it to give friends a free 30-day trial!');
@@ -2855,6 +2931,7 @@ def _build_html():
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>crew-bus</title>
 <style>{CSS}</style>
+<script async src="https://js.stripe.com/v3/buy-button.js"></script>
 </head>
 <body data-page="crew">
 <div class="magic-particles" id="magicParticles"></div>
@@ -3209,24 +3286,29 @@ def _build_html():
 <div class="confirm-overlay" id="payment-modal">
   <div class="confirm-box" style="max-width:420px;text-align:center">
     <h3 style="margin-bottom:4px">\U0001f513 Unlock <span id="pay-team-name">Team</span></h3>
-    <p style="color:var(--mu);font-size:.8rem;margin:0 0 14px">Choose a plan to get started</p>
-    <div style="display:flex;gap:12px;margin:0 0 14px">
-      <button onclick="activateLicense('trial')" style="flex:1;background:var(--sf);border:2px solid var(--br);border-radius:10px;padding:18px 10px;cursor:pointer;transition:border-color .2s,transform .15s;color:inherit" onmouseover="this.style.borderColor='var(--ac)';this.style.transform='scale(1.03)'" onmouseout="this.style.borderColor='var(--br)';this.style.transform='scale(1)'">
-        <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-trial-price">$10</div>
-        <div style="font-size:.85rem;color:var(--fg);margin:4px 0"><span id="pay-trial-days">30</span>-day trial</div>
-        <div style="font-size:.7rem;color:var(--mu)">Try it out</div>
-      </button>
-      <button onclick="activateLicense('annual')" style="flex:1;background:var(--sf);border:2px solid var(--ac);border-radius:10px;padding:18px 10px;cursor:pointer;transition:transform .15s;color:inherit;position:relative" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-        <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--ac);color:#000;font-size:.6rem;font-weight:700;padding:2px 10px;border-radius:10px;white-space:nowrap">BEST VALUE</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-annual-price">$50</div>
-        <div style="font-size:.85rem;color:var(--fg);margin:4px 0">per year</div>
-        <div style="font-size:.7rem;color:var(--mu)">Save over 50%</div>
-      </button>
+    <!-- Plan chooser (step 1) -->
+    <div id="pay-plan-chooser">
+      <p style="color:var(--mu);font-size:.8rem;margin:0 0 14px">Choose a plan to get started</p>
+      <div style="display:flex;gap:12px;margin:0 0 14px">
+        <button onclick="activateLicense('trial')" style="flex:1;background:var(--sf);border:2px solid var(--br);border-radius:10px;padding:18px 10px;cursor:pointer;transition:border-color .2s,transform .15s;color:inherit" onmouseover="this.style.borderColor='var(--ac)';this.style.transform='scale(1.03)'" onmouseout="this.style.borderColor='var(--br)';this.style.transform='scale(1)'">
+          <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-trial-price">$10</div>
+          <div style="font-size:.85rem;color:var(--fg);margin:4px 0"><span id="pay-trial-days">30</span>-day trial</div>
+          <div style="font-size:.7rem;color:var(--mu)">Try it out</div>
+        </button>
+        <button onclick="activateLicense('annual')" style="flex:1;background:var(--sf);border:2px solid var(--ac);border-radius:10px;padding:18px 10px;cursor:pointer;transition:transform .15s;color:inherit;position:relative" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+          <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--ac);color:#000;font-size:.6rem;font-weight:700;padding:2px 10px;border-radius:10px;white-space:nowrap">BEST VALUE</div>
+          <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-annual-price">$50</div>
+          <div style="font-size:.85rem;color:var(--fg);margin:4px 0">per year</div>
+          <div style="font-size:.7rem;color:var(--mu)">Save over 50%</div>
+        </button>
+      </div>
+      <div style="margin:0 0 8px">
+        <input class="setup-key" id="pay-promo" type="text" placeholder="Have a promo or activation key? Paste here" style="text-align:center;font-size:.85rem">
+      </div>
+      <div id="pay-error" style="font-size:.8rem;color:#e55;min-height:1.2em;margin-bottom:6px"></div>
     </div>
-    <div style="margin:0 0 8px">
-      <input class="setup-key" id="pay-promo" type="text" placeholder="Have a promo or activation key? Paste here" style="text-align:center;font-size:.85rem">
-    </div>
-    <div id="pay-error" style="font-size:.8rem;color:#e55;min-height:1.2em;margin-bottom:6px"></div>
+    <!-- Stripe checkout (step 2 — shown after clicking trial/annual) -->
+    <div id="pay-stripe-checkout" style="display:none"></div>
     <button class="confirm-cancel" onclick="closePaymentModal()" style="width:100%">Cancel</button>
   </div>
 </div>
