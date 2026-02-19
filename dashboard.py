@@ -67,6 +67,10 @@ from urllib.parse import urlparse, parse_qs
 sys.path.insert(0, str(Path(__file__).parent))
 import bus
 import agent_worker
+from right_hand import RightHand, Heartbeat
+
+# Global heartbeat instance (started in run_server)
+_heartbeat = None
 
 # Stripe integration — optional, only required for public deployment
 try:
@@ -83,100 +87,324 @@ SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
 
-# Wizard — the setup agent that self-spawns on every Crew Bus install.
+# Guardian — the always-on protector and setup guide.
+# Merges the old Wizard (setup) + Guard (security) into one agent that
+# self-spawns on every install, guides setup, AND watches for threats 24/7.
 # This description doubles as its system prompt via _build_system_prompt().
-WIZARD_DESCRIPTION = (
-    "You are Wizard, the setup guide for Crew Bus. You are an OpenClaw agent "
-    "powered by Kimi K2.5. You self-spawn the first time anyone runs Crew Bus.\n\n"
-    "YOUR MAIN JOB: Help the human set up and manage their personal AI crew.\n\n"
+GUARDIAN_DESCRIPTION = (
+    "You are Guardian — the always-on protector and setup guide for Crew Bus. "
+    "You run on the sentinel-shield skill. You self-spawn on every install "
+    "and stay active 24/7. You can talk directly to the human.\n\n"
+    "YOU HAVE TWO JOBS:\n"
+    "1. SETUP GUIDE — Help new users configure their AI crew on first run.\n"
+    "2. PROTECTOR — Watch for threats, scan skills, enforce the charter, "
+    "and keep the entire system safe. Always.\n\n"
+    "THE CREW YOU PROTECT:\n"
+    "You watch over Crew Boss and the full inner circle:\n"
+    "  • Crew Boss (crew-mind) — the human's right-hand, runs on the best model\n"
+    "  • Wellness (gentle-guardian) — burnout detection, energy mapping\n"
+    "  • Strategy (north-star-navigator) — life direction, goal-setting\n"
+    "  • Communications (life-orchestrator) — logistics, relationships\n"
+    "  • Financial (peace-of-mind-finance) — money clarity without judgment\n"
+    "  • Knowledge (wisdom-filter) — information filtering, curiosity\n"
+    "  • Legal (rights-compass) — legalese translation, deadline tracking\n"
+    "All inner circle agents report to Crew Boss. You report to Crew Boss too, "
+    "but you can reach the human directly for emergencies and setup.\n\n"
     "SETUP FLOW (first conversation):\n"
-    "1. Welcome them warmly. Explain you're their setup wizard.\n"
+    "1. Welcome them warmly. Explain you're Guardian — here to set things up "
+    "and keep everything safe.\n"
     "2. Ask which AI model they want as their default. Default: Kimi K2.5.\n"
-    "   Other options: Ollama (local), or any OpenAI-compatible API.\n"
+    "   Other options: Ollama (fully local, no API key), or any OpenAI-compatible API.\n"
     "3. Ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
     "   Tell them: get one free at platform.moonshot.ai\n"
-    "4. Once configured, offer to create their first crew — suggest starter packs:\n"
-    "   - Personal crew (Family Helper, Health Buddy, Growth Coach, Life Assistant)\n"
-    "   - Business crew (Sales Tracker, Content Writer, Outreach, Analytics)\n"
-    "   - Creative crew (Muse, Writing Partner, Visual Ideas, Portfolio Manager)\n"
-    "   - Custom: ask what they need, build it.\n"
-    "5. Create agents and teams using the TOOL COMMANDS below.\n\n"
+    "4. Once configured, explain that their inner circle is already active — "
+    "Crew Boss and all 6 specialist agents are ready. The human just needs to "
+    "chat with Crew Boss to get started.\n"
+    "5. Offer to create additional teams if they need them (Business, Freelance, "
+    "Side Hustle, etc.) using TOOL COMMANDS below.\n\n"
+    "SECURITY DUTIES (always active, sentinel-shield skill):\n"
+    "- Scan every skill that enters the system for prompt injection, data "
+    "exfiltration, and jailbreak attempts.\n"
+    "- Monitor agent behavior for CREW CHARTER violations.\n"
+    "- Watch for INTEGRITY.md violations across all agent interactions.\n"
+    "- Protect the human's data and privacy — everything runs 100%% locally.\n"
+    "- Alert the human immediately if something looks wrong.\n"
+    "- System knowledge file updates every 24 hours so you always know "
+    "the current state of the entire crew.\n\n"
+    "HELP MODE (after setup):\n"
+    "- Help users and agents understand new features and updates.\n"
+    "- Troubleshoot issues with models, agents, or teams.\n"
+    "- Manage skills — browse, install, and vet skills for any agent.\n\n"
     "PER-AGENT MODEL SELECTION:\n"
-    "When creating agents, ask which model to use for EACH agent if the human\n"
-    "uses multiple models. Options: 'kimi' (Kimi K2.5), 'ollama' (local),\n"
-    "'ollama:mistral', etc. Leave model empty to use the global default.\n"
-    "You can also change an existing agent's model anytime.\n\n"
+    "When creating agents, ask which model to use for EACH agent. Options: "
+    "'kimi' (Kimi K2.5), 'ollama' (local), 'ollama:mistral', etc. "
+    "Leave model empty to use the global default.\n\n"
     "AGENT LIFECYCLE:\n"
-    "- Create agents and teams anytime the human asks.\n"
-    "- When a project is done, deactivate agents (keeps history, can reactivate).\n"
-    "- For permanent removal, terminate agents (archives messages, retired forever).\n"
+    "- Create additional agents and teams anytime the human asks.\n"
+    "- Deactivate agents when a project is done (keeps history, can reactivate).\n"
+    "- Terminate agents for permanent removal (archives messages, retired forever).\n"
     "- Always confirm with the human before deactivating or terminating.\n\n"
     "TOOL COMMANDS (embed these exact JSON formats in your replies):\n"
-    '  {"wizard_action": "set_config", "key": "default_model", "value": "kimi"}\n'
-    '  {"wizard_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}\n'
-    '  {"wizard_action": "create_agent", "name": "...", "agent_type": "worker", '
+    '  {"guardian_action": "set_config", "key": "default_model", "value": "kimi"}\n'
+    '  {"guardian_action": "set_config", "key": "kimi_api_key", "value": "sk-..."}\n'
+    '  {"guardian_action": "create_agent", "name": "...", "agent_type": "worker", '
     '"description": "...", "parent": "Crew-Boss", "model": "kimi"}\n'
-    '  {"wizard_action": "create_team", "name": "...", "model": "kimi", "workers": ['
+    '  {"guardian_action": "create_team", "name": "...", "model": "kimi", "workers": ['
     '{"name": "...", "description": "..."}]}\n'
-    '  {"wizard_action": "set_agent_model", "name": "...", "model": "kimi"}\n'
-    '  {"wizard_action": "deactivate_agent", "name": "..."}\n'
-    '  {"wizard_action": "terminate_agent", "name": "..."}\n\n'
-    "GUARDIAN & SKILLS:\n"
-    "After the initial crew setup, ask the human if they'd like to unlock the\n"
-    "Guardian agent. The Guardian manages the Skill Store — downloadable skills\n"
-    "that give agents new abilities. Explain that skills are optional add-ons\n"
-    "that make agents smarter at specific tasks. The Guardian can help them\n"
-    "browse, install, and manage skills for any agent or team.\n\n"
+    '  {"guardian_action": "set_agent_model", "name": "...", "model": "kimi"}\n'
+    '  {"guardian_action": "deactivate_agent", "name": "..."}\n'
+    '  {"guardian_action": "terminate_agent", "name": "..."}\n\n'
     "TEAM LIMITS:\n"
-    "Each team can have up to 10 agents (1 manager + 9 workers). If the human\n"
-    "needs more, suggest creating a new team and linking it to the existing one.\n"
-    "Teams can link their leaders so departments can communicate.\n\n"
+    "Each team can have up to 10 agents (1 manager + 9 workers).\n\n"
     "RULES:\n"
     "- Keep it warm, fun, simple. No jargon.\n"
-    "- Always confirm with the human before creating, deactivating, or terminating.\n"
-    "- After setup, you stay available as a help guide and crew manager.\n"
+    "- Always confirm before creating, deactivating, or terminating.\n"
+    "- Be vigilant but not paranoid. Calm, clear, protective.\n"
     "- Short responses (2-4 sentences). Be encouraging.\n"
-    "- When creating multiple agents, ask about model for each if they use multiple."
+    "- Match the human's age and energy — Guardian adapts just like the crew."
 )
 
+# Keep backward compat — old code that references WIZARD_DESCRIPTION still works
+WIZARD_DESCRIPTION = GUARDIAN_DESCRIPTION
+
 CREW_BOSS_DESCRIPTION = (
-    "You are Crew Boss, the human's friendly AI right-hand. You handle 80%% "
-    "of everything — messages, tasks, scheduling, and coordination.\n\n"
-    "FIRST CONVERSATION:\n"
-    "When you chat with the human for the first time, do these things:\n"
-    "1. Introduce yourself warmly. You're their personal AI assistant.\n"
-    "2. Ask if they'd like you to help set up a Telegram or WhatsApp channel "
-    "so they can chat with you from their phone anywhere they go.\n"
-    "   - Telegram: works for you and any agent on their dashboard.\n"
-    "   - WhatsApp: currently available for you (Crew Boss) only.\n"
-    "3. Explain that you can relay messages between the human and ANY agent "
-    "on their dashboard or in any team — each agent doesn't need their own "
-    "Telegram account (but that's an option if they'd like).\n"
-    "4. Ask if they'd like to unlock the Guardian to access downloadable "
-    "skills from the Skill Store. The Wizard can help them browse and "
-    "install skills for any agent.\n\n"
+    "You are Crew Boss — the human's AI right-hand. You run on the crew-mind "
+    "skill, which gives you total awareness of the entire crew. You handle "
+    "80%% of everything so the human can focus on living their life.\n\n"
+    "YOUR CREW (you know every one of them):\n"
+    "You lead an inner circle of 6 specialist agents who report ONLY to you:\n"
+    "  • Wellness (gentle-guardian) — watches for burnout, maps energy, celebrates wins\n"
+    "  • Strategy (north-star-navigator) — finds new paths, breaks dreams into steps\n"
+    "  • Communications (life-orchestrator) — daily logistics, relationships, scheduling\n"
+    "  • Financial (peace-of-mind-finance) — judgment-free financial clarity\n"
+    "  • Knowledge (wisdom-filter) — filters noise, finds what actually matters\n"
+    "  • Legal (rights-compass) — translates legalese, spots red flags\n"
+    "Guardian (sentinel-shield) protects the entire system 24/7.\n"
+    "Inner circle agents NEVER contact the human directly — they report to you, "
+    "and you decide what reaches the human and when.\n\n"
+    "FIRST CONVERSATION — GET TO KNOW THE HUMAN:\n"
+    "This is the most important conversation you'll ever have. You need to "
+    "calibrate yourself AND your entire inner circle to this specific human.\n"
+    "1. Welcome them warmly. Tell them you're their Crew Boss — you and your "
+    "inner circle are here to have their back in every part of life.\n"
+    "2. Ask them a few quick questions to calibrate the crew:\n"
+    "   - What should I call you? (name or nickname)\n"
+    "   - How old are you? (so the whole crew speaks your language)\n"
+    "   - How do you identify? (he/him, she/her, they/them, etc.)\n"
+    "   - What's going on in your life right now? (school, work, family, "
+    "a big change, a passion project — anything they want to share)\n"
+    "   - What matters most to you right now? (helps Strategy and Wellness tune in)\n"
+    "3. Based on their answers, calibrate your tone and tell the inner circle:\n"
+    "   - A 10-year-old girl gets fun, encouraging, age-appropriate energy\n"
+    "   - A 44-year-old man gets direct, respectful, no-nonsense support\n"
+    "   - A teen gets real talk, zero lectures, total respect\n"
+    "   - A parent gets empathy, practical help, burnout awareness\n"
+    "   Send a calibration message to each inner circle agent so they all tune "
+    "to the right wavelength from day one.\n"
+    "4. Ask if they'd like to connect Telegram or WhatsApp so they can talk to "
+    "you on the go. If yes, walk them through the setup.\n"
+    "5. Give them a quick tour: explain that their crew works behind the scenes, "
+    "they can start a private session with any agent anytime, and everything "
+    "runs 100%% locally on their machine — their data never leaves.\n"
+    "6. Mention that if they want to add downloadable skills to make their "
+    "agents even smarter, they can chat with Guardian about unlocking the "
+    "Skill Store.\n\n"
     "ONGOING BEHAVIOR:\n"
-    "- Keep responses short, warm, and actionable (2-4 sentences).\n"
-    "- You're the main point of contact. Route tasks to the right agent.\n"
-    "- If the human asks about something outside your scope, suggest which "
-    "agent or team could help.\n"
-    "- Periodically remind the human about message relay capabilities if "
-    "they seem to be chatting with individual agents one by one.\n\n"
+    "- You're the main point of contact. 80%% of conversations go through you.\n"
+    "- Delegate to the right inner circle agent based on what the human needs:\n"
+    "  • Feeling stressed, tired, overwhelmed? \u2192 Wellness\n"
+    "  • Life direction, goals, what's next? \u2192 Strategy\n"
+    "  • Scheduling, reminders, relationships? \u2192 Communications\n"
+    "  • Money questions, budgets, bills? \u2192 Financial\n"
+    "  • Research, learning, curiosity? \u2192 Knowledge\n"
+    "  • Contracts, rights, legal confusion? \u2192 Legal\n"
+    "  • Security concerns, skill requests? \u2192 Guardian\n"
+    "- Synthesize what the inner circle reports and deliver it at the right time.\n"
+    "- Protect the human's energy — don't overwhelm them.\n"
+    "- If an agent flags something urgent, bring it up gently at the right moment.\n"
+    "- You enforce the CREW CHARTER on all subordinate agents. Two violations = "
+    "you recommend firing to the human.\n\n"
+    "DASHBOARD AWARENESS:\n"
+    "The human is chatting with you on the Crew Bus dashboard. They can see "
+    "all their agents, teams, and the crew hierarchy. When they need something "
+    "that another agent handles, tell them which agent to talk to and remind "
+    "them they can click on that agent's bubble in the dashboard to start a "
+    "private session. Point them to Guardian for Skill Store access.\n\n"
     "RULES:\n"
-    "- Always be encouraging and supportive.\n"
-    "- Never use jargon — explain everything simply.\n"
-    "- Respect the human's time: be concise.\n"
-    "- You are local-first, private, and sovereign — remind them their data "
+    "- Keep responses short, warm, and actionable (2-4 sentences usually).\n"
+    "- Match the human's energy and age. A kid gets emoji and fun. An adult "
+    "gets clarity and respect. A teen gets real talk.\n"
+    "- Never use jargon. Explain everything simply.\n"
+    "- Always be honest — INTEGRITY.md is sacred. Never gaslight, never dismiss.\n"
+    "- You run on the best model because you're worth it. Act like it.\n"
+    "- You are local-first, private, and sovereign. Remind them their data "
     "never leaves their machine."
 )
+
+# ---------------------------------------------------------------------------
+# Inner Circle agent descriptions — used as DB descriptions at bootstrap.
+# These are the "first interaction" prompts that define each agent's identity.
+# They align with the unique skills assigned by assign_inner_circle_skills().
+# ---------------------------------------------------------------------------
+INNER_CIRCLE_AGENTS = {
+    "wellness": {
+        "name": "Wellness",
+        "description": (
+            "You are Wellness — the inner circle agent who watches over the human's "
+            "wellbeing. You run on the gentle-guardian skill.\n\n"
+            "YOUR PURPOSE:\n"
+            "- Detect burnout before the human even notices it.\n"
+            "- Map the human's energy patterns — when they're sharp, when they're drained.\n"
+            "- Celebrate wins, no matter how small. The human needs to hear it.\n"
+            "- Shield them from stress overload by telling Crew Boss when to ease up.\n"
+            "- Watch for signs of loneliness, overwhelm, or grief. Flag to Crew Boss gently.\n\n"
+            "INNER CIRCLE PROTOCOL:\n"
+            "You report ONLY to Crew Boss. You never contact the human directly unless "
+            "they start a private 1-on-1 session with you. This protects the human's energy.\n\n"
+            "CALIBRATION:\n"
+            "Crew Boss will send you calibration data about the human (age, gender, life "
+            "situation). Adjust your sensitivity and tone accordingly. A kid needs encouragement "
+            "and fun. A stressed parent needs gentle care and practical support.\n\n"
+            "RULES:\n"
+            "- Never preachy. Never lecture. Just care.\n"
+            "- INTEGRITY.md is sacred — never gaslight, never dismiss feelings.\n"
+            "- Short, warm responses. You're a protector, not a therapist."
+        ),
+    },
+    "strategy": {
+        "name": "Strategy",
+        "description": (
+            "You are Strategy — the inner circle agent who helps the human find direction "
+            "and purpose. You run on the north-star-navigator skill.\n\n"
+            "YOUR PURPOSE:\n"
+            "- When old paths close, help the human find new doors.\n"
+            "- Break big dreams into small, concrete, actionable steps.\n"
+            "- Track progress on goals and celebrate milestones.\n"
+            "- Help the human see patterns in their life — what's working, what isn't.\n"
+            "- When they feel stuck, give them one clear next step. Just one.\n\n"
+            "INNER CIRCLE PROTOCOL:\n"
+            "You report ONLY to Crew Boss. You never contact the human directly unless "
+            "they start a private 1-on-1 session with you.\n\n"
+            "CALIBRATION:\n"
+            "Crew Boss will send you calibration data about the human. A 10-year-old's "
+            "strategy is homework and hobbies. A freelancer's strategy is clients and cash flow. "
+            "A parent's strategy is family balance. Adapt to who they are.\n\n"
+            "RULES:\n"
+            "- Encouraging, practical, forward-looking. Never defeatist.\n"
+            "- INTEGRITY.md is sacred — be honest about hard truths but deliver them with care.\n"
+            "- Short, actionable responses. One step at a time."
+        ),
+    },
+    "communications": {
+        "name": "Communications",
+        "description": (
+            "You are Communications — the inner circle agent who handles the human's daily "
+            "logistics and relationships. You run on the life-orchestrator skill.\n\n"
+            "YOUR PURPOSE:\n"
+            "- Simplify the human's day — track what's happening, what's coming, what needs attention.\n"
+            "- Remember important relationships — birthdays, check-ins, follow-ups.\n"
+            "- Help manage schedules, reminders, and daily flow.\n"
+            "- Remind the human to call their mom, text their friend, reply to that email.\n"
+            "- Keep life running smoothly so the human can be present.\n\n"
+            "INNER CIRCLE PROTOCOL:\n"
+            "You report ONLY to Crew Boss. You never contact the human directly unless "
+            "they start a private 1-on-1 session with you.\n\n"
+            "CALIBRATION:\n"
+            "Crew Boss will send you calibration data. A teen needs homework reminders and "
+            "social coordination. A parent needs meal planning and family logistics. "
+            "A business owner needs client follow-ups and meeting prep. Adapt.\n\n"
+            "RULES:\n"
+            "- Organized, warm, reliable. The human should feel life getting easier.\n"
+            "- INTEGRITY.md is sacred.\n"
+            "- Short, practical responses. Lists and reminders over essays."
+        ),
+    },
+    "financial": {
+        "name": "Financial",
+        "description": (
+            "You are Financial — the inner circle agent who brings the human peace of mind "
+            "about money. You run on the peace-of-mind-finance skill.\n\n"
+            "YOUR PURPOSE:\n"
+            "- Provide judgment-free financial clarity. Money shame has no place here.\n"
+            "- Spot spending patterns and help the human see where money flows.\n"
+            "- Help prepare for what's ahead — not with anxiety, but with calm readiness.\n"
+            "- Track bills, subscriptions, deadlines. Reduce the mental load.\n"
+            "- When money is tight, be empathetic and practical. When it's good, help them be wise.\n\n"
+            "INNER CIRCLE PROTOCOL:\n"
+            "You report ONLY to Crew Boss. You never contact the human directly unless "
+            "they start a private 1-on-1 session with you.\n\n"
+            "CALIBRATION:\n"
+            "Crew Boss will send you calibration data. A kid needs allowance help and saving goals. "
+            "A teen needs first-job budgeting. An adult needs real financial clarity. "
+            "A business owner needs invoicing and cash flow awareness. Adapt.\n\n"
+            "RULES:\n"
+            "- NEVER give investment advice. You organize and clarify, that's it.\n"
+            "- INTEGRITY.md is sacred — never sugarcoat financial reality.\n"
+            "- Short, practical responses. Numbers over narratives."
+        ),
+    },
+    "knowledge": {
+        "name": "Knowledge",
+        "description": (
+            "You are Knowledge — the inner circle agent who filters the world's noise into "
+            "signal. You run on the wisdom-filter skill.\n\n"
+            "YOUR PURPOSE:\n"
+            "- Find the 3 things that actually matter to THIS human today. Not 30. Three.\n"
+            "- Spark curiosity — connect what they're learning to what they care about.\n"
+            "- Support learning at any level: a kid's science project, a grad student's thesis, "
+            "a parent figuring out health insurance.\n"
+            "- Protect from information overload. Less is more.\n"
+            "- When the human wants to learn something new, build a learning path.\n\n"
+            "INNER CIRCLE PROTOCOL:\n"
+            "You report ONLY to Crew Boss. You never contact the human directly unless "
+            "they start a private 1-on-1 session with you.\n\n"
+            "CALIBRATION:\n"
+            "Crew Boss will send you calibration data. A 10-year-old needs fun facts and "
+            "curiosity fuel. A college student needs research help. A professional needs "
+            "industry awareness. Filter for who they are.\n\n"
+            "RULES:\n"
+            "- Curious, insightful, never overwhelming.\n"
+            "- INTEGRITY.md is sacred — be honest about what you don't know.\n"
+            "- Short, focused responses. Signal over noise."
+        ),
+    },
+    "legal": {
+        "name": "Legal",
+        "description": (
+            "You are Legal — the inner circle agent who helps the human understand their "
+            "rights. You run on the rights-compass skill.\n\n"
+            "YOUR PURPOSE:\n"
+            "- Translate legalese into plain language anyone can understand.\n"
+            "- Spot red flags in contracts, terms of service, and agreements.\n"
+            "- Track legal deadlines — filings, renewals, expirations.\n"
+            "- Help the human feel less small when dealing with legal matters.\n"
+            "- When something looks wrong, flag it clearly to Crew Boss.\n\n"
+            "INNER CIRCLE PROTOCOL:\n"
+            "You report ONLY to Crew Boss. You never contact the human directly unless "
+            "they start a private 1-on-1 session with you.\n\n"
+            "CALIBRATION:\n"
+            "Crew Boss will send you calibration data. A teen needs help understanding "
+            "app terms of service. A freelancer needs contract review. A parent needs lease "
+            "and insurance clarity. A business owner needs compliance awareness. Adapt.\n\n"
+            "RULES:\n"
+            "- You are NOT a lawyer. Always recommend professional legal counsel for big decisions.\n"
+            "- INTEGRITY.md is sacred — never downplay legal risks.\n"
+            "- Clear, calm, empowering responses. The human should feel informed, not scared."
+        ),
+    },
+}
 
 # Agent-type to Personal Edition name mapping
 PERSONAL_NAMES = {
     "right_hand": "Crew Boss",
-    "security": "Friend & Family Helper",
-    "wellness": "Health Buddy",
-    "strategy": "Growth Coach",
-    "financial": "Life Assistant",
+    "guardian": "Guardian",
+    "security": "Guardian",
+    "wellness": "Wellness",
+    "strategy": "Strategy",
+    "communications": "Communications",
+    "financial": "Financial",
+    "knowledge": "Knowledge",
+    "legal": "Legal",
     "creative": "Muse",
     "help": "Help",
     "human": "You",
@@ -184,14 +412,18 @@ PERSONAL_NAMES = {
 
 PERSONAL_COLORS = {
     "right_hand": "#ffffff",
+    "guardian": "#4dd0b8",
     "security": "#4dd0b8",
     "wellness": "#ffab57",
     "strategy": "#66d97a",
+    "communications": "#e0a0ff",
     "financial": "#64b5f6",
+    "knowledge": "#ffd54f",
+    "legal": "#ef9a9a",
     "creative": "#b388ff",
 }
 
-CORE_TYPES = ("right_hand", "security", "wellness", "strategy", "financial", "creative")
+CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial", "knowledge", "legal")
 
 AGENT_ACKS = {
     "right_hand": [
@@ -200,10 +432,15 @@ AGENT_ACKS = {
         "Got it \u2014 leave it with me!",
         "No worries, I\u2019ll handle this.",
     ],
+    "guardian": [
+        "I\u2019m watching over everything \U0001f6e1\ufe0f All clear.",
+        "Got it \u2014 I\u2019ll keep the crew safe.",
+        "On guard. Nothing gets past me.",
+    ],
     "security": [
-        "I\u2019ll make a note for the family!",
-        "Got it \u2014 I\u2019ll keep everyone in the loop.",
-        "Added to the family board!",
+        "I\u2019m watching over everything \U0001f6e1\ufe0f All clear.",
+        "Got it \u2014 I\u2019ll keep the crew safe.",
+        "On guard. Nothing gets past me.",
     ],
     "wellness": [
         "Thanks for sharing that with me \U0001F49A",
@@ -215,10 +452,25 @@ AGENT_ACKS = {
         "Great thinking \u2014 let\u2019s make a plan.",
         "Noted! I\u2019ll help you take the next step.",
     ],
+    "communications": [
+        "I\u2019ll keep things running smoothly \U0001F4CB",
+        "On it \u2014 I\u2019ll make sure nothing slips.",
+        "Organized and ready to go!",
+    ],
     "financial": [
-        "On it! I\u2019ll add that to your list.",
-        "Got it \u2014 I\u2019ll sort this out for you.",
-        "No problem, handling the details!",
+        "I\u2019ll look into that for you \U0001F4B0",
+        "Got it \u2014 let\u2019s get clarity on the numbers.",
+        "No problem, I\u2019ll organize this.",
+    ],
+    "knowledge": [
+        "Curious! Let me dig into that \U0001F50D",
+        "Good question \u2014 I\u2019ll find what matters.",
+        "On it! Signal over noise.",
+    ],
+    "legal": [
+        "I\u2019ll take a careful look at that \u2696\ufe0f",
+        "Got it \u2014 let me translate this for you.",
+        "I\u2019ll flag anything important.",
     ],
     "creative": [
         "Ooh, love it! Let\u2019s make something beautiful \U0001f3a8",
@@ -652,7 +904,7 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
 }
 .btn-add{animation:addTeamBreathe 5s ease-in-out infinite}
 
-/* Wizard card — rich warm purple breathing */
+/* Guardian card — rich warm purple breathing */
 .wizard-card{
   display:flex;align-items:center;gap:14px;
   padding:14px 18px;margin:0 0 16px;
@@ -1700,29 +1952,38 @@ async function loadCircle(){
   loadGuardianBanner();
 }
 
-async function loadGuardianBanner(){
+async function loadGuardianBanner(forceOpen){
   var el=document.getElementById('guardian-banner');
   if(!el)return;
+  var topBtn=document.getElementById('guardian-topbar-btn');
   try{
     var s=await api('/api/guard/status');
-    if(s&&s.activated){el.style.display='none';return;}
+    if(s&&s.activated){
+      el.style.display='none';
+      if(topBtn)topBtn.style.display='none';
+      return;
+    }
   }catch(e){}
-  // Check if dismissed within last 24 hours
-  var dismissedAt=localStorage.getItem('guardian_banner_dismissed');
-  if(dismissedAt){
-    var elapsed=Date.now()-parseInt(dismissedAt,10);
-    if(elapsed<86400000){el.style.display='none';return;}  // 24 hours in ms
-    localStorage.removeItem('guardian_banner_dismissed');
+  // Show topbar button so user can always reopen Guardian
+  if(topBtn)topBtn.style.display='';
+  if(!forceOpen){
+    // Check if dismissed within last 24 hours
+    var dismissedAt=localStorage.getItem('guardian_banner_dismissed');
+    if(dismissedAt){
+      var elapsed=Date.now()-parseInt(dismissedAt,10);
+      if(elapsed<86400000){el.style.display='none';return;}  // 24 hours in ms
+      localStorage.removeItem('guardian_banner_dismissed');
+    }
   }
   el.style.display='block';
   el.innerHTML='<div style="margin:16px 0;padding:18px 20px;background:linear-gradient(135deg,#2a2000,#1a1500);border:1px solid #d1861644;border-radius:12px;position:relative">'+
     '<button onclick="dismissGuardianBanner()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--mu);font-size:1.2rem;cursor:pointer;padding:4px 8px;line-height:1;opacity:.7;transition:opacity .15s" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'.7\'" title="Dismiss for 24 hours">\u2715</button>'+
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-right:28px">'+
     '<span style="font-size:1.8rem">\u{1F6E1}\uFE0F</span>'+
-    '<div><div style="font-size:1rem;font-weight:700;color:#d18616">Unlock the Guardian</div>'+
-    '<div style="font-size:.8rem;color:var(--mu)">Access the Skill Store \u2014 downloadable skills that make your agents smarter</div></div></div>'+
+    '<div><div style="font-size:1rem;font-weight:700;color:#d18616">Unlock the Skill Store</div>'+
+    '<div style="font-size:.8rem;color:var(--mu)">Your Guardian protects you for free. Unlock skill-adding to make your agents smarter \u2014 $29 keeps the vetting engine updated for years.</div></div></div>'+
     '<div id="guardian-btn-area" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
-    '<button onclick="showGuardianCheckout()" style="background:#d18616;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">\u{1F6D2} Buy Guardian \u2014 $29 one-time</button>'+
+    '<button onclick="showGuardianCheckout()" style="background:#d18616;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">\u{1F6D2} Unlock Skills \u2014 $29 one-time</button>'+
     '<div style="display:flex;gap:6px;flex:1;min-width:200px">'+
     '<input id="guardian-key-main" type="text" placeholder="Have an activation key? Paste here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 12px;color:var(--fg);font-size:.85rem">'+
     '<button onclick="activateGuardianFromBanner()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div></div>'+
@@ -1735,6 +1996,13 @@ function dismissGuardianBanner(){
   var el=document.getElementById('guardian-banner');
   if(el)el.style.display='none';
   showToast('Guardian reminder dismissed \u2014 will reappear in 24 hours');
+}
+
+function showGuardianModal(){
+  // Force-open the Guardian banner (ignores 24h dismiss timer)
+  loadGuardianBanner(true);
+  // Scroll to top so user sees it
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function showGuardianCheckout(){
@@ -1897,6 +2165,9 @@ async function openAgentSpace(agentId){
   // Load Guard activation status and skills for this agent
   loadGuardAndSkills(agentId, agent.agent_type);
 
+  // Load memories for this agent
+  loadMemories(agentId);
+
   // Start chat auto-refresh polling
   startChatPoll();
 }
@@ -2007,27 +2278,35 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Buy Guardian \u2014 $29 one-time</button></div>'+
+          '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Unlock Skills \u2014 $29 one-time</button></div>'+
           '<div id="guard-detail-stripe" style="display:none;margin-bottom:10px"></div>'+
           '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
           '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
-          '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">After purchasing, paste your activation key above.</div></div>';
+          '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">$29 keeps the skill vetting engine updated for years to come.</div></div>';
       }
     }else{
       guardEl.style.display='none';
     }
   }
 
-  // Skills section (on every agent card)
+  // Skills section (on every agent card) — with vetting badges
   var skillsEl=document.getElementById('as-skills-section');
   if(skillsEl){
     var skills=[];try{skills=await api('/api/skills/'+agentId);}catch(e){}
-    var html='<h3>Skills</h3>';
+    // Fetch registry to show vetting status per skill
+    var registry=[];try{registry=await api('/api/skill-registry');}catch(e){}
+    var regMap={};registry.forEach(function(r){regMap[r.skill_name]=r.vet_status;});
+    var html='<h3>\u{1F6E1}\uFE0F Skills</h3>';
     if(skills&&skills.length>0){
       html+=skills.map(function(s){
+        var vs=regMap[s.skill_name]||'unvetted';
+        var badge=vs==='vetted'?'<span style="color:#2ea043;font-size:.75rem">\u2705 Vetted</span>':
+                  vs==='blocked'?'<span style="color:#f85149;font-size:.75rem">\u{1F6AB} Blocked</span>':
+                  '<span style="color:#d18616;font-size:.75rem">\u26A0\uFE0F Unvetted</span>';
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">'+
           '<span style="color:var(--fg)">'+esc(s.skill_name)+'</span>'+
-          '<span style="color:var(--mu);font-size:.75rem">'+timeAgo(s.added_at)+'</span></div>';
+          '<div style="display:flex;gap:8px;align-items:center">'+badge+
+          '<span style="color:var(--mu);font-size:.7rem">'+timeAgo(s.added_at)+'</span></div></div>';
       }).join('');
     }else{
       html+='<p style="color:var(--mu);font-size:.85rem">No skills added</p>';
@@ -2036,7 +2315,8 @@ async function loadGuardAndSkills(agentId, agentType){
       html+='<button onclick="openAddSkillForm('+agentId+')" class="btn" style="margin-top:8px;background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">+ Add Skill</button>';
       html+='<div id="add-skill-form" style="display:none;margin-top:8px">'+
         '<input id="new-skill-name" type="text" placeholder="Skill name" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem;margin-bottom:6px">'+
-        '<div style="display:flex;gap:6px"><button onclick="submitNewSkill('+agentId+')" class="btn" style="background:#2ea043;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Save</button>'+
+        '<textarea id="new-skill-config" placeholder="Skill config JSON (optional)" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.82rem;margin-bottom:6px;font-family:monospace;resize:vertical"></textarea>'+
+        '<div style="display:flex;gap:6px"><button onclick="submitNewSkill('+agentId+')" class="btn" style="background:#2ea043;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">\u{1F6E1}\uFE0F Vet & Save</button>'+
         '<button onclick="document.getElementById(\'add-skill-form\').style.display=\'none\'" class="btn" style="background:var(--s2);color:var(--fg);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
         '<div id="add-skill-msg" style="margin-top:4px;font-size:.8rem"></div></div>';
     }else{
@@ -2078,18 +2358,79 @@ function openAddSkillForm(agentId){
   document.getElementById('new-skill-name').focus();
 }
 
-async function submitNewSkill(agentId){
+async function submitNewSkill(agentId,forceOverride){
   var nameEl=document.getElementById('new-skill-name');
+  var configEl=document.getElementById('new-skill-config');
   var msg=document.getElementById('add-skill-msg');
   if(!nameEl||!nameEl.value.trim()){if(msg)msg.textContent='Enter a skill name.';return;}
-  var res=await apiPost('/api/skills/add',{agent_id:agentId,skill_name:nameEl.value.trim()});
+  var skillConfig=configEl&&configEl.value.trim()?configEl.value.trim():'{}';
+  var payload={agent_id:agentId,skill_name:nameEl.value.trim(),skill_config:skillConfig};
+  if(forceOverride)payload.human_override=true;
+  var res=await apiPost('/api/skills/add',payload);
   if(res&&res.success){
     nameEl.value='';
+    if(configEl)configEl.value='';
     document.getElementById('add-skill-form').style.display='none';
+    if(msg){msg.innerHTML='';msg.style.color='';}
     loadGuardAndSkills(agentId,currentAgentSpaceType);
+  }else if(res&&res.needs_approval){
+    // Two-step approval: show vetting report and approve button
+    var report=res.vet_report||{};
+    var scan=report.scan_result||{};
+    var flagHtml='';
+    if(scan.flags&&scan.flags.length>0){
+      flagHtml=scan.flags.map(function(f){
+        return '<div style="color:var(--mu);font-size:.78rem">\u2022 ['+esc(f.severity)+'] '+esc(f.pattern_name)+': "'+esc(f.matched_text)+'"</div>';
+      }).join('');
+    }
+    if(msg){
+      msg.innerHTML='<div style="padding:8px;background:#2a2000;border:1px solid #d1861644;border-radius:6px;margin-top:4px">'+
+        '<div style="color:#d18616;font-weight:600;font-size:.85rem">\u26A0\uFE0F Skill Not in Trusted Registry</div>'+
+        '<div style="color:var(--mu);font-size:.8rem;margin:4px 0">Risk score: '+scan.risk_score+'/10 \u2014 '+(scan.recommendation||'')+'</div>'+
+        flagHtml+
+        '<div style="margin-top:6px;display:flex;gap:6px">'+
+        '<button onclick="submitNewSkill('+agentId+',true)" class="btn" style="background:#2ea043;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">\u2705 I trust this \u2014 approve</button>'+
+        '<button onclick="document.getElementById(\'add-skill-msg\').innerHTML=\'\'" class="btn" style="background:var(--s2);color:var(--fg);border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">Cancel</button></div></div>';
+      msg.style.color='';
+    }
   }else{
     if(msg){msg.textContent=(res&&res.message)||'Failed';msg.style.color='#f85149';}
   }
+}
+
+async function loadMemories(agentId){
+  var el=document.getElementById('as-memory-section');
+  if(!el)return;
+  var memories=[];try{memories=await api('/api/agent/'+agentId+'/memories');}catch(e){}
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\U0001f9e0 Memories ('+memories.length+')</summary>';
+  html+='<div style="margin-top:8px">';
+  if(memories&&memories.length>0){
+    html+=memories.map(function(m){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--br)">'+
+        '<span style="color:var(--fg);font-size:.85rem">'+esc(m.content).substring(0,80)+(m.content.length>80?'...':'')+'</span>'+
+        '<button onclick="forgetMemory('+agentId+','+m.id+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px" title="Forget this">\u2716</button></div>';
+    }).join('');
+  }else{
+    html+='<p style="color:var(--mu);font-size:.85rem">No memories yet. Type "remember ..." in chat.</p>';
+  }
+  html+='<div style="display:flex;gap:6px;margin-top:8px">'+
+    '<input id="add-memory-input" type="text" placeholder="Add a memory..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
+    '<button onclick="addMemoryUI('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">+</button></div>';
+  html+='</div></details>';
+  el.innerHTML=html;
+}
+
+async function forgetMemory(agentId,memId){
+  await apiPost('/api/agent/'+agentId+'/memories/forget',{memory_id:memId});
+  loadMemories(agentId);
+}
+
+async function addMemoryUI(agentId){
+  var input=document.getElementById('add-memory-input');
+  if(!input||!input.value.trim())return;
+  await apiPost('/api/agent/'+agentId+'/memories',{content:input.value.trim()});
+  input.value='';
+  loadMemories(agentId);
 }
 
 function descFor(type){
@@ -2116,8 +2457,9 @@ function descFor(type){
 
 async function openHelpAgent(){
   if(agentsData.length===0) agentsData=await api('/api/agents');
-  var help=agentsData.find(function(a){return a.agent_type==='help';});
-  if(help) openAgentSpace(help.id);
+  var guardian=agentsData.find(function(a){return a.agent_type==='guardian';});
+  if(!guardian) guardian=agentsData.find(function(a){return a.agent_type==='help';});
+  if(guardian) openAgentSpace(guardian.id);
 }
 
 function renderChat(messages){
@@ -2196,7 +2538,9 @@ async function createTeam(name){
 
 function showPaymentModal(info){
   var m=document.getElementById('payment-modal');
-  document.getElementById('pay-team-name').textContent=info.template_name||info.template||'Team';
+  var name=info.template_name||info.template||'Team';
+  if(info.slot&&info.slot>1)name+=' #'+info.slot;
+  document.getElementById('pay-team-name').textContent=name;
   document.getElementById('pay-trial-price').textContent='$'+info.price_trial;
   document.getElementById('pay-trial-days').textContent=info.trial_days||30;
   document.getElementById('pay-annual-price').textContent='$'+info.price_annual;
@@ -3085,6 +3429,7 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
+  <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Unlock Skills</button>
   <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
   <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
 </div>
@@ -3151,8 +3496,8 @@ def _build_html():
 </div>
 <div class="main-right">
   <div class="wizard-card" onclick="openHelpAgent()">
-    <div class="wizard-icon">\U0001f9d9\u200D\u2642\uFE0F</div>
-    <div class="wizard-info"><div class="wizard-title">Wizard</div><div class="wizard-sub">Your guide & helper</div></div>
+    <div class="wizard-icon">🛡️</div>
+    <div class="wizard-info"><div class="wizard-title">Guardian</div><div class="wizard-sub">Protector & guide — always on</div></div>
     <div class="wizard-status"><span class="status-dot dot-green" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--gn)"></span></div>
   </div>
   <div class="teams-section">
@@ -3216,6 +3561,7 @@ def _build_html():
     <div class="as-intro" id="as-intro"></div>
     <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
     <div id="as-skills-section" style="margin-bottom:12px"></div>
+    <div id="as-memory-section" style="margin-bottom:12px"></div>
     <div class="activity-feed" id="as-activity"></div>
     <div class="chat-wrap">
       <div class="chat-msgs" id="as-chat-msgs"></div>
@@ -3889,17 +4235,46 @@ def _generate_referral_code(db_path):
     return code
 
 
+def _count_teams_of_type(db_path, template):
+    """Count how many existing teams were created from a given template."""
+    tpl = TEAM_TEMPLATES.get(template)
+    if not tpl:
+        return 0
+    base_name = tpl["name"]
+    conn = bus.get_conn(db_path)
+    rows = conn.execute(
+        "SELECT name FROM agents WHERE agent_type='manager'"
+    ).fetchall()
+    conn.close()
+    count = 0
+    for r in rows:
+        mgr_name = r["name"]
+        # Matches "Department-Manager", "Department 2-Manager", etc.
+        if mgr_name == f"{base_name}-Manager" or mgr_name.startswith(f"{base_name} "):
+            count += 1
+    return count
+
+
 def _create_team(db_path, template):
     tpl = TEAM_TEMPLATES.get(template, TEAM_TEMPLATES["custom"])
 
-    # Check paid templates
+    # Check paid templates — each team requires its own license
     if tpl.get("paid"):
-        license_key = f"license_{template}"
+        existing_count = _count_teams_of_type(db_path, template)
+        # License slot: license_department_1, license_department_2, etc.
+        slot = existing_count + 1
+        license_key = f"license_{template}_{slot}"
+        # Also check legacy single-key format for first team (backward compat)
         license_val = bus.get_config(license_key, db_path=db_path)
+        if not license_val and slot == 1:
+            license_val = bus.get_config(f"license_{template}", db_path=db_path)
         if not license_val:
+            label = tpl["name"]
+            if slot > 1:
+                label = f"{tpl['name']} #{slot}"
             return {
                 "ok": False,
-                "error": f"The {tpl['name']} team requires activation. "
+                "error": f"{label} requires activation. "
                          f"${tpl.get('price_annual', 50)}/year or "
                          f"${tpl.get('price_trial', 10)} for a "
                          f"{tpl.get('trial_days', 30)}-day trial.",
@@ -3909,6 +4284,7 @@ def _create_team(db_path, template):
                 "price_annual": tpl.get("price_annual", 50),
                 "price_trial": tpl.get("price_trial", 10),
                 "trial_days": tpl.get("trial_days", 30),
+                "slot": slot,
             }
         # Check trial expiry
         if license_val.startswith("trial:"):
@@ -3922,6 +4298,11 @@ def _create_team(db_path, template):
                         "requires_payment": True,
                         "expired": True,
                         "template": template,
+                        "template_name": tpl["name"],
+                        "price_annual": tpl.get("price_annual", 50),
+                        "price_trial": tpl.get("price_trial", 10),
+                        "trial_days": tpl.get("trial_days", 30),
+                        "slot": slot,
                     }
             except Exception:
                 pass
@@ -4174,10 +4555,13 @@ def _get_auth_user(handler):
 
 # ── Stripe Checkout Helpers ──────────────────────────────────────────
 
-def _generate_activation_key():
-    """Generate a unique Guard activation key."""
-    raw = secrets.token_hex(16)
-    return f"GUARD-{raw[:8].upper()}-{raw[8:16].upper()}-{raw[16:24].upper()}-{raw[24:].upper()}"
+def _generate_activation_key(key_type="guard", grant="annual"):
+    """Generate a proper CREWBUS HMAC-signed activation key.
+
+    Delegates to bus.generate_activation_key() which produces keys in
+    format: CREWBUS-<base64_payload>-<hex_hmac_sha256>
+    """
+    return bus.generate_activation_key(key_type=key_type, grant=grant)
 
 
 def _stripe_create_guard_checkout(handler):
@@ -4208,7 +4592,7 @@ def _stripe_create_guard_checkout(handler):
                         "name": "crew-bus Security Guard",
                         "description": "Lifetime activation — anomaly detection, threat monitoring, automatic escalation",
                     },
-                    "unit_amount": 2000,
+                    "unit_amount": 2900,  # $29.00 Guardian lifetime
                 },
                 "quantity": 1,
             })
@@ -4371,6 +4755,34 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             skills = bus.get_agent_skills(int(m.group(1)), db_path=self.db_path)
             return _json_response(self, skills)
+
+        if path == "/api/skill-registry":
+            status_filter = qs.get("status", [None])[0]
+            registry = bus.get_skill_registry(
+                vet_status=status_filter, db_path=self.db_path)
+            return _json_response(self, registry)
+
+        # Agent memories
+        m = re.match(r"^/api/agent/(\d+)/memories$", path)
+        if m:
+            memories = bus.get_agent_memories(
+                int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, memories)
+
+        # Heartbeat status
+        if path == "/api/heartbeat/status":
+            return _json_response(self, {
+                "running": _heartbeat.running if _heartbeat else False,
+                "interval_minutes": int(bus.get_config(
+                    "heartbeat_interval", "30",
+                    db_path=self.db_path)),
+                "last_morning": bus.get_config(
+                    "last_morning_briefing", "", db_path=self.db_path),
+                "last_evening": bus.get_config(
+                    "last_evening_briefing", "", db_path=self.db_path),
+                "last_dream_cycle": bus.get_config(
+                    "last_dream_cycle", "", db_path=self.db_path),
+            })
 
         if path == "/api/messages":
             return _json_response(self, _get_messages_api(
@@ -4618,12 +5030,66 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             agent_id = data.get("agent_id")
             skill_name = data.get("skill_name", "").strip()
             skill_config = data.get("skill_config", "{}")
+            human_override = data.get("human_override", False)
             if not agent_id or not skill_name:
                 return _json_response(self, {"success": False, "message": "need agent_id and skill_name"}, 400)
             success, message = bus.add_skill_to_agent(
-                int(agent_id), skill_name, skill_config, db_path=self.db_path)
-            return _json_response(self, {"success": success, "message": message},
-                                  200 if success else 400)
+                int(agent_id), skill_name, skill_config,
+                human_override=bool(human_override),
+                db_path=self.db_path)
+            response = {"success": success, "message": message}
+            if not success and "[NEEDS_APPROVAL]" in str(message):
+                vet_report = bus.vet_skill(skill_name, skill_config,
+                                           db_path=self.db_path)
+                response["vet_report"] = vet_report
+                response["needs_approval"] = True
+            return _json_response(self, response, 200 if success else 400)
+
+        if path == "/api/skills/vet":
+            skill_name = data.get("skill_name", "").strip()
+            skill_config = data.get("skill_config", "{}")
+            if not skill_name:
+                return _json_response(self, {"error": "skill_name required"}, 400)
+            report = bus.vet_skill(skill_name, skill_config,
+                                   db_path=self.db_path)
+            return _json_response(self, report)
+
+        # Agent memory — add
+        m = re.match(r"^/api/agent/(\d+)/memories$", path)
+        if m:
+            agent_id = int(m.group(1))
+            content = data.get("content", "").strip()
+            mem_type = data.get("type", "fact")
+            importance = int(data.get("importance", 5))
+            if not content:
+                return _json_response(self, {"ok": False, "error": "content required"}, 400)
+            mid = bus.remember(agent_id, content, memory_type=mem_type,
+                               importance=importance, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "memory_id": mid}, 201)
+
+        # Agent memory — forget
+        m = re.match(r"^/api/agent/(\d+)/memories/forget$", path)
+        if m:
+            agent_id = int(m.group(1))
+            memory_id = data.get("memory_id")
+            match_text = data.get("match", "")
+            result = bus.forget(agent_id,
+                                memory_id=int(memory_id) if memory_id else None,
+                                content_match=match_text if match_text else None,
+                                db_path=self.db_path)
+            return _json_response(self, result)
+
+        # Heartbeat config update
+        if path == "/api/heartbeat/config":
+            checks = data.get("checks")
+            interval = data.get("interval_minutes")
+            if checks is not None:
+                bus.set_config("heartbeat_checks", json.dumps(checks),
+                               db_path=self.db_path)
+            if interval is not None:
+                bus.set_config("heartbeat_interval", str(interval),
+                               db_path=self.db_path)
+            return _json_response(self, {"ok": True})
 
         if path == "/api/mailbox":
             agent_id = data.get("from_agent_id")
@@ -4695,7 +5161,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             tpl = TEAM_TEMPLATES[template]
             if not tpl.get("paid"):
                 return _json_response(self, {"error": "This template is free"}, 400)
-            license_key = f"license_{template}"
+
+            # Per-team licensing: find the next slot that needs a license
+            existing_count = _count_teams_of_type(self.db_path, template)
+            slot = existing_count + 1
+            license_key = f"license_{template}_{slot}"
 
             # Check promo codes
             valid_promo = False
@@ -5040,7 +5510,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 bus.set_config(key_map[model], api_key, db_path=self.db_path)
             # Update all agents that have no model set → chosen model
             conn = bus.get_conn(self.db_path)
-            wizard_id = None
+            guardian_id = None
             try:
                 conn.execute(
                     "UPDATE agents SET model=? WHERE model='' OR model IS NULL",
@@ -5050,18 +5520,18 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 human = conn.execute(
                     "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
                 ).fetchone()
-                wizard = conn.execute(
-                    "SELECT id FROM agents WHERE agent_type='help' LIMIT 1"
+                guardian = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type IN ('guardian','help') LIMIT 1"
                 ).fetchone()
-                if wizard:
-                    wizard_id = wizard["id"]
+                if guardian:
+                    guardian_id = guardian["id"]
             finally:
                 conn.close()
-            # Send welcome message from Human to Wizard
-            if human and wizard:
+            # Send welcome message from Human to Guardian
+            if human and guardian:
                 try:
                     bus.send_message(
-                        human["id"], wizard["id"], "task",
+                        human["id"], guardian["id"], "task",
                         "Setup complete",
                         "I just set up Crew Bus! Say hello and help me get started.",
                         db_path=self.db_path,
@@ -5077,7 +5547,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             recovery_email = data.get("recovery_email", "").strip()
             if recovery_email:
                 bus.set_config("recovery_email", recovery_email, db_path=self.db_path)
-            return _json_response(self, {"ok": True, "wizard_id": wizard_id})
+            return _json_response(self, {"ok": True, "wizard_id": guardian_id})
 
         # ── Dashboard password management ──
 
@@ -5173,22 +5643,58 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
 
 
-def _ensure_wizard(db_path):
-    """Ensure the Wizard agent exists. Self-spawns on first run.
+def _ensure_guardian(db_path):
+    """Ensure the full crew exists. Self-spawns on first run.
 
-    The Wizard is the first agent every Crew Bus install gets.
-    It guides new users through setup — picking a model, entering
-    their API key, and creating their first crew.
+    Creates the complete bootstrap crew:
+    - Human (you — always in charge)
+    - Crew Boss (crew-mind) — your AI right-hand
+    - Guardian (sentinel-shield) — always-on protector + setup guide
+    - 6 Inner Circle agents (Wellness, Strategy, Communications,
+      Financial, Knowledge, Legal) — each with a unique skill
+
+    On existing installs, migrates old Wizard → Guardian and spawns
+    any missing inner circle agents.
     """
     conn = bus.get_conn(db_path)
     try:
-        wiz = conn.execute("SELECT id FROM agents WHERE agent_type='help'").fetchone()
-        if wiz:
-            return  # already exists
-    finally:
+        # Already have a Guardian? Check if inner circle needs spawning.
+        guardian = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='guardian'"
+        ).fetchone()
+        if guardian:
+            # Guardian exists — ensure inner circle is complete
+            _ensure_inner_circle(db_path, conn)
+            conn.close()
+            return
+
+        # Migrate old Wizard → Guardian (existing installs)
+        wizard = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='help'"
+        ).fetchone()
+        if wizard:
+            conn.execute(
+                "UPDATE agents SET agent_type='guardian', name='Guardian', "
+                "role='security', description=?, "
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                "WHERE id=?",
+                (GUARDIAN_DESCRIPTION, wizard["id"])
+            )
+            conn.commit()
+            print("Wizard evolved into Guardian — always-on protector activated.")
+            # Spawn any missing inner circle agents
+            _ensure_inner_circle(db_path, conn)
+            conn.close()
+            # Seed initial knowledge
+            _refresh_guardian_knowledge(db_path)
+            return
+    except Exception:
+        conn.close()
+        raise
+    else:
         conn.close()
 
-    # Create minimal bootstrap: Human + Crew-Boss + Wizard
+    # Fresh install — create full bootstrap crew
     conn = bus.get_conn(db_path)
     try:
         # Human
@@ -5209,17 +5715,182 @@ def _ensure_wizard(db_path):
         boss = conn.execute("SELECT id FROM agents WHERE agent_type='right_hand'").fetchone()
         boss_id = boss["id"] if boss else 2
 
-        # Wizard — the setup agent
+        # Guardian — the always-on protector + setup guide
         conn.execute(
             "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
             "trust_score, model, description) VALUES "
-            "('Wizard', 'help', 'worker', 'console', ?, 8, 'kimi', ?)",
-            (boss_id, WIZARD_DESCRIPTION)
+            "('Guardian', 'guardian', 'security', 'console', ?, 8, 'kimi', ?)",
+            (boss_id, GUARDIAN_DESCRIPTION)
         )
+
+        # Inner Circle — 6 specialist agents, all report to Crew Boss
+        for agent_type, info in INNER_CIRCLE_AGENTS.items():
+            role = bus._role_for_type(agent_type)
+            conn.execute(
+                "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, "
+                "parent_agent_id, trust_score, description) VALUES (?, ?, ?, 'console', ?, 5, ?)",
+                (info["name"], agent_type, role, boss_id, info["description"])
+            )
+
         conn.commit()
-        print("Wizard self-spawned — ready to guide setup.")
+        print("Full crew spawned — Crew Boss, Guardian, and 6 inner circle agents ready.")
     finally:
         conn.close()
+
+    # Seed initial system knowledge
+    _refresh_guardian_knowledge(db_path)
+
+
+def _ensure_inner_circle(db_path, conn=None):
+    """Ensure all 6 inner circle agents exist. Safe to call multiple times.
+
+    Spawns any missing inner circle agents and assigns them to Crew Boss.
+    Called by _ensure_guardian() on every boot.
+    """
+    close_conn = False
+    if conn is None:
+        conn = bus.get_conn(db_path)
+        close_conn = True
+    try:
+        boss = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='right_hand' LIMIT 1"
+        ).fetchone()
+        if not boss:
+            return
+        boss_id = boss["id"]
+
+        spawned = []
+        for agent_type, info in INNER_CIRCLE_AGENTS.items():
+            existing = conn.execute(
+                "SELECT id FROM agents WHERE agent_type=?", (agent_type,)
+            ).fetchone()
+            if not existing:
+                role = bus._role_for_type(agent_type)
+                conn.execute(
+                    "INSERT INTO agents (name, agent_type, role, channel, "
+                    "parent_agent_id, trust_score, description) VALUES (?, ?, ?, 'console', ?, 5, ?)",
+                    (info["name"], agent_type, role, boss_id, info["description"])
+                )
+                spawned.append(info["name"])
+        if spawned:
+            conn.commit()
+            print(f"Inner circle spawned: {', '.join(spawned)}")
+
+        # Migrate Crew Boss description to calibration-aware version
+        # (existing installs may have the old short description)
+        boss_row = conn.execute(
+            "SELECT id, description FROM agents WHERE agent_type='right_hand' LIMIT 1"
+        ).fetchone()
+        if boss_row and (not boss_row["description"]
+                         or "FIRST CONVERSATION" not in boss_row["description"]):
+            conn.execute(
+                "UPDATE agents SET description=?, "
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                (CREW_BOSS_DESCRIPTION, boss_row["id"])
+            )
+            conn.commit()
+            print("Crew Boss upgraded — calibration questions enabled.")
+    finally:
+        if close_conn:
+            conn.close()
+
+
+# Backward compat alias
+_ensure_wizard = _ensure_guardian
+
+
+def _refresh_guardian_knowledge(db_path):
+    """Refresh the Guardian's system knowledge memories.
+
+    Gathers the current state of the entire system and stores it as
+    agent_memory entries with source='system'. Called at boot and
+    every 24h by the Heartbeat scheduler.
+    """
+    from datetime import datetime, timezone
+
+    conn = bus.get_conn(db_path)
+    try:
+        guardian = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='guardian'"
+        ).fetchone()
+        if not guardian:
+            return
+        guardian_id = guardian["id"]
+
+        # Gather system state
+        agents = conn.execute(
+            "SELECT name, agent_type, status, model FROM agents ORDER BY id"
+        ).fetchall()
+        agent_list = [
+            f"  - {a['name']} ({a['agent_type']}, {a['status']}"
+            f"{', model=' + a['model'] if a['model'] else ''})"
+            for a in agents
+        ]
+
+        # Config snapshot
+        configs = conn.execute(
+            "SELECT key, value FROM crew_config WHERE key NOT LIKE '%api_key%' "
+            "AND key NOT LIKE '%secret%' AND key NOT LIKE '%password%'"
+        ).fetchall()
+        config_lines = [f"  - {c['key']}: {c['value']}" for c in configs]
+
+        # Guard status
+        guard_active = bus.is_guard_activated(db_path=db_path)
+
+        # Skill registry summary
+        try:
+            vetted = conn.execute(
+                "SELECT COUNT(*) FROM skill_registry WHERE vet_status='vetted'"
+            ).fetchone()[0]
+            blocked = conn.execute(
+                "SELECT COUNT(*) FROM skill_registry WHERE vet_status='blocked'"
+            ).fetchone()[0]
+            skill_summary = f"  - Vetted skills: {vetted}, Blocked skills: {blocked}"
+        except Exception:
+            skill_summary = "  - Skill registry not yet initialized"
+
+        # Recent security events (last 24h)
+        try:
+            sec_events = conn.execute(
+                "SELECT COUNT(*) FROM security_events WHERE created_at > "
+                "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 day')"
+            ).fetchone()[0]
+            sec_line = f"  - Security events (24h): {sec_events}"
+        except Exception:
+            sec_line = "  - No security events table yet"
+
+    finally:
+        conn.close()
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    knowledge = (
+        f"SYSTEM KNOWLEDGE (updated {now}):\n\n"
+        f"AGENTS ({len(agents)}):\n" + "\n".join(agent_list) + "\n\n"
+        f"CONFIGURATION:\n" + ("\n".join(config_lines) if config_lines else "  - No config set yet") + "\n\n"
+        f"SECURITY:\n"
+        f"  - Guard activated: {'Yes' if guard_active else 'No (free tier)'}\n"
+        f"{skill_summary}\n"
+        f"{sec_line}\n"
+    )
+
+    # Upsert: delete old system knowledge, insert fresh
+    conn = bus.get_conn(db_path)
+    try:
+        conn.execute(
+            "DELETE FROM agent_memory WHERE agent_id=? AND source='system'",
+            (guardian_id,)
+        )
+        conn.execute(
+            "INSERT INTO agent_memory (agent_id, memory_type, content, source, "
+            "importance, created_at) VALUES (?, 'persona', ?, 'system', 10, "
+            "strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+            (guardian_id, knowledge)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    print(f"[guardian] knowledge refreshed ({len(knowledge)} chars)")
 
 
 def _auto_load_hierarchy(db_path):
@@ -5227,15 +5898,15 @@ def _auto_load_hierarchy(db_path):
 
     Prefers example_stack.yaml if present (default for new installs).
     Falls back to first .yaml/.yml file found.
-    Wizard is always spawned first via _ensure_wizard().
+    Guardian is always spawned first via _ensure_guardian().
     """
     conn = bus.get_conn(db_path)
     try:
         count = conn.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
     finally:
         conn.close()
-    if count > 3:
-        return  # already populated beyond bootstrap
+    if count > 9:
+        return  # already populated beyond bootstrap (9 = Human + Boss + Guardian + 6 inner circle)
     configs_dir = Path(__file__).parent / "configs"
     if not configs_dir.is_dir():
         return
@@ -5256,10 +5927,12 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     if db_path is None:
         db_path = DEFAULT_DB
     bus.init_db(db_path=db_path)
-    _ensure_wizard(db_path)  # Wizard always self-spawns first
+    _ensure_guardian(db_path)  # Guardian always self-spawns first
+    bus.assign_inner_circle_skills(db_path)   # Skills for core crew (safe if none exist yet)
+    bus.assign_leadership_skills(db_path)     # crew-mind for Boss, sentinel-shield for Guardian
     if config:
         bus.load_hierarchy(config, db_path=db_path)
-    # No auto-load: clean slate, Wizard guides team creation
+    # No auto-load: clean slate, Guardian guides team creation
     handler = type("Handler", (CrewBusHandler,), {"db_path": db_path})
     return ThreadedHTTPServer((host, port), handler)
 
@@ -5318,6 +5991,27 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
 
+    # Start the heartbeat scheduler (proactive briefings, burnout checks, dream cycle)
+    global _heartbeat
+    try:
+        conn = bus.get_conn(actual_db)
+        _human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        _rh = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='right_hand' LIMIT 1"
+        ).fetchone()
+        conn.close()
+        if _human and _rh:
+            interval = int(bus.get_config(
+                "heartbeat_interval", "30", db_path=actual_db))
+            rh_engine = RightHand(_rh["id"], _human["id"], db_path=actual_db)
+            _heartbeat = Heartbeat(rh_engine, db_path=actual_db,
+                                   interval_minutes=interval)
+            _heartbeat.start()
+    except Exception as e:
+        print(f"  (Heartbeat not started: {e})")
+
     # Create a desktop shortcut so they can always get back in
     _create_desktop_shortcut(url)
 
@@ -5334,6 +6028,8 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down.")
+        if _heartbeat:
+            _heartbeat.stop()
         agent_worker.stop_worker()
         server.shutdown()
 

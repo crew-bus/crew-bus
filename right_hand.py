@@ -8,6 +8,7 @@ and managing cognitive load.
 """
 
 import json
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -745,3 +746,562 @@ class RightHand:
             self.rh_id, self.human_id, decision_type,
             context, action, db_path=self.db_path,
         )
+
+
+# =========================================================================
+# Heartbeat — proactive background scheduler
+# =========================================================================
+
+class Heartbeat:
+    """Proactive background scheduler for the Crew Boss.
+
+    Runs every N minutes, checks a list of conditions, and takes action.
+    Context-aware: respects burnout, quiet hours, and focus mode.
+    """
+
+    DEFAULT_CHECKS = [
+        {"type": "morning_briefing", "enabled": True, "hour": 8},
+        {"type": "evening_summary", "enabled": True, "hour": 18},
+        {"type": "burnout_check", "enabled": True},
+        {"type": "stale_messages", "enabled": True, "max_hours": 24},
+        {"type": "relationship_nudge", "enabled": True},
+        {"type": "dream_cycle", "enabled": True, "hour": 3},
+        {"type": "guardian_knowledge_refresh", "enabled": True, "hour": 4},
+        {"type": "integrity_audit", "enabled": True},
+        {"type": "weekly_reflection", "enabled": True, "day_of_week": 0, "hour": 4},
+        {"type": "guardian_monthly_report", "enabled": True, "day_of_month": 1, "hour": 6},
+    ]
+
+    def __init__(self, right_hand: "RightHand",
+                 db_path: Path = None,
+                 interval_minutes: int = 30):
+        self.rh = right_hand
+        self.db_path = db_path or bus.DB_PATH
+        self.interval = interval_minutes * 60  # seconds
+        self._thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+
+    def start(self):
+        """Start the heartbeat daemon thread."""
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._loop, daemon=True, name="heartbeat")
+        self._thread.start()
+
+    def stop(self):
+        """Stop the heartbeat daemon thread."""
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=5)
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _loop(self):
+        print(f"Heartbeat started (interval: {self.interval // 60}min)")
+        while not self._stop.is_set():
+            try:
+                self._tick()
+            except Exception as e:
+                print(f"[heartbeat] error: {e}")
+            self._stop.wait(self.interval)
+        print("Heartbeat stopped.")
+
+    def _tick(self):
+        """One heartbeat cycle.  Check all conditions and act."""
+        now = datetime.now(timezone.utc)
+        checks = self._get_enabled_checks()
+
+        for check in checks:
+            if not check.get("enabled", True):
+                continue
+            try:
+                result = self._run_check(check, now)
+                if result and result.get("action_needed"):
+                    self._execute_action(result, now)
+            except Exception as e:
+                print(f"[heartbeat] check '{check.get('type')}' failed: {e}")
+
+    def _get_enabled_checks(self) -> list:
+        """Return heartbeat checks from crew_config (or defaults)."""
+        raw = bus.get_config("heartbeat_checks", "", db_path=self.db_path)
+        if raw:
+            try:
+                return json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return self.DEFAULT_CHECKS
+
+    # ------------------------------------------------------------------
+    # Individual checks
+    # ------------------------------------------------------------------
+
+    def _run_check(self, check: dict, now: datetime) -> Optional[dict]:
+        check_type = check.get("type")
+
+        if check_type == "morning_briefing":
+            return self._check_briefing(now, check, "morning")
+
+        if check_type == "evening_summary":
+            return self._check_briefing(now, check, "evening")
+
+        if check_type == "burnout_check":
+            return self._check_burnout()
+
+        if check_type == "stale_messages":
+            return self._check_stale(now, check.get("max_hours", 24))
+
+        if check_type == "relationship_nudge":
+            return self._check_relationships()
+
+        if check_type == "dream_cycle":
+            return self._check_dream_cycle(now, check)
+
+        if check_type == "guardian_knowledge_refresh":
+            return self._check_guardian_knowledge(now, check)
+
+        if check_type == "integrity_audit":
+            return self._check_integrity_audit(now, check)
+
+        if check_type == "weekly_reflection":
+            return self._check_weekly_reflection(now, check)
+
+        if check_type == "guardian_monthly_report":
+            return self._check_guardian_monthly_report(now, check)
+
+        return None
+
+    def _check_briefing(self, now: datetime, check: dict,
+                        briefing_type: str) -> Optional[dict]:
+        """Fire a briefing once per day at the configured hour."""
+        target_hour = check.get("hour", 8 if briefing_type == "morning" else 18)
+        if now.hour != target_hour:
+            return None
+        config_key = f"last_{briefing_type}_briefing"
+        last = bus.get_config(config_key, "", db_path=self.db_path)
+        today = now.strftime("%Y-%m-%d")
+        if last == today:
+            return None
+        briefing = self.rh.compile_briefing(briefing_type)
+        return {"action_needed": True, "type": f"{briefing_type}_briefing",
+                "data": briefing, "config_key": config_key}
+
+    def _check_burnout(self) -> Optional[dict]:
+        state = self.rh.assess_human_state()
+        if state["burnout_score"] >= 7:
+            return {"action_needed": True, "type": "burnout_alert",
+                    "data": state}
+        return None
+
+    def _check_stale(self, now: datetime,
+                     max_hours: int) -> Optional[dict]:
+        cutoff = (now - timedelta(hours=max_hours)
+                  ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn = bus.get_conn(self.db_path)
+        try:
+            rows = conn.execute(
+                "SELECT m.*, a.name AS from_name FROM messages m "
+                "JOIN agents a ON m.from_agent_id = a.id "
+                "WHERE m.to_agent_id = ? AND m.status = 'queued' "
+                "AND m.created_at < ?",
+                (self.rh.human_id, cutoff),
+            ).fetchall()
+        finally:
+            conn.close()
+        if rows:
+            return {"action_needed": True, "type": "stale_reminder",
+                    "data": [dict(r) for r in rows]}
+        return None
+
+    def _check_relationships(self) -> Optional[dict]:
+        nudges = self.rh.check_relationship_health()
+        if nudges:
+            return {"action_needed": True, "type": "relationship_nudge",
+                    "data": nudges}
+        return None
+
+    def _check_dream_cycle(self, now: datetime,
+                           check: dict) -> Optional[dict]:
+        target_hour = check.get("hour", 3)
+        if now.hour != target_hour:
+            return None
+        last = bus.get_config("last_dream_cycle", "", db_path=self.db_path)
+        today = now.strftime("%Y-%m-%d")
+        if last == today:
+            return None
+        return {"action_needed": True, "type": "dream_cycle"}
+
+    def _check_guardian_knowledge(self, now: datetime,
+                                  check: dict) -> Optional[dict]:
+        """Refresh Guardian's system knowledge once per day."""
+        target_hour = check.get("hour", 4)
+        if now.hour != target_hour:
+            return None
+        last = bus.get_config("last_guardian_knowledge_refresh", "",
+                              db_path=self.db_path)
+        today = now.strftime("%Y-%m-%d")
+        if last == today:
+            return None
+        # Refresh knowledge directly (self-contained, no action needed)
+        try:
+            from dashboard import _refresh_guardian_knowledge
+            _refresh_guardian_knowledge(self.db_path)
+            bus.set_config("last_guardian_knowledge_refresh", today,
+                           db_path=self.db_path)
+        except Exception as e:
+            print(f"[heartbeat] guardian knowledge refresh failed: {e}")
+        return None
+
+    def _check_integrity_audit(self, now: datetime,
+                                check: dict) -> Optional[dict]:
+        """Scan recent agent replies for INTEGRITY + CHARTER violations.
+
+        Runs every heartbeat cycle. Scans messages from agents to the
+        human in the last 30 minutes for:
+        1. INTEGRITY violations (all agents) — gaslighting, dismissiveness
+        2. CHARTER violations (subordinate agents only) — neediness, toxicity
+        Logs violations as security events.
+        """
+        try:
+            from security import scan_reply_integrity, scan_reply_charter
+        except ImportError:
+            return None
+
+        # Subordinate types (get charter checks)
+        charter_exempt = {"human", "right_hand"}
+
+        conn = bus.get_conn(self.db_path)
+        try:
+            # Get recent agent→human messages (last 30 min)
+            rows = conn.execute(
+                "SELECT m.id, m.from_agent_id, m.body, "
+                "a.name AS agent_name, a.agent_type "
+                "FROM messages m JOIN agents a ON m.from_agent_id = a.id "
+                "WHERE m.to_agent_id = ? "
+                "AND a.agent_type != 'human' "
+                "AND m.created_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 minutes') "
+                "ORDER BY m.created_at DESC LIMIT 50",
+                (self.human_id,)
+            ).fetchall()
+        except Exception:
+            return None
+        finally:
+            conn.close()
+
+        if not rows:
+            return None
+
+        violations_found = []
+        for row in rows:
+            if not row["body"]:
+                continue
+            # Integrity check (all agents)
+            result = scan_reply_integrity(row["body"])
+            if not result["clean"]:
+                for v in result["violations"]:
+                    violations_found.append({
+                        "message_id": row["id"],
+                        "agent_name": row["agent_name"],
+                        "agent_id": row["from_agent_id"],
+                        "violation_type": v["type"],
+                        "snippet": v["snippet"],
+                        "severity": "high",
+                        "source": "INTEGRITY.md",
+                    })
+            # Charter check (subordinate agents only)
+            if row["agent_type"] not in charter_exempt:
+                charter = scan_reply_charter(row["body"])
+                if not charter["clean"]:
+                    for v in charter["violations"]:
+                        violations_found.append({
+                            "message_id": row["id"],
+                            "agent_name": row["agent_name"],
+                            "agent_id": row["from_agent_id"],
+                            "violation_type": v["type"],
+                            "snippet": v["snippet"],
+                            "severity": "medium",
+                            "source": "CREW_CHARTER.md",
+                        })
+
+        # Log each violation as a security event
+        # Find guardian/security agent for logging (once)
+        guard_id = self.rh_id
+        try:
+            conn = bus.get_conn(self.db_path)
+            guard = conn.execute(
+                "SELECT id FROM agents WHERE agent_type IN ('guardian','security') LIMIT 1"
+            ).fetchone()
+            conn.close()
+            if guard:
+                guard_id = guard["id"]
+        except Exception:
+            pass
+
+        for v in violations_found:
+            try:
+                source = v.get("source", "INTEGRITY.md")
+                severity = v.get("severity", "high")
+                label = "Charter" if source == "CREW_CHARTER.md" else "Integrity"
+                action = ("Warn agent; second violation = firing protocol"
+                          if source == "CREW_CHARTER.md"
+                          else "Review agent response and retrain if needed")
+                bus.log_security_event(
+                    security_agent_id=guard_id,
+                    threat_domain="integrity",
+                    severity=severity,
+                    title=f"{label} violation: {v['violation_type']} by {v['agent_name']}",
+                    details={
+                        "message_id": v["message_id"],
+                        "agent_id": v["agent_id"],
+                        "agent_name": v["agent_name"],
+                        "violation_type": v["violation_type"],
+                        "snippet": v["snippet"],
+                        "source": source,
+                    },
+                    recommended_action=action,
+                    db_path=self.db_path,
+                )
+                tag = "[charter]" if source == "CREW_CHARTER.md" else "[integrity]"
+                print(f"{tag} VIOLATION: {v['violation_type']} by {v['agent_name']}: {v['snippet']}")
+            except Exception as e:
+                print(f"[integrity] Failed to log violation: {e}")
+
+        return None
+
+    def _check_weekly_reflection(self, now: datetime,
+                                 check: dict) -> Optional[dict]:
+        """Weekly LLM-powered reflection for each agent. Monday at 4 AM.
+
+        Each agent reviews its memories from the past week and uses the LLM
+        to identify patterns, what works, and what to improve. The result
+        is stored as a high-importance persona memory that evolves the
+        agent's understanding of the human over time.
+        """
+        target_day = check.get("day_of_week", 0)  # Monday
+        target_hour = check.get("hour", 4)
+        if now.weekday() != target_day or now.hour != target_hour:
+            return None
+        last = bus.get_config("last_weekly_reflection", "", db_path=self.db_path)
+        this_week = now.strftime("%Y-W%W")
+        if last == this_week:
+            return None
+        return {"action_needed": True, "type": "weekly_reflection"}
+
+    def _check_guardian_monthly_report(self, now: datetime,
+                                       check: dict) -> Optional[dict]:
+        """✨ Guardian 'Silent Confidence Builder' — monthly security report.
+
+        On the 1st of each month, Guardian compiles a report of everything
+        it caught and sends it to Crew Boss, who can share it with the human
+        to build trust: 'Your Guardian has been watching — here's what it caught.'
+        """
+        target_day = check.get("day_of_month", 1)
+        target_hour = check.get("hour", 6)
+        if now.day != target_day or now.hour != target_hour:
+            return None
+        last = bus.get_config("last_guardian_monthly_report", "",
+                              db_path=self.db_path)
+        this_month = now.strftime("%Y-%m")
+        if last == this_month:
+            return None
+        return {"action_needed": True, "type": "guardian_monthly_report"}
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
+    def _execute_action(self, result: dict, now: datetime):
+        action_type = result["type"]
+
+        if action_type in ("morning_briefing", "evening_briefing"):
+            briefing = result["data"]
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                message_type="briefing", subject=briefing["subject"],
+                body=briefing["body_plain"],
+                priority=briefing.get("priority", "normal"),
+                db_path=self.db_path,
+            )
+            today = now.strftime("%Y-%m-%d")
+            bus.set_config(result["config_key"], today, db_path=self.db_path)
+            print(f"[heartbeat] sent {action_type}")
+
+        elif action_type == "burnout_alert":
+            state = result["data"]
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                message_type="alert",
+                subject="Burnout check-in",
+                body=(
+                    f"Hey, your energy seems low (burnout: "
+                    f"{state['burnout_score']}/10). Maybe take a break? "
+                    f"I'll keep things running. Current load recommendation: "
+                    f"{state['recommended_load']}."
+                ),
+                priority="normal", db_path=self.db_path,
+            )
+            print("[heartbeat] sent burnout check-in")
+
+        elif action_type == "stale_reminder":
+            count = len(result["data"])
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                message_type="alert",
+                subject=f"{count} message(s) waiting for your attention",
+                body=(
+                    "You have stale messages that need a look. "
+                    "Want me to summarize them for you?"
+                ),
+                priority="normal", db_path=self.db_path,
+            )
+            print(f"[heartbeat] stale reminder ({count} messages)")
+
+        elif action_type == "relationship_nudge":
+            nudges = result["data"]
+            lines = ["Some relationships could use attention:"]
+            for n in nudges[:5]:
+                lines.append(
+                    f"- {n.get('contact_name', '?')} "
+                    f"({n.get('contact_type', '?')}) — "
+                    f"status: {n.get('status', '?')}"
+                )
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                message_type="report",
+                subject="Relationship check-in",
+                body="\n".join(lines),
+                priority="low", db_path=self.db_path,
+            )
+            print(f"[heartbeat] relationship nudge ({len(nudges)} contacts)")
+
+        elif action_type == "dream_cycle":
+            conn = bus.get_conn(self.db_path)
+            try:
+                agents = conn.execute(
+                    "SELECT id FROM agents "
+                    "WHERE status='active' AND agent_type != 'human'"
+                ).fetchall()
+            finally:
+                conn.close()
+            total_compacted = 0
+            for agent in agents:
+                r = bus.synthesize_memories(
+                    agent["id"], older_than_days=7, db_path=self.db_path)
+                total_compacted += r.get("compacted", 0)
+            today = now.strftime("%Y-%m-%d")
+            bus.set_config("last_dream_cycle", today, db_path=self.db_path)
+            if total_compacted > 0:
+                print(f"[heartbeat] dream cycle: {total_compacted} memories synthesized")
+            else:
+                print("[heartbeat] dream cycle: nothing to compact")
+
+        elif action_type == "weekly_reflection":
+            # ✨ LLM-powered weekly reflection — each agent reviews its week
+            from agent_worker import call_llm
+            conn = bus.get_conn(self.db_path)
+            try:
+                agents = conn.execute(
+                    "SELECT id, name, agent_type FROM agents "
+                    "WHERE status='active' AND agent_type NOT IN ('human','guardian')"
+                ).fetchall()
+            finally:
+                conn.close()
+
+            reflection_prompt = (
+                "You are reviewing one week of memories for an AI agent "
+                "that serves a specific human. Based on these memories, "
+                "identify:\n"
+                "1. Patterns in what the human asks about most\n"
+                "2. What communication style works best with them\n"
+                "3. What the human cares about most this week\n"
+                "4. One thing this agent should do differently next week\n"
+                "Respond in 4 concise bullet points. Max 150 words. "
+                "Be specific to THIS human, not generic."
+            )
+
+            reflections_done = 0
+            for agent in agents:
+                memories = bus.get_agent_memories(
+                    agent["id"], limit=25, db_path=self.db_path)
+                if not memories or len(memories) < 3:
+                    continue  # Not enough data to reflect on
+
+                mem_text = "\n".join(
+                    f"- [{m.get('memory_type', 'fact')}] {m['content']}"
+                    for m in memories
+                )
+                try:
+                    reflection = call_llm(
+                        reflection_prompt, mem_text, [],
+                        db_path=self.db_path)
+                    if reflection and len(reflection) > 20:
+                        bus.remember(
+                            agent["id"],
+                            f"[weekly-reflection] {reflection}",
+                            memory_type="persona", importance=8,
+                            source="synthesis", db_path=self.db_path)
+                        reflections_done += 1
+                except Exception as e:
+                    print(f"[heartbeat] reflection failed for {agent['name']}: {e}")
+
+            this_week = now.strftime("%Y-W%W")
+            bus.set_config("last_weekly_reflection", this_week,
+                           db_path=self.db_path)
+            print(f"[heartbeat] weekly reflection: {reflections_done} agents reflected")
+
+        elif action_type == "guardian_monthly_report":
+            # ✨ Guardian "Silent Confidence Builder" — monthly security report
+            conn = bus.get_conn(self.db_path)
+            try:
+                # Count security events from the past month
+                month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                events = conn.execute(
+                    "SELECT COUNT(*) as total, "
+                    "SUM(CASE WHEN severity='high' THEN 1 ELSE 0 END) as high, "
+                    "SUM(CASE WHEN severity='medium' THEN 1 ELSE 0 END) as medium "
+                    "FROM security_events WHERE created_at > ?",
+                    (month_ago,)
+                ).fetchone()
+
+                # Count skills vetted
+                skills_vetted = conn.execute(
+                    "SELECT COUNT(*) FROM skill_registry WHERE vetted_at > ?",
+                    (month_ago,)
+                ).fetchone()[0]
+
+                # Count messages scanned (approximate — all agent→human messages)
+                messages_scanned = conn.execute(
+                    "SELECT COUNT(*) FROM messages WHERE created_at > ? "
+                    "AND message_type = 'report'",
+                    (month_ago,)
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+            total_events = events["total"] or 0
+            high_events = events["high"] or 0
+            medium_events = events["medium"] or 0
+
+            report = (
+                f"Guardian Monthly Report:\n"
+                f"• Scanned {messages_scanned} messages\n"
+                f"• Vetted {skills_vetted} skills\n"
+                f"• Caught {total_events} security events "
+                f"({high_events} high, {medium_events} medium)\n"
+                f"• All systems clear. Your crew is protected."
+            )
+
+            bus.send_message(
+                from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                message_type="report",
+                subject="Your Guardian's monthly security report",
+                body=report,
+                priority="low", db_path=self.db_path,
+            )
+            this_month = now.strftime("%Y-%m")
+            bus.set_config("last_guardian_monthly_report", this_month,
+                           db_path=self.db_path)
+            print(f"[heartbeat] guardian monthly report sent")
