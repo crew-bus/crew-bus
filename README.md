@@ -6,17 +6,15 @@
 
 <div align="center">
 
-## LAUNCHING TODAY
-
 **crew-bus is LIVE.** Free, open-source AI crew for everyone.
 
-[**Get Started**](https://crew-bus.dev) | [**Pricing**](https://crew-bus.dev/pricing) | [**Find an Installer**](https://crew-bus.dev/installer)
+[**Get Started**](https://crew-bus.dev) | [**Pricing**](https://crew-bus.dev/pricing)
 
 </div>
 
 ---
 
-**crew-bus** is a free, open-source coordination system for managing multiple AI agents from a single dashboard. No cloud. No subscriptions. No data leaving your machine.
+**crew-bus** is a free, open-source system for running your own personal AI crew from a single dashboard. No cloud. No data leaving your machine. Every human gets their own local Crew Bus — private, sovereign.
 
 One human. One crew. Full control.
 
@@ -24,90 +22,91 @@ One human. One crew. Full control.
 
 ## What is this?
 
-You have AI agents — maybe a personal assistant, a security monitor, a wellness tracker, a financial advisor, a brainstorming partner. Right now they're scattered across different apps with no coordination.
+crew-bus is a local message bus that coordinates multiple AI agents on your machine. Your **Crew Boss** is your AI right-hand — the agent you talk to 80% of the time. All other agents stay hidden unless you ask to talk directly.
 
-crew-bus is the message bus that connects them. It sits between you and your agents, routing messages, enforcing hierarchy, and making sure nothing important gets lost.
-
-Your **Crew Boss** is your AI chief of staff — the only agent that talks to you directly (unless you want private conversations with others). Every other agent reports through the chain of command.
+On first launch, a setup Wizard walks you through configuration — pick your AI model, paste your API key, and build your first team from ready-made templates. No terminal knowledge required.
 
 ## Features
 
-- **5 core agents** — Crew Boss, Guard, Wellness, Ideas, Wallet. Pre-configured and ready.
-- **Trust score (1-10)** — Controls how much Crew Boss handles autonomously. Set it to 1 and you see everything. Set it to 10 and you get a morning brief.
+- **Crew Boss** — Your AI chief of staff. Powered by Kimi K2.5, Ollama, Claude, Groq, Gemini, or any OpenAI-compatible model.
+- **5 core agents** — Crew Boss, Guard, Wellness, Ideas, Wallet. Pre-configured and orbiting the center of your dashboard.
+- **Setup Wizard** — Guides new users through model selection, API key setup, and first team creation. Runs automatically on first launch.
+- **Team templates** — Business Management, Department, Freelance, Side Hustle, or Custom. Pick one, name it, and your team is live with a manager and workers.
+- **Trust score (1–10)** — Controls how much Crew Boss handles autonomously. 1 = see everything. 10 = morning brief only.
 - **Burnout awareness** — When you're running hot, non-urgent messages get held for better timing.
 - **Private sessions** — Talk directly with any agent. 🔒 means private — not even Crew Boss sees the content.
-- **Teams** — Add departments with managers and workers. Scale from 5 agents to 50.
 - **Team mailbox** — Any agent can escalate directly to you if something critical is being ignored. No message gets silenced.
-- **Visual dashboard** — Clean circle layout. Status dots tell you everything. Mobile-first.
-- **Full audit trail** — Every message, every decision, every routing event. Logged locally.
+- **Dashboard PIN lock** — Optional PIN protects against accidental deletion. Auto-locks after idle. Kid-proof.
+- **Desktop shortcut** — Auto-created on first launch. Works on macOS, Windows, and Linux.
+- **Visual dashboard** — Circle layout with status dots. Mobile-first. Auto-opens in your browser on startup.
+- **Full audit trail** — Every message, every decision, every routing event. Logged locally in SQLite.
 - **Runs on anything** — Python + SQLite. Works on a Raspberry Pi, a laptop, or a server.
 
 ## Pricing
 
+crew-bus itself is **free and open-source** (MIT). Paid add-ons unlock extra capabilities:
+
 | Tier | Price | What You Get |
 |------|-------|-------------|
-| **Core** | **Free forever** | Full message bus, Crew Boss, 5 agents (Family Helper, Muse, Health Buddy, Growth Coach, Life Assistant), dashboard, CLI, private sessions, team mailbox, unlimited agents & departments. MIT License. |
-| **Security Guard** | **$29 one-time** | Everything in Core + real-time anomaly detection, threat monitoring (6 domains), automatic escalation, mutiny detection, audit trail hardening. Lifetime activation key. |
-| **Installer Permit** | **$25 per permit** | Marketplace listing, KYC badge, job board access, video meet & greet, community reviews, 6 months free Guardian messaging. First permit free. |
+| **Core** | **Free forever** | Full message bus, Crew Boss, 5 core agents, dashboard, private sessions, team mailbox, Wizard setup. MIT License. |
+| **Guardian** | **$29 one-time** | Unlock the Skill Store — downloadable skills that make your agents smarter. Threat monitoring, anomaly detection, audit hardening. Lifetime activation key. |
+| **Business Management** | **$50/yr or $10 trial** | Full business team — Operations Lead, HR Coordinator, Finance Monitor, Strategy Advisor, Comms Manager. |
+| **Department** | **$25/yr or $5 trial** | Add-on department with manager + workers (Task Runner, Research Aide). |
+| **Freelance** | **$30/yr or $5 trial** | Lead Finder, Invoice Bot, Client Follow-up — everything a freelancer needs. |
+| **Side Hustle** | **$30/yr or $5 trial** | Market Scout, Content Creator, Sales Tracker — launch and grow your idea. |
+| **Custom Team** | **$50/yr or $10 trial** | Build your own team from scratch with any agents you want. |
 
-No subscriptions. No cloud fees. No hidden charges. Payments via Stripe.
+No subscriptions on core. No cloud fees. No hidden charges. Payments via Stripe.
 
 ## Quick Start
 
 ```bash
-# Replace with your GitHub username in the URL
 git clone https://github.com/crew-bus/crew-bus.git
 cd crew-bus
 pip install pyyaml
-python dashboard.py
+python3 dashboard.py
 ```
 
-Open `http://localhost:8080` in your browser. That's it.
+Your browser opens automatically. The Wizard walks you through setup.
 
-## Try These Example Crews
+Use `--no-browser` if you don't want the browser to auto-open.
 
-Get started in seconds. Pick a crew, load it, done.
+## Example Crews
+
+Load a pre-built crew config to get started fast:
 
 ### Family Crew
 For busy families — chores, meals, homework, health, and daily life.
 ```bash
-crew-bus load examples/family-crew.yaml
+python3 dashboard.py --config examples/family-crew.yaml
 ```
-Includes: Crew Boss (warm big-sister energy), Friend & Family Helper, Health Buddy, Life Assistant. Family Mode with quiet hours 9pm-7am.
 
 ### Artist / Passion Crew
 For artists, musicians, writers, and makers of all kinds.
 ```bash
-crew-bus load examples/artist-passion-crew.yaml
+python3 dashboard.py --config examples/artist-passion-crew.yaml
 ```
-Includes: Crew Boss (encouraging friend), Muse (creative prompts + streak tracker), Health Buddy, Growth Coach. Passion Mode with daily creative sparks.
 
 ### Teen Crew
 For teens — homework, gaming, music, big ideas, zero lectures.
 ```bash
-crew-bus load examples/teen-crew.yaml
+python3 dashboard.py --config examples/teen-crew.yaml
 ```
-Includes: Crew Boss (chill big-bro energy), Friend & Family Helper, Muse (gaming, music, drawing), Growth Coach (study timer + skill tree). Fun Mode with gamification.
 
-### Launch Crew (for growing Crew Bus)
-For spreading the word about Crew Bus — warm, human, zero-corporate outreach.
+### Launch Crew
+For spreading the word — warm, human, zero-corporate outreach.
 ```bash
-crew-bus load examples/launch-crew.yaml
+python3 dashboard.py --config examples/launch-crew.yaml
 ```
-Includes: Crew Boss (warm launch captain), Content Creator (tweets, threads, Reddit posts), Outreach Buddy (finds communities, drafts friendly intros), Visual Helper (images, GIFs, thumbnails), Momentum Tracker (reads replies, suggests next moves). Launch Mode with burnout protection and content approval.
 
-> Want to customize? Copy any example to `configs/my-crew.yaml` and make it yours. Rename Crew Boss to anything you want.
-
-## Screenshots
-
-[Add screenshots of the circle layout, agent space, team dashboard, and private session]
+> Or skip the examples and let the Wizard build your first team interactively.
 
 ## Architecture
 
 ```
 Human
   ↕
-Crew Boss (trust: 1-10)
+Crew Boss (trust: 1–10)
   ↕           ↕           ↕           ↕
 Guard      Wellness     Ideas      Wallet
                           ↕
@@ -120,35 +119,27 @@ Messages flow through the bus. Routing rules enforce the hierarchy. Trust score 
 
 ## The Circle
 
-The dashboard shows your 5 core agents in a circle around Crew Boss:
+The dashboard shows your 5 core agents orbiting Crew Boss:
 
-- 🔷 **Crew Boss** (center) — Your AI chief of staff
+- 🔷 **Crew Boss** (center) — Your AI right-hand
 - 🛡️ **Guard** (left) — Security monitoring
 - 💚 **Wellness** (top) — Health and wellbeing
 - 💡 **Ideas** (right) — Strategy and brainstorming
 - 💰 **Wallet** (bottom) — Financial tracking
 
-Tap any agent to open a private 1-on-1 space with activity feed and chat.
+Tap any agent to open their private space with activity feed and chat.
 
 ## Privacy
 
 - **Private sessions** are truly private. Crew Boss logs that a session happened but never sees the content.
-- **Team mailbox** logs that a message was sent but never the content.
 - **Everything runs locally.** No cloud, no telemetry, no phone-home.
 - **You own your data.** It's a SQLite file on your machine. Back it up, delete it, move it — your choice.
-
-## Multi-Channel
-
-Agents can communicate through:
-- **Web dashboard** — Always available, no setup
-- **Telegram** — Assign bot tokens to agents for real-time mobile chat
-- **Signal** — Coming soon
-- **Smartphone app** — Coming soon
 
 ## Requirements
 
 - Python 3.8+
 - PyYAML (`pip install pyyaml`)
+- An LLM API key (Kimi K2.5 free at platform.moonshot.ai, or use Ollama for fully local)
 - That's it. No frameworks. No Docker. No cloud accounts.
 
 ## Project Structure
@@ -157,21 +148,14 @@ Agents can communicate through:
 crew-bus/
 ├── bus.py              # Core message bus engine
 ├── dashboard.py        # Web dashboard (localhost:8080)
+├── agent_worker.py     # LLM integration (Kimi, Ollama, Claude, Groq, Gemini)
+├── security.py         # Encryption & trust model
 ├── cli.py              # Command-line interface
 ├── configs/            # Agent hierarchy configs
-│   └── example_stack.yaml # Default configuration (copy and customize)
 ├── examples/           # Ready-to-use crew configs
-│   ├── family-crew.yaml        # Family crew (chores, meals, health)
-│   ├── artist-passion-crew.yaml # Creative crew (art, music, writing)
-│   ├── teen-crew.yaml          # Teen crew (school, gaming, big ideas)
-│   └── launch-crew.yaml        # Launch crew (grow Crew Bus organically)
 ├── templates/          # HTML templates
-├── test_day2.py        # Core bus tests (38)
-├── test_day3.py        # Advanced feature tests (61)
-├── test_private_sessions.py  # Privacy tests (34)
-├── test_team_mailbox.py      # Mailbox tests (34)
-├── test_guard_activation.py  # Guard activation + skill gating tests (24)
-├── test_techie_marketplace.py # Techie marketplace tests (43)
+├── conftest.py         # Pytest configuration
+├── test_agent_worker.py # Agent worker tests
 └── README.md           # You are here
 ```
 
@@ -182,6 +166,7 @@ crew-bus/
 3. **Simple by default, powerful when needed.** Trust score 1 = see everything. Trust score 10 = full autopilot.
 4. **No agent can silence another agent.** The team mailbox is the fire alarm anyone can pull.
 5. **Free for everyone.** crew-bus is infrastructure for the world.
+6. **A 10-year-old should be able to figure it out.** If the UX isn't obvious, it's a bug.
 
 ## License
 
@@ -189,12 +174,8 @@ MIT — do whatever you want with it.
 
 ## Status
 
-Active development. Core bus, dashboard, private sessions, team mailbox, Guard activation, and techie marketplace are working. 234 tests passing.
-
-To customize your agent hierarchy, copy `configs/example_stack.yaml` to `configs/my_stack.yaml` and edit it.
-
-Coming soon: Smartphone app, Signal integration.
+Live and actively developed. Core bus, dashboard, private sessions, teams, Wizard setup, Guardian activation, Stripe payments, and desktop shortcuts are all working.
 
 ---
 
-*Built by one person in a few days. That's the point — AI should be simple enough that anyone can run their own crew.*
+*Built by one person within a month. That's the point — AI should be simple enough that anyone can run their own crew.*
