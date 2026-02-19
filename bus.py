@@ -31,8 +31,8 @@ import yaml
 
 DB_PATH = Path(__file__).parent / "crew_bus.db"
 
-# Guard activation verification key (signing key lives on crew-bus.dev server)
-GUARD_ACTIVATION_VERIFY_KEY = "PLACEHOLDER_REPLACE_BEFORE_LAUNCH"
+# Activation verification key (signing key lives on crew-bus.dev server)
+GUARD_ACTIVATION_VERIFY_KEY = "38cd1c83d599dcd7c8eb1fad1a494436939b7462c3b93c11d3f1f0eb280a0b26"
 
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
@@ -3746,6 +3746,39 @@ def generate_test_activation_key(verify_key: Optional[str] = None) -> str:
         hashlib.sha256,
     ).hexdigest()
     return f"CREWBUS-{payload_b64}-{sig}"
+
+
+def validate_activation_key(activation_key: str, expected_type: str = None,
+                            verify_key: str = None) -> tuple:
+    """Validate a CREWBUS activation key without storing it.
+
+    Returns (True, payload_dict) on success, (False, error_string) on failure.
+    If expected_type is given, checks payload["type"] matches.
+    """
+    key = verify_key or GUARD_ACTIVATION_VERIFY_KEY
+    if not activation_key or not activation_key.startswith("CREWBUS-"):
+        return (False, "Invalid key format")
+    remainder = activation_key[len("CREWBUS-"):]
+    last_dash = remainder.rfind("-")
+    if last_dash <= 0:
+        return (False, "Invalid key format")
+    payload_b64 = remainder[:last_dash]
+    signature = remainder[last_dash + 1:]
+    if not payload_b64 or not signature:
+        return (False, "Invalid key format")
+    expected_sig = hmac.new(
+        key.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected_sig, signature):
+        return (False, "Invalid activation key")
+    try:
+        payload_json = base64.b64decode(payload_b64).decode("utf-8")
+        payload = json.loads(payload_json)
+    except Exception:
+        return (False, "Malformed key")
+    if expected_type and payload.get("type") != expected_type:
+        return (False, f"Key type mismatch: expected {expected_type}, got {payload.get('type')}")
+    return (True, payload)
 
 
 # ---------------------------------------------------------------------------

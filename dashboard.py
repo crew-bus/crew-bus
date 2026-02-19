@@ -1661,9 +1661,17 @@ async function loadGuardianBanner(){
     var s=await api('/api/guard/status');
     if(s&&s.activated){el.style.display='none';return;}
   }catch(e){}
+  // Check if dismissed within last 24 hours
+  var dismissedAt=localStorage.getItem('guardian_banner_dismissed');
+  if(dismissedAt){
+    var elapsed=Date.now()-parseInt(dismissedAt,10);
+    if(elapsed<86400000){el.style.display='none';return;}  // 24 hours in ms
+    localStorage.removeItem('guardian_banner_dismissed');
+  }
   el.style.display='block';
-  el.innerHTML='<div style="margin:16px 0;padding:18px 20px;background:linear-gradient(135deg,#2a2000,#1a1500);border:1px solid #d1861644;border-radius:12px">'+
-    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'+
+  el.innerHTML='<div style="margin:16px 0;padding:18px 20px;background:linear-gradient(135deg,#2a2000,#1a1500);border:1px solid #d1861644;border-radius:12px;position:relative">'+
+    '<button onclick="dismissGuardianBanner()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--mu);font-size:1.2rem;cursor:pointer;padding:4px 8px;line-height:1;opacity:.7;transition:opacity .15s" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'.7\'" title="Dismiss for 24 hours">\u2715</button>'+
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-right:28px">'+
     '<span style="font-size:1.8rem">\u{1F6E1}\uFE0F</span>'+
     '<div><div style="font-size:1rem;font-weight:700;color:#d18616">Unlock the Guardian</div>'+
     '<div style="font-size:.8rem;color:var(--mu)">Access the Skill Store \u2014 downloadable skills that make your agents smarter</div></div></div>'+
@@ -1674,6 +1682,13 @@ async function loadGuardianBanner(){
     '<button onclick="activateGuardianFromBanner()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div></div>'+
     '<div id="guardian-buy-area" style="display:none"></div>'+
     '<div id="guardian-banner-msg" style="margin-top:8px;font-size:.8rem;min-height:1em"></div></div>';
+}
+
+function dismissGuardianBanner(){
+  localStorage.setItem('guardian_banner_dismissed',Date.now().toString());
+  var el=document.getElementById('guardian-banner');
+  if(el)el.style.display='none';
+  showToast('Guardian reminder dismissed \u2014 will reappear in 24 hours');
 }
 
 function showGuardianCheckout(){
@@ -1696,11 +1711,11 @@ async function activateGuardianFromBanner(){
   if(!key){if(msgEl)msgEl.innerHTML='<span style="color:#e55">Please paste your activation key.</span>';return;}
   try{
     var r=await apiPost('/api/guard/activate',{key:key});
-    if(r&&r.ok){
+    if(r&&r.success){
       showToast('\u{1F6E1}\uFE0F Guardian activated! Skills unlocked.');
       loadGuardianBanner();
     }else{
-      if(msgEl)msgEl.innerHTML='<span style="color:#e55">'+(r.error||'Invalid key. Check for typos.')+'</span>';
+      if(msgEl)msgEl.innerHTML='<span style="color:#e55">'+(r.message||r.error||'Invalid key. Check for typos.')+'</span>';
     }
   }catch(e){if(msgEl)msgEl.innerHTML='<span style="color:#e55">Connection error.</span>';}
 }
@@ -3711,6 +3726,28 @@ def _validate_promo(code, template, db_path):
             return {"valid": True, "grant_type": "trial"}
         return {"valid": False, "error": "Invalid referral code."}
 
+    # CREWBUS activation keys from Stripe purchase
+    code_raw = code.strip()
+    if code_raw.startswith("CREWBUS-"):
+        # Validate the key signature and type
+        valid, result = bus.validate_activation_key(code_raw, expected_type=template)
+        if valid:
+            # Check not already used on this install
+            fingerprint = hashlib.sha256(code_raw.encode()).hexdigest()[:16]
+            used = bus.get_config(f"used_key_{fingerprint}", db_path=db_path)
+            if used:
+                return {"valid": False, "error": "This activation key has already been used."}
+            bus.set_config(f"used_key_{fingerprint}", "yes", db_path=db_path)
+            # Determine grant type from payload
+            grant = result.get("grant", "annual")
+            return {"valid": True, "grant_type": grant}
+        else:
+            # Maybe it's a guard key being used for a plan — try without type check
+            valid2, result2 = bus.validate_activation_key(code_raw)
+            if valid2:
+                return {"valid": False, "error": f"This key is for '{result2.get('type')}', not '{template}'."}
+            return {"valid": False, "error": result}
+
     return {"valid": False, "error": "Invalid promo code. Check for typos or visit crew-bus.dev/pricing."}
 
 
@@ -4359,6 +4396,20 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             key = data.get("key", "").strip()
             if not key:
                 return _json_response(self, {"success": False, "message": "No activation key provided"}, 400)
+            # Accept master promo code for Guardian activation
+            if key.upper() == MASTER_PROMO:
+                conn = bus.get_conn(self.db_path)
+                now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                fp = hashlib.sha256(key.encode()).hexdigest()[:16]
+                try:
+                    conn.execute(
+                        "INSERT INTO guard_activation (activation_key, activated_at, key_fingerprint) VALUES (?, ?, ?)",
+                        (key, now, fp))
+                    conn.commit()
+                except Exception:
+                    pass  # already activated
+                conn.close()
+                return _json_response(self, {"success": True, "message": "Guardian activated (master promo)"})
             success, message = bus.activate_guard(key, db_path=self.db_path)
             return _json_response(self, {"success": success, "message": message},
                                   200 if success else 400)
