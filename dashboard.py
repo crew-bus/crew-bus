@@ -5010,22 +5010,72 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     return ThreadedHTTPServer((host, port), handler)
 
 
+def _create_desktop_shortcut(url):
+    """Drop a clickable shortcut on the user's Desktop to reopen the dashboard."""
+    import platform
+    desktop = Path.home() / "Desktop"
+    if not desktop.exists():
+        desktop = Path.home()  # fallback if no Desktop folder
+    system = platform.system()
+    try:
+        if system == "Darwin":  # macOS
+            shortcut = desktop / "Crew Bus.webloc"
+            if not shortcut.exists():
+                shortcut.write_text(
+                    '<?xml version="1.0" encoding="UTF-8"?>\n'
+                    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+                    '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+                    '<plist version="1.0"><dict>\n'
+                    '<key>URL</key>\n'
+                    f'<string>{url}</string>\n'
+                    '</dict></plist>\n'
+                )
+                print(f"  \U0001f4ce Desktop shortcut created: {shortcut}")
+        elif system == "Windows":
+            shortcut = desktop / "Crew Bus.url"
+            if not shortcut.exists():
+                shortcut.write_text(f"[InternetShortcut]\nURL={url}\nIconIndex=0\n")
+                print(f"  \U0001f4ce Desktop shortcut created: {shortcut}")
+        else:  # Linux / other
+            shortcut = desktop / "crew-bus.desktop"
+            if not shortcut.exists():
+                shortcut.write_text(
+                    "[Desktop Entry]\nType=Link\nName=Crew Bus\n"
+                    f"URL={url}\nIcon=web-browser\n"
+                )
+                shortcut.chmod(0o755)
+                print(f"  \U0001f4ce Desktop shortcut created: {shortcut}")
+    except Exception as e:
+        print(f"  (Could not create desktop shortcut: {e})")
+
+
 def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
                open_browser=True):
     server = create_server(port=port, db_path=db_path, config=config, host=host)
     actual_db = server.RequestHandlerClass.db_path
-    print(f"crew-bus dashboard running on http://{host}:{port}")
-    print(f"Database: {actual_db}")
+    url = f"http://127.0.0.1:{port}"
+
+    print()
+    print("  \u2728 crew-bus is running!")
+    print(f"  \U0001f310 Dashboard: {url}")
+    print(f"  \U0001f4c1 Database:  {actual_db}")
+    print()
 
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
 
+    # Create a desktop shortcut so they can always get back in
+    _create_desktop_shortcut(url)
+
     # Auto-open browser after 1-second delay (server needs to be ready)
     if open_browser:
-        url = f"http://127.0.0.1:{port}"
         threading.Timer(1.0, webbrowser.open, args=[url]).start()
 
-    print("Press Ctrl+C to stop.")
+    print()
+    print("  \U0001f449 Closed your browser? Just double-click 'Crew Bus' on your Desktop!")
+    print(f"  \U0001f449 Or open this URL: {url}")
+    print("  \U0001f6d1 Press Ctrl+C to stop the server.")
+    print()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
