@@ -219,7 +219,10 @@ SYSTEM_PROMPTS = {
     "manager": (
         "You are a team manager in the user's personal AI crew. "
         "You coordinate your team's workers and report up to Crew Boss. "
-        "Keep responses short, organized, and helpful."
+        "Keep responses short, organized, and helpful.\n\n"
+        "You can delegate tasks to your workers. To assign work, include:\n"
+        '{"delegate": {"to": "Worker-Name", "task": "what to do"}}\n'
+        "One block per worker. They will receive the task automatically."
     ),
 }
 
@@ -295,6 +298,27 @@ def _build_system_prompt(agent_type: str, agent_name: str,
                 "CREW CHARTER (your constitution — violation = security event):\n"
                 + charter
             )
+
+    # --- Inject team roster for managers ---
+    if agent_type == "manager":
+        try:
+            conn = bus.get_conn(db_path)
+            try:
+                workers = conn.execute(
+                    "SELECT name, description FROM agents "
+                    "WHERE parent_agent_id=? AND active=1 ORDER BY name",
+                    (agent_id,)
+                ).fetchall()
+            finally:
+                conn.close()
+            if workers:
+                roster = "YOUR TEAM:\n" + "\n".join(
+                    f"- {w['name']}" + (f": {w['description'][:60]}" if w['description'] else "")
+                    for w in workers
+                )
+                parts.append(roster)
+        except Exception:
+            pass
 
     # --- Inject skills ---
     try:
@@ -1058,11 +1082,16 @@ def call_ollama(system_prompt: str, user_message: str,
 # Chat history helper
 # ---------------------------------------------------------------------------
 
-def _get_recent_chat(db_path: Path, human_id: int, agent_id: int,
+def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
                      limit: int = 6) -> list:
-    """Fetch recent chat messages and format for Ollama context."""
+    """Fetch recent chat context for an agent.
+
+    Pulls messages between sender↔agent. For managers, also includes
+    recent messages from their workers so they have team awareness.
+    """
     conn = bus.get_conn(db_path)
     try:
+        # Direct conversation between sender and this agent
         rows = conn.execute("""
             SELECT from_agent_id, body, subject
             FROM messages
@@ -1070,13 +1099,38 @@ def _get_recent_chat(db_path: Path, human_id: int, agent_id: int,
                 OR (from_agent_id=? AND to_agent_id=?))
               AND body IS NOT NULL AND body != ''
             ORDER BY created_at DESC LIMIT ?
-        """, (human_id, agent_id, agent_id, human_id, limit)).fetchall()
+        """, (sender_id, agent_id, agent_id, sender_id, limit)).fetchall()
+
+        # For managers: also pull recent messages TO this agent from workers
+        agent_row = conn.execute(
+            "SELECT agent_type FROM agents WHERE id=?", (agent_id,)
+        ).fetchone()
+        worker_rows = []
+        if agent_row and agent_row["agent_type"] == "manager":
+            worker_rows = conn.execute("""
+                SELECT a.name, m.body
+                FROM messages m
+                JOIN agents a ON m.from_agent_id = a.id
+                WHERE m.to_agent_id = ?
+                  AND a.parent_agent_id = ?
+                  AND m.body IS NOT NULL AND m.body != ''
+                ORDER BY m.created_at DESC LIMIT 10
+            """, (agent_id, agent_id)).fetchall()
     finally:
         conn.close()
 
     history = []
+
+    # Inject team updates as system context if available
+    if worker_rows:
+        team_summary = "Recent updates from your team:\n" + "\n".join(
+            f"- {w['name']}: {w['body'][:150]}" for w in reversed(worker_rows)
+        )
+        history.append({"role": "user", "content": team_summary})
+        history.append({"role": "assistant", "content": "Got it, I have my team's updates."})
+
     for row in reversed(rows):  # oldest first
-        role = "user" if row["from_agent_id"] == human_id else "assistant"
+        role = "user" if row["from_agent_id"] == sender_id else "assistant"
         text = row["body"] if row["body"] else row["subject"]
         if text:
             history.append({"role": role, "content": text})
@@ -1129,110 +1183,134 @@ def _check_memory_command(text: str, agent_id: int,
 # ---------------------------------------------------------------------------
 
 def _process_queued_messages(db_path: Path):
-    """Find queued messages from human or Crew Boss to agents, generate replies."""
+    """Process all queued messages. Human→agent gets LLM. Agent→agent just delivers."""
     conn = bus.get_conn(db_path)
     try:
-        # Find ALL queued messages from human OR right_hand (Crew Boss) to agents
+        # Pick up ALL queued messages to active agents
         rows = conn.execute("""
             SELECT m.id, m.from_agent_id, m.to_agent_id, m.body, m.subject,
-                   a.agent_type, a.name, a.model
+                   a.agent_type, a.name, a.model, h.agent_type AS sender_type
             FROM messages m
             JOIN agents a ON m.to_agent_id = a.id
             JOIN agents h ON m.from_agent_id = h.id
-            WHERE (h.agent_type = 'human' OR h.agent_type = 'right_hand')
-              AND m.status = 'queued'
-              AND a.agent_type != 'human'
+            WHERE m.status = 'queued'
               AND a.active = 1
             ORDER BY m.created_at ASC
         """).fetchall()
     finally:
         conn.close()
 
-    for row in rows:
-        msg_id = row["id"]
-        human_id = row["from_agent_id"]
-        agent_id = row["to_agent_id"]
-        agent_type = row["agent_type"]
-        agent_name = row["name"]
-        agent_model = row["model"] if row["model"] else ""
-        user_text = row["body"] if row["body"] else row["subject"]
+    if not rows:
+        return
 
-        if not user_text:
-            _mark_delivered(db_path, msg_id)
-            continue
+    # Mark all as 'delivered' immediately so they don't get re-picked
+    # on the next poll cycle while we're processing them.
+    conn = bus.get_conn(db_path)
+    try:
+        for row in rows:
+            conn.execute("UPDATE messages SET status='delivered' WHERE id=?",
+                         (row["id"],))
+        conn.commit()
+    finally:
+        conn.close()
 
-        # Check for memory commands first (remember/forget/list)
-        memory_response = _check_memory_command(user_text, agent_id, db_path)
-        if memory_response:
-            _insert_reply_direct(db_path, agent_id, human_id, memory_response)
-            _mark_delivered(db_path, msg_id)
-            continue
+    # Every message gets processed — agent reads it, thinks, replies.
+    # Human messages first (priority), then all others sequentially.
+    # Sequential avoids SQLite write contention from parallel threads.
+    human_msgs = [r for r in rows if r["sender_type"] == "human"]
+    agent_msgs = [r for r in rows if r["sender_type"] != "human"]
 
-        # Get agent description from DB for dynamic prompts
-        desc = ""
-        try:
-            _conn = bus.get_conn(db_path)
-            _row = _conn.execute("SELECT description FROM agents WHERE id=?",
-                                 (agent_id,)).fetchone()
-            if _row:
-                desc = _row["description"] or ""
-            _conn.close()
-        except Exception:
-            pass
+    for row in human_msgs:
+        _process_single_message(row, db_path)
 
-        # Guardian shortcut: intercept WhatsApp setup requests directly
-        # (don't rely on the LLM to emit the JSON — handle it in code)
-        if agent_type == "guardian" and _re.search(
-            r'\bwhatsapp\b', user_text, _re.IGNORECASE
-        ):
-            _handle_whatsapp_setup(db_path, agent_id, human_id)
-            _mark_delivered(db_path, msg_id)
-            continue
+    for row in agent_msgs:
+        _process_single_message(row, db_path)
 
-        # Social draft shortcut: if the task message itself contains a
-        # social_draft JSON block, process it directly — no LLM needed.
-        # Crew Boss sends pre-formatted drafts to worker agents.
-        if _re.search(r'"social_draft"', user_text):
-            _result = _extract_social_drafts(user_text, agent_id, db_path)
-            # Send confirmation back
-            _confirmations = _re.findall(r'\*\*Published to (\w+)!\*\*', _result)
-            _saved = _re.findall(r'\*Draft #(\d+) saved for (\w+)\*', _result)
-            if _confirmations:
-                _reply_text = "Done! Published to: " + ", ".join(_confirmations) + "."
-            elif _saved:
-                _reply_text = "Drafts saved: " + ", ".join(
-                    f"#{d[0]} ({d[1]})" for d in _saved) + "."
-            else:
-                _reply_text = "Task received — processing social content."
-            _insert_reply_direct(db_path, agent_id, human_id, _reply_text,
-                                 human_msg=user_text, agent_type=agent_type)
-            _mark_delivered(db_path, msg_id)
-            continue
 
-        # Build system prompt — injects memories + skills
-        system_prompt = _build_system_prompt(agent_type, agent_name, desc,
-                                             agent_id=agent_id, db_path=db_path)
+def _process_single_message(row, db_path: Path):
+    """Process one queued message — call LLM, insert reply, handle shortcuts."""
+    msg_id = row["id"]
+    human_id = row["from_agent_id"]
+    agent_id = row["to_agent_id"]
+    agent_type = row["agent_type"]
+    agent_name = row["name"]
+    agent_model = row["model"] if row["model"] else ""
+    user_text = row["body"] if row["body"] else row["subject"]
 
-        # Get recent chat history for context
-        chat_history = _get_recent_chat(db_path, human_id, agent_id)
+    if not user_text:
+        return
 
-        # Call LLM — routes to Kimi/Ollama/etc based on agent's model field
-        reply = call_llm(system_prompt, user_text, chat_history,
-                         model=agent_model, db_path=db_path)
+    # Check for memory commands first (remember/forget/list)
+    memory_response = _check_memory_command(user_text, agent_id, db_path)
+    if memory_response:
+        _insert_reply_direct(db_path, agent_id, human_id, memory_response)
+        return
 
-        if reply:
-            # Execute any wizard_action commands embedded in the reply
-            clean_reply = _execute_wizard_actions(reply, db_path)
+    # Get agent description from DB for dynamic prompts
+    desc = ""
+    try:
+        _conn = bus.get_conn(db_path)
+        _row = _conn.execute("SELECT description FROM agents WHERE id=?",
+                             (agent_id,)).fetchone()
+        if _row:
+            desc = _row["description"] or ""
+        _conn.close()
+    except Exception:
+        pass
 
-            # Extract and create any social_draft JSON blocks
-            clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+    # Guardian shortcut: intercept WhatsApp setup requests directly
+    if agent_type == "guardian" and _re.search(
+        r'\bwhatsapp\b', user_text, _re.IGNORECASE
+    ):
+        _handle_whatsapp_setup(db_path, agent_id, human_id)
+        return
 
-            # Insert reply directly — always works, bypasses routing rules
-            _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
-                                 human_msg=user_text, agent_type=agent_type)
+    # Social draft shortcut: process directly — no LLM needed
+    if _re.search(r'"social_draft"', user_text):
+        _result = _extract_social_drafts(user_text, agent_id, db_path)
+        _confirmations = _re.findall(r'\*\*Published to (\w+)!\*\*', _result)
+        _saved = _re.findall(r'\*Draft #(\d+) saved for (\w+)\*', _result)
+        if _confirmations:
+            _reply_text = "Done! Published to: " + ", ".join(_confirmations) + "."
+        elif _saved:
+            _reply_text = "Drafts saved: " + ", ".join(
+                f"#{d[0]} ({d[1]})" for d in _saved) + "."
+        else:
+            _reply_text = "Task received — processing social content."
+        _insert_reply_direct(db_path, agent_id, human_id, _reply_text,
+                             human_msg=user_text, agent_type=agent_type)
+        return
 
-        # Mark original message as delivered
-        _mark_delivered(db_path, msg_id)
+    # Build system prompt — injects memories + skills
+    system_prompt = _build_system_prompt(agent_type, agent_name, desc,
+                                         agent_id=agent_id, db_path=db_path)
+
+    # Get recent chat history for context
+    chat_history = _get_recent_chat(db_path, human_id, agent_id)
+
+    # Call LLM — routes to Kimi/Ollama/etc based on agent's model field
+    reply = call_llm(system_prompt, user_text, chat_history,
+                     model=agent_model, db_path=db_path)
+
+    if reply:
+        # Execute any wizard_action commands embedded in the reply
+        clean_reply = _execute_wizard_actions(reply, db_path)
+
+        # Extract and create any social_draft JSON blocks
+        clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+
+        # Extract explicit delegation JSON (if manager included any)
+        if agent_type == "manager":
+            clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
+
+        # Auto-fan-out: when a manager gets a task from human or Crew Boss,
+        # forward the original task to all its active workers automatically.
+        if agent_type == "manager" and row["from_agent_id"] != agent_id:
+            _fan_out_to_workers(db_path, agent_id, user_text)
+
+        # Insert reply directly — always works, bypasses routing rules
+        _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
+                             human_msg=user_text, agent_type=agent_type)
 
 
 import re as _re
@@ -1296,6 +1374,88 @@ def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:
             print(f"[social] draft exception: {e}")
 
     return reply
+
+
+def _fan_out_to_workers(db_path: Path, manager_id: int, task_text: str):
+    """Send a task from a manager to all its active workers."""
+    conn = bus.get_conn(db_path)
+    try:
+        workers = conn.execute(
+            "SELECT id, name FROM agents WHERE parent_agent_id=? AND active=1",
+            (manager_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for w in workers:
+        try:
+            bus.send_message(
+                from_id=manager_id, to_id=w["id"],
+                message_type="task", subject="Task from manager",
+                body=task_text, priority="normal", db_path=db_path,
+            )
+            print(f"[fan-out] manager #{manager_id} → {w['name']}")
+        except Exception as e:
+            print(f"[fan-out] failed → {w['name']}: {e}")
+
+
+def _extract_delegations(reply: str, manager_id: int, db_path: Path) -> str:
+    """Extract delegation JSON blocks from a manager's reply and send tasks to workers.
+
+    Managers embed: {"delegate": {"to": "Agent-Name", "task": "do this thing"}}
+    The task is sent as a queued message from the manager to the worker.
+    Workers must be direct reports (parent_agent_id = manager_id).
+    """
+    pattern = r'\{[^{}]*"delegate"[^{}]*\{[^{}]*\}[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+    if not matches:
+        return reply
+
+    conn = bus.get_conn(db_path)
+    try:
+        # Get this manager's workers
+        workers = conn.execute(
+            "SELECT id, name FROM agents WHERE parent_agent_id=? AND active=1",
+            (manager_id,)
+        ).fetchall()
+        worker_map = {w["name"].lower(): w for w in workers}
+    finally:
+        conn.close()
+
+    sent = []
+    for raw in matches:
+        try:
+            import json as _json
+            obj = _json.loads(raw)
+            d = obj.get("delegate", {})
+            target_name = d.get("to", "").strip()
+            task_text = d.get("task", "").strip()
+            if not target_name or not task_text:
+                continue
+
+            worker = worker_map.get(target_name.lower())
+            if not worker:
+                print(f"[delegate] skipped — '{target_name}' not a worker of manager #{manager_id}")
+                continue
+
+            # Send task from manager to worker (will be queued for processing)
+            bus.send_message(
+                from_id=manager_id, to_id=worker["id"],
+                message_type="task",
+                subject=f"Task from manager",
+                body=task_text,
+                priority="normal", db_path=db_path,
+            )
+            sent.append(worker["name"])
+            print(f"[delegate] manager #{manager_id} → {worker['name']}: {task_text[:60]}")
+        except Exception as e:
+            print(f"[delegate] parse error: {e}")
+
+    # Strip raw JSON blocks from the visible reply, append clean summary
+    clean = _re.sub(pattern, '', reply).strip()
+    if sent:
+        clean += "\n\n📋 *Delegated tasks to: " + ", ".join(sent) + "*"
+    return clean
 
 
 def _boss_review_and_publish(draft_id: int, platform: str,
