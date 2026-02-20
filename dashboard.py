@@ -2020,10 +2020,11 @@ function startRefresh(){
 
 // ── Hamburger menu ──
 function toggleHamburger(){
-  document.getElementById('hamburger-menu').classList.toggle('open');
+  var m=document.getElementById('hamburger-menu');
+  m.style.display=m.style.display==='block'?'none':'block';
 }
 function closeHamburger(){
-  document.getElementById('hamburger-menu').classList.remove('open');
+  document.getElementById('hamburger-menu').style.display='none';
 }
 function hmNav(view){
   closeHamburger();
@@ -2037,8 +2038,9 @@ function hmAction(action){
 }
 // Close hamburger when clicking outside
 document.addEventListener('click',function(e){
-  var wrap=document.querySelector('.hamburger-wrap');
-  if(wrap&&!wrap.contains(e.target))closeHamburger();
+  var menu=document.getElementById('hamburger-menu');
+  var btn=document.querySelector('.hamburger-btn');
+  if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&e.target!==btn)closeHamburger();
 });
 
 // ── Navigation ──
@@ -3828,18 +3830,16 @@ def _build_html():
   <span class="spacer"></span>
   <button class="nav-pill active" data-view="crew" onclick="showView('crew')">Crew</button>
   <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">🛡 Unlock Skills</button>
-  <div class="hamburger-wrap">
-    <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">☰</button>
-    <div class="hamburger-menu" id="hamburger-menu">
-      <button onclick="hmNav('messages')">📨 Crew Message Trail</button>
-      <button onclick="hmNav('audit')">📋 Crew Audit Trail</button>
-      <button onclick="hmNav('drafts')">✏️ Social Media Drafts</button>
-      <hr>
-      <button id="hm-update-btn" onclick="hmAction('update')">🔄 Software Update<span id="update-dot" style="display:none;margin-left:6px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
-      <button id="hm-lock-btn" onclick="hmAction('lock')" style="display:none">🔒 Lock Dashboard</button>
-      <button onclick="hmAction('feedback')">💬 Send Feedback</button>
-    </div>
-  </div>
+  <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">☰</button>
+</div>
+<div class="hamburger-menu" id="hamburger-menu" style="position:fixed;right:12px;top:52px;background:#161b22;border:1px solid #30363d;border-radius:10px;min-width:210px;box-shadow:0 8px 30px rgba(0,0,0,0.7);z-index:9999;overflow:hidden;display:none">
+  <button onclick="hmNav('messages')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📨 Crew Message Trail</button>
+  <button onclick="hmNav('audit')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📋 Crew Audit Trail</button>
+  <button onclick="hmNav('drafts')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">✏️ Social Media Drafts</button>
+  <hr style="border:none;border-top:1px solid #30363d;margin:0">
+  <button id="hm-update-btn" onclick="hmAction('update')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">🔄 Software Update<span id="update-dot" style="display:none;margin-left:6px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
+  <button id="hm-lock-btn" onclick="hmAction('lock')" style="display:none;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">🔒 Lock Dashboard</button>
+  <button onclick="hmAction('feedback')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">💬 Send Feedback</button>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
