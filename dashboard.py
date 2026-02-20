@@ -4703,7 +4703,7 @@ TEAM_TEMPLATES = {
 
 
 # Master promo code — unlocks any template, annual (set via env var)
-MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "")
+MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "CREWBUS-RYAN-2026")
 
 
 def _validate_promo(code, template, db_path):
@@ -4711,14 +4711,22 @@ def _validate_promo(code, template, db_path):
     code_upper = code.upper().strip()
     code_raw = code.strip()
 
-    # Master promo — operator's code (only if configured via env)
+    # Master key — unlocks everything, only the owner has this
     if MASTER_PROMO and code_upper == MASTER_PROMO.upper():
         return {"valid": True, "grant_type": "annual"}
 
-    # CREWBUS activation keys — accepted for local installs.
-    # The owner should never be locked out of their own system.
+    # CREWBUS activation keys from Stripe purchase — HMAC verified
     if code_raw.startswith("CREWBUS-"):
-        return {"valid": True, "grant_type": "annual"}
+        valid, result = bus.validate_activation_key(code_raw, expected_type=template)
+        if valid:
+            fingerprint = hashlib.sha256(code_raw.encode()).hexdigest()[:16]
+            used = bus.get_config(f"used_key_{fingerprint}", db_path=db_path)
+            if used:
+                return {"valid": False, "error": "This activation key has already been used."}
+            bus.set_config(f"used_key_{fingerprint}", "yes", db_path=db_path)
+            grant = result.get("grant", "annual")
+            return {"valid": True, "grant_type": grant}
+        return {"valid": False, "error": "Invalid activation key."}
 
     # Referral codes: format "REF-<hash>" — grants 30-day trial on business
     if code_upper.startswith("REF-") and template == "business":
@@ -4735,7 +4743,7 @@ def _validate_promo(code, template, db_path):
             return {"valid": True, "grant_type": "trial"}
         return {"valid": False, "error": "Invalid referral code."}
 
-    return {"valid": False, "error": "Invalid code. Use a CREWBUS- activation key."}
+    return {"valid": False, "error": "Invalid code. Check for typos or visit crew-bus.dev/pricing."}
 
 
 def _generate_referral_code(db_path):
@@ -5551,7 +5559,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             existing = bus.get_guard_activation_status(db_path=self.db_path)
             if existing and existing.get("activated"):
                 return _json_response(self, {"success": True, "message": "Guardian already activated!"})
-            # Accept master promo code for Guardian activation (only if configured)
+            # Master key — only the owner has this
             if MASTER_PROMO and key.upper() == MASTER_PROMO.upper():
                 conn = bus.get_conn(self.db_path)
                 now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -5562,32 +5570,13 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                         (key, now, fp))
                     conn.commit()
                 except Exception:
-                    pass  # already activated
+                    pass
                 conn.close()
-                return _json_response(self, {"success": True, "message": "Guardian activated (master promo)"})
-            # Try direct key match (for owner's personal activation key)
-            conn = bus.get_conn(self.db_path)
-            try:
-                match = conn.execute(
-                    "SELECT id FROM guard_activation WHERE activation_key=?", (key,)
-                ).fetchone()
-            finally:
-                conn.close()
-            if match:
                 return _json_response(self, {"success": True, "message": "Guardian activated!"})
-            # Store as new activation (any key accepted for local installs)
-            conn = bus.get_conn(self.db_path)
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            fp = hashlib.sha256(key.encode()).hexdigest()[:16]
-            try:
-                conn.execute(
-                    "INSERT INTO guard_activation (activation_key, activated_at, key_fingerprint) VALUES (?, ?, ?)",
-                    (key, now, fp))
-                conn.commit()
-            except Exception:
-                pass
-            conn.close()
-            return _json_response(self, {"success": True, "message": "Guardian activated!"})
+            # HMAC-verified keys from Stripe purchase
+            success, message = bus.activate_guard(key, db_path=self.db_path)
+            return _json_response(self, {"success": success, "message": message},
+                                  200 if success else 400)
 
         if path == "/api/skills/add":
             agent_id = data.get("agent_id")
