@@ -22,6 +22,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import os
 import sqlite3
 import threading
 import uuid
@@ -43,7 +44,11 @@ DB_PATH = Path(__file__).parent / "crew_bus.db"
 _db_write_lock = threading.Lock()
 
 # Activation verification key (signing key lives on crew-bus.dev server)
-GUARD_ACTIVATION_VERIFY_KEY = "38cd1c83d599dcd7c8eb1fad1a494436939b7462c3b93c11d3f1f0eb280a0b26"
+# Load from env var so the published source doesn't leak the production key
+GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
+    "GUARD_ACTIVATION_VERIFY_KEY",
+    "set-your-activation-key-in-env"  # placeholder — production key via env
+)
 
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (

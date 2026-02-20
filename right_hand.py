@@ -1284,8 +1284,8 @@ class Heartbeat:
 
         The agents run like a business — they create content, Crew Boss
         reviews it, and it gets published. No hand-holding required.
-        Crew Boss and Ryan pop in occasionally, or if there's a big issue
-        the agents notify Crew Boss who fixes it or escalates to Ryan.
+        Crew Boss and the human pop in occasionally, or if there's a big issue
+        the agents notify Crew Boss who fixes it or escalates to the human.
         """
         interval_hours = check.get("interval_hours", 4)
         last = bus.get_config("last_social_autopilot", "",
@@ -1366,7 +1366,7 @@ class Heartbeat:
 
         Crew Boss checks recent posts for quality issues. If he sees a
         problem, he handles it himself (within his trust level) or
-        escalates to Ryan if it's a big deal.
+        escalates to the human if it's a big deal.
         """
         last = bus.get_config("last_social_review", "",
                               db_path=self.db_path)
@@ -1854,7 +1854,7 @@ class Heartbeat:
                     except Exception:
                         pass
 
-            # High issues: Crew Boss escalates to Ryan
+            # High issues: Crew Boss escalates to the human
             if high_issues:
                 issue_lines = []
                 for i in high_issues:
@@ -1874,7 +1874,7 @@ class Heartbeat:
                 )
                 print(f"[social-review] escalated {len(high_issues)} issues to human")
 
-            # Crew Boss self-report (internal log, not sent to Ryan)
+            # Crew Boss self-report (internal log, not sent to the human)
             review_summary = (
                 f"Social review: {recent_count} posts this hour, "
                 f"{posted_today} today, "

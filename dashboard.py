@@ -83,12 +83,16 @@ except ImportError:
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_GUARD_PRICE_ID = os.environ.get("STRIPE_GUARD_PRICE_ID", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+# Stripe Buy Button IDs — configure via env (JSON dict) or leave empty for self-hosted
+STRIPE_BUY_BUTTONS = json.loads(os.environ.get("STRIPE_BUY_BUTTONS", "{}")) if os.environ.get("STRIPE_BUY_BUTTONS") else {}
 SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 
 DEFAULT_PORT = 8080
 DEFAULT_DB = bus.DB_PATH
 
 # WhatsApp bridge subprocess management
+WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
 _wa_bridge_process = None
 _wa_bridge_lock = threading.Lock()
 
@@ -2861,20 +2865,8 @@ function closePaymentModal(){
   if(pc)pc.style.display='';
 }
 
-var STRIPE_BUTTONS={
-  'business_trial':'buy_btn_1T2MkbBtzeOIyrgGrywdE6cR',
-  'business_annual':'buy_btn_1T2MluBtzeOIyrgG0R6HhQQp',
-  'department_trial':'buy_btn_1T2MmzBtzeOIyrgGW19oKuvz',
-  'department_annual':'buy_btn_1T2MnvBtzeOIyrgGuNTKEvrm',
-  'freelance_trial':'buy_btn_1T2Mp4BtzeOIyrgGYN3ewnVG',
-  'freelance_annual':'buy_btn_1T2MqIBtzeOIyrgGCVLxff2Z',
-  'sidehustle_trial':'buy_btn_1T2MrGBtzeOIyrgGAae7quiH',
-  'sidehustle_annual':'buy_btn_1T2MsRBtzeOIyrgG5ynqDNMz',
-  'custom_trial':'buy_btn_1T2MtABtzeOIyrgGPA1ALRO9',
-  'custom_annual':'buy_btn_1T2MeNBtzeOIyrgG4BcKZidk',
-  'guardian':'buy_btn_1T2MjBBtzeOIyrgGjhN2D4zG'
-};
-var STRIPE_PK='pk_live_RTviU0Xh2WU9mtvUSQGrKiNA';
+var STRIPE_BUTTONS=window.__STRIPE_BUTTONS||{};
+var STRIPE_PK=window.__STRIPE_PK||'';
 
 function showStripeButton(btnId,containerId){
   var c=document.getElementById(containerId);
@@ -3811,6 +3803,7 @@ def _build_html():
 <title>crew-bus</title>
 <style>{CSS}</style>
 <script async src="https://js.stripe.com/v3/buy-button.js"></script>
+<script>window.__STRIPE_PK={json.dumps(STRIPE_PUBLISHABLE_KEY)};window.__STRIPE_BUTTONS={json.dumps(STRIPE_BUY_BUTTONS)};</script>
 </head>
 <body data-page="crew">
 <div class="magic-particles" id="magicParticles"></div>
@@ -4502,7 +4495,7 @@ def _wa_bridge_status():
     if not running:
         return {"running": False, "status": "not_running"}
     try:
-        req = urllib.request.Request("http://localhost:3001/status")
+        req = urllib.request.Request(f"{WA_BRIDGE_URL}/status")
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             data["running"] = True
@@ -4515,7 +4508,7 @@ def _wa_bridge_qr():
     """Fetch the current QR SVG from the bridge."""
     import urllib.request
     try:
-        req = urllib.request.Request("http://localhost:3001/qr/svg")
+        req = urllib.request.Request(f"{WA_BRIDGE_URL}/qr/svg")
         with urllib.request.urlopen(req, timeout=3) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except Exception:
@@ -4731,16 +4724,16 @@ TEAM_TEMPLATES = {
 }
 
 
-# Ryan's master promo code — unlocks any template, annual
-MASTER_PROMO = "CREWBUS-RYAN-2026"
+# Master promo code — unlocks any template, annual (set via env var)
+MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "")
 
 
 def _validate_promo(code, template, db_path):
     """Validate a promo code. Returns {valid, grant_type} or {valid, error}."""
     code_upper = code.upper().strip()
 
-    # Master promo — Ryan's personal code
-    if code_upper == MASTER_PROMO:
+    # Master promo — operator's code (only if configured via env)
+    if MASTER_PROMO and code_upper == MASTER_PROMO.upper():
         return {"valid": True, "grant_type": "annual"}
 
     # Referral codes: format "REF-<hash>" — grants 30-day trial on business
@@ -5596,8 +5589,8 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             key = data.get("key", "").strip()
             if not key:
                 return _json_response(self, {"success": False, "message": "No activation key provided"}, 400)
-            # Accept master promo code for Guardian activation
-            if key.upper() == MASTER_PROMO:
+            # Accept master promo code for Guardian activation (only if configured)
+            if MASTER_PROMO and key.upper() == MASTER_PROMO.upper():
                 conn = bus.get_conn(self.db_path)
                 now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 fp = hashlib.sha256(key.encode()).hexdigest()[:16]
@@ -6752,10 +6745,19 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
 
     # Log startup / recovery (helps track power outage restarts)
     try:
+        # Look up the actual human agent ID (don't assume id=1)
+        _hconn = bus.get_conn(actual_db)
+        try:
+            _hrow = _hconn.execute(
+                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+            ).fetchone()
+            _human_id = _hrow["id"] if _hrow else 0
+        finally:
+            _hconn.close()
         with bus.db_write(actual_db) as _sc:
             _sc.execute(
                 "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
-                ("system_startup", 1, json.dumps({"port": port, "db": str(actual_db)})),
+                ("system_startup", _human_id, json.dumps({"port": port, "db": str(actual_db)})),
             )
             # Re-queue any messages stuck from a crash (shouldn't happen with WAL+FULL, but safety net)
             stuck = _sc.execute(
@@ -6764,7 +6766,7 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
             if stuck:
                 _sc.execute(
                     "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
-                    ("crash_recovery", 1, json.dumps({"requeued_messages": stuck})),
+                    ("crash_recovery", _human_id, json.dumps({"requeued_messages": stuck})),
                 )
                 print(f"  \u26a0\ufe0f  Recovered {stuck} messages stuck from last shutdown")
     except Exception:

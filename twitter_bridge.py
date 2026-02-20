@@ -415,11 +415,18 @@ def post_all_approved(db_path: Optional[Path] = None) -> dict:
 # Convenience: draft + auto-approve + post in one call
 # ---------------------------------------------------------------------------
 
-def quick_tweet(text: str, agent_id: int = 1, db_path: Optional[Path] = None) -> dict:
+def quick_tweet(text: str, agent_id: int = None, db_path: Optional[Path] = None) -> dict:
     """Create a draft, auto-approve it, and post immediately.
 
     Use this for urgent posts. For normal flow, use draft → review → approve → post.
     """
+    if agent_id is None:
+        conn = bus.get_conn(db_path)
+        try:
+            row = conn.execute("SELECT id FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
+            agent_id = row["id"] if row else 1
+        finally:
+            conn.close()
     draft = bus.create_social_draft(agent_id, "twitter", text, db_path=db_path)
     if not draft.get("ok"):
         return draft

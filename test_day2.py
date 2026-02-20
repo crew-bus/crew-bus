@@ -21,7 +21,7 @@ Simulates a complete day of operations for Ryan Johnson:
   Step 17: Human feedback: approve V4 queue, override GST queue
   Step 18: Record feedback, show updated accuracy
 
-Run:  PYTHONPATH="/c/Users/ryanr/crew-bus:/c/Users/ryanr/Lib/site-packages" /c/Python314/python.exe test_day2.py
+Run:  pytest test_day2.py  (or: python test_day2.py)
 """
 
 import json

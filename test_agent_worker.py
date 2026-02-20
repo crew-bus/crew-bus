@@ -23,7 +23,7 @@ def _setup_db():
     conn.execute(
         "INSERT INTO agents (name, agent_type, role, status, active) "
         "VALUES (?, ?, ?, ?, ?)",
-        ("Ryan", "human", "human", "active", 1),
+        ("Human", "human", "human", "active", 1),
     )
     # Create Crew Boss (right_hand) — parent is human
     conn.execute(

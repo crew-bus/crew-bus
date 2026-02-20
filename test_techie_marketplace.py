@@ -172,9 +172,9 @@ except PermissionError as e:
 # ============================================================
 
 section("Test 6: use_techie_key() marks key as used")
-result6 = bus.use_techie_key(key4, "user-ryan-001", db_path=TEST_DB)
+result6 = bus.use_techie_key(key4, "user-test-001", db_path=TEST_DB)
 check("6a", result6["key_value"] == key4, f"Key should match: {result6}")
-check("6b", result6["used_for_user"] == "user-ryan-001", f"User: {result6['used_for_user']}")
+check("6b", result6["used_for_user"] == "user-test-001", f"User: {result6['used_for_user']}")
 check("6c", result6["used_at"] is not None, "Should have timestamp")
 
 # Verify jobs_completed incremented

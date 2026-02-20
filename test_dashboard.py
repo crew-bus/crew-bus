@@ -2,7 +2,7 @@
 test_dashboard.py - Seed crew_bus.db with rich demo data and verify the dashboard.
 
 Populates the database with:
-  - Full agent hierarchy from ryan_stack.yaml
+  - Full agent hierarchy from stack config (ryan_stack.yaml or example_stack.yaml)
   - 25+ messages across agents spanning 3 days
   - 10+ Crew Boss decisions (mix of approved and overridden)
   - Trust score and burnout score variations
@@ -64,8 +64,8 @@ conn.close()
 
 print(f"  Agents: {', '.join(sorted(agents.keys()))}")
 
-# Convenience IDs — prefer 'Ryan' (ryan_stack), fall back to 'Human' (example_stack)
-RYAN = agents.get("Ryan", agents.get("Human", {})).get("id", 1)
+# Convenience IDs — prefer stack-specific human name, fall back to 'Human' (example_stack)
+HUMAN = agents.get("Ryan", agents.get("Human", {})).get("id", 1)
 CHIEF = agents["Crew-Boss"]["id"]
 
 
@@ -167,16 +167,16 @@ def seed_audit(event_type, agent_id, details, days_ago=0, hours_ago=0):
 print("[seed] Setting trust/burnout scores ...")
 
 # Set Crew Boss trust to 6 (assistant level)
-bus.update_trust_score(RYAN, 6, db_path=DB_FILE)
+bus.update_trust_score(HUMAN, 6, db_path=DB_FILE)
 
 # Set burnout to 4 (moderate)
-bus.update_burnout_score(RYAN, 4, db_path=DB_FILE)
+bus.update_burnout_score(HUMAN, 4, db_path=DB_FILE)
 
 # Audit trail of score changes
 seed_audit("trust_change", CHIEF, {"old": 1, "new": 4, "reason": "Initial ramp-up"}, days_ago=3)
 seed_audit("trust_change", CHIEF, {"old": 4, "new": 6, "reason": "Solid first week"}, days_ago=1)
-seed_audit("burnout_change", RYAN, {"old": 5, "new": 7, "reason": "Heavy sprint"}, days_ago=2)
-seed_audit("burnout_change", RYAN, {"old": 7, "new": 4, "reason": "Weekend recovery"}, days_ago=0)
+seed_audit("burnout_change", HUMAN, {"old": 5, "new": 7, "reason": "Heavy sprint"}, days_ago=2)
+seed_audit("burnout_change", HUMAN, {"old": 7, "new": 4, "reason": "Weekend recovery"}, days_ago=0)
 
 
 # ---------------------------------------------------------------------------
@@ -188,12 +188,12 @@ print("[seed] Adding timing rules ...")
 conn = bus.get_conn(DB_FILE)
 conn.execute(
     "INSERT INTO timing_rules (agent_id, rule_type, rule_config, enabled) VALUES (?, ?, ?, ?)",
-    (RYAN, "quiet_hours",
+    (HUMAN, "quiet_hours",
      json.dumps({"start": "22:00", "end": "07:00", "timezone": "America/Vancouver"}), 1)
 )
 conn.execute(
     "INSERT INTO timing_rules (agent_id, rule_type, rule_config, enabled) VALUES (?, ?, ?, ?)",
-    (RYAN, "burnout_threshold",
+    (HUMAN, "burnout_threshold",
      json.dumps({"threshold": 7, "action": "queue_non_urgent"}), 1)
 )
 conn.commit()
@@ -206,7 +206,7 @@ conn.close()
 
 print("[seed] Seeding messages ...")
 
-# Agent IDs — prefer ryan_stack names, fall back to example_stack names
+# Agent IDs — prefer stack-specific names, fall back to example_stack names
 V4 = agents.get("V4", agents.get("Ideas", {})).get("id", CHIEF)
 QUANT = agents.get("Quant", agents.get("Wallet", {})).get("id", CHIEF)
 CFO = agents.get("CFO", agents.get("Wallet", {})).get("id", CHIEF)
@@ -250,7 +250,7 @@ m4 = seed_message(LEGAL, CHIEF, "report", "Contract review complete - Acme Corp"
     "normal", "delivered", days_ago=3)
 msg_count += 1
 
-m5 = seed_message(CHIEF, RYAN, "report", "Morning briefing - Day summary",
+m5 = seed_message(CHIEF, HUMAN, "report", "Morning briefing - Day summary",
     "3 items need your attention today: strategy review, P&L sign-off, and "
     "Acme NDA revisions. Quant flagged elevated burnout - I blocked your Friday PM.",
     "normal", "read", days_ago=3)
@@ -275,7 +275,7 @@ m8 = seed_message(CFO, CHIEF, "alert", "Unusual expense flagged",
     "high", "read", days_ago=2, hours_ago=5)
 msg_count += 1
 
-m9 = seed_message(RYAN, CHIEF, "task", "Follow up on Acme NDA revisions",
+m9 = seed_message(HUMAN, CHIEF, "task", "Follow up on Acme NDA revisions",
     "Tell Legal to proceed with the recommended changes. Get revised draft by EOW.",
     "normal", "delivered", days_ago=2, hours_ago=4)
 msg_count += 1
@@ -320,14 +320,14 @@ m15 = seed_message(V4, CHIEF, "escalation", "Competitor launched early - need re
     "critical", "read", days_ago=1, hours_ago=10)
 msg_count += 1
 
-m16 = seed_message(CHIEF, RYAN, "alert", "URGENT: Competitor launched early",
+m16 = seed_message(CHIEF, HUMAN, "alert", "URGENT: Competitor launched early",
     "V4 flagged: Competitor X launched v2 ahead of schedule. Our differentiation holds "
     "but recommend accelerating March release. V4 requests emergency strategy session. "
     "This is time-sensitive.",
     "critical", "read", days_ago=1, hours_ago=10)
 msg_count += 1
 
-m17 = seed_message(RYAN, CHIEF, "task", "Schedule emergency strategy session",
+m17 = seed_message(HUMAN, CHIEF, "task", "Schedule emergency strategy session",
     "Set up a 1-hour session with V4 for tomorrow morning. Also loop in CFO for budget impact.",
     "high", "delivered", days_ago=1, hours_ago=9)
 msg_count += 1
@@ -365,7 +365,7 @@ m22 = seed_message(LEGAL, CHIEF, "report", "Revised Acme NDA ready for signature
 msg_count += 1
 
 # --- Today ---
-m23 = seed_message(CHIEF, RYAN, "report", "Morning briefing",
+m23 = seed_message(CHIEF, HUMAN, "report", "Morning briefing",
     "Good morning. 3 items for today:\n"
     "1. Sign Acme NDA (Legal has it ready)\n"
     "2. Emergency strategy session at 10am (V4 + CFO)\n"
@@ -413,7 +413,7 @@ print("[seed] Seeding Crew Boss decisions ...")
 dec_count = 0
 
 # Decision 1: Delivered critical competitor alert (approved)
-d1 = seed_decision(CHIEF, RYAN, "deliver",
+d1 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Competitor launched early", "priority": "critical", "from": "V4"},
     "Deliver immediately - critical business intelligence",
     "Critical priority from strategy agent. Competitor launch impacts our timeline. "
@@ -422,7 +422,7 @@ d1 = seed_decision(CHIEF, RYAN, "deliver",
 dec_count += 1
 
 # Decision 2: Filtered low-priority social media report (approved)
-d2 = seed_decision(CHIEF, RYAN, "filter",
+d2 = seed_decision(CHIEF, HUMAN, "filter",
     {"message_subject": "Social engagement weekly digest", "priority": "low", "from": "Comms"},
     "Queue for briefing - low priority digest",
     "Low priority informational report. No action required. Will include in evening briefing.",
@@ -430,7 +430,7 @@ d2 = seed_decision(CHIEF, RYAN, "filter",
 dec_count += 1
 
 # Decision 3: Escalated AWS billing alert (approved)
-d3 = seed_decision(CHIEF, RYAN, "escalate",
+d3 = seed_decision(CHIEF, HUMAN, "escalate",
     {"message_subject": "Unusual expense flagged", "priority": "high", "from": "CFO"},
     "Escalate - unexpected cost spike needs attention",
     "45% AWS overspend is material. Human should be aware and approve cleanup action.",
@@ -438,7 +438,7 @@ d3 = seed_decision(CHIEF, RYAN, "escalate",
 dec_count += 1
 
 # Decision 4: Handled routine task autonomously (OVERRIDDEN - human wanted to see it)
-d4 = seed_decision(CHIEF, RYAN, "handle",
+d4 = seed_decision(CHIEF, HUMAN, "handle",
     {"message_subject": "Knowledge base growth report", "priority": "low", "from": "Memory"},
     "Handle autonomously - routine knowledge maintenance",
     "Standard weekly report, no anomalies. Will auto-acknowledge and file.",
@@ -449,7 +449,7 @@ d4 = seed_decision(CHIEF, RYAN, "handle",
 dec_count += 1
 
 # Decision 5: Queued non-urgent during high burnout (approved)
-d5 = seed_decision(CHIEF, RYAN, "queue",
+d5 = seed_decision(CHIEF, HUMAN, "queue",
     {"message_subject": "Weekly wellness summary", "priority": "normal", "from": "Quant"},
     "Queue - burnout score elevated, non-urgent",
     "Burnout score was 7 at time of message. Wellness summary is informational. "
@@ -458,7 +458,7 @@ d5 = seed_decision(CHIEF, RYAN, "queue",
 dec_count += 1
 
 # Decision 6: Delivered budget assessment immediately (approved)
-d6 = seed_decision(CHIEF, RYAN, "deliver",
+d6 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Emergency budget assessment", "priority": "high", "from": "CFO"},
     "Deliver now - context for strategy session",
     "High priority and directly relevant to the emergency strategy session Ryan scheduled. "
@@ -467,7 +467,7 @@ d6 = seed_decision(CHIEF, RYAN, "deliver",
 dec_count += 1
 
 # Decision 7: Filtered idea during busy period (OVERRIDDEN - good idea)
-d7 = seed_decision(CHIEF, RYAN, "filter",
+d7 = seed_decision(CHIEF, HUMAN, "filter",
     {"message_subject": "Proactive PR about our roadmap", "priority": "normal", "from": "Comms"},
     "Filter - not urgent during crisis response",
     "Normal priority idea. Human is focused on competitor response. "
@@ -479,7 +479,7 @@ d7 = seed_decision(CHIEF, RYAN, "filter",
 dec_count += 1
 
 # Decision 8: Delivered overdue invoice alert (approved)
-d8 = seed_decision(CHIEF, RYAN, "deliver",
+d8 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Invoice #1087 overdue 30 days", "priority": "high", "from": "Invoice-Bot"},
     "Deliver - financial exposure requires attention",
     "$12,500 overdue. Cash flow impact. Needs human authorization for escalation.",
@@ -487,7 +487,7 @@ d8 = seed_decision(CHIEF, RYAN, "deliver",
 dec_count += 1
 
 # Decision 9: Auto-handled lease renewal reminder (approved)
-d9 = seed_decision(CHIEF, RYAN, "handle",
+d9 = seed_decision(CHIEF, HUMAN, "handle",
     {"message_subject": "BCS monthly operations summary", "priority": "normal", "from": "BCS-Manager"},
     "Handle - standard monthly ops report, include in briefing",
     "Routine operations report. Metrics are within normal range. "
@@ -496,7 +496,7 @@ d9 = seed_decision(CHIEF, RYAN, "handle",
 dec_count += 1
 
 # Decision 10: Delivered morning briefing (approved)
-d10 = seed_decision(CHIEF, RYAN, "deliver",
+d10 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Morning briefing", "priority": "normal", "from": "Crew-Boss"},
     "Deliver - daily briefing for human",
     "Compiled overnight items, today's priorities, and wellness update. "
@@ -505,7 +505,7 @@ d10 = seed_decision(CHIEF, RYAN, "deliver",
 dec_count += 1
 
 # Decision 11: Queued lead tracker report (approved)
-d11 = seed_decision(CHIEF, RYAN, "queue",
+d11 = seed_decision(CHIEF, HUMAN, "queue",
     {"message_subject": "3 hot leads identified", "priority": "normal", "from": "Lead-Tracker"},
     "Queue for next review block - not time-critical today",
     "Good leads but human is in emergency strategy mode. These can wait 24-48 hours "
@@ -514,7 +514,7 @@ d11 = seed_decision(CHIEF, RYAN, "queue",
 dec_count += 1
 
 # Decision 12: Filtered a repeat idea (OVERRIDDEN initially but then approved pattern)
-d12 = seed_decision(CHIEF, RYAN, "filter",
+d12 = seed_decision(CHIEF, HUMAN, "filter",
     {"message_subject": "Partnership opportunity with TechCorp", "priority": "normal", "from": "V4"},
     "Filter - similar partnership was rejected 2 months ago",
     "Knowledge store shows a TechCorp partnership was previously rejected. "
@@ -622,7 +622,7 @@ print(f"  Created {k_count} knowledge entries")
 print("[seed] Seeding audit trail ...")
 
 audit_entries = [
-    ("hierarchy_loaded", RYAN, {"config": CONFIG_FILE.name, "agents": 15}, 3, 4),
+    ("hierarchy_loaded", HUMAN, {"config": CONFIG_FILE.name, "agents": 15}, 3, 4),
     ("message_sent", V4, {"to": "Crew-Boss", "subject": "Weekly strategy review ready"}, 3, 2),
     ("message_delivered", CHIEF, {"to": "Ryan", "subject": "Morning briefing"}, 3, 0),
     ("message_sent", CFO, {"to": "Crew-Boss", "subject": "Unusual expense flagged"}, 2, 5),
@@ -666,7 +666,7 @@ audit_total = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
 timing_total = conn.execute("SELECT COUNT(*) FROM timing_rules").fetchone()[0]
 
 # Get trust from Crew Boss agent, burnout from human agent
-human_row = conn.execute("SELECT burnout_score FROM agents WHERE id=?", (RYAN,)).fetchone()
+human_row = conn.execute("SELECT burnout_score FROM agents WHERE id=?", (HUMAN,)).fetchone()
 rh_row = conn.execute("SELECT trust_score FROM agents WHERE id=?", (CHIEF,)).fetchone()
 
 conn.close()

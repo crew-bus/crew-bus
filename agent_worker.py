@@ -20,6 +20,7 @@ Global default stored in crew_config table ('default_model' key).
 """
 
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -35,11 +36,12 @@ import bus
 # Config
 # ---------------------------------------------------------------------------
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "llama3.2"
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
 KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions"
 KIMI_DEFAULT_MODEL = "kimi-k2.5"
 POLL_INTERVAL = 0.5  # seconds between queue checks
+WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
 
 # Provider registry — model_prefix → (api_url, default_model, config_key_for_api_key)
 PROVIDERS = {
@@ -482,7 +484,7 @@ _FACT_PATTERNS = [
     (_learn_re.compile(
         r"\b(?:i'?m|i am)\s+(?:a|an)\s+(\w[\w\s]{2,25})(?:[.!?\n,]|$)",
         _learn_re.IGNORECASE), "fact", 6),
-    # Name: "call me Ryan", "my name is Ryan"
+    # Name: "call me Alex", "my name is Alex"
     (_learn_re.compile(
         r"\b(?:call me|my name is|i'?m|i am)\s+([A-Z][a-z]+)\b",
         0), "fact", 8),
@@ -652,7 +654,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
     """
     updates = {}
 
-    # Name: "call me Ryan", "my name is Ryan", "I'm Ryan"
+    # Name: "call me Alex", "my name is Alex", "I'm Alex"
     # Exclusion set — common words that follow "I'm/I am" but aren't names
     _NOT_NAMES = frozenset({
         "feeling", "doing", "going", "working", "looking", "trying", "getting",
@@ -1570,7 +1572,7 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
         for _ in range(30):
             time.sleep(2)
             try:
-                req = _ur.Request("http://localhost:3001/qr/svg")
+                req = _ur.Request(f"{WA_BRIDGE_URL}/qr/svg")
                 with _ur.urlopen(req, timeout=3) as resp:
                     data = _json.loads(resp.read().decode("utf-8"))
                     if data.get("svg"):
@@ -1587,7 +1589,7 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
                 pass
             # Check if already connected (saved session)
             try:
-                req = _ur.Request("http://localhost:3001/status")
+                req = _ur.Request(f"{WA_BRIDGE_URL}/status")
                 with _ur.urlopen(req, timeout=3) as resp:
                     st = _json.loads(resp.read().decode("utf-8"))
                     if st.get("status") == "connected":
@@ -1614,7 +1616,7 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
         for _ in range(60):
             time.sleep(3)
             try:
-                req = _ur.Request("http://localhost:3001/status")
+                req = _ur.Request(f"{WA_BRIDGE_URL}/status")
                 with _ur.urlopen(req, timeout=3) as resp:
                     st = _json.loads(resp.read().decode("utf-8"))
                     if st.get("status") == "connected":
@@ -1782,7 +1784,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                             for _ in range(30):
                                 time.sleep(2)
                                 try:
-                                    req = _ur.Request("http://localhost:3001/qr/svg")
+                                    req = _ur.Request(f"{WA_BRIDGE_URL}/qr/svg")
                                     with _ur.urlopen(req, timeout=3) as resp:
                                         data = _json.loads(resp.read().decode("utf-8"))
                                         if data.get("svg"):
@@ -1801,7 +1803,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                                     pass
                                 # Also check if already connected (skipped QR)
                                 try:
-                                    req = _ur.Request("http://localhost:3001/status")
+                                    req = _ur.Request(f"{WA_BRIDGE_URL}/status")
                                     with _ur.urlopen(req, timeout=3) as resp:
                                         st = _json.loads(resp.read().decode("utf-8"))
                                         if st.get("status") == "connected":
@@ -1830,7 +1832,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                             for _ in range(60):
                                 time.sleep(3)
                                 try:
-                                    req = _ur.Request("http://localhost:3001/status")
+                                    req = _ur.Request(f"{WA_BRIDGE_URL}/status")
                                     with _ur.urlopen(req, timeout=3) as resp:
                                         st = _json.loads(resp.read().decode("utf-8"))
                                         if st.get("status") == "connected":
