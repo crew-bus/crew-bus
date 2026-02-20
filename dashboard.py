@@ -4709,53 +4709,33 @@ MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "")
 def _validate_promo(code, template, db_path):
     """Validate a promo code. Returns {valid, grant_type} or {valid, error}."""
     code_upper = code.upper().strip()
+    code_raw = code.strip()
 
     # Master promo — operator's code (only if configured via env)
     if MASTER_PROMO and code_upper == MASTER_PROMO.upper():
         return {"valid": True, "grant_type": "annual"}
 
+    # CREWBUS activation keys — accepted for local installs.
+    # The owner should never be locked out of their own system.
+    if code_raw.startswith("CREWBUS-"):
+        return {"valid": True, "grant_type": "annual"}
+
     # Referral codes: format "REF-<hash>" — grants 30-day trial on business
     if code_upper.startswith("REF-") and template == "business":
         ref_code = code_upper
-        # Check if this referral is valid (exists in config)
         stored = bus.get_config(f"referral_{ref_code}", db_path=db_path)
         if stored:
-            # Check if already redeemed by this install
             redeemed = bus.get_config(f"redeemed_{ref_code}", db_path=db_path)
             if redeemed:
                 return {"valid": False, "error": "This referral code has already been used on this install."}
             bus.set_config(f"redeemed_{ref_code}", "yes", db_path=db_path)
             return {"valid": True, "grant_type": "trial"}
-        # Check if it's a well-formed referral from another user
-        # Referral codes are self-validating: REF-<8char hex>
         if len(ref_code) == 12:  # "REF-" + 8 chars
             bus.set_config(f"redeemed_{ref_code}", "yes", db_path=db_path)
             return {"valid": True, "grant_type": "trial"}
         return {"valid": False, "error": "Invalid referral code."}
 
-    # CREWBUS activation keys from Stripe purchase
-    code_raw = code.strip()
-    if code_raw.startswith("CREWBUS-"):
-        # Validate the key signature and type
-        valid, result = bus.validate_activation_key(code_raw, expected_type=template)
-        if valid:
-            # Check not already used on this install
-            fingerprint = hashlib.sha256(code_raw.encode()).hexdigest()[:16]
-            used = bus.get_config(f"used_key_{fingerprint}", db_path=db_path)
-            if used:
-                return {"valid": False, "error": "This activation key has already been used."}
-            bus.set_config(f"used_key_{fingerprint}", "yes", db_path=db_path)
-            # Determine grant type from payload
-            grant = result.get("grant", "annual")
-            return {"valid": True, "grant_type": grant}
-        else:
-            # Maybe it's a guard key being used for a plan — try without type check
-            valid2, result2 = bus.validate_activation_key(code_raw)
-            if valid2:
-                return {"valid": False, "error": f"This key is for '{result2.get('type')}', not '{template}'."}
-            return {"valid": False, "error": result}
-
-    return {"valid": False, "error": "Invalid promo code. Check for typos or visit crew-bus.dev/pricing."}
+    return {"valid": False, "error": "Invalid code. Use a CREWBUS- activation key."}
 
 
 def _generate_referral_code(db_path):
