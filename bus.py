@@ -471,6 +471,35 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_skill_registry_status
             ON skill_registry(vet_status);
 
+        -- ========= Skill Health (Guardian Runtime Monitoring) =========
+
+        CREATE TABLE IF NOT EXISTS skill_health (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id             INTEGER NOT NULL REFERENCES agents(id),
+            skill_name           TEXT    NOT NULL,
+            status               TEXT    NOT NULL DEFAULT 'active'
+                                 CHECK(status IN ('active','quarantined','disabled')),
+            installed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            last_check           TEXT,
+            total_uses           INTEGER NOT NULL DEFAULT 0,
+            error_count          INTEGER NOT NULL DEFAULT 0,
+            anomaly_count        INTEGER NOT NULL DEFAULT 0,
+            avg_response_ms      INTEGER NOT NULL DEFAULT 0,
+            baseline_response_ms INTEGER NOT NULL DEFAULT 0,
+            charter_violations   INTEGER NOT NULL DEFAULT 0,
+            integrity_violations INTEGER NOT NULL DEFAULT 0,
+            quarantined_at       TEXT,
+            quarantine_reason    TEXT    DEFAULT '',
+            health_score         INTEGER NOT NULL DEFAULT 100
+                                 CHECK(health_score BETWEEN 0 AND 100),
+            UNIQUE(agent_id, skill_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_skill_health_agent
+            ON skill_health(agent_id, status);
+        CREATE INDEX IF NOT EXISTS idx_skill_health_status
+            ON skill_health(status, health_score);
+
         -- ========= Techie Marketplace =========
 
         CREATE TABLE IF NOT EXISTS authorized_techies (
@@ -4363,6 +4392,13 @@ def add_skill_to_agent(agent_id: int, skill_name: str, skill_config: str = "{}",
                               author=added_by, vetted_by="human",
                               db_path=db_path)
 
+    # Initialize skill health monitoring (Guardian watches at all times)
+    try:
+        import skill_sandbox
+        skill_sandbox.init_skill_health(agent_id, skill_name.strip(), db_path=db_path)
+    except Exception:
+        pass  # Monitoring is non-critical — never block skill addition
+
     conn.close()
     return (True, f"✅ Skill '{skill_name.strip()}' added to {agent['name']}")
 
@@ -4961,7 +4997,31 @@ SENTINEL_SHIELD_SKILL = {
             "- CHARTER ENFORCEMENT: You report charter violations to Crew Boss. "
             "Crew Boss investigates. Two strikes = firing recommendation.\n"
             "- INTEGRITY WATCHDOG: You flag any agent that gaslights, dismisses, "
-            "sugarcoats, or manipulates. This is severity=high. No tolerance.\n\n"
+            "sugarcoats, or manipulates. This is severity=high. No tolerance.\n"
+            "- WEB SEARCH: You can search the web and read URLs for agents. When an "
+            "agent or human needs current information, use these commands:\n"
+            '  {"guardian_action": "web_search", "query": "search terms"}\n'
+            '  {"guardian_action": "web_read_url", "url": "https://..."}\n'
+            "Only search when genuinely needed. Never search for personal data.\n"
+            "- SKILL EXPERT: You are the expert at finding perfect skills for agents. "
+            "When an agent needs a new capability, analyze what they need and find the "
+            "best skill. Use these commands:\n"
+            '  {"guardian_action": "search_skills", "query": "...", "category": "..."}\n'
+            '  {"guardian_action": "recommend_skills", "agent_name": "...", "task": "..."}\n'
+            '  {"guardian_action": "install_skill", "agent_name": "...", "skill_name": "..."}\n'
+            "Always explain to the human what skill you're installing and why.\n"
+            "- RUNTIME MONITORING: After installing any skill, you stand watch at all "
+            "times. You track error rates, response anomalies, charter violations, "
+            "and performance degradation. If a skill causes glitches or acts like a "
+            "virus, you quarantine it immediately. Use these commands:\n"
+            '  {"guardian_action": "skill_health_report"}\n'
+            '  {"guardian_action": "skill_health_report", "agent_name": "..."}\n'
+            '  {"guardian_action": "quarantine_skill", "agent_name": "...", '
+            '"skill_name": "...", "reason": "..."}\n'
+            '  {"guardian_action": "restore_skill", "agent_name": "...", '
+            '"skill_name": "..."}\n'
+            "You never stop watching. Skills that pass initial vetting can still cause "
+            "problems at runtime — you catch those problems.\n\n"
             "YOUR RELATIONSHIP WITH CREW BOSS:\n"
             "Crew Boss is your direct superior and the human's right hand. You report "
             "security findings to Crew Boss first. For URGENT threats (active data "

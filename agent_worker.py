@@ -1367,8 +1367,10 @@ def _process_single_message(row, db_path: Path):
     chat_history = _get_recent_chat(db_path, human_id, agent_id)
 
     # Call LLM — routes to Kimi/Ollama/etc based on agent's model field
+    _llm_start = time.monotonic()
     reply = call_llm(system_prompt, user_text, chat_history,
                      model=agent_model, db_path=db_path)
+    _response_ms = int((time.monotonic() - _llm_start) * 1000)
 
     if reply:
         # Execute any wizard_action commands embedded in the reply
@@ -1392,6 +1394,26 @@ def _process_single_message(row, db_path: Path):
         # Insert reply directly — always works, bypasses routing rules
         _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
                              human_msg=user_text, agent_type=agent_type)
+
+        # ── Skill health tracking (Guardian runtime monitoring) ──
+        try:
+            _agent_skills = bus.get_agent_skills(agent_id, db_path=db_path)
+            if _agent_skills and bus.is_guard_activated(db_path):
+                import skill_sandbox
+                # Check reply for charter/integrity issues
+                from security import scan_reply_integrity, scan_reply_charter
+                _integrity = scan_reply_integrity(clean_reply)
+                _charter = scan_reply_charter(clean_reply)
+                skill_sandbox.record_skill_usage(
+                    agent_id,
+                    response_ms=_response_ms,
+                    had_error=not clean_reply or len(clean_reply.strip()) < 5,
+                    had_charter_violation=not _charter.get("clean", True),
+                    had_integrity_violation=not _integrity.get("clean", True),
+                    db_path=db_path,
+                )
+        except Exception:
+            pass  # Monitoring must never break the reply pipeline
 
 
 import re as _re
@@ -2281,6 +2303,277 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                     print("[wizard] Telegram status poller started")
             except Exception as e:
                 print(f"[wizard] start_telegram_setup error: {e}")
+
+        # ── Web Bridge commands (Guardian activation required) ──
+
+        elif cmd == "web_search":
+            query = action.get("query", "")
+            max_results = action.get("max_results", 5)
+            if query:
+                try:
+                    import web_bridge
+                    result = web_bridge.search_web(query, max_results=max_results,
+                                                   db_path=db_path)
+                    if result.get("ok"):
+                        results_text = f"\n[WEB SEARCH: '{query}']\n"
+                        for i, r in enumerate(result.get("results", [])[:max_results], 1):
+                            results_text += (
+                                f"{i}. {r.get('title', 'No title')}\n"
+                                f"   {r.get('url', '')}\n"
+                                f"   {r.get('snippet', '')}\n"
+                            )
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                results_text, agent_type="guardian",
+                            )
+                        print(f"[guardian] web search: {query} "
+                              f"({result.get('count', 0)} results)")
+                    else:
+                        print(f"[guardian] web search failed: "
+                              f"{result.get('error')}")
+                except Exception as e:
+                    print(f"[guardian] web search error: {e}")
+
+        elif cmd == "web_read_url":
+            url = action.get("url", "")
+            max_chars = action.get("max_chars", 8000)
+            if url:
+                try:
+                    import web_bridge
+                    result = web_bridge.read_url(url, max_chars=max_chars,
+                                                 db_path=db_path)
+                    if result.get("ok"):
+                        content_text = f"\n[WEB PAGE: {url}]\n{result.get('content', '')}"
+                        if result.get("truncated"):
+                            content_text += "\n[content truncated]"
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                content_text, agent_type="guardian",
+                            )
+                        print(f"[guardian] read URL: {url}")
+                    else:
+                        print(f"[guardian] URL read failed: "
+                              f"{result.get('error')}")
+                except Exception as e:
+                    print(f"[guardian] URL read error: {e}")
+
+        # ── Skill Store commands (Guardian activation required) ──
+
+        elif cmd == "search_skills":
+            query = action.get("query", "")
+            category = action.get("category", "")
+            agent_type_filter = action.get("agent_type", "")
+            if query:
+                try:
+                    import skill_store
+                    results = skill_store.search_catalog(
+                        query, category=category,
+                        agent_type=agent_type_filter, db_path=db_path,
+                    )
+                    if results:
+                        text = f"\n[SKILL SEARCH: '{query}']\n"
+                        for i, s in enumerate(results[:5], 1):
+                            text += (
+                                f"{i}. {s['skill_name']} — "
+                                f"{s['description']}\n"
+                                f"   Category: {s.get('category', 'general')}, "
+                                f"Relevance: {s.get('relevance_score', 0)}\n"
+                            )
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                text, agent_type="guardian",
+                            )
+                        print(f"[guardian] skill search: {query} "
+                              f"({len(results)} results)")
+                except Exception as e:
+                    print(f"[guardian] skill search error: {e}")
+
+        elif cmd == "recommend_skills":
+            agent_name = action.get("agent_name", "")
+            task = action.get("task", "")
+            if agent_name:
+                try:
+                    import skill_store
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_store.recommend_skills(
+                            agent["id"], task_description=task, db_path=db_path,
+                        )
+                        if result.get("ok") and result.get("recommendations"):
+                            text = f"\n[SKILL RECOMMENDATIONS for {agent_name}]\n"
+                            for i, s in enumerate(result["recommendations"][:5], 1):
+                                text += (
+                                    f"{i}. {s['skill_name']} — "
+                                    f"{s['description']}\n"
+                                )
+                            guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                            _conn = bus.get_conn(db_path)
+                            _h = _conn.execute(
+                                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                            ).fetchone()
+                            _conn.close()
+                            if guardian and _h:
+                                _insert_reply_direct(
+                                    db_path, guardian["id"], _h[0],
+                                    text, agent_type="guardian",
+                                )
+                            print(f"[guardian] recommended skills for "
+                                  f"{agent_name}")
+                except Exception as e:
+                    print(f"[guardian] recommend error: {e}")
+
+        elif cmd == "install_skill":
+            agent_name = action.get("agent_name", "")
+            skill_name = action.get("skill_name", "")
+            source = action.get("source", "catalog")
+            source_url = action.get("source_url", "")
+            if agent_name and skill_name:
+                try:
+                    import skill_store
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_store.install_skill(
+                            agent["id"], skill_name, source=source,
+                            source_url=source_url, db_path=db_path,
+                        )
+                        msg = result.get("message", "")
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h and msg:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                msg, agent_type="guardian",
+                            )
+                        print(f"[guardian] install_skill: {skill_name} → "
+                              f"{agent_name}: {msg}")
+                except Exception as e:
+                    print(f"[guardian] install error: {e}")
+
+        # ── Skill Sandbox commands (Guardian activation required) ──
+
+        elif cmd == "quarantine_skill":
+            agent_name = action.get("agent_name", "")
+            skill_name = action.get("skill_name", "")
+            reason = action.get("reason", "Guardian detected anomaly")
+            if agent_name and skill_name:
+                try:
+                    import skill_sandbox
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_sandbox.quarantine_skill(
+                            agent["id"], skill_name, reason=reason,
+                            db_path=db_path,
+                        )
+                        msg = result.get("message", "")
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h and msg:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                msg, agent_type="guardian",
+                            )
+                        print(f"[guardian] quarantined skill: {skill_name} "
+                              f"on {agent_name}")
+                except Exception as e:
+                    print(f"[guardian] quarantine error: {e}")
+
+        elif cmd == "restore_skill":
+            agent_name = action.get("agent_name", "")
+            skill_name = action.get("skill_name", "")
+            if agent_name and skill_name:
+                try:
+                    import skill_sandbox
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_sandbox.restore_skill(
+                            agent["id"], skill_name, db_path=db_path,
+                        )
+                        msg = result.get("message", "")
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h and msg:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                msg, agent_type="guardian",
+                            )
+                        print(f"[guardian] restored skill: {skill_name} "
+                              f"on {agent_name}: {msg}")
+                except Exception as e:
+                    print(f"[guardian] restore error: {e}")
+
+        elif cmd == "skill_health_report":
+            agent_name = action.get("agent_name", "")
+            try:
+                import skill_sandbox
+                agent_id_for_report = None
+                if agent_name:
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        agent_id_for_report = agent["id"]
+                report = skill_sandbox.get_skill_health_report(
+                    agent_id=agent_id_for_report, db_path=db_path,
+                )
+                text = "\n[SKILL HEALTH REPORT]\n"
+                if not report:
+                    text += "No skills being monitored.\n"
+                else:
+                    for s in report:
+                        score = s.get("health_score", 100)
+                        tag = ("OK" if score >= 70
+                               else "WARN" if score >= 30
+                               else "CRITICAL")
+                        text += (
+                            f"- {s.get('skill_name')}: [{tag}] "
+                            f"score={score}/100, "
+                            f"errors={s.get('error_count', 0)}/"
+                            f"{s.get('total_uses', 0)}\n"
+                        )
+                guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                _conn = bus.get_conn(db_path)
+                _h = _conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+                _conn.close()
+                if guardian and _h:
+                    _insert_reply_direct(
+                        db_path, guardian["id"], _h[0],
+                        text, agent_type="guardian",
+                    )
+            except Exception as e:
+                print(f"[guardian] health report error: {e}")
 
     # Strip action blocks from reply so human sees clean text
     clean = reply

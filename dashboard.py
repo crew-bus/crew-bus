@@ -5451,6 +5451,62 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 vet_status=status_filter, db_path=self.db_path)
             return _json_response(self, registry)
 
+        # ── Web Bridge GET endpoints ──
+
+        if path == "/api/web/status":
+            try:
+                import web_bridge
+                return _json_response(self, web_bridge.status(db_path=self.db_path))
+            except ImportError:
+                return _json_response(self, {"configured": False,
+                                              "error": "web_bridge not available"})
+
+        # ── Skill Store GET endpoints ──
+
+        if path == "/api/skills/catalog":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_store
+                catalog = skill_store.load_catalog(db_path=self.db_path)
+                return _json_response(self, {"skills": catalog, "count": len(catalog)})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/skills/catalog/stats":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_store
+                return _json_response(self, skill_store.get_catalog_stats(
+                    db_path=self.db_path))
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        # ── Skill Health GET endpoints ──
+
+        if path == "/api/skills/health":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                return _json_response(self, skill_sandbox.get_health_summary(
+                    db_path=self.db_path))
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        m = re.match(r"^/api/skills/health/(\d+)$", path)
+        if m:
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                report = skill_sandbox.get_skill_health_report(
+                    agent_id=int(m.group(1)), db_path=self.db_path)
+                return _json_response(self, report)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
         # Agent memories
         m = re.match(r"^/api/agent/(\d+)/memories$", path)
         if m:
@@ -5771,6 +5827,117 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             report = bus.vet_skill(skill_name, skill_config,
                                    db_path=self.db_path)
             return _json_response(self, report)
+
+        # ── Web Bridge POST endpoints ──
+
+        if path == "/api/web/search":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            query = data.get("query", "").strip()
+            if not query:
+                return _json_response(self, {"error": "query required"}, 400)
+            try:
+                import web_bridge
+                result = web_bridge.search_web(
+                    query, max_results=data.get("max_results", 5),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/web/read":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            url = data.get("url", "").strip()
+            if not url:
+                return _json_response(self, {"error": "url required"}, 400)
+            try:
+                import web_bridge
+                result = web_bridge.read_url(
+                    url, max_chars=data.get("max_chars", 8000),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        # ── Skill Store POST endpoints ──
+
+        if path == "/api/skills/search":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            query = data.get("query", "").strip()
+            if not query:
+                return _json_response(self, {"error": "query required"}, 400)
+            try:
+                import skill_store
+                results = skill_store.search_catalog(
+                    query, category=data.get("category", ""),
+                    agent_type=data.get("agent_type", ""),
+                    db_path=self.db_path)
+                return _json_response(self, {"results": results, "count": len(results)})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/skills/recommend":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            agent_id = data.get("agent_id")
+            if not agent_id:
+                return _json_response(self, {"error": "agent_id required"}, 400)
+            try:
+                import skill_store
+                result = skill_store.recommend_skills(
+                    int(agent_id), task_description=data.get("task", ""),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/skills/install":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            agent_id = data.get("agent_id")
+            skill_name = data.get("skill_name", "").strip()
+            if not agent_id or not skill_name:
+                return _json_response(self, {"error": "agent_id and skill_name required"}, 400)
+            try:
+                import skill_store
+                result = skill_store.install_skill(
+                    int(agent_id), skill_name,
+                    source=data.get("source", "catalog"),
+                    source_url=data.get("source_url", ""),
+                    db_path=self.db_path)
+                return _json_response(self, result, 200 if result.get("ok") else 400)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        # ── Skill Sandbox POST endpoints ──
+
+        m = re.match(r"^/api/skills/(\d+)/([^/]+)/quarantine$", path)
+        if m:
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                result = skill_sandbox.quarantine_skill(
+                    int(m.group(1)), m.group(2),
+                    reason=data.get("reason", "Manual quarantine"),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        m = re.match(r"^/api/skills/(\d+)/([^/]+)/restore$", path)
+        if m:
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                result = skill_sandbox.restore_skill(
+                    int(m.group(1)), m.group(2), db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
 
         # Agent memory — add
         m = re.match(r"^/api/agent/(\d+)/memories$", path)

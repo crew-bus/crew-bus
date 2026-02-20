@@ -58,7 +58,7 @@ Five agents who work behind the scenes to support the most important parts of yo
 
 | Agent | Skill | What It Does |
 |-------|-------|-------------|
-| **Guardian** | sentinel-shield | Protects the system 24/7. Scans skills for threats. Manages setup. Watches for anomalies |
+| **Guardian** | sentinel-shield | Protects the system 24/7. Scans skills for threats. Searches the web. Finds and installs perfect skills for any agent. Monitors every installed skill for glitches and anomalies. Quarantines bad skills. Never sleeps |
 | **Wellness** | gentle-guardian | Watches for burnout, maps your energy, celebrates your wins, shields you from stress overload |
 | **Strategy** | north-star-navigator | Helps you find purpose when old paths close. Finds new doors. Breaks big dreams into small steps |
 | **Communications** | life-orchestrator | Handles daily logistics, tracks relationships, reminds you to call your mom, simplifies your day |
@@ -114,7 +114,7 @@ Everything that matters is free. Forever. MIT License.
 - Full message bus with routing rules and audit trail
 - Crew Boss — your AI right-hand running on your choice of model
 - 5 inner circle agents with unique skills (Guardian, Wellness, Strategy, Communications, Financial)
-- Guardian — always-on protector, now part of the inner circle
+- Guardian — always-on protector with web search, skill store, and runtime monitoring
 - INTEGRITY.md protection — no agent can ever gaslight you
 - CREW_CHARTER.md enforcement — worker discipline with real consequences
 - Inner Circle Protocol — energy protection through smart routing
@@ -136,7 +136,7 @@ Everything that matters is free. Forever. MIT License.
 
 | Add-on | Price | What It Unlocks |
 |--------|-------|----------------|
-| **Guardian Activation** | $29 one-time | Skill Store — downloadable skills that make any agent smarter. Advanced threat monitoring and audit hardening. Lifetime key. |
+| **Guardian Activation** | $29 one-time | Unlocks web search for all agents. Skill Store with 20+ curated skills — Guardian finds and installs the perfect skill for any task. Runtime Skill Sandbox monitors every installed skill for errors, glitches, and anomalies. Quarantine and restore with one click. Lifetime key. |
 | **Business Management** | $50/yr | Operations Lead, HR, Finance, Strategy, Comms. Full business crew. |
 | **Department** | $25/yr | Add-on department with manager + workers. |
 | **Freelance** | $30/yr | Lead Finder, Invoice Bot, Client Follow-up. |
@@ -155,7 +155,7 @@ Human (you — always in charge)
 Crew Boss (crew-mind) ← highest IQ, best model, 9000 char context
   |
   |--- Inner Circle (all report ONLY to Crew Boss)
-  |     |--- Guardian (sentinel-shield)
+  |     |--- Guardian (sentinel-shield + web search + skill store + sandbox)
   |     |--- Wellness (gentle-guardian)
   |     |--- Strategy (north-star-navigator)
   |     |--- Communications (life-orchestrator)
@@ -180,6 +180,43 @@ Three layers that no other AI system has:
 2. **CREW_CHARTER.md** — Injected into every subordinate agent prompt. Rules: be honest, be competent, be caring, be disciplined, be efficient. No drama, no neediness, no manipulation. Two violations = fired. Crew Boss investigates reports and recommends firing to the human. Severity: medium.
 
 3. **Guardian + Skill Vetting** — Every skill that enters the system is scanned for prompt injection, data exfiltration, jailbreak attempts, and code execution. Dangerous skills are hard-blocked. Unknown skills need human approval. Only vetted builtins auto-approve. The vetting pipeline is behind the $29 Guardian activation.
+
+4. **Skill Sandbox** — After a skill is installed, Guardian never stops watching. Every agent response is timed and analyzed. Error rates, charter violations, integrity violations, and response time anomalies feed a real-time health score (0-100). Skills that degrade below safe thresholds get quarantined automatically — removed from the agent, flagged in the audit log. Restore re-vets the skill before reinstalling. Zero tolerance for buggy or malicious behavior.
+
+---
+
+## Guardian Activation — What $29 Unlocks
+
+One lifetime key. No subscription. No cloud. Everything runs on your machine.
+
+### 🌐 Web Search
+Every agent gains internet access. DuckDuckGo search and URL reading — no API key needed, zero external dependencies. Guardian controls access. Internal IPs are blocked. Your agents can research, fact-check, and stay current.
+
+### 🛒 Skill Store
+20 curated skills across 10 categories — ready to install with one command. Guardian analyzes what your agent needs, recommends the best skill, vets it for safety, and installs it. Skills cover creative writing, homework help, budget tracking, meal planning, music production, lead finding, fitness planning, data analysis, and more. Community skills from trusted HTTPS sources are also supported.
+
+| Category | Skills |
+|----------|--------|
+| Creative | Creative Writing Partner, Music Production Coach, Graphic Design Prompter |
+| Education | Homework Helper, Study Flashcard Maker |
+| Business | Lead Finder, Invoice Manager |
+| Productivity | Schedule Optimizer, Project Planner |
+| Communications | Social Media Writer, Email Responder, Content Repurposer |
+| Technical | Code Reviewer, Data Analyst |
+| Financial | Budget Tracker |
+| Wellness | Fitness Planner, Habit Builder |
+| Household | Meal Planner, Relationship Reminder |
+| Knowledge | Research Assistant |
+
+### 🔒 Skill Sandbox
+Guardian monitors every installed skill in real time. After each agent response, it tracks:
+
+- **Error rate** — replies that are empty or broken
+- **Charter violations** — agent behavior that violates crew rules
+- **Integrity violations** — gaslighting, dismissing feelings, sugarcoating
+- **Response time anomalies** — sudden spikes that signal something wrong
+
+Each skill gets a health score from 0 to 100. Healthy (70+), Warning (30-69), Critical (below 30). Critical skills get quarantined — removed from the agent and flagged. Restore re-vets the skill before reinstalling. Full audit trail.
 
 ---
 
