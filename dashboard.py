@@ -990,10 +990,10 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   outline:none;
 }
 
-/* Trust + Burnout beneath circle */
+/* Trust + Energy score indicators (bottom of page) */
 .indicators{
   display:flex;gap:20px;justify-content:center;
-  padding:0 16px 16px;
+  padding:12px 16px;margin:0 auto;
 }
 .indicator{
   display:flex;align-items:center;gap:8px;
@@ -2179,6 +2179,14 @@ async function loadCircle(){
   if(burnoutSlider)burnoutSlider.value=stats.burnout_score||5;
   var td=document.getElementById('tb-trust-display');
   if(td)td.textContent=stats.trust_score||1;
+
+  // Dynamic labels — boss name for trust, human name for energy
+  var trustLbl=document.getElementById('trust-label');
+  var energyLbl=document.getElementById('energy-label');
+  var bossName=stats.boss_name||'Crew Boss';
+  var humanName=stats.human_name||'Human';
+  if(trustLbl)trustLbl.textContent=bossName+' Trust Score';
+  if(energyLbl)energyLbl.textContent=humanName+' Energy Score';
 
   loadTeams();
   loadGuardianBanner();
@@ -3887,14 +3895,6 @@ def _build_html():
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
   </div>
-  <!-- FIX 3: indicators click opens popup, no more bottom sheet -->
-  <div class="indicators">
-    <div class="indicator" onclick="openTBPopup()">
-      <label>Trust</label><span class="val" id="trust-val" style="color:#fff">5</span>
-    </div>
-    <div class="indicator" onclick="openTBPopup()">
-      <label>Energy</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
-    </div>
   </div>
 </div>
 <div class="main-right">
@@ -3907,6 +3907,15 @@ def _build_html():
   <!-- Guardian unlock banner (hidden when activated) -->
   <div id="guardian-banner" style="display:none"></div>
 </div>
+</div>
+<!-- ══════════ SCORE INDICATORS (bottom) ══════════ -->
+<div class="indicators" id="bottom-indicators">
+  <div class="indicator" onclick="openTBPopup()">
+    <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
+  </div>
+  <div class="indicator" onclick="openTBPopup()">
+    <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
+  </div>
 </div>
 <!-- ══════════ COMPOSE BAR ══════════ -->
 <div class="compose-bar" id="compose-bar">
@@ -4361,6 +4370,7 @@ def _get_stats(db_path):
             "crew_name": (human["name"] + "'s Crew") if human else "Crew",
             "human_name": human["name"] if human else "",
             "human_id": human["id"] if human else None,
+            "boss_name": rh["name"] if rh else "Crew Boss",
             "trust_score": rh["trust_score"] if rh else 1,
             "burnout_score": human["burnout_score"] if human else 5,
             "agent_count": agent_count,
