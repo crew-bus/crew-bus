@@ -1569,12 +1569,14 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
 
         # Phase 1: Wait for QR code (up to 60s)
         qr_found = False
+        consecutive_failures = 0
         for _ in range(30):
             time.sleep(2)
             try:
                 req = _ur.Request(f"{WA_BRIDGE_URL}/qr/svg")
                 with _ur.urlopen(req, timeout=3) as resp:
                     data = _json.loads(resp.read().decode("utf-8"))
+                    consecutive_failures = 0  # bridge is alive
                     if data.get("svg"):
                         _insert_reply_direct(
                             db_path, guardian_id, human_id,
@@ -1586,12 +1588,13 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
                         qr_found = True
                         break
             except Exception:
-                pass
+                consecutive_failures += 1
             # Check if already connected (saved session)
             try:
                 req = _ur.Request(f"{WA_BRIDGE_URL}/status")
                 with _ur.urlopen(req, timeout=3) as resp:
                     st = _json.loads(resp.read().decode("utf-8"))
+                    consecutive_failures = 0  # bridge is alive
                     if st.get("status") == "connected":
                         _insert_reply_direct(
                             db_path, guardian_id, human_id,
@@ -1601,13 +1604,26 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
                         )
                         return
             except Exception:
-                pass
+                consecutive_failures += 1
+            # If bridge stopped responding, it probably crashed
+            if consecutive_failures >= 6:
+                _insert_reply_direct(
+                    db_path, guardian_id, human_id,
+                    "The WhatsApp bridge crashed during startup. "
+                    "This usually means a stale session — try "
+                    "deleting the wa-bridge/wa-session folder "
+                    "and asking me to 'set up WhatsApp' again.",
+                    agent_type="guardian",
+                )
+                print("[guardian] WA bridge crashed (no response after 6 checks)")
+                return
 
         if not qr_found:
             _insert_reply_direct(
                 db_path, guardian_id, human_id,
-                "The WhatsApp bridge is taking a while to start up. "
-                "Try saying 'set up WhatsApp' again in a moment.",
+                "The WhatsApp bridge didn't generate a QR code in time. "
+                "Try deleting the wa-bridge/wa-session folder "
+                "and asking me to 'set up WhatsApp' again.",
                 agent_type="guardian",
             )
             return
@@ -1756,8 +1772,21 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                 )
                 with urllib.request.urlopen(_wa_req, timeout=10) as _wa_resp:
                     result = json.loads(_wa_resp.read().decode("utf-8"))
-                if not result.get("ok"):
-                    print(f"[wizard] WA bridge start failed: {result.get('error')}")
+                if not result.get("ok") and result.get("status") != "already_running":
+                    _err = result.get("error", "unknown error")
+                    print(f"[wizard] WA bridge start failed: {_err}")
+                    # Tell the human what went wrong
+                    _g = bus.get_agent_by_name("Guardian", db_path=db_path)
+                    _h_conn = bus.get_conn(db_path)
+                    _h_row = _h_conn.execute("SELECT id FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
+                    _h_conn.close()
+                    if _g and _h_row:
+                        _insert_reply_direct(
+                            db_path, _g["id"], _h_row[0],
+                            f"I couldn't start the WhatsApp bridge: {_err}. "
+                            "Make sure Node.js is installed and the wa-bridge folder exists.",
+                            agent_type="guardian",
+                        )
                 else:
                     # Get Guardian agent ID for injecting messages
                     guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
@@ -1781,12 +1810,14 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
 
                             # Phase 1: Wait for QR code (up to 60s)
                             qr_found = False
+                            consecutive_failures = 0
                             for _ in range(30):
                                 time.sleep(2)
                                 try:
                                     req = _ur.Request(f"{WA_BRIDGE_URL}/qr/svg")
                                     with _ur.urlopen(req, timeout=3) as resp:
                                         data = _json.loads(resp.read().decode("utf-8"))
+                                        consecutive_failures = 0  # bridge is alive
                                         if data.get("svg"):
                                             # Inject QR message into chat
                                             _insert_reply_direct(
@@ -1800,12 +1831,13 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                                             qr_found = True
                                             break
                                 except Exception:
-                                    pass
+                                    consecutive_failures += 1
                                 # Also check if already connected (skipped QR)
                                 try:
                                     req = _ur.Request(f"{WA_BRIDGE_URL}/status")
                                     with _ur.urlopen(req, timeout=3) as resp:
                                         st = _json.loads(resp.read().decode("utf-8"))
+                                        consecutive_failures = 0  # bridge is alive
                                         if st.get("status") == "connected":
                                             _insert_reply_direct(
                                                 db_path, guardian_id, human_id,
@@ -1816,14 +1848,26 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                                             print("[wizard] WA already connected")
                                             return
                                 except Exception:
-                                    pass
+                                    consecutive_failures += 1
+                                # If bridge stopped responding, it probably crashed
+                                if consecutive_failures >= 6:
+                                    _insert_reply_direct(
+                                        db_path, guardian_id, human_id,
+                                        "The WhatsApp bridge crashed during startup. "
+                                        "This usually means a stale session — try "
+                                        "deleting the wa-bridge/wa-session folder "
+                                        "and asking me to 'set up WhatsApp' again.",
+                                        agent_type="guardian",
+                                    )
+                                    print("[wizard] WA bridge crashed (no response after 6 checks)")
+                                    return
 
                             if not qr_found:
                                 _insert_reply_direct(
                                     db_path, guardian_id, human_id,
-                                    "Hmm, the WhatsApp bridge is taking longer than "
-                                    "expected to generate a QR code. Try asking me "
-                                    "to 'set up WhatsApp' again in a moment.",
+                                    "The WhatsApp bridge didn't generate a QR code in time. "
+                                    "Try deleting the wa-bridge/wa-session folder "
+                                    "and asking me to 'set up WhatsApp' again.",
                                     agent_type="guardian",
                                 )
                                 return
