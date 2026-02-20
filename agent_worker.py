@@ -313,14 +313,16 @@ def _build_system_prompt(agent_type: str, agent_name: str,
                         + (f": {w['description'][:80]}" if w['description'] else "")
                         for w in workers
                     )
-                    + "\n\nYOU CAN DELEGATE TASKS to any of your workers. "
-                    "When the human asks you something, your workers "
-                    "automatically receive the task too. You coordinate "
-                    "their work and summarize results for the human.\n"
-                    "To explicitly assign a specific task to a worker, include:\n"
-                    '{"delegate": {"to": "Worker-Name", "task": "what to do"}}\n'
-                    "You ARE the team lead. You DO have direct access to your workers. "
-                    "Never say you can't reach them — they report to you."
+                    + "\n\nHOW YOUR TEAM WORKS:\n"
+                    "- The bus automatically sends tasks to your workers when "
+                    "the human messages you. Workers reply with their input.\n"
+                    "- You then synthesize their reports into one clear "
+                    "summary for the human.\n"
+                    "- To assign a specific task to one worker, include:\n"
+                    '  {"delegate": {"to": "Worker-Name", "task": "what to do"}}\n'
+                    "- You ARE the team lead. Your workers WILL respond. "
+                    "Never say you can't reach them or that there's a gap. "
+                    "The communication just works — trust it."
                 )
                 parts.append(roster)
         except Exception:
@@ -343,9 +345,12 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             if mgr:
                 parts.append(
                     f"You report to {mgr['name']} (your team manager). "
-                    "When the human or your manager sends you a task, "
-                    "do your best work and reply with helpful results. "
-                    "You're a specialist — focus on what you do best."
+                    "When your manager or the human sends you a task, "
+                    "respond with your best work based on YOUR specialty. "
+                    "For status check-ins or team meetings, share what "
+                    "you've been working on, your progress, and any "
+                    "blockers. Your reply goes straight to your manager "
+                    "who will combine the team's input. Keep it focused."
                 )
         except Exception:
             pass
@@ -1337,9 +1342,19 @@ def _process_single_message(row, db_path: Path):
             clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
 
         # Auto-fan-out: when a manager gets a task from human or Crew Boss,
-        # forward the original task to all its active workers automatically.
+        # forward a worker-appropriate version to all its active workers.
+        # Workers are specialists — they need a work task, not the raw
+        # management instruction the human gave the manager.
         if agent_type == "manager" and row["from_agent_id"] != agent_id:
-            _fan_out_to_workers(db_path, agent_id, user_text)
+            worker_task = (
+                f"Your manager ({agent_name}) is coordinating the team on this request "
+                f"from the human:\n\n\"{user_text}\"\n\n"
+                "Based on YOUR specialty, contribute what you can. "
+                "Share your current status, relevant expertise, progress, "
+                "or recommendations. Keep it focused and useful — your "
+                "manager will combine everyone's input."
+            )
+            _fan_out_to_workers(db_path, agent_id, worker_task)
 
         # Don't store empty replies (can happen when LLM returns only action blocks)
         if not clean_reply or not clean_reply.strip():
@@ -1453,7 +1468,8 @@ def _synthesize_team_reports(manager_id: int, db_path: Path):
         human = conn.execute(
             "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
         ).fetchone()
-        # Get recent worker→manager replies (delivered in this cycle)
+        # Get worker→manager replies from the last 2 minutes (this cycle only).
+        # Older replies may contain stale or broken responses.
         worker_replies = conn.execute("""
             SELECT a.name, m.body
             FROM messages m
@@ -1462,6 +1478,7 @@ def _synthesize_team_reports(manager_id: int, db_path: Path):
               AND a.parent_agent_id = ?
               AND a.active = 1
               AND m.body IS NOT NULL AND m.body != ''
+              AND m.created_at >= datetime('now', '-2 minutes')
             ORDER BY m.created_at DESC LIMIT 10
         """, (manager_id, manager_id)).fetchall()
     finally:
