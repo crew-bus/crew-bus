@@ -990,11 +990,14 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   outline:none;
 }
 
-/* Trust + Energy score indicators (bottom of page) */
+/* Trust + Energy score indicators (fixed bottom) */
 .indicators{
   display:flex;gap:20px;justify-content:center;
-  padding:12px 16px;margin:0 auto;
+  padding:8px 16px;
+  position:fixed;bottom:60px;left:0;right:0;
+  z-index:50;pointer-events:none;
 }
+.indicators .indicator{pointer-events:auto}
 .indicator{
   display:flex;align-items:center;gap:8px;
   background:var(--sf);border:1px solid var(--bd);
@@ -4341,6 +4344,7 @@ def _html_response(handler, html, status=200):
     handler.send_response(status)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
     handler.end_headers()
     handler.wfile.write(body)
 
