@@ -532,7 +532,6 @@ body.day-mode .bubble.center:hover .bubble-circle{
 }
 body.day-mode .tb-popup{box-shadow:0 8px 32px rgba(0,0,0,.12)}
 body.day-mode .tb-popup-overlay{background:rgba(0,0,0,.2)}
-body.day-mode .bubble-count{color:var(--ac)}
 body.day-mode .nav-btn.active{background:var(--ac);color:#fff}
 body.day-mode .nav-pill.active{background:var(--ac);color:#fff}
 body.day-mode .dn-btn.active{background:var(--ac);color:#fff}
@@ -681,9 +680,6 @@ body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
   margin-top:8px;font-size:.78rem;font-weight:700;color:rgba(255,255,255,0.92);
   text-align:center;white-space:nowrap;letter-spacing:0.04em;
   text-shadow:0 1px 6px rgba(0,0,0,0.7);
-}
-.bubble-count{
-  font-size:.62rem;color:var(--ac);margin-top:2px;font-weight:600;
 }
 .bubble-sub{
   font-size:.55rem;color:var(--mu);margin-top:1px;
@@ -2286,8 +2282,6 @@ function renderBubble(id,agent,sub){
   el.onclick=function(){openAgentSpace(agent.id)};
   var dot=el.querySelector('.status-dot');
   if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
-  var countEl=el.querySelector('.bubble-count');
-  if(countEl){var c=agent.period_count||agent.unread_count||0;countEl.textContent=c>0?c+' msgs':''}
   var subEl=el.querySelector('.bubble-sub');
   if(subEl)subEl.textContent=sub||'';
 }
@@ -3871,8 +3865,7 @@ def _build_html():
     <!-- Crew Boss — center star -->
     <div class="bubble center" id="bubble-boss" style="left:50%;top:53.1%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
-    </div>
+      <span class="bubble-label">Crew Boss</span>    </div>
     <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
     <div class="bubble outer" id="bubble-family" style="left:50%;top:15.3%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🏠</span><span class="status-dot dot-green"></span></div>
