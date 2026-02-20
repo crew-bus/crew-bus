@@ -497,6 +497,7 @@ CSS = r"""
   --tx:#e6edf3;--mu:#8b949e;--ac:#58a6ff;
   --gn:#3fb950;--yl:#d29922;--rd:#f85149;
   --or:#d18616;--pr:#bc8cff;--tl:#39d0d0;
+  --hl:#e94560;
   --r:12px;--sh:0 2px 12px rgba(0,0,0,.4);
 }
 
@@ -506,6 +507,7 @@ body.day-mode{
   --tx:#1f2328;--mu:#656d76;--ac:#0969da;
   --gn:#1a7f37;--yl:#9a6700;--rd:#cf222e;
   --or:#bc4c00;--pr:#8250df;--tl:#0e8a7e;
+  --hl:#d63384;
   --sh:0 2px 12px rgba(0,0,0,.08);
 }
 body.day-mode .bubble.center .bubble-circle{
@@ -1129,7 +1131,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   border-radius:50%;border:2px solid var(--sf);
 }
 
-/* ── Agent Space (FULL SCREEN mobile, LEFT HALF desktop) ── */
+/* ── Agent Space — CHAT-FIRST design ── */
 .agent-space{
   display:none;position:fixed;top:0;left:0;width:100%;height:100%;
   z-index:200;background:var(--bg);
@@ -1139,94 +1141,167 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .agent-space.closing{animation:slideOutLeft .2s ease forwards}
 @keyframes slideInLeft{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 @keyframes slideOutLeft{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+
+/* Chat header — avatar + name + online dot (hero-demo style) */
 .as-topbar{
   display:flex;align-items:center;gap:12px;
-  padding:12px 16px;background:var(--sf);border-bottom:1px solid var(--bd);
-  min-height:52px;flex-shrink:0;
+  padding:14px 16px;background:rgba(12,14,22,0.5);
+  border-bottom:1px solid var(--bd);min-height:60px;flex-shrink:0;
 }
 .as-back{
-  width:44px;height:44px;border-radius:50%;border:1px solid var(--bd);
-  background:transparent;color:var(--tx);font-size:1.2rem;
+  width:40px;height:40px;border-radius:50%;border:1px solid var(--bd);
+  background:transparent;color:var(--tx);font-size:1.1rem;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:border-color .2s;flex-shrink:0;
 }
-.as-title{font-weight:700;font-size:1rem;flex:1;cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s}
-.as-title:hover{border-bottom-color:rgba(255,255,255,0.3)}
-.edit-icon{display:inline-block;font-size:.65rem;color:var(--mu);cursor:pointer;margin-left:4px;opacity:.4;transition:opacity .2s;vertical-align:middle}
-.edit-icon:hover{opacity:1;color:var(--ac)}
-.as-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.as-back:hover{border-color:var(--ac)}
+.as-avatar{
+  width:42px;height:42px;border-radius:50%;
+  background:rgba(12,14,22,0.95);border:2px solid rgba(255,255,255,0.8);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;box-shadow:0 0 15px rgba(255,255,255,0.15);
+  flex-shrink:0;
+}
+.as-name-wrap{flex:1;min-width:0}
+.as-title{font-weight:700;font-size:1rem;cursor:pointer;display:block;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.as-title:hover{opacity:.8}
+.as-online{font-size:.7rem;color:#00b894;display:flex;align-items:center;gap:4px;margin-top:2px}
+.as-online-dot{width:7px;height:7px;border-radius:50%;background:#00b894;
+  display:inline-block;animation:dotPulse 1.5s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{opacity:1}50%{opacity:.4}}
+.edit-icon{display:none}
+.as-dot{display:none}
+.as-topbar-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.as-settings-btn{
+  width:36px;height:36px;border-radius:50%;border:1px solid var(--bd);
+  background:transparent;color:var(--mu);font-size:1rem;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.as-settings-btn:hover{border-color:var(--ac);color:var(--ac)}
+.as-settings-btn.active{background:var(--ac);color:#000;border-color:var(--ac)}
+
+/* Chat body — THE main area, takes all available space */
 .as-body{
-  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  padding:16px;
+  flex:1;display:flex;flex-direction:column;overflow:hidden;
+  padding:0;
 }
+
+/* Chat messages — full height, scrollable */
+.chat-wrap{
+  display:flex;flex-direction:column;flex:1;overflow:hidden;
+}
+.chat-msgs{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:16px;display:flex;flex-direction:column;gap:10px;
+}
+.chat-msg{
+  max-width:82%;padding:10px 14px;border-radius:16px;
+  font-size:.9rem;line-height:1.55;word-break:break-word;
+  animation:msgIn .25s ease;
+}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.chat-msg.from-agent{
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);
+  color:var(--tx);align-self:flex-start;border-bottom-left-radius:4px;
+}
+.chat-msg.from-human{
+  background:var(--hl,#e94560);color:#fff;align-self:flex-end;
+  border-bottom-right-radius:4px;border:none;
+}
+.chat-msg .chat-time{font-size:.6rem;opacity:.5;margin-top:3px}
+.chat-msg.from-agent .chat-time{color:var(--mu)}
+.chat-msg.from-human .chat-time{color:rgba(255,255,255,.6)}
+
+/* Empty state — friendly first message */
+.chat-empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;padding:40px 20px;text-align:center;
+}
+.chat-empty-icon{font-size:3rem;opacity:.3}
+.chat-empty-text{font-size:.95rem;color:var(--mu);max-width:280px;line-height:1.5}
+
+/* Typing indicator — 3 bouncing dots (hero-demo style) */
+.typing-indicator{
+  display:flex;gap:5px;padding:10px 14px;align-self:flex-start;
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);
+  border-radius:16px;border-bottom-left-radius:4px;
+  animation:msgIn .25s ease;
+}
+/* typing-row visibility controlled via JS inline style */
+.typing-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--mu);
+}
+.typing-dot:nth-child(1){animation:typingBounce 1.2s ease-in-out infinite 0s}
+.typing-dot:nth-child(2){animation:typingBounce 1.2s ease-in-out infinite .2s}
+.typing-dot:nth-child(3){animation:typingBounce 1.2s ease-in-out infinite .4s}
+@keyframes typingBounce{
+  0%,60%,100%{transform:translateY(0);opacity:.4}
+  30%{transform:translateY(-5px);opacity:1}
+}
+
+/* Chat input — clean, matching hero demo */
+.chat-input-row{
+  display:flex;align-items:center;padding:10px 16px;gap:10px;
+  border-top:1px solid var(--bd);background:rgba(12,14,22,0.3);
+  flex-shrink:0;
+}
+.chat-input{
+  flex:1;padding:10px 16px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);color:var(--tx);font-size:.95rem;
+  font-family:inherit;outline:none;border-radius:24px;
+  min-height:44px;transition:border-color .2s;
+}
+.chat-input:focus{border-color:rgba(255,255,255,0.25)}
+.chat-input::placeholder{color:var(--mu)}
+.chat-send{
+  width:44px;height:44px;border-radius:50%;border:none;
+  background:var(--hl,#e94560);color:#fff;font-size:1.1rem;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:transform .15s,opacity .15s;flex-shrink:0;
+}
+.chat-send:hover{transform:scale(1.08)}
+.chat-send:active{transform:scale(0.95)}
+.chat-send:disabled{opacity:.4;transform:none;cursor:default}
+
+/* Settings panel — slides down, hidden by default */
+.as-settings-panel{
+  display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:16px;border-top:1px solid var(--bd);
+  background:var(--sf);max-height:60vh;
+}
+.as-settings-panel.open{display:block;animation:settingsSlide .2s ease}
+@keyframes settingsSlide{from{opacity:0;max-height:0}to{opacity:1;max-height:60vh}}
 
 /* Agent space intro */
 .as-intro{
-  padding:16px;border-radius:var(--r);margin-bottom:16px;
+  padding:14px;border-radius:var(--r);margin-bottom:14px;
   border:1px solid var(--bd);
 }
-.as-intro p{font-size:.9rem;color:var(--mu);line-height:1.6}
+.as-intro p{font-size:.85rem;color:var(--mu);line-height:1.5}
 .as-model-row{
   display:flex;align-items:center;gap:8px;margin-top:10px;
   padding-top:10px;border-top:1px solid var(--bd);
 }
-.as-model-label{font-size:.8rem;color:var(--mu);font-weight:600;white-space:nowrap}
+.as-model-label{font-size:.75rem;color:var(--mu);font-weight:600;white-space:nowrap}
 .as-model-select{
-  flex:1;padding:6px 10px;background:var(--bg);color:var(--tx);
-  border:1px solid var(--bd);border-radius:var(--r);font-size:.8rem;
+  flex:1;padding:5px 8px;background:var(--bg);color:var(--tx);
+  border:1px solid var(--bd);border-radius:var(--r);font-size:.75rem;
   cursor:pointer;outline:none;-webkit-appearance:none;appearance:none;
 }
 .as-model-select:focus{border-color:var(--ac)}
 
 /* Activity feed */
-.activity-feed{margin-bottom:16px}
-.activity-feed h3{font-size:.8rem;color:var(--mu);text-transform:uppercase;
-  letter-spacing:.04em;margin-bottom:8px}
+.activity-feed{margin-bottom:14px}
+.activity-feed h3{font-size:.75rem;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:6px}
 .activity-item{
-  padding:10px 14px;background:var(--sf);border:1px solid var(--bd);
-  border-radius:var(--r);margin-bottom:6px;font-size:.85rem;
+  padding:8px 12px;background:var(--sf);border:1px solid var(--bd);
+  border-radius:var(--r);margin-bottom:4px;font-size:.8rem;
 }
-.activity-time{font-size:.7rem;color:var(--mu)}
-.activity-body{margin-top:4px}
-
-/* Chat interface */
-.chat-wrap{
-  display:flex;flex-direction:column;
-  background:var(--sf);border:1px solid var(--bd);
-  border-radius:var(--r);overflow:hidden;
-  min-height:200px;max-height:50vh;
-}
-.chat-msgs{
-  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  padding:12px;display:flex;flex-direction:column;gap:8px;
-}
-.chat-msg{
-  max-width:85%;padding:8px 12px;border-radius:14px;
-  font-size:.85rem;line-height:1.4;word-break:break-word;
-}
-.chat-msg.from-agent{
-  background:var(--bd);color:var(--tx);align-self:flex-start;
-  border-bottom-left-radius:4px;
-}
-.chat-msg.from-human{
-  background:var(--ac);color:#fff;align-self:flex-end;
-  border-bottom-right-radius:4px;
-}
-.chat-msg .chat-time{font-size:.6rem;opacity:.6;margin-top:2px}
-.chat-input-row{
-  display:flex;border-top:1px solid var(--bd);
-}
-.chat-input{
-  flex:1;padding:14px 16px;border:none;background:transparent;
-  color:var(--tx);font-size:1rem;font-family:inherit;
-  outline:none;min-height:52px;
-}
-.chat-send{
-  padding:14px 20px;border:none;background:transparent;
-  color:var(--ac);font-weight:700;cursor:pointer;font-size:1rem;
-  min-width:60px;min-height:52px;transition:background .2s;
-  border-radius:0;
-}
-.chat-send:hover{background:rgba(88,166,255,.1)}
+.activity-time{font-size:.65rem;color:var(--mu)}
+.activity-body{margin-top:3px}
 
 /* ── Template picker modal ── */
 .modal-overlay{
@@ -1489,8 +1564,9 @@ tr.override td{background:rgba(210,153,34,.08)}
   .circle-wrap{max-width:580px;aspect-ratio:unset;height:490px}
   /* Agent space: left half on desktop */
   .agent-space{
-    width:50%;max-width:520px;
+    width:50%;max-width:560px;
     border-right:1px solid var(--bd);border-left:none;
+    box-shadow:4px 0 20px rgba(0,0,0,0.3);
   }
   .agent-space.open ~ .main-layout{opacity:.5;pointer-events:none}
   .teams-section{padding:0 0 24px}
@@ -1577,6 +1653,7 @@ tr.override td{background:rgba(210,153,34,.08)}
 
 /* ── Compose bar ── */
 .compose-bar{
+  display:none;  /* Hidden — chat-first agent space replaces this */
   position:sticky;bottom:0;z-index:80;
   background:var(--sf);border-top:1px solid var(--bd);
   padding:12px 16px;
@@ -1765,28 +1842,28 @@ function resetPin(){
 
 async function checkForUpdates(){
   var btn=document.getElementById('update-btn');
-  btn.textContent='\U0001f504 Checking...';
+  btn.textContent='🔄 Checking...';
   try{
     var r=await api('/api/update/check');
     if(r&&r.update_available){
       var ok=await showConfirm('Update Available','A new version of Crew Bus is available. Update now? The dashboard will restart.','Update Now');
       if(ok){
-        btn.textContent='\U0001f504 Updating...';
+        btn.textContent='🔄 Updating...';
         var u=await apiPost('/api/update/apply',{});
         if(u&&u.ok){
           showToast('Updated! Restarting dashboard...');
           setTimeout(function(){location.reload()},2000);
         }else{
           showToast(u.error||'Update failed.','error');
-          btn.innerHTML='\U0001f504 Update';
+          btn.innerHTML='🔄 Update';
         }
-      }else{btn.innerHTML='\U0001f504 Update';}
+      }else{btn.innerHTML='🔄 Update';}
     }else{
       showToast('You\u2019re on the latest version.');
-      btn.innerHTML='\U0001f504 Update';
+      btn.innerHTML='🔄 Update';
       var dot=document.getElementById('update-dot');if(dot)dot.style.display='none';
     }
-  }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='\U0001f504 Update';}
+  }catch(e){showToast('Could not check for updates.','error');btn.innerHTML='🔄 Update';}
 }
 
 // Auto-update: check on load + every 24 hours, show dot only (never auto-apply)
@@ -1870,6 +1947,26 @@ function personalName(a){
   return m[a.agent_type]||a.name||'Agent';
 }
 
+function agentEmoji(type){
+  var m={'right_hand':'✩','guardian':'🛡','security':'🏠','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🎨','knowledge':'📚','legal':'📜','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
+  return m[type]||'🤖';
+}
+
+function agentBorderColor(type){
+  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#4dd0b8','security':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','communications':'#b388ff'};
+  return m[type]||'rgba(255,255,255,0.3)';
+}
+
+// Toggle settings panel in agent space
+function toggleSettings(){
+  var panel=document.getElementById('as-settings-panel');
+  var btn=document.getElementById('as-settings-btn');
+  if(!panel)return;
+  var isOpen=panel.classList.contains('open');
+  panel.classList.toggle('open');
+  if(btn)btn.classList.toggle('active',!isOpen);
+}
+
 // FIX 4: map for display names used in Messages dropdown
 var DISPLAY_NAMES={'right_hand':'Crew Boss','security':'Friend & Family Helper','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
 var CORE_TYPES_SET={'right_hand':1,'security':1,'wellness':1,'strategy':1,'financial':1};
@@ -1912,7 +2009,7 @@ function loadCurrentView(){
 
 // ══════════ SOCIAL DRAFTS ══════════
 
-var platformIcons={reddit:'\U0001f4e2',twitter:'\U0001f426',hackernews:'\U0001f4f0',discord:'\U0001f4ac',linkedin:'\U0001f4bc',producthunt:'\U0001f680',other:'\U0001f4cb'};
+var platformIcons={reddit:'📢',twitter:'🐦',hackernews:'📰',discord:'💬',linkedin:'💼',producthunt:'🚀',other:'📋'};
 var statusColors={draft:'#d18616',approved:'#2ea043',posted:'#388bfd',rejected:'#f85149'};
 
 async function loadDrafts(){
@@ -1926,7 +2023,7 @@ async function loadDrafts(){
   if(!drafts||!drafts.length){el.innerHTML='<p style="color:var(--mu);text-align:center;padding:40px 0">No drafts yet. Your Content Creator and Website Manager will add them here.</p>';return}
   var html='';
   drafts.forEach(function(d){
-    var icon=platformIcons[d.platform]||'\U0001f4cb';
+    var icon=platformIcons[d.platform]||'📋';
     var sc=statusColors[d.status]||'var(--mu)';
     html+='<div style="background:var(--sf);border:1px solid var(--br);border-radius:10px;padding:16px;margin-bottom:12px">';
     html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
@@ -1940,15 +2037,12 @@ async function loadDrafts(){
     if(d.title)html+='<div style="font-weight:600;margin-bottom:6px;color:var(--fg)">'+esc(d.title)+'</div>';
     html+='<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:12px;font-size:.82rem;color:var(--fg);max-height:300px;overflow-y:auto;margin:0 0 10px">'+esc(d.body)+'</pre>';
     html+='<div style="display:flex;gap:6px;justify-content:flex-end">';
-    html+='<button onclick="copyDraft('+d.id+')" style="background:var(--ac);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\U0001f4cb Copy</button>';
+    html+='<button onclick="copyDraft('+d.id+')" style="background:var(--ac);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">📋 Copy</button>';
     if(d.status==='draft'){
       html+='<button onclick="updateDraftStatus('+d.id+',\'approved\')" style="background:#2ea043;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Approve</button>';
       html+='<button onclick="updateDraftStatus('+d.id+',\'rejected\')" style="background:#f85149;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2717 Reject</button>';
     }
     if(d.status==='approved'){
-      if(d.platform==='twitter'){
-        html+='<button onclick="postDraftToX('+d.id+')" style="background:#1d9bf0;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\U0001d54f Post to X</button>';
-      }
       html+='<button onclick="updateDraftStatus('+d.id+',\'posted\')" style="background:#388bfd;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Mark Posted</button>';
     }
     html+='</div></div>';
@@ -1970,26 +2064,6 @@ async function copyDraft(id){
 async function updateDraftStatus(id,status){
   await apiPost('/api/social/drafts/'+id+'/status',{status:status});
   loadDrafts();
-}
-
-async function postDraftToX(id){
-  if(!confirm('Post this draft live to X/Twitter?'))return;
-  try{
-    var r=await apiPost('/api/twitter/draft/'+id+'/post',{});
-    if(r.ok){showToast('Posted to X! Tweet ID: '+r.tweet_id)}
-    else{showToast('Error: '+(r.error||'unknown'))}
-    loadDrafts();
-  }catch(e){showToast('Failed: '+e.message)}
-}
-
-async function postAllApprovedToX(){
-  if(!confirm('Post ALL approved Twitter drafts to X?'))return;
-  try{
-    var r=await apiPost('/api/twitter/post-all-approved',{});
-    if(r.ok){showToast('Posted '+r.posted+' tweets to X!')}
-    else{showToast('Error: '+(r.error||'unknown'))}
-    loadDrafts();
-  }catch(e){showToast('Failed: '+e.message)}
 }
 
 function showToast(msg){
@@ -2188,11 +2262,25 @@ async function openAgentSpace(agentId){
   space.classList.add('open');
   space.dataset.agentId=agentId;
 
-  // Set name immediately from cache for instant feedback
+  // Close settings panel when opening a new agent
+  var settingsPanel=document.getElementById('as-settings-panel');
+  if(settingsPanel)settingsPanel.classList.remove('open');
+  var settingsBtn=document.getElementById('as-settings-btn');
+  if(settingsBtn)settingsBtn.classList.remove('active');
+
+  // Set avatar + name immediately from cache for instant feedback
   var cached=agentsData.find(function(a){return a.id==agentId;});
   if(cached){
-    document.getElementById('as-name').textContent=personalName(cached);
+    var cname=personalName(cached);
+    document.getElementById('as-name').textContent=cname;
     document.getElementById('as-name').style.color=accentColor(cached.agent_type);
+    var avatar=document.getElementById('as-avatar');
+    if(avatar){avatar.textContent=agentEmoji(cached.agent_type);avatar.style.borderColor=agentBorderColor(cached.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(cached.agent_type)+'33';}
+    var onlineEl=document.getElementById('as-online');
+    if(onlineEl){
+      if(cached.active!==false){onlineEl.innerHTML='<span class="as-online-dot"></span>Online';onlineEl.style.color='#00b894';}
+      else{onlineEl.innerHTML='Paused';onlineEl.style.color='var(--mu)';}
+    }
   }
 
   var agent=await api('/api/agent/'+agentId);
@@ -2204,16 +2292,24 @@ async function openAgentSpace(agentId){
   var name=personalName(agent);
   currentAgentSpaceType=agent.agent_type;
 
+  // Update header
   document.getElementById('as-name').textContent=name;
   document.getElementById('as-name').style.color=color;
+  var avatar=document.getElementById('as-avatar');
+  if(avatar){avatar.textContent=agentEmoji(agent.agent_type);avatar.style.borderColor=agentBorderColor(agent.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(agent.agent_type)+'33';}
+  var onlineEl=document.getElementById('as-online');
+  if(onlineEl){
+    if(agent.active!==false){onlineEl.innerHTML='<span class="as-online-dot"></span>Online';onlineEl.style.color='#00b894';}
+    else{onlineEl.innerHTML='Paused';onlineEl.style.color='var(--mu)';}
+  }
   var asDot=document.getElementById('as-status-dot');
-  asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
+  if(asDot)asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
 
+  // Settings panel content (hidden by default)
   var intro=document.getElementById('as-intro');
   intro.style.borderColor=color+'44';
   var curModel=agent.model||'';
   var defaultModel=_defaultModel||'';
-  var modelLabel=curModel?curModel:(defaultModel?defaultModel+' (default)':'ollama (default)');
   intro.innerHTML='<p>'+esc(agent.description||descFor(agent.agent_type))+'</p>'+
     '<div class="as-model-row">'+
     '<span class="as-model-label">\u{1F916} Model:</span>'+
@@ -2244,11 +2340,14 @@ async function openAgentSpace(agentId){
     }).join('');
   }
 
-  // FIX 6: personalized placeholder and accent-colored Send button
+  // Personalized placeholder
   var chatInput=document.getElementById('chat-input');
   if(chatInput)chatInput.placeholder='Talk to '+name+'...';
-  var sendBtn=document.getElementById('chat-send-btn');
-  if(sendBtn)sendBtn.style.color=color;
+  chatInput.focus();
+
+  // Hide typing indicator
+  var typingEl=document.getElementById('typing-row');
+  if(typingEl)typingEl.style.display='none';
 
   renderChat(chat||[]);
 
@@ -2371,7 +2470,7 @@ async function loadGuardAndSkills(agentId, agentType){
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<span style="font-size:1.3rem">\u{1F512}</span>'+
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
-          '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">\U0001f6d2 Unlock Skills \u2014 $29 one-time</button></div>'+
+          '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">🛒 Unlock Skills \u2014 $29 one-time</button></div>'+
           '<div id="guard-detail-stripe" style="display:none;margin-bottom:10px"></div>'+
           '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
           '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
@@ -2495,7 +2594,7 @@ async function loadMemories(agentId){
   var el=document.getElementById('as-memory-section');
   if(!el)return;
   var memories=[];try{memories=await api('/api/agent/'+agentId+'/memories');}catch(e){}
-  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\U0001f9e0 Memories ('+memories.length+')</summary>';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">🧠 Memories ('+memories.length+')</summary>';
   html+='<div style="margin-top:8px">';
   if(memories&&memories.length>0){
     html+=memories.map(function(m){
@@ -2558,12 +2657,25 @@ async function openHelpAgent(){
 function renderChat(messages){
   var wrap=document.getElementById('as-chat-msgs');
   if(!wrap)return;
+  var typingEl=document.getElementById('typing-row');
+  if(!messages||messages.length===0){
+    var name=document.getElementById('as-name').textContent||'this agent';
+    wrap.innerHTML='<div class="chat-empty">'+
+      '<div class="chat-empty-icon">💬</div>'+
+      '<div class="chat-empty-text">Say hi to '+esc(name)+'! Just type a message below.</div>'+
+      '</div>';
+    return;
+  }
+  var prevCount=wrap.querySelectorAll('.chat-msg').length;
   wrap.innerHTML=messages.map(function(m){
     var cls=m.direction==='from_human'?'from-human':'from-agent';
     if(m.private)cls+=' private';
     return '<div class="chat-msg '+cls+'"><div>'+esc(m.text)+'</div>'+
       '<div class="chat-time">'+timeAgo(m.time)+'</div></div>';
   }).join('');
+  // If new agent messages arrived, hide typing indicator
+  var agentMsgs=messages.filter(function(m){return m.direction!=='from_human'});
+  if(agentMsgs.length>0&&typingEl){typingEl.style.display='none';}
   wrap.scrollTop=wrap.scrollHeight;
 }
 
@@ -3237,7 +3349,11 @@ async function sendChat(){
   var agentId=document.getElementById('agent-space').dataset.agentId;
   var sendBtn=document.getElementById('chat-send-btn');
   input.value='';
-  if(sendBtn){sendBtn.disabled=true;sendBtn.textContent='...';}
+  if(sendBtn){sendBtn.disabled=true;}
+
+  // Clear empty state if present
+  var emptyEl=document.querySelector('.chat-empty');
+  if(emptyEl)emptyEl.remove();
 
   // Optimistically show the sent message immediately
   var wrap=document.getElementById('as-chat-msgs');
@@ -3249,18 +3365,28 @@ async function sendChat(){
     wrap.scrollTop=wrap.scrollHeight;
   }
 
+  // Show typing indicator (agent is thinking)
+  var typingEl=document.getElementById('typing-row');
+  if(typingEl){
+    typingEl.style.display='block';
+    if(wrap)wrap.scrollTop=wrap.scrollHeight;
+  }
+
   try{
     if(privateSessionActive&&privateSessionId){
       await apiPost('/api/agent/'+agentId+'/private/message',{text:text});
     }else{
       await apiPost('/api/agent/'+agentId+'/chat',{text:text});
     }
-    // Real agent responses arrive asynchronously via bus — chat auto-refresh will pick them up
+    // Agent replies arrive asynchronously via bus — chat poll picks them up
+    // Typing indicator hides automatically when reply appears in renderChat
   }catch(e){
-    // If fetch failed, at least the optimistic message is visible
     console.error('sendChat error:',e);
+    // Hide typing indicator on error
+    if(typingEl)typingEl.style.display='none';
   }finally{
-    if(sendBtn){sendBtn.disabled=false;sendBtn.textContent='Send';}
+    if(sendBtn){sendBtn.disabled=false;}
+    input.focus();
   }
 }
 
@@ -3396,6 +3522,7 @@ function stopChatPoll(){
   if(chatPollTimer){clearInterval(chatPollTimer);chatPollTimer=null;}
 }
 
+var _lastChatCount=0;
 async function doChatPoll(){
   var space=document.getElementById('agent-space');
   if(!space||!space.classList.contains('open')){stopChatPoll();return;}
@@ -3405,9 +3532,13 @@ async function doChatPoll(){
     var chat=await api('/api/agent/'+agentId+'/chat');
     var wrap=document.getElementById('as-chat-msgs');
     if(!wrap)return;
-    var oldCount=wrap.children.length;
-    renderChat(chat);
-    if(chat.length>oldCount){wrap.scrollTop=wrap.scrollHeight;}
+    var newCount=chat?chat.length:0;
+    // Only re-render if message count changed
+    if(newCount!==_lastChatCount){
+      renderChat(chat);
+      if(newCount>_lastChatCount){wrap.scrollTop=wrap.scrollHeight;}
+      _lastChatCount=newCount;
+    }
   }catch(e){}
 }
 
@@ -3564,10 +3695,10 @@ def _build_html():
   <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
   <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
   <button class="nav-pill" data-view="drafts" onclick="showView('drafts')">Drafts</button>
-  <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">\U0001f4ac Feedback</button>
-  <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">\U0001f6e1 Unlock Skills</button>
-  <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">\U0001f504 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
-  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">\U0001f512 Lock</button>
+  <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">💬 Feedback</button>
+  <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">🛡 Unlock Skills</button>
+  <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">🔄 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
+  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">🔒 Lock</button>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
@@ -3579,7 +3710,7 @@ def _build_html():
   <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   <div class="day-night-toggle">
     <button class="dn-btn active" onclick="setDayNight('day',this)" title="Day mode">\u2600\uFE0F</button>
-    <button class="dn-btn" onclick="setDayNight('night',this)" title="Night mode">\U0001f319</button>
+    <button class="dn-btn" onclick="setDayNight('night',this)" title="Night mode">🌙</button>
   </div>
 </div>
 <div class="main-layout">
@@ -3600,15 +3731,15 @@ def _build_html():
     </div>
     <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
     <div class="bubble outer" id="bubble-family" style="left:50%;top:15.3%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f3e0</span><span class="status-dot dot-green"></span></div>
+      <div class="bubble-circle"><span class="icon">🏠</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-muse" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f3a8</span><span class="status-dot dot-green"></span></div>
+      <div class="bubble-circle"><span class="icon">🎨</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-growth" style="left:70.1%;top:83.6%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f331</span><span class="status-dot dot-green"></span></div>
+      <div class="bubble-circle"><span class="icon">🌱</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-life" style="left:29.9%;top:83.6%;transform:translate(-50%,-50%)">
@@ -3616,7 +3747,7 @@ def _build_html():
       <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-health" style="left:17.4%;top:41.4%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">\U0001f49a</span><span class="status-dot dot-green"></span></div>
+      <div class="bubble-circle"><span class="icon">💚</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
   </div>
@@ -3685,26 +3816,46 @@ def _build_html():
   <button class="tb-close" onclick="closeTBPopup()">Done</button>
 </div>
 
-<!-- ══════════ AGENT SPACE (FIX 2: full-screen mobile, left-half desktop) ══════════ -->
+<!-- ══════════ AGENT SPACE — CHAT-FIRST (matching hero-demo vision) ══════════ -->
 <div id="agent-space" class="agent-space">
   <div class="as-topbar">
     <button class="as-back" onclick="closeAgentSpace()">\u2190</button>
-    <span class="as-title" id="as-name" onclick="startRenameAgent()" title="Click to rename">Agent <span class="edit-icon">\u270F\uFE0F</span></span>
+    <div class="as-avatar" id="as-avatar">\u2729</div>
+    <div class="as-name-wrap">
+      <span class="as-title" id="as-name" onclick="startRenameAgent()">Crew Boss</span>
+      <div class="as-online" id="as-online"><span class="as-online-dot"></span>Online</div>
+    </div>
+    <div class="as-topbar-actions">
+      <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Private session">🔒</button>
+      <button class="as-settings-btn" id="as-settings-btn" onclick="toggleSettings()" title="Settings">\u2699</button>
+    </div>
     <span class="as-dot dot-green" id="as-status-dot"></span>
-    <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Toggle private session">\U0001f512</button>
   </div>
   <div class="as-body">
-    <div class="as-intro" id="as-intro"></div>
-    <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
-    <div id="as-skills-section" style="margin-bottom:12px"></div>
-    <div id="as-memory-section" style="margin-bottom:12px"></div>
-    <div class="activity-feed" id="as-activity"></div>
+    <!-- Chat is THE primary view -->
     <div class="chat-wrap">
-      <div class="chat-msgs" id="as-chat-msgs"></div>
-      <div class="chat-input-row">
-        <input class="chat-input" id="chat-input" placeholder="Talk to this agent..." onkeydown="chatKeydown(event)">
-        <button class="chat-send" id="chat-send-btn" onclick="sendChat()">Send</button>
+      <div class="chat-msgs" id="as-chat-msgs">
+        <!-- messages render here -->
       </div>
+      <div class="typing-row" id="typing-row" style="display:none;padding:4px 16px 8px">
+        <div class="typing-indicator">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chat-input" placeholder="Type a message..." onkeydown="chatKeydown(event)">
+        <button class="chat-send" id="chat-send-btn" onclick="sendChat()">\u25B6</button>
+      </div>
+    </div>
+    <!-- Settings panel — hidden by default, toggled via gear icon -->
+    <div class="as-settings-panel" id="as-settings-panel">
+      <div class="as-intro" id="as-intro"></div>
+      <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
+      <div id="as-skills-section" style="margin-bottom:12px"></div>
+      <div id="as-memory-section" style="margin-bottom:12px"></div>
+      <div class="activity-feed" id="as-activity"></div>
     </div>
   </div>
 </div>
@@ -3787,14 +3938,14 @@ def _build_html():
   <div class="modal-sheet">
     <div class="handle"></div>
     <h3>Add a Team</h3>
-    <div style="font-size:.65rem;color:var(--mu);text-align:center;margin-bottom:8px">\u2714 Free &nbsp; | &nbsp; \U0001f4b3 Paid (trial available)</div>
-    <div class="template-card" onclick="createTeam('school')"><span class="template-icon">\U0001f4da</span><div><div class="template-name">School \u2714</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
-    <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">\U0001f3b8</span><div><div class="template-name">Passion Project \u2714</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
-    <div class="template-card" onclick="createTeam('household')"><span class="template-icon">\U0001f3e0</span><div><div class="template-name">Household \u2714</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
-    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">\U0001f3e2</span><div><div class="template-name">Business Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
-    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">\U0001f3d7\ufe0f</span><div><div class="template-name">Department</div><div class="template-desc">Task Runner, Research Aide <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $25/yr</span></div></div></div>
-    <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">\U0001f4bc</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Follow-up <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
-    <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">\U0001f4b0</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content, Sales <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
+    <div style="font-size:.65rem;color:var(--mu);text-align:center;margin-bottom:8px">\u2714 Free &nbsp; | &nbsp; 💳 Paid (trial available)</div>
+    <div class="template-card" onclick="createTeam('school')"><span class="template-icon">📚</span><div><div class="template-name">School \u2714</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
+    <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">🎸</span><div><div class="template-name">Passion Project \u2714</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
+    <div class="template-card" onclick="createTeam('household')"><span class="template-icon">🏠</span><div><div class="template-name">Household \u2714</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
+    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">🏢</span><div><div class="template-name">Business Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">🏗\ufe0f</span><div><div class="template-name">Department</div><div class="template-desc">Task Runner, Research Aide <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $25/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">💼</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Follow-up <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
+    <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">💰</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content, Sales <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
     <button class="btn" onclick="closeTemplatePicker()" style="width:100%;margin-top:8px">Cancel</button>
   </div>
@@ -3827,7 +3978,7 @@ def _build_html():
 <!-- First-time setup overlay -->
 <div class="setup-overlay" id="setup-overlay" style="display:none">
   <div class="setup-card">
-    <div class="setup-icon">\U0001f9d9\u200d\u2642\ufe0f</div>
+    <div class="setup-icon">🧙\u200d\u2642\ufe0f</div>
     <h2>Welcome to Crew Bus</h2>
     <p class="setup-sub">Your personal AI crew. Pick your AI model<br>
     and get your crew online in 30 seconds.</p>
@@ -3849,7 +4000,7 @@ def _build_html():
       <div class="setup-key-wrap">
         <input class="setup-key" id="setup-key" type="password" placeholder="sk-..." autocomplete="new-password" data-lpignore="true" data-1p-ignore
           onkeydown="if(event.key==='Enter')submitSetup()">
-        <button class="setup-key-toggle" onclick="toggleSetupKey()" title="Show/hide key">\U0001f441\ufe0f</button>
+        <button class="setup-key-toggle" onclick="toggleSetupKey()" title="Show/hide key">👁\ufe0f</button>
       </div>
       <a class="setup-link" id="setup-link" href="https://platform.moonshot.ai" target="_blank" rel="noopener">
         Get a free key at platform.moonshot.ai \u2192
@@ -3871,7 +4022,7 @@ def _build_html():
     </div>
 
     <div class="setup-error" id="setup-error"></div>
-    <button class="setup-btn" id="setup-btn" onclick="submitSetup()">\U0001f680 Start My Crew</button>
+    <button class="setup-btn" id="setup-btn" onclick="submitSetup()">🚀 Start My Crew</button>
     <div class="setup-footer">100% local \u00b7 MIT license \u00b7 No cloud \u00b7 Your data stays on your machine</div>
   </div>
 </div>
@@ -3879,13 +4030,13 @@ def _build_html():
 <!-- ══════════ LOCK SCREEN ══════════ -->
 <div class="lock-overlay" id="lock-overlay" style="display:none">
   <div class="lock-card">
-    <div class="lock-icon">\U0001f512</div>
+    <div class="lock-icon">🔒</div>
     <h2>Dashboard Locked</h2>
     <p class="lock-sub">Enter your PIN to unlock</p>
     <input class="setup-key" id="lock-pin" type="password" placeholder="Enter PIN..."
       autocomplete="off" onkeydown="if(event.key==='Enter')unlockDashboard()">
     <div class="setup-error" id="lock-error"></div>
-    <button class="setup-btn" onclick="unlockDashboard()" style="margin-top:12px">\U0001f513 Unlock</button>
+    <button class="setup-btn" onclick="unlockDashboard()" style="margin-top:12px">🔓 Unlock</button>
     <a href="#" class="lock-forgot" onclick="showPinReset(event)">Forgot PIN?</a>
     <div id="pin-reset-form" style="display:none;margin-top:12px;text-align:center">
       <p class="lock-sub" style="margin-bottom:8px">Enter your recovery email to reset your PIN</p>
@@ -3915,7 +4066,7 @@ def _build_html():
 <!-- ══════════ FEEDBACK MODAL ══════════ -->
 <div class="confirm-overlay" id="feedback-modal">
   <div class="confirm-box" style="max-width:420px">
-    <h3>\U0001f4ac Share Your Feedback</h3>
+    <h3>💬 Share Your Feedback</h3>
     <p style="font-size:.8rem;color:var(--mu);margin-bottom:12px">Help us make Crew Bus better. Your feedback goes directly to the dev team.</p>
     <select class="setup-select" id="feedback-type" style="margin-bottom:10px;padding:8px;width:100%;font-size:.85rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:6px">
       <option value="bug">Bug Report</option>
@@ -3936,7 +4087,7 @@ def _build_html():
 <!-- ══════════ PAYMENT MODAL ══════════ -->
 <div class="confirm-overlay" id="payment-modal">
   <div class="confirm-box" style="max-width:420px;text-align:center">
-    <h3 style="margin-bottom:4px">\U0001f513 Unlock <span id="pay-team-name">Team</span></h3>
+    <h3 style="margin-bottom:4px">🔓 Unlock <span id="pay-team-name">Team</span></h3>
     <!-- Plan chooser (step 1) -->
     <div id="pay-plan-chooser">
       <p style="color:var(--mu);font-size:.8rem;margin:0 0 14px">Choose a plan to get started</p>
@@ -5048,14 +5199,6 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             return _json_response(self, bus.get_social_drafts(
                 platform=platform, status=status, db_path=self.db_path))
 
-        # ── Twitter Bridge (GET) ──
-        if path == "/api/twitter/status":
-            try:
-                import twitter_bridge
-                return _json_response(self, twitter_bridge.status(self.db_path))
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
         _json_response(self, {"error": "not found"}, 404)
 
     def do_POST(self):
@@ -5875,135 +6018,6 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, result)
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
-
-        # ── Twitter Bridge endpoints ─────────────────────────────
-        if path == "/api/twitter/status":
-            try:
-                import twitter_bridge
-                return _json_response(self, twitter_bridge.status(self.db_path))
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/setup":
-            # Store Twitter API keys
-            api_key = data.get("api_key", "")
-            api_secret = data.get("api_secret", "")
-            access_token = data.get("access_token", "")
-            access_secret = data.get("access_secret", "")
-            bearer_token = data.get("bearer_token", "")
-            if not all([api_key, api_secret, access_token, access_secret]):
-                return _json_response(self, {
-                    "error": "api_key, api_secret, access_token, access_secret required"
-                }, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.setup_twitter_keys(
-                    api_key, api_secret, access_token, access_secret,
-                    bearer_token, self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/tweet":
-            text = data.get("text", "")
-            reply_to = data.get("reply_to")
-            if not text:
-                return _json_response(self, {"error": "text required"}, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.post_tweet(text, reply_to=reply_to, db_path=self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/thread":
-            tweets = data.get("tweets", [])
-            if not tweets or not isinstance(tweets, list):
-                return _json_response(self, {"error": "tweets array required"}, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.post_thread(tweets, db_path=self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        m = re.match(r"^/api/twitter/draft/(\d+)/post$", path)
-        if m:
-            draft_id = int(m.group(1))
-            try:
-                import twitter_bridge
-                result = twitter_bridge.post_approved_draft(draft_id, self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/post-all-approved":
-            try:
-                import twitter_bridge
-                result = twitter_bridge.post_all_approved(self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/follow":
-            usernames = data.get("usernames", [])
-            username = data.get("username", "")
-            if username:
-                usernames = [username]
-            if not usernames:
-                return _json_response(self, {"error": "username or usernames required"}, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.follow_users(usernames, self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/like":
-            tweet_id = data.get("tweet_id", "")
-            if not tweet_id:
-                return _json_response(self, {"error": "tweet_id required"}, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.like_tweet(tweet_id, self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/profile":
-            try:
-                import twitter_bridge
-                result = twitter_bridge.update_profile(
-                    name=data.get("name"),
-                    description=data.get("description"),
-                    url=data.get("url"),
-                    location=data.get("location"),
-                    db_path=self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/profile-image":
-            file_path = data.get("file_path", "")
-            if not file_path:
-                return _json_response(self, {"error": "file_path required"}, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.update_profile_image(file_path, self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
-
-        if path == "/api/twitter/profile-banner":
-            file_path = data.get("file_path", "")
-            if not file_path:
-                return _json_response(self, {"error": "file_path required"}, 400)
-            try:
-                import twitter_bridge
-                result = twitter_bridge.update_profile_banner(file_path, self.db_path)
-                return _json_response(self, result)
-            except Exception as e:
-                return _json_response(self, {"error": str(e)}, 500)
 
         _json_response(self, {"error": "not found"}, 404)
 
