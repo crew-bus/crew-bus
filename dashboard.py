@@ -580,6 +580,30 @@ a{color:var(--ac);text-decoration:none}
   color:var(--tx);background:var(--bd);border-color:var(--mu);
 }
 
+/* ── Hamburger menu ── */
+.hamburger-wrap{position:relative}
+.hamburger-btn{
+  background:none;border:1px solid var(--bd);border-radius:8px;
+  color:var(--mu);font-size:1.2rem;cursor:pointer;padding:5px 10px;
+  transition:all .2s;line-height:1;min-height:34px;display:inline-flex;align-items:center;
+}
+.hamburger-btn:hover{color:var(--tx);border-color:var(--mu)}
+.hamburger-menu{
+  display:none;position:absolute;right:0;top:calc(100% + 6px);
+  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
+  min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.35);
+  z-index:200;overflow:hidden;
+}
+.hamburger-menu.open{display:block;animation:menuFade .15s ease}
+@keyframes menuFade{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.hamburger-menu button{
+  display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;
+  background:none;border:none;color:var(--tx);font-size:.85rem;
+  cursor:pointer;text-align:left;transition:background .15s;
+}
+.hamburger-menu button:hover{background:var(--bd)}
+.hamburger-menu hr{border:none;border-top:1px solid var(--bd);margin:0}
+
 /* ── Views ── */
 .view{display:none;min-height:calc(100vh - 49px);min-height:calc(100dvh - 49px)}
 .view.active{display:block}
@@ -819,9 +843,6 @@ a{color:var(--ac);text-decoration:none}
   50%{box-shadow:0 0 18px rgba(88,166,255,0.35),inset 0 0 14px rgba(88,166,255,0.08);border-color:rgba(88,166,255,0.45)}
 }
 .topbar .nav-pill{animation:navIdleShimmer 6s ease-in-out infinite}
-.topbar .nav-pill:nth-child(4){animation-delay:1.5s}
-.topbar .nav-pill:nth-child(5){animation-delay:3s}
-.topbar .nav-pill:nth-child(6){animation-delay:4.5s}
 .topbar .nav-pill.active{animation:navActivePulse 4s ease-in-out infinite}
 
 /* Trust & Energy indicators — gentle breathing */
@@ -1458,19 +1479,6 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 }
 .lock-icon{font-size:3rem;margin-bottom:12px}
 .lock-sub{color:var(--mu);font-size:.9rem;margin-bottom:20px}
-.feedback-btn{
-  display:inline-block;background:none;border:1px solid var(--bd);
-  color:var(--mu);padding:6px 12px;border-radius:var(--r);font-size:.7rem;
-  cursor:pointer;transition:all .2s;margin-left:4px;
-}
-.feedback-btn:hover{border-color:var(--ac);color:var(--ac)}
-.lock-btn{
-  display:inline-block;background:none;border:1px solid var(--bd);
-  color:var(--mu);padding:6px 14px;border-radius:var(--r);font-size:.75rem;
-  cursor:pointer;transition:all .2s;margin-left:4px;
-}
-.lock-btn:hover{border-color:var(--ac);color:var(--ac)}
-
 /* ── Legacy pages (messages, decisions, audit) ── */
 .legacy-container{padding:16px;max-width:900px;margin:0 auto}
 .legacy-container h1{font-size:1.3rem;margin-bottom:12px}
@@ -1785,7 +1793,7 @@ async function requirePin(actionMsg){
     if(!saveRes||!saveRes.ok){showToast('Failed to save PIN','error');return false;}
     showToast('PIN set! Your crew is now protected.');
     // Show the lock button now that PIN is set
-    var lockBtn=document.getElementById('lock-btn');
+    var lockBtn=document.getElementById('hm-lock-btn');
     if(lockBtn)lockBtn.style.display='';
     resetIdleTimer();
     return true;
@@ -1892,7 +1900,7 @@ async function _autoUpdateCheck(){
     var r=await api('/api/update/check');
     if(r&&r.update_available){
       var dot=document.getElementById('update-dot');
-      if(dot)dot.style.display='block';
+      if(dot)dot.style.display='inline-block';
     }
   }catch(e){}
 }
@@ -2006,6 +2014,29 @@ function startRefresh(){
   },1000);
 }
 
+// ── Hamburger menu ──
+function toggleHamburger(){
+  document.getElementById('hamburger-menu').classList.toggle('open');
+}
+function closeHamburger(){
+  document.getElementById('hamburger-menu').classList.remove('open');
+}
+function hmNav(view){
+  closeHamburger();
+  showView(view);
+}
+function hmAction(action){
+  closeHamburger();
+  if(action==='update')checkForUpdates();
+  else if(action==='lock')lockDashboard();
+  else if(action==='feedback')openFeedback();
+}
+// Close hamburger when clicking outside
+document.addEventListener('click',function(e){
+  var wrap=document.querySelector('.hamburger-wrap');
+  if(wrap&&!wrap.contains(e.target))closeHamburger();
+});
+
 // ── Navigation ──
 function showView(name){
   currentView=name;
@@ -2021,7 +2052,6 @@ function showView(name){
 function loadCurrentView(){
   if(currentView==='crew')loadCircle();
   else if(currentView==='messages')loadMessages();
-  else if(currentView==='decisions')loadDecisions();
   else if(currentView==='audit')loadAudit();
   else if(currentView==='drafts')loadDrafts();
   else if(currentView==='team'){}  // team dash loads separately
@@ -3706,7 +3736,7 @@ function bootDashboard(){
   // Show lock button and start idle timer if PIN is set
   fetch('/api/dashboard/has-password').then(function(r){return r.json()}).then(function(d){
     if(d.has_password){
-      document.getElementById('lock-btn').style.display='';
+      document.getElementById('hm-lock-btn').style.display='';
       resetIdleTimer();
     }
   }).catch(function(){});
@@ -3793,14 +3823,19 @@ def _build_html():
   <span class="brand">crew-bus</span>
   <span class="spacer"></span>
   <button class="nav-pill active" data-view="crew" onclick="showView('crew')">Crew</button>
-  <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
-  <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
-  <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
-  <button class="nav-pill" data-view="drafts" onclick="showView('drafts')">Drafts</button>
-  <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">💬 Feedback</button>
   <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">🛡 Unlock Skills</button>
-  <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">🔄 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
-  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">🔒 Lock</button>
+  <div class="hamburger-wrap">
+    <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">☰</button>
+    <div class="hamburger-menu" id="hamburger-menu">
+      <button onclick="hmNav('messages')">📨 Crew Message Trail</button>
+      <button onclick="hmNav('audit')">📋 Crew Audit Trail</button>
+      <button onclick="hmNav('drafts')">✏️ Social Media Drafts</button>
+      <hr>
+      <button id="hm-update-btn" onclick="hmAction('update')">🔄 Software Update<span id="update-dot" style="display:none;margin-left:6px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
+      <button id="hm-lock-btn" onclick="hmAction('lock')" style="display:none">🔒 Lock Dashboard</button>
+      <button onclick="hmAction('feedback')">💬 Send Feedback</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
