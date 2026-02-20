@@ -1309,6 +1309,121 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                 except Exception as e:
                     print(f"[wizard] set_agent_model error: {e}")
 
+        elif cmd == "start_whatsapp_setup":
+            # Start WA bridge and spawn a background thread to poll for QR + connection
+            print("[wizard] starting WhatsApp setup...")
+            try:
+                # Import dashboard helpers
+                import dashboard
+                result = dashboard._start_wa_bridge()
+                if not result.get("ok"):
+                    print(f"[wizard] WA bridge start failed: {result.get('error')}")
+                else:
+                    # Get Guardian agent ID for injecting messages
+                    guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                    human = None
+                    conn = bus.get_conn(db_path)
+                    row = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                    conn.close()
+                    if row:
+                        human_id = row[0]
+                    else:
+                        human_id = None
+                    guardian_id = guardian["id"] if guardian else None
+
+                    if guardian_id and human_id:
+                        def _wa_qr_poller():
+                            """Poll for QR code, inject into chat, then wait for connection."""
+                            import urllib.request as _ur
+                            import json as _json
+
+                            # Phase 1: Wait for QR code (up to 60s)
+                            qr_found = False
+                            for _ in range(30):
+                                time.sleep(2)
+                                try:
+                                    req = _ur.Request("http://localhost:3001/qr/svg")
+                                    with _ur.urlopen(req, timeout=3) as resp:
+                                        data = _json.loads(resp.read().decode("utf-8"))
+                                        if data.get("svg"):
+                                            # Inject QR message into chat
+                                            _insert_reply_direct(
+                                                db_path, guardian_id, human_id,
+                                                "[WA_QR]\n\nOpen WhatsApp on your phone, go to "
+                                                "Settings > Linked Devices > Link a Device, "
+                                                "and scan this QR code.",
+                                                agent_type="guardian",
+                                            )
+                                            print("[wizard] QR code injected into chat")
+                                            qr_found = True
+                                            break
+                                except Exception:
+                                    pass
+                                # Also check if already connected (skipped QR)
+                                try:
+                                    req = _ur.Request("http://localhost:3001/status")
+                                    with _ur.urlopen(req, timeout=3) as resp:
+                                        st = _json.loads(resp.read().decode("utf-8"))
+                                        if st.get("status") == "connected":
+                                            _insert_reply_direct(
+                                                db_path, guardian_id, human_id,
+                                                "WhatsApp is already connected! "
+                                                "Crew Boss messages will now flow through WhatsApp.",
+                                                agent_type="guardian",
+                                            )
+                                            print("[wizard] WA already connected")
+                                            return
+                                except Exception:
+                                    pass
+
+                            if not qr_found:
+                                _insert_reply_direct(
+                                    db_path, guardian_id, human_id,
+                                    "Hmm, the WhatsApp bridge is taking longer than "
+                                    "expected to generate a QR code. Try asking me "
+                                    "to 'set up WhatsApp' again in a moment.",
+                                    agent_type="guardian",
+                                )
+                                return
+
+                            # Phase 2: Wait for connection (up to 180s)
+                            for _ in range(60):
+                                time.sleep(3)
+                                try:
+                                    req = _ur.Request("http://localhost:3001/status")
+                                    with _ur.urlopen(req, timeout=3) as resp:
+                                        st = _json.loads(resp.read().decode("utf-8"))
+                                        if st.get("status") == "connected":
+                                            _insert_reply_direct(
+                                                db_path, guardian_id, human_id,
+                                                "WhatsApp connected! You're all set. "
+                                                "Crew Boss messages will now flow "
+                                                "through WhatsApp too.",
+                                                agent_type="guardian",
+                                            )
+                                            print("[wizard] WhatsApp connected!")
+                                            return
+                                except Exception:
+                                    pass
+
+                            # Timed out waiting for scan
+                            _insert_reply_direct(
+                                db_path, guardian_id, human_id,
+                                "The QR code expired before it was scanned. "
+                                "No worries — just ask me to 'set up WhatsApp' "
+                                "again and I'll generate a fresh one.",
+                                agent_type="guardian",
+                            )
+                            print("[wizard] WA QR expired without scan")
+
+                        t = threading.Thread(target=_wa_qr_poller, daemon=True)
+                        t.start()
+                        print("[wizard] WA QR poller thread started")
+            except Exception as e:
+                print(f"[wizard] start_whatsapp_setup error: {e}")
+
     # Strip action blocks from reply so human sees clean text
     clean = reply
     for raw in matches:
