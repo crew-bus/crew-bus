@@ -3211,6 +3211,9 @@ async function openTeamDash(teamId){
       '<span class="team-mgr-sub">Manager</span></div></div>';
   }
 
+  // Filter out terminated workers
+  workers=workers.filter(function(w){return w.status!=='terminated'});
+
   // SVG connector lines
   if(workers.length>0&&mgr){
     var svgW=Math.min(workers.length*100,400);
