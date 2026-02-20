@@ -1193,6 +1193,13 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 }
 .as-settings-btn:hover{border-color:var(--ac);color:var(--ac)}
 .as-settings-btn.active{background:var(--ac);color:#000;border-color:var(--ac)}
+.as-newchat-btn{
+  width:36px;height:36px;border-radius:50%;border:1px solid var(--bd);
+  background:transparent;color:var(--mu);font-size:.9rem;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.as-newchat-btn:hover{border-color:var(--ac);color:var(--ac)}
 
 /* Chat body — THE main area, takes all available space */
 .as-body{
@@ -2744,6 +2751,13 @@ function closeAgentSpace(){
   space.classList.add('closing');
   setTimeout(function(){space.classList.remove('open','closing')},200);
 }
+async function startNewChat(){
+  if(!currentAgentId)return;
+  if(!confirm('Start a fresh conversation? Chat history will be cleared.'))return;
+  await apiPost('/api/agent/'+currentAgentId+'/chat/clear',{});
+  renderChat([]);
+  showToast('Fresh conversation started');
+}
 function chatKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}}
 
 // ══════════ TEAMS ══════════
@@ -3885,6 +3899,7 @@ def _build_html():
       <div class="as-online" id="as-online"><span class="as-online-dot"></span>Online</div>
     </div>
     <div class="as-topbar-actions">
+      <button class="as-newchat-btn" onclick="startNewChat()" title="New conversation">✨</button>
       <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Private session">🔒</button>
       <button class="as-settings-btn" id="as-settings-btn" onclick="toggleSettings()" title="Settings">\u2699</button>
     </div>
@@ -4328,6 +4343,27 @@ def _get_agent_chat(db_path, agent_id, limit=50):
                  "text": r["body"] if r["body"] else r["subject"],
                  "time": r["created_at"],
                  "private": r["private_session_id"] is not None} for r in rows]
+    finally:
+        conn.close()
+
+
+def _clear_agent_chat(db_path, agent_id):
+    """Clear chat history between the human and an agent (start fresh)."""
+    conn = bus.get_conn(db_path)
+    try:
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        if not human:
+            return {"ok": False, "error": "no human agent"}
+        hid = human["id"]
+        conn.execute("""
+            DELETE FROM messages
+            WHERE (from_agent_id=? AND to_agent_id=?)
+               OR (from_agent_id=? AND to_agent_id=?)
+        """, (hid, agent_id, agent_id, hid))
+        conn.commit()
+        return {"ok": True}
     finally:
         conn.close()
 
@@ -5449,6 +5485,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": "need text"}, 400)
             result = _send_chat(self.db_path, int(m.group(1)), text)
             return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        m = re.match(r"^/api/agent/(\d+)/chat/clear$", path)
+        if m:
+            result = _clear_agent_chat(self.db_path, int(m.group(1)))
+            return _json_response(self, result)
 
         # Private session endpoints
         m = re.match(r"^/api/agent/(\d+)/private/start$", path)
