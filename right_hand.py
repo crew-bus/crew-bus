@@ -771,6 +771,8 @@ class Heartbeat:
         {"type": "weekly_reflection", "enabled": True, "day_of_week": 0, "hour": 4},
         {"type": "guardian_monthly_report", "enabled": True, "day_of_month": 1, "hour": 6},
         {"type": "launch_hourly_report", "enabled": True},
+        {"type": "social_autopilot", "enabled": True, "interval_hours": 4},
+        {"type": "social_review", "enabled": True},
     ]
 
     def __init__(self, right_hand: "RightHand",
@@ -875,6 +877,12 @@ class Heartbeat:
 
         if check_type == "launch_hourly_report":
             return self._check_launch_hourly_report(now)
+
+        if check_type == "social_autopilot":
+            return self._check_social_autopilot(now, check)
+
+        if check_type == "social_review":
+            return self._check_social_review(now)
 
         return None
 
@@ -1229,6 +1237,235 @@ class Heartbeat:
             "this_hour": this_hour,
         }
 
+    # ------------------------------------------------------------------
+    # Social Autopilot — agents run the business, Crew Boss checks in
+    # ------------------------------------------------------------------
+
+    # Content calendar: rotating topics so the feed stays fresh.
+    # Each entry maps to platform-specific content tasks.
+    _CONTENT_CALENDAR = [
+        {
+            "theme": "product_update",
+            "twitter": "Share a quick product update or tip about Crew Bus. Be conversational, use 1-2 emojis max. Under 280 chars.",
+            "discord": "Post a product update in the updates channel. Use a clear title and 2-3 bullet points about what's new.",
+            "website": "Write a short blog post about a recent Crew Bus feature or improvement. 2-3 paragraphs, friendly tone.",
+        },
+        {
+            "theme": "community_engagement",
+            "twitter": "Ask the community a fun question about AI assistants, productivity, or what they'd want from a personal AI crew. Keep it casual and inviting.",
+            "discord": "Start a discussion in the community channel. Ask an engaging question or share a thought-provoking take on AI assistants.",
+        },
+        {
+            "theme": "behind_the_scenes",
+            "twitter": "Share a behind-the-scenes moment from building Crew Bus. Could be a dev win, a funny bug, or a design decision. Authentic and real.",
+            "discord": "Share a behind-the-scenes update about Crew Bus development. What are we working on? What's the vision?",
+        },
+        {
+            "theme": "tips_and_tricks",
+            "twitter": "Share a quick tip about getting the most out of AI assistants or Crew Bus. Practical and useful. Thread-friendly.",
+            "discord": "Share a helpful tip or trick for using Crew Bus effectively. Include a clear example.",
+            "website": "Write a tips-and-tricks blog post. 3-5 practical tips, each with a brief explanation.",
+        },
+        {
+            "theme": "vision_and_mission",
+            "twitter": "Share something about the Crew Bus mission — personal AI for everyone, privacy-first, open source. Inspiring but not preachy.",
+            "discord": "Post about the bigger picture — why Crew Bus exists, what we're building toward. Motivating and genuine.",
+        },
+        {
+            "theme": "user_spotlight",
+            "twitter": "Celebrate the community. Thank early adopters, highlight a use case, or give a shoutout. Warm and appreciative.",
+            "discord": "Spotlight something cool from the community or celebrate a milestone. Make people feel valued.",
+        },
+    ]
+
+    def _check_social_autopilot(self, now: datetime,
+                                check: dict) -> Optional[dict]:
+        """Every N hours, queue up content tasks for the marketing agents.
+
+        The agents run like a business — they create content, Crew Boss
+        reviews it, and it gets published. No hand-holding required.
+        Crew Boss and Ryan pop in occasionally, or if there's a big issue
+        the agents notify Crew Boss who fixes it or escalates to Ryan.
+        """
+        interval_hours = check.get("interval_hours", 4)
+        last = bus.get_config("last_social_autopilot", "",
+                              db_path=self.db_path)
+        this_cycle = now.strftime("%Y-%m-%dT%H")
+
+        # Only run every N hours
+        if last:
+            try:
+                last_dt = datetime.strptime(last, "%Y-%m-%dT%H")
+                hours_since = (now.replace(tzinfo=None) - last_dt).total_seconds() / 3600
+                if hours_since < interval_hours:
+                    return None
+            except (ValueError, TypeError):
+                pass
+
+        # Don't post during quiet hours (midnight–7am local)
+        local_hour = datetime.now().hour
+        if local_hour < 7 or local_hour >= 23:
+            return None
+
+        # Pick a content theme based on the day/hour rotation
+        day_of_year = now.timetuple().tm_yday
+        cycle_index = (day_of_year * 6 + now.hour // interval_hours) % len(self._CONTENT_CALENDAR)
+        theme = self._CONTENT_CALENDAR[cycle_index]
+
+        # Find marketing team agents
+        conn = bus.get_conn(self.db_path)
+        try:
+            agents = conn.execute(
+                "SELECT a.id, a.name, a.agent_type FROM agents a "
+                "JOIN teams t ON a.team_id = t.id "
+                "WHERE t.name IN ('Marketing', 'Launch') "
+                "AND a.active = 1 "
+                "AND a.agent_type NOT IN ('human', 'right_hand', 'guardian')"
+            ).fetchall()
+
+            # Check what was posted recently to avoid duplicates
+            recent_posts = conn.execute(
+                "SELECT platform, body FROM social_drafts "
+                "WHERE status = 'posted' "
+                "AND created_at > datetime('now', '-24 hours')"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        if not agents:
+            return None
+
+        recent_platforms = set()
+        for p in recent_posts:
+            recent_platforms.add(p["platform"])
+
+        return {
+            "action_needed": True,
+            "type": "social_autopilot",
+            "data": {
+                "theme": theme,
+                "agents": [{"id": a["id"], "name": a["name"],
+                            "type": a["agent_type"]} for a in agents],
+                "recent_platforms": list(recent_platforms),
+                "cycle_index": cycle_index,
+            },
+            "config_key": "last_social_autopilot",
+            "this_cycle": this_cycle,
+        }
+
+    def _check_social_review(self, now: datetime) -> Optional[dict]:
+        """Hourly review of what the agents posted.
+
+        Crew Boss checks recent posts for quality issues. If he sees a
+        problem, he handles it himself (within his trust level) or
+        escalates to Ryan if it's a big deal.
+        """
+        last = bus.get_config("last_social_review", "",
+                              db_path=self.db_path)
+        this_hour = now.strftime("%Y-%m-%dT%H")
+        if last == this_hour:
+            return None
+
+        conn = bus.get_conn(self.db_path)
+        try:
+            # Get posts from last hour
+            recent = conn.execute(
+                "SELECT sd.id, sd.platform, sd.title, sd.body, sd.status, "
+                "       sd.created_at, a.name as agent_name "
+                "FROM social_drafts sd "
+                "LEFT JOIN agents a ON sd.agent_id = a.id "
+                "WHERE sd.created_at > datetime('now', '-1 hour') "
+                "ORDER BY sd.created_at DESC"
+            ).fetchall()
+
+            # Get failed posts
+            failed = conn.execute(
+                "SELECT sd.id, sd.platform, sd.body, sd.status "
+                "FROM social_drafts sd "
+                "WHERE sd.status IN ('draft', 'rejected') "
+                "AND sd.created_at > datetime('now', '-4 hours')"
+            ).fetchall()
+
+            # Overall stats
+            total_posted_today = conn.execute(
+                "SELECT COUNT(*) FROM social_drafts "
+                "WHERE status = 'posted' "
+                "AND created_at > datetime('now', '-24 hours')"
+            ).fetchone()[0]
+
+            platforms_active = conn.execute(
+                "SELECT DISTINCT platform FROM social_drafts "
+                "WHERE status = 'posted' "
+                "AND created_at > datetime('now', '-24 hours')"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        if not recent and not failed:
+            return None
+
+        # Build review data
+        issues = []
+
+        for post in recent:
+            body = post["body"] or ""
+            # Flag potential issues Crew Boss can catch
+            if len(body.strip()) < 20:
+                issues.append({
+                    "severity": "low",
+                    "type": "too_short",
+                    "draft_id": post["id"],
+                    "platform": post["platform"],
+                    "msg": f"Very short post on {post['platform']} by {post['agent_name']}"
+                })
+            if body.count("#") > 5:
+                issues.append({
+                    "severity": "low",
+                    "type": "hashtag_spam",
+                    "draft_id": post["id"],
+                    "platform": post["platform"],
+                    "msg": f"Too many hashtags on {post['platform']}"
+                })
+            # Check for duplicate content
+            for other in recent:
+                if other["id"] != post["id"] and other["body"] == body:
+                    issues.append({
+                        "severity": "medium",
+                        "type": "duplicate",
+                        "draft_id": post["id"],
+                        "platform": post["platform"],
+                        "msg": f"Duplicate content detected on {post['platform']}"
+                    })
+
+        for f in failed:
+            issues.append({
+                "severity": "medium",
+                "type": "failed_post",
+                "draft_id": f["id"],
+                "platform": f["platform"],
+                "msg": f"Post stuck in '{f['status']}' on {f['platform']}"
+            })
+
+        return {
+            "action_needed": True,
+            "type": "social_review",
+            "data": {
+                "recent_count": len(recent),
+                "recent_posts": [
+                    {"id": r["id"], "platform": r["platform"],
+                     "agent": r["agent_name"], "status": r["status"],
+                     "body_preview": (r["body"] or "")[:80]}
+                    for r in recent
+                ],
+                "issues": issues,
+                "failed_count": len(failed),
+                "posted_today": total_posted_today,
+                "active_platforms": [p["platform"] for p in platforms_active],
+            },
+            "config_key": "last_social_review",
+            "this_hour": this_hour,
+        }
+
     @staticmethod
     def _table_exists(conn, table_name: str) -> bool:
         r = conn.execute(
@@ -1446,3 +1683,200 @@ class Heartbeat:
                 result["config_key"], result["this_hour"],
                 db_path=self.db_path)
             print("[heartbeat] hourly launch report sent to Crew Boss")
+
+        elif action_type == "social_autopilot":
+            # -------------------------------------------------------
+            # SOCIAL AUTOPILOT — agents run the business autonomously
+            # -------------------------------------------------------
+            data = result["data"]
+            theme = data["theme"]
+            agents = data["agents"]
+            recent_platforms = set(data.get("recent_platforms", []))
+
+            # Map agent names to roles for task assignment
+            content_agents = [a for a in agents if "Content" in a["name"]
+                              or "Comms" in a["name"]]
+            community_agents = [a for a in agents if "Community" in a["name"]]
+            website_agents = [a for a in agents if "Website" in a["name"]]
+
+            # Fallback: if no specific agents found, use all of them
+            if not content_agents:
+                content_agents = agents[:1]
+            if not community_agents:
+                community_agents = agents[1:2] if len(agents) > 1 else agents[:1]
+            if not website_agents:
+                website_agents = agents[2:3] if len(agents) > 2 else agents[:1]
+
+            tasks_sent = 0
+
+            # --- Twitter task (skip if already posted to twitter recently) ---
+            if "twitter" in theme and "twitter" not in recent_platforms:
+                prompt = theme["twitter"]
+                for agent in content_agents[:1]:
+                    task_body = json.dumps({
+                        "social_draft": {
+                            "platform": "twitter",
+                            "body": prompt,
+                            "title": "",
+                            "target": "",
+                        }
+                    })
+                    # Don't send raw prompt as social_draft body — that would
+                    # post the instructions. Instead, send as a task for the
+                    # agent to process via LLM.
+                    bus.send_message(
+                        from_id=self.rh.rh_id, to_id=agent["id"],
+                        message_type="task",
+                        subject=f"Social content: {theme.get('theme', 'update')}",
+                        body=(
+                            f"Write a tweet for @CrewBusHQ. Theme: {theme.get('theme', 'update')}.\n\n"
+                            f"Instructions: {prompt}\n\n"
+                            f"When done, output your tweet as:\n"
+                            f'{{"social_draft": {{"platform": "twitter", "body": "YOUR TWEET TEXT HERE"}}}}'
+                        ),
+                        priority="normal", db_path=self.db_path,
+                    )
+                    tasks_sent += 1
+
+            # --- Discord task ---
+            if "discord" in theme and "discord" not in recent_platforms:
+                prompt = theme["discord"]
+                target_agents = community_agents[:1] if community_agents else content_agents[:1]
+                for agent in target_agents:
+                    bus.send_message(
+                        from_id=self.rh.rh_id, to_id=agent["id"],
+                        message_type="task",
+                        subject=f"Discord content: {theme.get('theme', 'update')}",
+                        body=(
+                            f"Write a Discord post for the Crew Bus server. Theme: {theme.get('theme', 'update')}.\n\n"
+                            f"Instructions: {prompt}\n\n"
+                            f"When done, output your post as:\n"
+                            f'{{"social_draft": {{"platform": "discord", "title": "YOUR TITLE", "body": "YOUR POST BODY", "target": "general"}}}}'
+                        ),
+                        priority="normal", db_path=self.db_path,
+                    )
+                    tasks_sent += 1
+
+            # --- Website/blog task (less frequent — only certain themes) ---
+            if "website" in theme:
+                prompt = theme["website"]
+                for agent in website_agents[:1]:
+                    bus.send_message(
+                        from_id=self.rh.rh_id, to_id=agent["id"],
+                        message_type="task",
+                        subject=f"Blog post: {theme.get('theme', 'update')}",
+                        body=(
+                            f"Write a blog post for crew-bus.dev. Theme: {theme.get('theme', 'update')}.\n\n"
+                            f"Instructions: {prompt}\n\n"
+                            f"When done, output your post as:\n"
+                            f'{{"social_draft": {{"platform": "website", "title": "YOUR TITLE", "body": "<p>YOUR HTML BODY</p>"}}}}'
+                        ),
+                        priority="normal", db_path=self.db_path,
+                    )
+                    tasks_sent += 1
+
+            bus.set_config(
+                result["config_key"], result["this_cycle"],
+                db_path=self.db_path)
+            print(f"[heartbeat] social autopilot: {tasks_sent} tasks sent "
+                  f"(theme: {theme.get('theme', '?')})")
+
+        elif action_type == "social_review":
+            # -------------------------------------------------------
+            # SOCIAL REVIEW — Crew Boss checks the team's work hourly
+            # -------------------------------------------------------
+            data = result["data"]
+            issues = data.get("issues", [])
+            recent_count = data.get("recent_count", 0)
+            posted_today = data.get("posted_today", 0)
+            active_platforms = data.get("active_platforms", [])
+
+            # Crew Boss handles issues based on severity
+            high_issues = [i for i in issues if i.get("severity") == "high"]
+            medium_issues = [i for i in issues if i.get("severity") == "medium"]
+            low_issues = [i for i in issues if i.get("severity") == "low"]
+
+            # Low issues: Crew Boss handles silently (logs it, moves on)
+            for issue in low_issues:
+                try:
+                    conn = bus.get_conn(self.db_path)
+                    conn.execute(
+                        "INSERT INTO audit_log (event_type, agent_id, details) "
+                        "VALUES (?, ?, ?)",
+                        ("social_review_low", self.rh.rh_id,
+                         json.dumps(issue)),
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+
+            # Medium issues: Crew Boss tries to fix, logs it
+            for issue in medium_issues:
+                if issue["type"] == "failed_post":
+                    # Retry failed posts
+                    try:
+                        from agent_worker import _boss_review_and_publish
+                        conn = bus.get_conn(self.db_path)
+                        draft = conn.execute(
+                            "SELECT * FROM social_drafts WHERE id=?",
+                            (issue["draft_id"],)
+                        ).fetchone()
+                        conn.close()
+                        if draft and draft["status"] == "draft":
+                            _boss_review_and_publish(
+                                draft["id"], draft["platform"],
+                                draft["body"], draft["title"] or "",
+                                self.db_path)
+                            print(f"[social-review] retried draft #{draft['id']}")
+                    except Exception as e:
+                        print(f"[social-review] retry failed: {e}")
+                else:
+                    # Log it for Crew Boss
+                    try:
+                        conn = bus.get_conn(self.db_path)
+                        conn.execute(
+                            "INSERT INTO audit_log (event_type, agent_id, details) "
+                            "VALUES (?, ?, ?)",
+                            ("social_review_medium", self.rh.rh_id,
+                             json.dumps(issue)),
+                        )
+                        conn.commit()
+                        conn.close()
+                    except Exception:
+                        pass
+
+            # High issues: Crew Boss escalates to Ryan
+            if high_issues:
+                issue_lines = []
+                for i in high_issues:
+                    issue_lines.append(f"- [{i['severity'].upper()}] {i['msg']}")
+                bus.send_message(
+                    from_id=self.rh.rh_id, to_id=self.rh.human_id,
+                    message_type="alert",
+                    subject="Social media issue needs your attention",
+                    body=(
+                        "Hey boss, found some issues with recent social posts "
+                        "that I can't handle on my own:\n\n"
+                        + "\n".join(issue_lines)
+                        + f"\n\nPosts today: {posted_today} across "
+                        f"{', '.join(active_platforms) or 'no platforms'}"
+                    ),
+                    priority="high", db_path=self.db_path,
+                )
+                print(f"[social-review] escalated {len(high_issues)} issues to human")
+
+            # Crew Boss self-report (internal log, not sent to Ryan)
+            review_summary = (
+                f"Social review: {recent_count} posts this hour, "
+                f"{posted_today} today, "
+                f"{len(issues)} issues "
+                f"({len(high_issues)} high, {len(medium_issues)} medium, "
+                f"{len(low_issues)} low). "
+                f"Active: {', '.join(active_platforms) or 'none'}"
+            )
+            print(f"[heartbeat] {review_summary}")
+
+            bus.set_config(
+                result["config_key"], result["this_hour"],
+                db_path=self.db_path)
