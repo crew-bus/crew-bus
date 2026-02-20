@@ -1792,6 +1792,39 @@ function closePasswordPrompt(submit){
   }
 }
 
+// ── PIN gatekeeper for destructive actions ──
+async function requirePin(actionMsg){
+  // Check if a PIN exists
+  var hasPass;
+  try{hasPass=await api('/api/dashboard/has-password');}catch(e){return true;}
+  if(!hasPass.has_password){
+    // No PIN set — make them create one first
+    var newPin=await showPasswordPrompt(
+      'Set a PIN to protect your crew. You\u2019ll need this PIN for any destructive action like deleting teams.');
+    if(!newPin)return false;
+    if(newPin.length<4){showToast('PIN must be at least 4 characters','error');return false;}
+    // Confirm it
+    var confirmPin=await showPasswordPrompt('Confirm your new PIN');
+    if(!confirmPin){return false;}
+    if(confirmPin!==newPin){showToast('PINs don\u2019t match. Try again.','error');return false;}
+    // Save the new PIN
+    var saveRes=await apiPost('/api/dashboard/set-password',{password:newPin});
+    if(!saveRes||!saveRes.ok){showToast('Failed to save PIN','error');return false;}
+    showToast('PIN set! Your crew is now protected.');
+    // Show the lock button now that PIN is set
+    var lockBtn=document.getElementById('lock-btn');
+    if(lockBtn)lockBtn.style.display='';
+    resetIdleTimer();
+    return true;
+  }
+  // PIN exists — verify it
+  var pin=await showPasswordPrompt(actionMsg||'Enter your PIN to continue');
+  if(!pin)return false;
+  var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
+  if(!verify||!verify.valid){showToast('Wrong PIN. Action cancelled.','error');return false;}
+  return true;
+}
+
 // ── Dashboard lock/unlock ──
 var _dashboardLocked=false;
 var _idleTimer=null;
@@ -2987,16 +3020,9 @@ async function deleteTeam(teamId,teamName){
     'Delete Team'
   );
   if(!ok)return;
-  // If PIN is set, require it before deleting
-  try{
-    var hasPass=await api('/api/dashboard/has-password');
-    if(hasPass.has_password){
-      var pin=await showPasswordPrompt('Enter your PIN to delete this team');
-      if(!pin)return;
-      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
-      if(!verify.valid){showToast('Wrong PIN. Deletion cancelled.','error');return;}
-    }
-  }catch(e){}
+  // Always require PIN — prompts to create one if not set yet
+  var authorized=await requirePin('Enter your PIN to delete this team');
+  if(!authorized)return;
   try{
     var r=await apiPost('/api/teams/'+teamId+'/delete',{});
     if(r.ok){showToast('Team deleted ('+r.deleted_count+' agents removed)');showView('crew');loadTeams();}
@@ -3044,16 +3070,9 @@ async function terminateAgent(agentId,agentName,agentType){
     'Terminate'
   );
   if(!ok)return;
-  // Require PIN if set
-  try{
-    var hasPass=await api('/api/dashboard/has-password');
-    if(hasPass.has_password){
-      var pin=await showPasswordPrompt('Enter your PIN to terminate '+agentName);
-      if(!pin)return;
-      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
-      if(!verify.valid){showToast('Wrong PIN. Termination cancelled.','error');return;}
-    }
-  }catch(e){}
+  // Always require PIN — prompts to create one if not set yet
+  var authorized=await requirePin('Enter your PIN to terminate '+agentName);
+  if(!authorized)return;
   try{
     var r=await apiPost('/api/agent/'+agentId+'/terminate',{});
     if(r.ok){
