@@ -33,7 +33,7 @@ from pathlib import Path
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
 BUS_URL = os.environ.get("BUS_URL", "http://localhost:8080")
 HTTP_PORT = int(os.environ.get("TG_PORT", "3002"))
-POLL_INTERVAL = int(os.environ.get("TG_POLL_INTERVAL", "5"))  # seconds
+OUTBOUND_POLL = 1  # seconds — check bus for new replies (fast = snappy responses)
 
 # ── State ───────────────────────────────────────────────────────────
 
@@ -439,27 +439,31 @@ def main():
     server_thread.start()
 
     print(f"[tg-bridge] Listening on http://localhost:{HTTP_PORT}")
-    print(f"[tg-bridge] Polling Telegram every {POLL_INTERVAL}s")
 
-    # Main loop: poll Telegram for inbound, poll bus for outbound
+    # Inbound (Telegram → bus) runs on its own thread because Telegram
+    # long-polling blocks for up to 30s waiting for new messages.
+    def _inbound_loop():
+        while running:
+            try:
+                poll_telegram()
+            except Exception as e:
+                print(f"[tg-bridge] Telegram poll error: {e}")
+                time.sleep(5)
+            # Re-resolve agents if needed
+            if not crew_boss_agent_id:
+                resolve_agents()
+
+    threading.Thread(target=_inbound_loop, daemon=True, name="tg-inbound").start()
+
+    # Outbound (bus → Telegram) polls fast so replies arrive in ~1-2s.
+    print(f"[tg-bridge] Outbound polling every {OUTBOUND_POLL}s")
     while running:
-        try:
-            poll_telegram()
-        except Exception as e:
-            print(f"[tg-bridge] Telegram poll error: {e}")
-            time.sleep(5)
-
         try:
             poll_outbound()
         except Exception as e:
             if "Connection refused" not in str(e):
                 print(f"[tg-bridge] Outbound error: {e}")
-
-        # Re-resolve agents if not yet found
-        if not crew_boss_agent_id:
-            resolve_agents()
-
-        time.sleep(POLL_INTERVAL)
+        time.sleep(OUTBOUND_POLL)
 
 
 if __name__ == "__main__":

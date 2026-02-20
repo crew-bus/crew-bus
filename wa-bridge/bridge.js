@@ -36,7 +36,7 @@ const path = require("path");
 
 const PORT = parseInt(process.env.WA_PORT || "3001", 10);
 const BUS_URL = process.env.BUS_URL || "http://localhost:8080";
-const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL || "5000", 10);
+const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL || "1000", 10);
 const AUTH_DIR = path.join(__dirname, "wa-session", "baileys-auth");
 
 // ── State ───────────────────────────────────────────────────────────
