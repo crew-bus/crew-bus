@@ -2327,7 +2327,7 @@ async function openAgentSpace(agentId){
   if(!space)return;
   space.classList.remove('closing');
   space.classList.add('open');
-  var ov=document.getElementById('agent-overlay');if(ov)ov.style.display='block';
+  var ov=document.getElementById('agent-overlay');if(ov)setTimeout(function(){ov.style.display='block'},300);
   space.dataset.agentId=agentId;
 
   // Close settings panel when opening a new agent
