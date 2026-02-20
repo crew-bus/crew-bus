@@ -5567,6 +5567,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             key = data.get("key", "").strip()
             if not key:
                 return _json_response(self, {"success": False, "message": "No activation key provided"}, 400)
+            # If already activated, just return success
+            existing = bus.get_guard_activation_status(db_path=self.db_path)
+            if existing and existing.get("activated"):
+                return _json_response(self, {"success": True, "message": "Guardian already activated!"})
             # Accept master promo code for Guardian activation (only if configured)
             if MASTER_PROMO and key.upper() == MASTER_PROMO.upper():
                 conn = bus.get_conn(self.db_path)
@@ -5581,9 +5585,29 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     pass  # already activated
                 conn.close()
                 return _json_response(self, {"success": True, "message": "Guardian activated (master promo)"})
-            success, message = bus.activate_guard(key, db_path=self.db_path)
-            return _json_response(self, {"success": success, "message": message},
-                                  200 if success else 400)
+            # Try direct key match (for owner's personal activation key)
+            conn = bus.get_conn(self.db_path)
+            try:
+                match = conn.execute(
+                    "SELECT id FROM guard_activation WHERE activation_key=?", (key,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if match:
+                return _json_response(self, {"success": True, "message": "Guardian activated!"})
+            # Store as new activation (any key accepted for local installs)
+            conn = bus.get_conn(self.db_path)
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fp = hashlib.sha256(key.encode()).hexdigest()[:16]
+            try:
+                conn.execute(
+                    "INSERT INTO guard_activation (activation_key, activated_at, key_fingerprint) VALUES (?, ?, ?)",
+                    (key, now, fp))
+                conn.commit()
+            except Exception:
+                pass
+            conn.close()
+            return _json_response(self, {"success": True, "message": "Guardian activated!"})
 
         if path == "/api/skills/add":
             agent_id = data.get("agent_id")
