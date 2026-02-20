@@ -303,6 +303,29 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         except Exception:
             pass
 
+        # Inject linked teams/departments this manager oversees
+        try:
+            linked_ids = bus.get_linked_teams(agent_id, db_path=db_path)
+            if linked_ids:
+                conn = bus.get_conn(db_path)
+                try:
+                    linked_names = []
+                    for lid in linked_ids:
+                        row = conn.execute(
+                            "SELECT name FROM agents WHERE id=?", (lid,)
+                        ).fetchone()
+                        if row:
+                            linked_names.append(row["name"])
+                    if linked_names:
+                        parts.append(
+                            "LINKED DEPARTMENTS (you oversee these teams):\n"
+                            + "\n".join(f"- {n}" for n in linked_names)
+                        )
+                finally:
+                    conn.close()
+        except Exception:
+            pass
+
     # --- Inject team context for workers ---
     if agent_type == "worker":
         try:
