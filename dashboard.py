@@ -3869,23 +3869,23 @@ def _build_html():
     <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
     <div class="bubble outer" id="bubble-family" style="left:50%;top:15.3%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🏠</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+      <span class="bubble-label">Friend & Family</span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-guardian" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🛡</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Guardian</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+      <span class="bubble-label">Guardian</span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-growth" style="left:70.1%;top:83.6%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🌱</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+      <span class="bubble-label">Growth Coach</span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-life" style="left:29.9%;top:83.6%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+      <span class="bubble-label">Life Assistant</span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-health" style="left:17.4%;top:41.4%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">💚</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+      <span class="bubble-label">Health Buddy</span><span class="bubble-sub"></span>
     </div>
   </div>
   <!-- Score indicators below inner circle -->
