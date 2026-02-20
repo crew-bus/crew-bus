@@ -3895,6 +3895,15 @@ def _build_html():
       <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
   </div>
+  <!-- Score indicators below inner circle -->
+  <div class="indicators" id="bottom-indicators">
+    <div class="indicator" onclick="openTBPopup()">
+      <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
+    </div>
+    <div class="indicator" onclick="openTBPopup()">
+      <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
+    </div>
+  </div>
   </div>
 </div>
 <div class="main-right">
@@ -3906,15 +3915,6 @@ def _build_html():
   </div>
   <!-- Guardian unlock banner (hidden when activated) -->
   <div id="guardian-banner" style="display:none"></div>
-  <!-- Score indicators below teams -->
-  <div class="indicators" id="bottom-indicators">
-    <div class="indicator" onclick="openTBPopup()">
-      <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
-    </div>
-    <div class="indicator" onclick="openTBPopup()">
-      <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
-    </div>
-  </div>
 </div>
 </div>
 <!-- ══════════ COMPOSE BAR ══════════ -->
