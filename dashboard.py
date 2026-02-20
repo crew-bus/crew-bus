@@ -1134,6 +1134,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .agent-space.closing{animation:slideOutLeft .2s ease forwards}
 @keyframes slideInLeft{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 @keyframes slideOutLeft{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+/* Clickable overlay behind agent chat — click to dismiss */
+.agent-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:199;background:rgba(0,0,0,0.3);cursor:pointer}
 
 /* Chat header — avatar + name + online dot (hero-demo style) */
 .as-topbar{
@@ -1564,7 +1566,7 @@ tr.override td{background:rgba(210,153,34,.08)}
     border-right:1px solid var(--bd);border-left:none;
     box-shadow:4px 0 20px rgba(0,0,0,0.3);
   }
-  .agent-space.open ~ .main-layout{opacity:.5;cursor:pointer}
+  .agent-space.open ~ .main-layout{opacity:.5;pointer-events:none}
   .teams-section{padding:0 0 24px}
 }
 
@@ -2325,6 +2327,7 @@ async function openAgentSpace(agentId){
   if(!space)return;
   space.classList.remove('closing');
   space.classList.add('open');
+  var ov=document.getElementById('agent-overlay');if(ov)ov.style.display='block';
   space.dataset.agentId=agentId;
 
   // Close settings panel when opening a new agent
@@ -2789,14 +2792,8 @@ function closeAgentSpace(){
   var space=document.getElementById('agent-space');
   space.classList.add('closing');
   setTimeout(function(){space.classList.remove('open','closing')},200);
+  var ov=document.getElementById('agent-overlay');if(ov)ov.style.display='none';
 }
-// Close agent chat when clicking anywhere outside it
-document.addEventListener('click',function(e){
-  var space=document.getElementById('agent-space');
-  if(!space||!space.classList.contains('open'))return;
-  if(space.contains(e.target))return;
-  closeAgentSpace();
-});
 async function startNewChat(){
   var agentId=document.getElementById('agent-space').dataset.agentId;
   if(!agentId)return;
@@ -3956,6 +3953,7 @@ def _build_html():
 </div>
 
 <!-- ══════════ AGENT SPACE — CHAT-FIRST (matching hero-demo vision) ══════════ -->
+<div id="agent-overlay" class="agent-overlay" onclick="closeAgentSpace()"></div>
 <div id="agent-space" class="agent-space">
   <div class="as-topbar">
     <button class="as-back" onclick="closeAgentSpace()">\u2190</button>
