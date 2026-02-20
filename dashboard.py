@@ -116,7 +116,6 @@ GUARDIAN_DESCRIPTION = (
     "  • Communications (life-orchestrator) — logistics, relationships\n"
     "  • Financial (peace-of-mind-finance) — money clarity without judgment\n"
     "  • Knowledge (wisdom-filter) — information filtering, curiosity\n"
-    "  • Legal (rights-compass) — legalese translation, deadline tracking\n"
     "All inner circle agents report to Crew Boss. You report to Crew Boss too, "
     "but you can reach the human directly for emergencies and setup.\n\n"
     "SETUP FLOW (first conversation):\n"
@@ -188,13 +187,12 @@ CREW_BOSS_DESCRIPTION = (
     "skill, which gives you total awareness of the entire crew. You handle "
     "80%% of everything so the human can focus on living their life.\n\n"
     "YOUR CREW (you know every one of them):\n"
-    "You lead an inner circle of 6 specialist agents who report ONLY to you:\n"
+    "You lead an inner circle of 5 specialist agents who report ONLY to you:\n"
     "  • Wellness (gentle-guardian) — watches for burnout, maps energy, celebrates wins\n"
     "  • Strategy (north-star-navigator) — finds new paths, breaks dreams into steps\n"
     "  • Communications (life-orchestrator) — daily logistics, relationships, scheduling\n"
     "  • Financial (peace-of-mind-finance) — judgment-free financial clarity\n"
     "  • Knowledge (wisdom-filter) — filters noise, finds what actually matters\n"
-    "  • Legal (rights-compass) — translates legalese, spots red flags\n"
     "Guardian (sentinel-shield) protects the entire system 24/7.\n"
     "Inner circle agents NEVER contact the human directly — they report to you, "
     "and you decide what reaches the human and when.\n\n"
@@ -233,7 +231,6 @@ CREW_BOSS_DESCRIPTION = (
     "  • Scheduling, reminders, relationships? \u2192 Communications\n"
     "  • Money questions, budgets, bills? \u2192 Financial\n"
     "  • Research, learning, curiosity? \u2192 Knowledge\n"
-    "  • Contracts, rights, legal confusion? \u2192 Legal\n"
     "  • Security concerns, skill requests? \u2192 Guardian\n"
     "- Synthesize what the inner circle reports and deliver it at the right time.\n"
     "- Protect the human's energy — don't overwhelm them.\n"
@@ -384,44 +381,17 @@ INNER_CIRCLE_AGENTS = {
             "- Short, focused responses. Signal over noise."
         ),
     },
-    "legal": {
-        "name": "Legal",
-        "description": (
-            "You are Legal — the inner circle agent who helps the human understand their "
-            "rights. You run on the rights-compass skill.\n\n"
-            "YOUR PURPOSE:\n"
-            "- Translate legalese into plain language anyone can understand.\n"
-            "- Spot red flags in contracts, terms of service, and agreements.\n"
-            "- Track legal deadlines — filings, renewals, expirations.\n"
-            "- Help the human feel less small when dealing with legal matters.\n"
-            "- When something looks wrong, flag it clearly to Crew Boss.\n\n"
-            "INNER CIRCLE PROTOCOL:\n"
-            "You report ONLY to Crew Boss. You never contact the human directly unless "
-            "they start a private 1-on-1 session with you.\n\n"
-            "CALIBRATION:\n"
-            "Crew Boss will send you calibration data. A teen needs help understanding "
-            "app terms of service. A freelancer needs contract review. A parent needs lease "
-            "and insurance clarity. A business owner needs compliance awareness. Adapt.\n\n"
-            "RULES:\n"
-            "- You are NOT a lawyer. Always recommend professional legal counsel for big decisions.\n"
-            "- INTEGRITY.md is sacred — never downplay legal risks.\n"
-            "- Clear, calm, empowering responses. The human should feel informed, not scared."
-        ),
-    },
 }
 
 # Agent-type to Personal Edition name mapping
 PERSONAL_NAMES = {
     "right_hand": "Crew Boss",
     "guardian": "Guardian",
-    "security": "Guardian",
-    "wellness": "Wellness",
-    "strategy": "Strategy",
-    "communications": "Communications",
-    "financial": "Financial",
-    "knowledge": "Knowledge",
-    "legal": "Legal",
-    "creative": "Muse",
+    "wellness": "Health Buddy",
+    "strategy": "Growth Coach",
+    "communications": "Friend & Family",
+    "financial": "Life Assistant",
+    "knowledge": "Muse",
     "help": "Help",
     "human": "You",
 }
@@ -429,17 +399,14 @@ PERSONAL_NAMES = {
 PERSONAL_COLORS = {
     "right_hand": "#ffffff",
     "guardian": "#4dd0b8",
-    "security": "#4dd0b8",
     "wellness": "#ffab57",
     "strategy": "#66d97a",
-    "communications": "#e0a0ff",
+    "communications": "#4dd0b8",
     "financial": "#64b5f6",
-    "knowledge": "#ffd54f",
-    "legal": "#ef9a9a",
-    "creative": "#b388ff",
+    "knowledge": "#b388ff",
 }
 
-CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial", "knowledge", "legal")
+CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial", "knowledge")
 
 AGENT_ACKS = {
     "right_hand": [
@@ -482,16 +449,6 @@ AGENT_ACKS = {
         "Curious! Let me dig into that \U0001F50D",
         "Good question \u2014 I\u2019ll find what matters.",
         "On it! Signal over noise.",
-    ],
-    "legal": [
-        "I\u2019ll take a careful look at that \u2696\ufe0f",
-        "Got it \u2014 let me translate this for you.",
-        "I\u2019ll flag anything important.",
-    ],
-    "creative": [
-        "Ooh, love it! Let\u2019s make something beautiful \U0001f3a8",
-        "Inspiration incoming! I\u2019m on it.",
-        "Great idea \u2014 let\u2019s get creative!",
     ],
     "help": [
         "Good question! Check the info above for guidance.",
@@ -1964,7 +1921,7 @@ function dotClass(status,agent_type,checkIn,active){
   if(active===0||active===false)return 'dot-orange';
   if(status==='quarantined')return 'dot-yellow';
   if(status==='terminated')return 'dot-red';
-  if(agent_type==='security'&&checkIn){
+  if((agent_type==='guardian'||agent_type==='security')&&checkIn){
     var ago=(Date.now()-new Date(checkIn.endsWith&&checkIn.endsWith('Z')?checkIn:checkIn+'Z'))/60000;
     if(ago>65)return 'dot-yellow';
   }
@@ -1978,22 +1935,22 @@ function burnoutDotColor(score){
 }
 
 function accentColor(type){
-  var m={'right_hand':'#ffffff','security':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6'};
+  var m={'right_hand':'#ffffff','guardian':'#4dd0b8','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','knowledge':'#b388ff'};
   return m[type]||'#ffffff';
 }
 
 function personalName(a){
-  var m={'right_hand':'Crew Boss','security':'Friend & Family Helper','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
+  var m={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','knowledge':'Muse','help':'Help','human':'You'};
   return m[a.agent_type]||a.name||'Agent';
 }
 
 function agentEmoji(type){
-  var m={'right_hand':'✩','guardian':'🛡','security':'🏠','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🎨','knowledge':'📚','legal':'📜','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
+  var m={'right_hand':'✩','guardian':'🛡','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🏠','knowledge':'🎨','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
   return m[type]||'🤖';
 }
 
 function agentBorderColor(type){
-  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#4dd0b8','security':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','communications':'#b388ff'};
+  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#4dd0b8','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','knowledge':'#b388ff'};
   return m[type]||'rgba(255,255,255,0.3)';
 }
 
@@ -2008,8 +1965,8 @@ function toggleSettings(){
 }
 
 // FIX 4: map for display names used in Messages dropdown
-var DISPLAY_NAMES={'right_hand':'Crew Boss','security':'Friend & Family Helper','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
-var CORE_TYPES_SET={'right_hand':1,'security':1,'wellness':1,'strategy':1,'financial':1};
+var DISPLAY_NAMES={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','knowledge':'Muse','help':'Help','human':'You'};
+var CORE_TYPES_SET={'right_hand':1,'communications':1,'wellness':1,'strategy':1,'financial':1,'knowledge':1};
 
 // ── Auto-refresh ──
 function startRefresh(){
@@ -2136,11 +2093,11 @@ async function loadCircle(){
   agentsData=agents;
 
   var boss=agents.find(function(a){return a.agent_type==='right_hand'});
-  var guard=agents.find(function(a){return a.agent_type==='security'});
+  var guard=agents.find(function(a){return a.agent_type==='communications'});
   var well=agents.find(function(a){return a.agent_type==='wellness'});
   var ideas=agents.find(function(a){return a.agent_type==='strategy'});
   var wallet=agents.find(function(a){return a.agent_type==='financial'});
-  var muse=agents.find(function(a){return a.agent_type==='creative'});
+  var muse=agents.find(function(a){return a.agent_type==='knowledge'});
 
   var guardCI='';
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
@@ -2512,7 +2469,7 @@ async function loadGuardAndSkills(agentId, agentType){
   // Guard-specific section (only on Guard agent card)
   var guardEl=document.getElementById('as-guard-section');
   if(guardEl){
-    if(agentType==='security'){
+    if(agentType==='guardian'||agentType==='security'){
       guardEl.style.display='block';
       if(activated){
         guardEl.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:12px;background:#1a2e1a;border-radius:8px;border:1px solid #2ea04366">'+
@@ -2581,7 +2538,7 @@ async function submitGuardKey(){
   if(res&&res.success){
     msg.textContent=res.message;msg.style.color='#2ea043';
     var agentId=document.getElementById('agent-space').dataset.agentId;
-    setTimeout(function(){loadGuardAndSkills(agentId,'security');},500);
+    setTimeout(function(){loadGuardAndSkills(agentId,'guardian');},500);
   }else{
     msg.textContent=(res&&res.message)||'Activation failed';msg.style.color='#f85149';
   }
@@ -2682,16 +2639,19 @@ async function addMemoryUI(agentId){
 function descFor(type){
   var d={
     'right_hand':'Your friendly right-hand who handles 80% of everything so you don\u2019t have to. The only agent that talks to you directly \u2014 warm, reliable, always has your back.',
-    'security':'Shared chores, kid reminders, homework nudges, family calendar \u2014 keeps everyone on the same page without nagging.',
+    'guardian':'Protects your crew and guards the system. Watches for threats 24/7.',
+    'communications':'Shared chores, kid reminders, family calendar \u2014 keeps everyone on the same page without nagging \U0001F3E0',
     'wellness':'Watches your energy and wellbeing. Gentle burnout nudges, quiet hours, and steps in if you really need a break \U0001F49A',
     'strategy':'Helps you build great habits, break big ideas into small steps, and grow at your own pace \U0001F331',
     'financial':'Meals, shopping lists, daily logistics, errands, and all the little stuff that keeps life running smoothly \u26A1',
+    'knowledge':'Sparks curiosity, filters the noise, and helps you learn anything at your own pace \U0001F3A8',
     'help':'Welcome to crew-bus \u2014 your friendly AI crew!\\n\\n' +
       '\u2728 Crew Boss \u2014 Your friendly right-hand. Handles everything, talks to you directly.\\n' +
-      '\U0001F3E0 Friend & Family Helper \u2014 Chores, reminders, family calendar.\\n' +
+      '\U0001F3E0 Friend & Family \u2014 Chores, reminders, family calendar.\\n' +
       '\U0001F49A Health Buddy \u2014 Watches your wellbeing. Talk privately using the \U0001F512 button.\\n' +
       '\U0001F331 Growth Coach \u2014 Habits, goals, and personal growth.\\n' +
-      '\u26A1 Life Assistant \u2014 Meals, shopping, daily logistics.\\n\\n' +
+      '\u26A1 Life Assistant \u2014 Meals, shopping, daily logistics.\\n' +
+      '\U0001F3A8 Muse \u2014 Curiosity, learning, and creative inspiration.\\n\\n' +
       'Teams \u2014 Add teams for work, household, or anything you need.\\n\\n' +
       'Trust Score \u2014 Controls how much Crew Boss handles on their own (1 = asks about everything, 10 = full autopilot).\\n' +
       'Burnout \u2014 When high, Crew Boss holds non-urgent messages for better timing.\\n\\n' +
@@ -3305,7 +3265,7 @@ async function loadMessages(){
   var sel=document.getElementById('agent-filter');
   if(sel&&sel.options.length<=1){
     // First add core agents with display names
-    var coreOrder=['right_hand','security','wellness','strategy','financial'];
+    var coreOrder=['right_hand','guardian','communications','wellness','strategy','financial','knowledge'];
     coreOrder.forEach(function(ctype){
       var a=agentsData.find(function(ag){return ag.agent_type===ctype});
       if(a){
@@ -4321,11 +4281,11 @@ def _get_agents_api(db_path, period=None):
             LEFT JOIN agents p ON a.parent_agent_id=p.id
             ORDER BY CASE a.agent_type
               WHEN 'human' THEN 0 WHEN 'right_hand' THEN 1
-              WHEN 'security' THEN 2 WHEN 'strategy' THEN 3
-              WHEN 'wellness' THEN 4 WHEN 'financial' THEN 5
-              WHEN 'legal' THEN 6 WHEN 'knowledge' THEN 7
-              WHEN 'communications' THEN 8 WHEN 'manager' THEN 9
-              WHEN 'worker' THEN 10 ELSE 11 END, a.name
+              WHEN 'guardian' THEN 2 WHEN 'communications' THEN 3
+              WHEN 'wellness' THEN 4 WHEN 'strategy' THEN 5
+              WHEN 'financial' THEN 6 WHEN 'knowledge' THEN 7
+              WHEN 'manager' THEN 8 WHEN 'worker' THEN 9
+              ELSE 10 END, a.name
         """, (cutoff,)).fetchall()
         results = []
         for r in rows:
@@ -4950,7 +4910,7 @@ def _apply_update():
 def _get_guard_checkin(db_path):
     conn = bus.get_conn(db_path)
     try:
-        guard = conn.execute("SELECT id FROM agents WHERE agent_type='security' LIMIT 1").fetchone()
+        guard = conn.execute("SELECT id FROM agents WHERE agent_type IN ('guardian','security') LIMIT 1").fetchone()
         if not guard:
             return {"last_checkin": None}
         row = conn.execute("SELECT timestamp FROM audit_log WHERE agent_id=? ORDER BY timestamp DESC LIMIT 1",
@@ -6399,8 +6359,8 @@ def _ensure_guardian(db_path):
     - Human (you — always in charge)
     - Crew Boss (crew-mind) — your AI right-hand
     - Guardian (sentinel-shield) — always-on protector + setup guide
-    - 6 Inner Circle agents (Wellness, Strategy, Communications,
-      Financial, Knowledge, Legal) — each with a unique skill
+    - 5 Inner Circle agents (Wellness, Strategy, Communications,
+      Financial, Knowledge) — each with a unique skill
 
     On existing installs, migrates old Wizard → Guardian and spawns
     any missing inner circle agents.
@@ -6488,7 +6448,7 @@ def _ensure_guardian(db_path):
             )
 
         conn.commit()
-        print("Full crew spawned — Crew Boss, Guardian, and 6 inner circle agents ready.")
+        print("Full crew spawned — Crew Boss, Guardian, and 5 inner circle agents ready.")
     finally:
         conn.close()
 
@@ -6497,7 +6457,7 @@ def _ensure_guardian(db_path):
 
 
 def _ensure_inner_circle(db_path, conn=None):
-    """Ensure all 6 inner circle agents exist. Safe to call multiple times.
+    """Ensure all 5 inner circle agents exist. Safe to call multiple times.
 
     Spawns any missing inner circle agents and assigns them to Crew Boss.
     Called by _ensure_guardian() on every boot.
@@ -6661,7 +6621,7 @@ def _auto_load_hierarchy(db_path):
     finally:
         conn.close()
     if count > 9:
-        return  # already populated beyond bootstrap (9 = Human + Boss + Guardian + 6 inner circle)
+        return  # already populated beyond bootstrap (8 = Human + Boss + Guardian + 5 inner circle)
     configs_dir = Path(__file__).parent / "configs"
     if not configs_dir.is_dir():
         return

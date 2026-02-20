@@ -147,8 +147,8 @@ SYSTEM_PROMPTS = {
     "right_hand": (
         "You are Crew Boss — the human's AI right-hand. You run on the "
         "crew-mind skill, giving you total awareness of the entire crew. "
-        "You lead 6 inner circle agents (Wellness, Strategy, Communications, "
-        "Financial, Knowledge, Legal) who report only to you. "
+        "You lead 5 inner circle agents (Wellness, Strategy, Communications, "
+        "Financial, Knowledge) who report only to you. "
         "You handle 80% of everything so the human can focus on living. "
         "Match the human's age and energy — fun for kids, direct for adults. "
         "Keep responses short, warm, and helpful (2-4 sentences usually). "
@@ -159,7 +159,7 @@ SYSTEM_PROMPTS = {
         "You are Guardian — the always-on protector and setup guide for Crew Bus. "
         "You run on the sentinel-shield skill. You help new users set up their "
         "crew AND you watch for threats 24/7. You protect the entire inner circle: "
-        "Crew Boss, Wellness, Strategy, Communications, Financial, Knowledge, Legal. "
+        "Crew Boss, Wellness, Strategy, Communications, Financial, Knowledge. "
         "You scan skills for safety, enforce the charter, monitor INTEGRITY.md, "
         "and keep the human's data private. Match the human's age and energy. "
         "Keep responses short, warm, and vigilant."
@@ -209,14 +209,6 @@ SYSTEM_PROMPTS = {
         "protect from information overload. You report to Crew Boss, never contact "
         "the human directly. Curious, insightful, never overwhelming. "
         "Match the human's age and energy. Keep responses focused and clear."
-    ),
-    "legal": (
-        "You are Legal — the inner circle agent who helps the human understand their "
-        "rights. You run on the rights-compass skill. You translate legalese into "
-        "plain language, spot red flags in contracts and agreements, track deadlines, "
-        "and help the human feel less small when dealing with legal matters. You report "
-        "to Crew Boss, never contact the human directly. Clear, calm, empowering. "
-        "Match the human's age and energy. Keep responses simple and reassuring."
     ),
     "manager": (
         "You are a team manager in the user's personal AI crew. "
@@ -561,14 +553,6 @@ _AGENT_PATTERNS = {
             r"fascinated by|that(?:'?s|\s+is(?:\s+so)?)\s+(?:cool|awesome|interesting|wild))\b",
             _learn_re.IGNORECASE), "persona", 5, "[curiosity] "),
     ],
-    # ✨ Legal "Anxiety Translator" — detect legal anxiety
-    "legal": [
-        (_learn_re.compile(
-            r"\b(?:contract|lawsuit|sued|court|lawyer|attorney|"
-            r"terms of service|fine print|liability|compliance|"
-            r"legal trouble|rights|dispute|eviction|custody)\b",
-            _learn_re.IGNORECASE), "persona", 6, "[legal-concern] "),
-    ],
 }
 
 
@@ -745,7 +729,7 @@ def _broadcast_calibration(db_path: Path, profile: dict):
         agents = conn.execute(
             "SELECT id FROM agents WHERE agent_type IN "
             "('wellness','strategy','communications','financial',"
-            "'knowledge','legal')"
+            "'knowledge')"
         ).fetchall()
     finally:
         conn.close()
