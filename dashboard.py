@@ -990,14 +990,11 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   outline:none;
 }
 
-/* Trust + Energy score indicators (fixed bottom) */
+/* Trust + Energy score indicators (below teams) */
 .indicators{
-  display:flex;gap:20px;justify-content:center;
-  padding:8px 16px;
-  position:fixed;bottom:60px;left:0;right:0;
-  z-index:50;pointer-events:none;
+  display:flex;gap:14px;justify-content:center;
+  padding:16px 0 8px;
 }
-.indicators .indicator{pointer-events:auto}
 .indicator{
   display:flex;align-items:center;gap:8px;
   background:var(--sf);border:1px solid var(--bd);
@@ -3909,16 +3906,16 @@ def _build_html():
   </div>
   <!-- Guardian unlock banner (hidden when activated) -->
   <div id="guardian-banner" style="display:none"></div>
-</div>
-</div>
-<!-- ══════════ SCORE INDICATORS (bottom) ══════════ -->
-<div class="indicators" id="bottom-indicators">
-  <div class="indicator" onclick="openTBPopup()">
-    <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
+  <!-- Score indicators below teams -->
+  <div class="indicators" id="bottom-indicators">
+    <div class="indicator" onclick="openTBPopup()">
+      <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
+    </div>
+    <div class="indicator" onclick="openTBPopup()">
+      <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
+    </div>
   </div>
-  <div class="indicator" onclick="openTBPopup()">
-    <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
-  </div>
+</div>
 </div>
 <!-- ══════════ COMPOSE BAR ══════════ -->
 <div class="compose-bar" id="compose-bar">
