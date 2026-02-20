@@ -1231,10 +1231,16 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
     )
     print("[guardian] WhatsApp setup triggered directly")
 
-    # Start the bridge
+    # Start the bridge via dashboard's HTTP API (avoids module import issues)
     try:
-        import dashboard
-        result = dashboard._start_wa_bridge()
+        req = urllib.request.Request(
+            "http://localhost:8080/api/wa/start",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
         if not result.get("ok") and result.get("status") != "already_running":
             _insert_reply_direct(
                 db_path, guardian_id, human_id,
@@ -1439,9 +1445,15 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             # Start WA bridge and spawn a background thread to poll for QR + connection
             print("[wizard] starting WhatsApp setup...")
             try:
-                # Import dashboard helpers
-                import dashboard
-                result = dashboard._start_wa_bridge()
+                # Start bridge via dashboard HTTP API
+                _wa_req = urllib.request.Request(
+                    "http://localhost:8080/api/wa/start",
+                    data=b"{}",
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(_wa_req, timeout=10) as _wa_resp:
+                    result = json.loads(_wa_resp.read().decode("utf-8"))
                 if not result.get("ok"):
                     print(f"[wizard] WA bridge start failed: {result.get('error')}")
                 else:
