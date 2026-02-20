@@ -3904,7 +3904,6 @@ def _build_html():
       <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
     </div>
   </div>
-  </div>
 </div>
 <div class="main-right">
   <div class="teams-section">
