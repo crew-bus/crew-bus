@@ -194,10 +194,10 @@ def post_approved_draft(draft_id: int, db_path: Optional[Path] = None) -> dict:
         return {"ok": False, "error": f"Draft {draft_id} status is '{draft['status']}', must be 'approved'"}
 
     # target = channel name (default: general)
-    channel = (draft.get("target") or "general").strip()
+    channel = (draft["target"] or "general").strip()
 
     # If there's a title, post as embed. Otherwise plain text.
-    if draft.get("title"):
+    if draft["title"]:
         result = post_embed(
             title=draft["title"],
             description=draft["body"],

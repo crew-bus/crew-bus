@@ -224,7 +224,7 @@ def post_approved_draft(draft_id: int, db_path: Optional[Path] = None) -> dict:
         return {"ok": False, "error": f"Draft {draft_id} status is '{draft['status']}', must be 'approved'"}
 
     # target = subreddit name (e.g. "r/opensource" or "opensource")
-    subreddit = (draft.get("target") or "").strip()
+    subreddit = (draft["target"] or "").strip()
     if not subreddit:
         return {"ok": False, "error": "Draft has no target subreddit set"}
     subreddit = subreddit.lstrip("r/").lstrip("/")

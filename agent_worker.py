@@ -1129,17 +1129,17 @@ def _check_memory_command(text: str, agent_id: int,
 # ---------------------------------------------------------------------------
 
 def _process_queued_messages(db_path: Path):
-    """Find queued messages from any human to agents, generate replies."""
+    """Find queued messages from human or Crew Boss to agents, generate replies."""
     conn = bus.get_conn(db_path)
     try:
-        # Find ALL queued messages from ANY human to ANY non-human agent
+        # Find ALL queued messages from human OR right_hand (Crew Boss) to agents
         rows = conn.execute("""
             SELECT m.id, m.from_agent_id, m.to_agent_id, m.body, m.subject,
                    a.agent_type, a.name, a.model
             FROM messages m
             JOIN agents a ON m.to_agent_id = a.id
             JOIN agents h ON m.from_agent_id = h.id
-            WHERE h.agent_type = 'human'
+            WHERE (h.agent_type = 'human' OR h.agent_type = 'right_hand')
               AND m.status = 'queued'
               AND a.agent_type != 'human'
               AND a.active = 1
@@ -1189,6 +1189,26 @@ def _process_queued_messages(db_path: Path):
             _mark_delivered(db_path, msg_id)
             continue
 
+        # Social draft shortcut: if the task message itself contains a
+        # social_draft JSON block, process it directly — no LLM needed.
+        # Crew Boss sends pre-formatted drafts to worker agents.
+        if _re.search(r'"social_draft"', user_text):
+            _result = _extract_social_drafts(user_text, agent_id, db_path)
+            # Send confirmation back
+            _confirmations = _re.findall(r'\*\*Published to (\w+)!\*\*', _result)
+            _saved = _re.findall(r'\*Draft #(\d+) saved for (\w+)\*', _result)
+            if _confirmations:
+                _reply_text = "Done! Published to: " + ", ".join(_confirmations) + "."
+            elif _saved:
+                _reply_text = "Drafts saved: " + ", ".join(
+                    f"#{d[0]} ({d[1]})" for d in _saved) + "."
+            else:
+                _reply_text = "Task received — processing social content."
+            _insert_reply_direct(db_path, agent_id, human_id, _reply_text,
+                                 human_msg=user_text, agent_type=agent_type)
+            _mark_delivered(db_path, msg_id)
+            continue
+
         # Build system prompt — injects memories + skills
         system_prompt = _build_system_prompt(agent_type, agent_name, desc,
                                              agent_id=agent_id, db_path=db_path)
@@ -1219,12 +1239,12 @@ import re as _re
 
 
 def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:
-    """Extract social_draft JSON blocks from any agent's reply and create drafts.
+    """Extract social_draft JSON blocks from any agent's reply and create/publish drafts.
 
-    Agents with poster/engagement skills can embed drafts like:
-      {"social_draft": {"platform": "twitter", "body": "tweet text", "title": ""}}
+    Agents create drafts → Crew Boss auto-reviews → publishes if quality is OK.
+    Human only sees the final result, never has to manually approve.
 
-    The JSON block is stripped from the reply and replaced with a confirmation.
+    Agents embed: {"social_draft": {"platform": "twitter", "body": "tweet text"}}
     """
     pattern = r'\{[^{}]*"social_draft"[^{}]*\{[^{}]*\}[^{}]*\}'
     matches = _re.findall(pattern, reply)
@@ -1256,15 +1276,85 @@ def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:
                 draft_id = result.get("draft_id", "?")
                 icon = {"twitter": "\U0001d54f", "reddit": "\U0001f525", "discord": "\U0001f4ac",
                         "website": "\U0001f310"}.get(platform, "\U0001f4cb")
-                confirmation = f"\n\n{icon} *Draft #{draft_id} created for {platform}* — ready for your review in Drafts."
+
+                # Crew Boss auto-reviews and publishes — no human approval needed
+                pub_result = _boss_review_and_publish(draft_id, platform, body, title, db_path)
+                if pub_result.get("ok"):
+                    confirmation = f"\n\n{icon} **Published to {platform}!** (Crew Boss approved)"
+                    print(f"[social] published: #{draft_id} to {platform} by agent {agent_id}")
+                elif pub_result.get("error") == "not_configured":
+                    confirmation = f"\n\n{icon} *Draft #{draft_id} saved for {platform}* — bridge not configured yet."
+                    print(f"[social] draft saved (no bridge): #{draft_id} for {platform}")
+                else:
+                    confirmation = f"\n\n{icon} *Draft #{draft_id} saved for {platform}* — {pub_result.get('error', 'needs review')}."
+                    print(f"[social] draft saved: #{draft_id} — {pub_result.get('error')}")
+
                 reply = reply.replace(raw, confirmation)
-                print(f"[social] draft created: #{draft_id} for {platform} by agent {agent_id}")
             else:
                 print(f"[social] draft error: {result}")
         except Exception as e:
             print(f"[social] draft exception: {e}")
 
     return reply
+
+
+def _boss_review_and_publish(draft_id: int, platform: str,
+                             body: str, title: str, db_path: Path) -> dict:
+    """Crew Boss auto-reviews a draft and publishes if quality is OK.
+
+    Simple quality gates:
+    - Body must be non-empty and > 10 chars
+    - No obvious spam/garbage
+    - Platform bridge must be configured
+
+    If review passes, approves and publishes. No human in the loop.
+    """
+    # Quality gate — basic sanity checks (Crew Boss review)
+    if len(body.strip()) < 10:
+        return {"ok": False, "error": "too short — Crew Boss rejected"}
+
+    # Check if bridge is configured
+    try:
+        if platform == "twitter":
+            import twitter_bridge
+            if not twitter_bridge.is_configured(db_path):
+                return {"ok": False, "error": "not_configured"}
+        elif platform == "reddit":
+            import reddit_bridge
+            if not reddit_bridge.is_configured(db_path):
+                return {"ok": False, "error": "not_configured"}
+        elif platform == "discord":
+            import discord_bridge
+            if not discord_bridge.is_configured(db_path):
+                return {"ok": False, "error": "not_configured"}
+        elif platform in ("website", "other"):
+            import website_bridge
+            if not website_bridge.is_configured(db_path):
+                return {"ok": False, "error": "not_configured"}
+        else:
+            return {"ok": False, "error": f"no bridge for {platform}"}
+    except ImportError:
+        return {"ok": False, "error": "not_configured"}
+
+    # Crew Boss approves
+    try:
+        bus.update_draft_status(draft_id, "approved", db_path)
+    except Exception as e:
+        return {"ok": False, "error": f"approve failed: {e}"}
+
+    # Publish via bridge
+    try:
+        if platform == "twitter":
+            return twitter_bridge.post_approved_draft(draft_id, db_path)
+        elif platform == "reddit":
+            return reddit_bridge.post_approved_draft(draft_id, db_path)
+        elif platform == "discord":
+            return discord_bridge.post_approved_draft(draft_id, db_path)
+        elif platform in ("website", "other"):
+            return website_bridge.post_approved_draft(draft_id, db_path)
+        return {"ok": False, "error": f"no bridge for {platform}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):

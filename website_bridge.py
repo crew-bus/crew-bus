@@ -256,7 +256,7 @@ def post_approved_draft(draft_id: int, db_path: Optional[Path] = None) -> dict:
         return {"ok": False, "error": f"Draft {draft_id} status is '{draft['status']}', must be 'approved'"}
 
     result = create_blog_post(
-        title=draft.get("title") or "Crew Bus Update",
+        title=draft["title"] or "Crew Bus Update",
         body_html=draft["body"],
         db_path=db_path,
     )
