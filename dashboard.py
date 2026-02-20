@@ -590,8 +590,8 @@ a{color:var(--ac);text-decoration:none}
 .hamburger-btn:hover{color:var(--tx);border-color:var(--mu)}
 .hamburger-menu{
   display:none;position:absolute;right:0;top:calc(100% + 6px);
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.35);
+  background:var(--bg);border:1px solid var(--bd);border-radius:10px;
+  min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.5);
   z-index:200;overflow:hidden;
 }
 .hamburger-menu.open{display:block;animation:menuFade .15s ease}
