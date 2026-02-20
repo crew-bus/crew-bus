@@ -1104,6 +1104,14 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   cursor:pointer;font-weight:600;transition:all .2s;
 }
 .btn-delete-team:hover{background:#e94560;color:#fff}
+.btn-pause-team{
+  padding:6px 12px;font-size:.75rem;border-radius:var(--r);
+  border:1px solid #f0883e;background:transparent;color:#f0883e;
+  cursor:pointer;font-weight:600;transition:all .2s;
+}
+.btn-pause-team:hover{background:#f0883e;color:#fff}
+.btn-pause-team.btn-resume{border-color:#3fb950;color:#3fb950}
+.btn-pause-team.btn-resume:hover{background:#3fb950;color:#fff}
 .team-hierarchy{position:relative;padding:16px 0}
 .team-mgr-wrap{text-align:center;margin-bottom:16px}
 .team-mgr-bubble{
@@ -2948,6 +2956,35 @@ function showReferralCode(code){
   });
 }
 
+async function pauseTeam(teamId,teamName){
+  if(!confirm('Pause "'+teamName+'"? All agents will stop consuming tokens. You can resume anytime.'))return;
+  try{
+    var agents=await api('/api/teams/'+teamId+'/agents');
+    var paused=0;
+    for(var i=0;i<agents.length;i++){
+      if(agents[i].active){
+        try{await apiPost('/api/agent/'+agents[i].id+'/deactivate',{});paused++;}catch(e){}
+      }
+    }
+    showToast(teamName+' paused ('+paused+' agents).');
+    openTeamDash(teamId);
+    loadTeams();
+  }catch(e){showToast('Failed to pause team.','error')}
+}
+async function resumeTeam(teamId,teamName){
+  try{
+    var agents=await api('/api/teams/'+teamId+'/agents');
+    var resumed=0;
+    for(var i=0;i<agents.length;i++){
+      if(!agents[i].active){
+        try{await apiPost('/api/agent/'+agents[i].id+'/activate',{});resumed++;}catch(e){}
+      }
+    }
+    showToast(teamName+' resumed ('+resumed+' agents back online).');
+    openTeamDash(teamId);
+    loadTeams();
+  }catch(e){showToast('Failed to resume team.','error')}
+}
 async function deleteTeam(teamId,teamName){
   var ok=await showConfirm(
     'Delete Team',
@@ -3135,10 +3172,14 @@ async function openTeamDash(teamId){
   var workers=teamAgents.filter(function(a){return a.agent_type!=='manager'});
 
   var canRename=!team.locked_name;
+  var teamPaused=mgr&&!mgr.active;
   var html='<div class="team-dash-header">'+
     '<button class="team-dash-back" onclick="showView(\'crew\')">\u2190</button>'+
     '<span class="team-dash-title" id="team-dash-name" data-team-id="'+teamId+'"'+(canRename?' onclick="startRenameTeam()" title="Click to rename"':'')+'>'+esc(team.name)+(canRename?' <span class="edit-icon">\u270F\uFE0F</span>':'')+'</span>'+
     '<span class="badge badge-active">'+team.agent_count+' agents</span>'+
+    (teamPaused
+      ?'<button class="btn-pause-team btn-resume" onclick="resumeTeam('+teamId+',\''+esc(team.name).replace(/"/g,'&quot;')+'\')">Resume Team</button>'
+      :'<button class="btn-pause-team" onclick="pauseTeam('+teamId+',\''+esc(team.name).replace(/"/g,'&quot;')+'\')">Pause Team</button>')+
     '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
   // Manager bubble — click to open, double-click name to rename
