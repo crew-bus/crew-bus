@@ -1180,6 +1180,15 @@ def _process_queued_messages(db_path: Path):
         except Exception:
             pass
 
+        # Guardian shortcut: intercept WhatsApp setup requests directly
+        # (don't rely on the LLM to emit the JSON — handle it in code)
+        if agent_type == "guardian" and _re.search(
+            r'\bwhatsapp\b', user_text, _re.IGNORECASE
+        ):
+            _handle_whatsapp_setup(db_path, agent_id, human_id)
+            _mark_delivered(db_path, msg_id)
+            continue
+
         # Build system prompt — injects memories + skills
         system_prompt = _build_system_prompt(agent_type, agent_name, desc,
                                              agent_id=agent_id, db_path=db_path)
@@ -1204,6 +1213,123 @@ def _process_queued_messages(db_path: Path):
 
 
 import re as _re
+
+
+def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
+    """Handle WhatsApp setup entirely in code — no LLM needed.
+
+    Starts the WA bridge, sends a friendly message, then spawns a
+    background thread to poll for QR and connection status.
+    """
+    # Send immediate acknowledgment
+    _insert_reply_direct(
+        db_path, guardian_id, human_id,
+        "Starting WhatsApp setup! A QR code will appear here in a moment. "
+        "Get your phone ready — you'll scan it with WhatsApp "
+        "(Settings > Linked Devices > Link a Device).",
+        agent_type="guardian",
+    )
+    print("[guardian] WhatsApp setup triggered directly")
+
+    # Start the bridge
+    try:
+        import dashboard
+        result = dashboard._start_wa_bridge()
+        if not result.get("ok") and result.get("status") != "already_running":
+            _insert_reply_direct(
+                db_path, guardian_id, human_id,
+                "Hmm, I couldn't start the WhatsApp bridge: "
+                + result.get("error", "unknown error")
+                + ". Make sure Node.js is installed and the wa-bridge folder exists.",
+                agent_type="guardian",
+            )
+            return
+    except Exception as e:
+        _insert_reply_direct(
+            db_path, guardian_id, human_id,
+            "Something went wrong starting the WhatsApp bridge: " + str(e),
+            agent_type="guardian",
+        )
+        return
+
+    # Spawn background thread for QR polling + connection monitoring
+    def _wa_qr_poller():
+        import urllib.request as _ur
+        import json as _json
+
+        # Phase 1: Wait for QR code (up to 60s)
+        qr_found = False
+        for _ in range(30):
+            time.sleep(2)
+            try:
+                req = _ur.Request("http://localhost:3001/qr/svg")
+                with _ur.urlopen(req, timeout=3) as resp:
+                    data = _json.loads(resp.read().decode("utf-8"))
+                    if data.get("svg"):
+                        _insert_reply_direct(
+                            db_path, guardian_id, human_id,
+                            "[WA_QR]\n\nScan this QR code with your phone now! "
+                            "Open WhatsApp > Settings > Linked Devices > Link a Device.",
+                            agent_type="guardian",
+                        )
+                        print("[guardian] QR code injected into chat")
+                        qr_found = True
+                        break
+            except Exception:
+                pass
+            # Check if already connected (saved session)
+            try:
+                req = _ur.Request("http://localhost:3001/status")
+                with _ur.urlopen(req, timeout=3) as resp:
+                    st = _json.loads(resp.read().decode("utf-8"))
+                    if st.get("status") == "connected":
+                        _insert_reply_direct(
+                            db_path, guardian_id, human_id,
+                            "WhatsApp is already connected! "
+                            "Crew Boss messages will flow through WhatsApp now.",
+                            agent_type="guardian",
+                        )
+                        return
+            except Exception:
+                pass
+
+        if not qr_found:
+            _insert_reply_direct(
+                db_path, guardian_id, human_id,
+                "The WhatsApp bridge is taking a while to start up. "
+                "Try saying 'set up WhatsApp' again in a moment.",
+                agent_type="guardian",
+            )
+            return
+
+        # Phase 2: Wait for scan/connection (up to 180s)
+        for _ in range(60):
+            time.sleep(3)
+            try:
+                req = _ur.Request("http://localhost:3001/status")
+                with _ur.urlopen(req, timeout=3) as resp:
+                    st = _json.loads(resp.read().decode("utf-8"))
+                    if st.get("status") == "connected":
+                        _insert_reply_direct(
+                            db_path, guardian_id, human_id,
+                            "WhatsApp connected! You're all set. "
+                            "Crew Boss messages will now flow through WhatsApp too.",
+                            agent_type="guardian",
+                        )
+                        print("[guardian] WhatsApp connected!")
+                        return
+            except Exception:
+                pass
+
+        _insert_reply_direct(
+            db_path, guardian_id, human_id,
+            "The QR code expired before it was scanned. No worries — "
+            "just say 'set up WhatsApp' again and I'll generate a fresh one.",
+            agent_type="guardian",
+        )
+
+    t = threading.Thread(target=_wa_qr_poller, daemon=True)
+    t.start()
 
 def _execute_wizard_actions(reply: str, db_path: Path) -> str:
     """Parse and execute wizard_action/guardian_action JSON commands from an LLM reply.
