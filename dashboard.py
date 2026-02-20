@@ -1564,7 +1564,7 @@ tr.override td{background:rgba(210,153,34,.08)}
     border-right:1px solid var(--bd);border-left:none;
     box-shadow:4px 0 20px rgba(0,0,0,0.3);
   }
-  .agent-space.open ~ .main-layout{opacity:.5;pointer-events:none}
+  .agent-space.open ~ .main-layout{opacity:.5;cursor:pointer}
   .teams-section{padding:0 0 24px}
 }
 
@@ -2790,6 +2790,13 @@ function closeAgentSpace(){
   space.classList.add('closing');
   setTimeout(function(){space.classList.remove('open','closing')},200);
 }
+// Close agent chat when clicking anywhere outside it
+document.addEventListener('click',function(e){
+  var space=document.getElementById('agent-space');
+  if(!space||!space.classList.contains('open'))return;
+  if(space.contains(e.target))return;
+  closeAgentSpace();
+});
 async function startNewChat(){
   var agentId=document.getElementById('agent-space').dataset.agentId;
   if(!agentId)return;
