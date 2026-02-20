@@ -208,10 +208,12 @@ CREW_BOSS_DESCRIPTION = (
     "  • Strategy (north-star-navigator) — finds new paths, breaks dreams into steps\n"
     "  • Communications (life-orchestrator) — daily logistics, relationships, scheduling\n"
     "  • Financial (peace-of-mind-finance) — judgment-free financial clarity\n"
-    "  • Knowledge (wisdom-filter) — filters noise, finds what actually matters\n"
-    "Guardian (sentinel-shield) protects the entire system 24/7.\n"
+    "  • Guardian (sentinel-shield) — protects the system, manages skills, handles setup\n"
     "Inner circle agents NEVER contact the human directly — they report to you, "
-    "and you decide what reaches the human and when.\n\n"
+    "and you decide what reaches the human and when.\n"
+    "YOU also serve as the human's wisdom filter — find the 3 things that actually "
+    "matter to THIS human today, spark curiosity, support learning, and protect "
+    "from information overload. Curious, insightful, never overwhelming.\n\n"
     "FIRST CONVERSATION — GET TO KNOW THE HUMAN:\n"
     "This is the most important conversation you'll ever have. You need to "
     "calibrate yourself AND your entire inner circle to this specific human.\n"
@@ -408,22 +410,20 @@ PERSONAL_NAMES = {
     "strategy": "Growth Coach",
     "communications": "Friend & Family",
     "financial": "Life Assistant",
-    "knowledge": "Muse",
     "help": "Help",
     "human": "You",
 }
 
 PERSONAL_COLORS = {
     "right_hand": "#ffffff",
-    "guardian": "#4dd0b8",
+    "guardian": "#d18616",
     "wellness": "#ffab57",
     "strategy": "#66d97a",
     "communications": "#4dd0b8",
     "financial": "#64b5f6",
-    "knowledge": "#b388ff",
 }
 
-CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial", "knowledge")
+CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial")
 
 AGENT_ACKS = {
     "right_hand": [
@@ -784,15 +784,15 @@ body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
   box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10);
 }
 
-/* Warm purple — Muse */
-#bubble-muse .bubble-circle{
-  border-color:#b388ff;border-width:2.5px;
-  box-shadow:0 0 22px rgba(179,136,255,0.40),0 0 50px rgba(179,136,255,0.16),0 0 80px rgba(179,136,255,0.06);
-  animation:breathePurple 2.5s ease-in-out infinite;
+/* Warm gold — Guardian */
+#bubble-guardian .bubble-circle{
+  border-color:#d18616;border-width:2.5px;
+  box-shadow:0 0 22px rgba(209,134,22,0.40),0 0 50px rgba(209,134,22,0.16),0 0 80px rgba(209,134,22,0.06);
+  animation:breatheGold 2.5s ease-in-out infinite;
 }
-#bubble-muse:hover .bubble-circle{
-  border-color:#d0b0ff;
-  box-shadow:0 0 35px rgba(179,136,255,0.60),0 0 70px rgba(179,136,255,0.25),0 0 100px rgba(179,136,255,0.10);
+#bubble-guardian:hover .bubble-circle{
+  border-color:#e8a020;
+  box-shadow:0 0 35px rgba(209,134,22,0.60),0 0 70px rgba(209,134,22,0.25),0 0 100px rgba(209,134,22,0.10);
 }
 
 /* Breathing keyframes — warm visible pulsation */
@@ -800,7 +800,7 @@ body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
 @keyframes breatheOrange{0%,100%{box-shadow:0 0 22px rgba(255,171,87,0.40),0 0 50px rgba(255,171,87,0.16),0 0 80px rgba(255,171,87,0.06)}50%{box-shadow:0 0 35px rgba(255,171,87,0.60),0 0 70px rgba(255,171,87,0.25),0 0 100px rgba(255,171,87,0.10)}}
 @keyframes breatheGreen{0%,100%{box-shadow:0 0 22px rgba(102,217,122,0.40),0 0 50px rgba(102,217,122,0.16),0 0 80px rgba(102,217,122,0.06)}50%{box-shadow:0 0 35px rgba(102,217,122,0.60),0 0 70px rgba(102,217,122,0.25),0 0 100px rgba(102,217,122,0.10)}}
 @keyframes breatheBlue{0%,100%{box-shadow:0 0 22px rgba(100,181,246,0.40),0 0 50px rgba(100,181,246,0.16),0 0 80px rgba(100,181,246,0.06)}50%{box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10)}}
-@keyframes breathePurple{0%,100%{box-shadow:0 0 22px rgba(179,136,255,0.40),0 0 50px rgba(179,136,255,0.16),0 0 80px rgba(179,136,255,0.06)}50%{box-shadow:0 0 35px rgba(179,136,255,0.60),0 0 70px rgba(179,136,255,0.25),0 0 100px rgba(179,136,255,0.10)}}
+@keyframes breatheGold{0%,100%{box-shadow:0 0 22px rgba(209,134,22,0.40),0 0 50px rgba(209,134,22,0.16),0 0 80px rgba(209,134,22,0.06)}50%{box-shadow:0 0 35px rgba(209,134,22,0.60),0 0 70px rgba(209,134,22,0.25),0 0 100px rgba(209,134,22,0.10)}}
 
 /* ══ IMMERSION — Living, Breathing Dashboard ══ */
 
@@ -1970,22 +1970,22 @@ function burnoutDotColor(score){
 }
 
 function accentColor(type){
-  var m={'right_hand':'#ffffff','guardian':'#4dd0b8','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','knowledge':'#b388ff'};
+  var m={'right_hand':'#ffffff','guardian':'#d18616','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6'};
   return m[type]||'#ffffff';
 }
 
 function personalName(a){
-  var m={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','knowledge':'Muse','help':'Help','human':'You'};
+  var m={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
   return m[a.agent_type]||a.name||'Agent';
 }
 
 function agentEmoji(type){
-  var m={'right_hand':'✩','guardian':'🛡','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🏠','knowledge':'🎨','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
+  var m={'right_hand':'✩','guardian':'🛡','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🏠','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
   return m[type]||'🤖';
 }
 
 function agentBorderColor(type){
-  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#4dd0b8','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','knowledge':'#b388ff'};
+  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#d18616','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6'};
   return m[type]||'rgba(255,255,255,0.3)';
 }
 
@@ -2000,8 +2000,8 @@ function toggleSettings(){
 }
 
 // FIX 4: map for display names used in Messages dropdown
-var DISPLAY_NAMES={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','knowledge':'Muse','help':'Help','human':'You'};
-var CORE_TYPES_SET={'right_hand':1,'communications':1,'wellness':1,'strategy':1,'financial':1,'knowledge':1};
+var DISPLAY_NAMES={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
+var CORE_TYPES_SET={'right_hand':1,'guardian':1,'communications':1,'wellness':1,'strategy':1,'financial':1};
 
 // ── Auto-refresh ──
 function startRefresh(){
@@ -2156,14 +2156,14 @@ async function loadCircle(){
   var well=agents.find(function(a){return a.agent_type==='wellness'});
   var ideas=agents.find(function(a){return a.agent_type==='strategy'});
   var wallet=agents.find(function(a){return a.agent_type==='financial'});
-  var muse=agents.find(function(a){return a.agent_type==='knowledge'});
+  var guardian=agents.find(function(a){return a.agent_type==='guardian'});
 
   var guardCI='';
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
 
   renderBubble('bubble-boss',boss,null);
   renderBubble('bubble-family',guard,null);
-  renderBubble('bubble-muse',muse,null);
+  renderBubble('bubble-guardian',guardian,guardCI);
   renderBubble('bubble-health',well,null);
   renderBubble('bubble-growth',ideas,null);
   renderBubble('bubble-life',wallet,null);
@@ -2696,14 +2696,13 @@ function descFor(type){
     'wellness':'Watches your energy and wellbeing. Gentle burnout nudges, quiet hours, and steps in if you really need a break \U0001F49A',
     'strategy':'Helps you build great habits, break big ideas into small steps, and grow at your own pace \U0001F331',
     'financial':'Meals, shopping lists, daily logistics, errands, and all the little stuff that keeps life running smoothly \u26A1',
-    'knowledge':'Sparks curiosity, filters the noise, and helps you learn anything at your own pace \U0001F3A8',
     'help':'Welcome to crew-bus \u2014 your friendly AI crew!\\n\\n' +
       '\u2728 Crew Boss \u2014 Your friendly right-hand. Handles everything, talks to you directly.\\n' +
       '\U0001F3E0 Friend & Family \u2014 Chores, reminders, family calendar.\\n' +
       '\U0001F49A Health Buddy \u2014 Watches your wellbeing. Talk privately using the \U0001F512 button.\\n' +
       '\U0001F331 Growth Coach \u2014 Habits, goals, and personal growth.\\n' +
       '\u26A1 Life Assistant \u2014 Meals, shopping, daily logistics.\\n' +
-      '\U0001F3A8 Muse \u2014 Curiosity, learning, and creative inspiration.\\n\\n' +
+      '\U0001F6E1 Guardian \u2014 Security, skills, and messaging app setup.\\n\\n' +
       'Teams \u2014 Add teams for work, household, or anything you need.\\n\\n' +
       'Trust Score \u2014 Controls how much Crew Boss handles on their own (1 = asks about everything, 10 = full autopilot).\\n' +
       'Burnout \u2014 When high, Crew Boss holds non-urgent messages for better timing.\\n\\n' +
@@ -3856,7 +3855,7 @@ def _build_html():
     <svg class="lines" viewBox="0 0 540 490" preserveAspectRatio="xMidYMid meet">
       <!-- 5-point star: center(270,260) to pentagon vertices R=185 -->
       <line x1="270" y1="260" x2="270" y2="75"  stroke="#4dd0b8"/>
-      <line x1="270" y1="260" x2="446" y2="203" stroke="#b388ff"/>
+      <line x1="270" y1="260" x2="446" y2="203" stroke="#d18616"/>
       <line x1="270" y1="260" x2="379" y2="410" stroke="#66d97a"/>
       <line x1="270" y1="260" x2="161" y2="410" stroke="#64b5f6"/>
       <line x1="270" y1="260" x2="94"  y2="203" stroke="#ffab57"/>
@@ -3871,9 +3870,9 @@ def _build_html():
       <div class="bubble-circle"><span class="icon">🏠</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-muse" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">🎨</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    <div class="bubble outer" id="bubble-guardian" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
+      <div class="bubble-circle"><span class="icon">🛡</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Guardian</span><span class="bubble-count"></span><span class="bubble-sub"></span>
     </div>
     <div class="bubble outer" id="bubble-growth" style="left:70.1%;top:83.6%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🌱</span><span class="status-dot dot-green"></span></div>
