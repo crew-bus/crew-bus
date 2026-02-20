@@ -2326,6 +2326,7 @@ async function openAgentSpace(agentId){
   var space=document.getElementById('agent-space');
   if(!space)return;
   space.classList.remove('closing');
+  space.style.display='';
   space.classList.add('open');
   var ov=document.getElementById('agent-overlay');if(ov)setTimeout(function(){ov.style.display='block'},300);
   space.dataset.agentId=agentId;
@@ -2791,7 +2792,7 @@ function closeAgentSpace(){
   stopChatPoll();
   var space=document.getElementById('agent-space');
   space.classList.add('closing');
-  setTimeout(function(){space.classList.remove('open','closing')},200);
+  setTimeout(function(){space.classList.remove('open','closing');space.style.display='none';},250);
   var ov=document.getElementById('agent-overlay');if(ov)ov.style.display='none';
 }
 async function startNewChat(){
