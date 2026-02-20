@@ -588,7 +588,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             agent_id    INTEGER NOT NULL REFERENCES agents(id),
             platform    TEXT NOT NULL CHECK(platform IN (
-                'reddit','twitter','hackernews','discord','linkedin','producthunt','other')),
+                'reddit','twitter','hackernews','discord','linkedin','producthunt','website','other')),
             title       TEXT NOT NULL DEFAULT '',
             body        TEXT NOT NULL,
             target      TEXT NOT NULL DEFAULT '',
@@ -612,6 +612,32 @@ def init_db(db_path: Optional[Path] = None) -> None:
             "ALTER TABLE human_profile ADD COLUMN "
             "extended_profile TEXT NOT NULL DEFAULT '{}'"
         )
+
+    # Migrate: add 'website' to social_drafts platform CHECK constraint
+    # SQLite can't ALTER CHECK constraints, so recreate the table if needed
+    _needs_sd_migrate = False
+    _sd_sql = cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='social_drafts'").fetchone()
+    if _sd_sql and "'website'" not in (_sd_sql[0] or ""):
+        _needs_sd_migrate = True
+    if _needs_sd_migrate:
+        # CHECK constraint blocks 'website' — recreate table
+        cur.execute("ALTER TABLE social_drafts RENAME TO _social_drafts_old")
+        cur.execute("""CREATE TABLE IF NOT EXISTS social_drafts (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id    INTEGER NOT NULL REFERENCES agents(id),
+            platform    TEXT NOT NULL CHECK(platform IN (
+                'reddit','twitter','hackernews','discord','linkedin','producthunt','website','other')),
+            title       TEXT NOT NULL DEFAULT '',
+            body        TEXT NOT NULL,
+            target      TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft','approved','posted','rejected')),
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            approved_at TEXT
+        )""")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_drafts(status, platform)")
+        cur.execute("INSERT INTO social_drafts SELECT * FROM _social_drafts_old")
+        cur.execute("DROP TABLE _social_drafts_old")
 
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
@@ -4064,7 +4090,7 @@ def get_team_mailbox_summary(team_id: int,
 # Social Content Drafts
 # ---------------------------------------------------------------------------
 
-VALID_PLATFORMS = ("reddit", "twitter", "hackernews", "discord", "linkedin", "producthunt", "other")
+VALID_PLATFORMS = ("reddit", "twitter", "hackernews", "discord", "linkedin", "producthunt", "website", "other")
 VALID_DRAFT_STATUSES = ("draft", "approved", "posted", "rejected")
 
 

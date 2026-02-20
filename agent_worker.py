@@ -1204,6 +1204,9 @@ def _process_queued_messages(db_path: Path):
             # Execute any wizard_action commands embedded in the reply
             clean_reply = _execute_wizard_actions(reply, db_path)
 
+            # Extract and create any social_draft JSON blocks
+            clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+
             # Insert reply directly — always works, bypasses routing rules
             _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
                                  human_msg=user_text, agent_type=agent_type)
@@ -1213,6 +1216,55 @@ def _process_queued_messages(db_path: Path):
 
 
 import re as _re
+
+
+def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:
+    """Extract social_draft JSON blocks from any agent's reply and create drafts.
+
+    Agents with poster/engagement skills can embed drafts like:
+      {"social_draft": {"platform": "twitter", "body": "tweet text", "title": ""}}
+
+    The JSON block is stripped from the reply and replaced with a confirmation.
+    """
+    pattern = r'\{[^{}]*"social_draft"[^{}]*\{[^{}]*\}[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+    if not matches:
+        return reply
+
+    for raw in matches:
+        try:
+            parsed = json.loads(raw)
+            draft_data = parsed.get("social_draft", {})
+        except json.JSONDecodeError:
+            continue
+
+        platform = draft_data.get("platform", "")
+        body = draft_data.get("body", "")
+        title = draft_data.get("title", "")
+        target = draft_data.get("target", "")
+
+        if not platform or not body:
+            continue
+
+        try:
+            result = bus.create_social_draft(
+                agent_id=agent_id, platform=platform,
+                body=body, title=title, target=target,
+                db_path=db_path,
+            )
+            if result.get("ok"):
+                draft_id = result.get("draft_id", "?")
+                icon = {"twitter": "\U0001d54f", "reddit": "\U0001f525", "discord": "\U0001f4ac",
+                        "website": "\U0001f310"}.get(platform, "\U0001f4cb")
+                confirmation = f"\n\n{icon} *Draft #{draft_id} created for {platform}* — ready for your review in Drafts."
+                reply = reply.replace(raw, confirmation)
+                print(f"[social] draft created: #{draft_id} for {platform} by agent {agent_id}")
+            else:
+                print(f"[social] draft error: {result}")
+        except Exception as e:
+            print(f"[social] draft exception: {e}")
+
+    return reply
 
 
 def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):

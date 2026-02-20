@@ -2045,7 +2045,7 @@ function loadCurrentView(){
 
 // ══════════ SOCIAL DRAFTS ══════════
 
-var platformIcons={reddit:'📢',twitter:'🐦',hackernews:'📰',discord:'💬',linkedin:'💼',producthunt:'🚀',other:'📋'};
+var platformIcons={reddit:'📢',twitter:'🐦',hackernews:'📰',discord:'💬',linkedin:'💼',producthunt:'🚀',website:'🌐',other:'📋'};
 var statusColors={draft:'#d18616',approved:'#2ea043',posted:'#388bfd',rejected:'#f85149'};
 
 async function loadDrafts(){
@@ -2079,7 +2079,11 @@ async function loadDrafts(){
       html+='<button onclick="updateDraftStatus('+d.id+',\'rejected\')" style="background:#f85149;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2717 Reject</button>';
     }
     if(d.status==='approved'){
+      html+='<button onclick="publishDraft('+d.id+')" style="background:#f0883e;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem;font-weight:600">🚀 Publish</button>';
       html+='<button onclick="updateDraftStatus('+d.id+',\'posted\')" style="background:#388bfd;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">\u2713 Mark Posted</button>';
+    }
+    if(d.status==='draft'){
+      html+='<button onclick="publishDraft('+d.id+')" style="background:#f0883e;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem;font-weight:600">🚀 Publish Now</button>';
     }
     html+='</div></div>';
   });
@@ -2100,6 +2104,16 @@ async function copyDraft(id){
 async function updateDraftStatus(id,status){
   await apiPost('/api/social/drafts/'+id+'/status',{status:status});
   loadDrafts();
+}
+
+async function publishDraft(id){
+  if(!confirm('Publish this draft live? This will post it to the platform.'))return;
+  try{
+    var r=await apiPost('/api/social/drafts/'+id+'/publish',{});
+    if(r.ok){showToast('Published successfully!')}
+    else{showToast(r.error||'Publish failed','error')}
+    loadDrafts();
+  }catch(e){showToast('Publish failed: '+e,'error')}
 }
 
 function showToast(msg){
@@ -4030,6 +4044,7 @@ def _build_html():
         <option value="discord">Discord</option>
         <option value="linkedin">LinkedIn</option>
         <option value="producthunt">Product Hunt</option>
+        <option value="website">Website</option>
         <option value="other">Other</option>
       </select>
       <select id="drafts-status-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
@@ -6253,6 +6268,110 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 result = bus.update_draft_status(
                     draft_id=draft_id, status=new_status,
                     db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Draft Publish (routes to correct bridge) ──
+        m = re.match(r"^/api/social/drafts/(\d+)/publish$", path)
+        if m:
+            draft_id = int(m.group(1))
+            try:
+                conn = bus.get_conn(self.db_path)
+                draft = conn.execute(
+                    "SELECT * FROM social_drafts WHERE id=?", (draft_id,)
+                ).fetchone()
+                conn.close()
+                if not draft:
+                    return _json_response(self, {"error": "Draft not found"}, 404)
+                platform = draft["platform"]
+                # Auto-approve if still in draft status
+                if draft["status"] == "draft":
+                    bus.update_draft_status(draft_id, "approved", self.db_path)
+                if platform == "twitter":
+                    import twitter_bridge
+                    result = twitter_bridge.post_approved_draft(draft_id, self.db_path)
+                elif platform == "reddit":
+                    import reddit_bridge
+                    result = reddit_bridge.post_approved_draft(draft_id, self.db_path)
+                elif platform == "discord":
+                    import discord_bridge
+                    result = discord_bridge.post_approved_draft(draft_id, self.db_path)
+                elif platform in ("website", "other"):
+                    import website_bridge
+                    result = website_bridge.post_approved_draft(draft_id, self.db_path)
+                else:
+                    result = {"ok": False, "error": f"No bridge for platform: {platform}"}
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        # ── Bridge Status Endpoints ──
+        if path == "/api/bridges/status":
+            try:
+                bridges = {}
+                import twitter_bridge
+                bridges["twitter"] = twitter_bridge.status(self.db_path)
+            except Exception:
+                bridges["twitter"] = {"configured": False}
+            try:
+                import reddit_bridge
+                bridges["reddit"] = reddit_bridge.status(self.db_path)
+            except Exception:
+                bridges["reddit"] = {"configured": False}
+            try:
+                import discord_bridge
+                bridges["discord"] = discord_bridge.status(self.db_path)
+            except Exception:
+                bridges["discord"] = {"configured": False}
+            try:
+                import website_bridge
+                bridges["website"] = website_bridge.status(self.db_path)
+            except Exception:
+                bridges["website"] = {"configured": False}
+            return _json_response(self, bridges)
+
+        # ── Bridge Setup Endpoints ──
+        if path == "/api/bridges/twitter/setup":
+            try:
+                import twitter_bridge
+                result = twitter_bridge.setup_twitter_keys(
+                    api_key=data.get("api_key", ""),
+                    api_secret=data.get("api_secret", ""),
+                    access_token=data.get("access_token", ""),
+                    access_secret=data.get("access_secret", ""),
+                    bearer_token=data.get("bearer_token", ""),
+                    db_path=self.db_path,
+                )
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/bridges/reddit/setup":
+            try:
+                import reddit_bridge
+                result = reddit_bridge.setup_reddit_keys(
+                    client_id=data.get("client_id", ""),
+                    client_secret=data.get("client_secret", ""),
+                    username=data.get("username", ""),
+                    password=data.get("password", ""),
+                    db_path=self.db_path,
+                )
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 400)
+
+        if path == "/api/bridges/discord/setup":
+            try:
+                import discord_bridge
+                channel = data.get("channel", "general")
+                webhook_url = data.get("webhook_url", "")
+                if not webhook_url:
+                    return _json_response(self, {"error": "webhook_url required"}, 400)
+                result = discord_bridge.setup_discord_webhook(
+                    channel=channel, webhook_url=webhook_url,
+                    db_path=self.db_path,
+                )
                 return _json_response(self, result)
             except Exception as e:
                 return _json_response(self, {"error": str(e)}, 400)
