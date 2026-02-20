@@ -589,21 +589,24 @@ a{color:var(--ac);text-decoration:none}
 }
 .hamburger-btn:hover{color:var(--tx);border-color:var(--mu)}
 .hamburger-menu{
-  display:none;position:absolute;right:0;top:calc(100% + 6px);
-  background:#161b22;border:1px solid var(--bd);border-radius:10px;
-  min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.6);
-  z-index:200;overflow:hidden;
+  display:none;position:fixed;right:12px;top:52px;
+  background:#161b22;border:1px solid #30363d;border-radius:10px;
+  min-width:210px;box-shadow:0 8px 30px rgba(0,0,0,0.7);
+  z-index:9999;overflow:hidden;
 }
-body.day-mode .hamburger-menu{background:#ffffff}
+body.day-mode .hamburger-menu{background:#ffffff;border-color:#d0d7de;box-shadow:0 8px 30px rgba(0,0,0,0.15)}
 .hamburger-menu.open{display:block;animation:menuFade .15s ease}
 @keyframes menuFade{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 .hamburger-menu button{
   display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;
-  background:none;border:none;color:var(--tx);font-size:.85rem;
+  background:#161b22;border:none;color:#e6edf3;font-size:.85rem;
   cursor:pointer;text-align:left;transition:background .15s;
 }
-.hamburger-menu button:hover{background:var(--bd)}
-.hamburger-menu hr{border:none;border-top:1px solid var(--bd);margin:0}
+body.day-mode .hamburger-menu button{background:#ffffff;color:#1f2328}
+.hamburger-menu button:hover{background:#21262d}
+body.day-mode .hamburger-menu button:hover{background:#f0f2f5}
+.hamburger-menu hr{border:none;border-top:1px solid #30363d;margin:0}
+body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
 
 /* ── Views ── */
 .view{display:none;min-height:calc(100vh - 49px);min-height:calc(100dvh - 49px)}
