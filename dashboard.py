@@ -6201,6 +6201,12 @@ def _ensure_guardian(db_path):
             "SELECT id FROM agents WHERE agent_type='guardian'"
         ).fetchone()
         if guardian:
+            # Sync Guardian description with latest code (picks up new tool commands)
+            conn.execute(
+                "UPDATE agents SET description=? WHERE id=?",
+                (GUARDIAN_DESCRIPTION, guardian["id"])
+            )
+            conn.commit()
             # Guardian exists — ensure inner circle is complete
             _ensure_inner_circle(db_path, conn)
             conn.close()
