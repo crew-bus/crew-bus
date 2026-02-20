@@ -4244,6 +4244,65 @@ PAGE_HTML = _build_html()
 
 # ── API Helpers ─────────────────────────────────────────────────────
 
+def _notify_agents_of_rename(db_path, agent_id, old_name, new_name):
+    """Send a system notification to all active agents about a name change.
+
+    The renamed agent gets a personal note; all other active agents
+    (especially teammates, managers, and Crew Boss) learn about the change
+    so they update their internal context.
+    """
+    try:
+        conn = bus.get_conn(db_path)
+        try:
+            # Find the human agent (sender for system messages)
+            human = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+            ).fetchone()
+            if not human:
+                return
+            human_id = human["id"]
+
+            # Get all active agents
+            active = conn.execute(
+                "SELECT id, name, agent_type FROM agents "
+                "WHERE status='active' AND agent_type != 'human'"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        # Notify the renamed agent
+        with bus.db_write(db_path) as conn:
+            conn.execute(
+                "INSERT INTO messages (from_agent_id, to_agent_id, "
+                "message_type, subject, body, priority, status) "
+                "VALUES (?, ?, 'report', 'Name changed', ?, 'normal', "
+                "'delivered')",
+                (human_id, agent_id,
+                 f"Your name has been changed from \"{old_name}\" to "
+                 f"\"{new_name}\". Use your new name from now on."))
+
+        # Notify all other active agents
+        for a in active:
+            if a["id"] == agent_id:
+                continue  # already notified above
+            with bus.db_write(db_path) as conn:
+                conn.execute(
+                    "INSERT INTO messages (from_agent_id, to_agent_id, "
+                    "message_type, subject, body, priority, status) "
+                    "VALUES (?, ?, 'report', 'Agent renamed', ?, "
+                    "'normal', 'delivered')",
+                    (human_id, a["id"],
+                     f"Agent \"{old_name}\" has been renamed to "
+                     f"\"{new_name}\". Please use the new name going "
+                     f"forward."))
+
+        print(f"[dashboard] Rename notifications sent: "
+              f"\"{old_name}\" → \"{new_name}\" "
+              f"({len(active)} agents notified)")
+    except Exception as e:
+        print(f"[dashboard] Rename notification error: {e}")
+
+
 def _json_response(handler, data, status=200):
     body = json.dumps(data, default=str).encode("utf-8")
     handler.send_response(status)
@@ -6043,17 +6102,37 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": "name required"}, 400)
             if len(new_name) > 40:
                 return _json_response(self, {"error": "name too long (max 40 chars)"}, 400)
+
+            # Read old name + check for conflicts before writing
             conn = bus.get_conn(self.db_path)
             try:
-                existing = conn.execute("SELECT id FROM agents WHERE name=? AND id!=?",
-                                        (new_name, agent_id)).fetchone()
+                agent_row = conn.execute(
+                    "SELECT id, name, agent_type FROM agents WHERE id=?",
+                    (agent_id,)).fetchone()
+                if not agent_row:
+                    return _json_response(self, {"error": "agent not found"}, 404)
+                old_name = agent_row["name"]
+                existing = conn.execute(
+                    "SELECT id FROM agents WHERE name=? AND id!=?",
+                    (new_name, agent_id)).fetchone()
                 if existing:
                     return _json_response(self, {"error": "name already taken"}, 409)
-                conn.execute("UPDATE agents SET name=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
-                             (new_name, agent_id))
-                conn.commit()
             finally:
                 conn.close()
+
+            # Write with proper lock
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET name=?, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                    "WHERE id=?",
+                    (new_name, agent_id))
+
+            # Notify all active agents about the name change
+            if old_name != new_name:
+                _notify_agents_of_rename(
+                    self.db_path, agent_id, old_name, new_name)
+
             return _json_response(self, {"ok": True, "id": agent_id, "name": new_name})
 
         # ── Deactivate agent ──
