@@ -1,7 +1,9 @@
 /**
- * crew-bus WhatsApp Bridge — Crew Boss Only
+ * crew-bus WhatsApp Bridge — Crew Boss Only (Baileys edition)
  *
  * Node.js sidecar that connects WhatsApp to the crew-bus Python system.
+ * Uses Baileys (WebSocket-based) instead of whatsapp-web.js (Puppeteer).
+ * No browser required — lighter, faster, no "Execution context destroyed" crashes.
  *
  * Inbound:  WhatsApp message from you → POST to crew-bus API → lands as Human→Crew-Boss message
  * Outbound: Polls crew-bus for new Crew-Boss→Human messages → forwards to your WhatsApp
@@ -16,172 +18,193 @@
  * API:
  *   POST /send   { "text": "Hello" }        → sends to your WhatsApp
  *   GET  /status                             → connection status
+ *   GET  /qr                                 → raw QR string
+ *   GET  /qr/svg                             → QR as inline SVG
  *   POST /stop                               → graceful shutdown
  */
 
-const { Client, LocalAuth } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+} = require("baileys");
 const http = require("http");
+const path = require("path");
 
 // ── Config ──────────────────────────────────────────────────────────
 
 const PORT = parseInt(process.env.WA_PORT || "3001", 10);
 const BUS_URL = process.env.BUS_URL || "http://localhost:8080";
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL || "5000", 10);
+const AUTH_DIR = path.join(__dirname, "wa-session", "baileys-auth");
 
-// These get resolved at runtime from the crew-bus API
-let MY_WHATSAPP_ID = null; // e.g. "15551234567@c.us" — set after first inbound message
+// ── State ───────────────────────────────────────────────────────────
+
+let sock = null;
+let MY_WHATSAPP_ID = null;
 let humanAgentId = null;
 let crewBossAgentId = null;
 let lastSeenMessageId = 0;
-let latestQR = null;        // raw QR string for HTTP endpoint
-let qrTimestamp = 0;         // when the QR was generated
-
-// ── WhatsApp Client ─────────────────────────────────────────────────
-
-const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: "./wa-session" }),
-  puppeteer: {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--single-process",
-    ],
-  },
-});
-
+let latestQR = null;
+let qrTimestamp = 0;
 let clientReady = false;
 let clientStatus = "initializing";
+let pollTimer = null;
 
-client.on("qr", (qr) => {
-  clientStatus = "waiting_for_qr_scan";
-  latestQR = qr;
-  qrTimestamp = Date.now();
-  console.log("\n╔══════════════════════════════════════════╗");
-  console.log("║  Scan this QR code with WhatsApp:        ║");
-  console.log("║  Phone → Settings → Linked Devices       ║");
-  console.log("╚══════════════════════════════════════════╝\n");
-  qrcode.generate(qr, { small: true });
-});
+// ── WhatsApp Connection (Baileys) ───────────────────────────────────
 
-client.on("ready", async () => {
-  clientReady = true;
-  clientStatus = "connected";
-  latestQR = null;  // no longer needed once connected
-  console.log("[wa-bridge] WhatsApp client ready ✓");
-  console.log("[wa-bridge] Listening on http://localhost:" + PORT);
-  console.log("[wa-bridge] Polling crew-bus every " + POLL_INTERVAL_MS + "ms");
-
-  // Get our own WhatsApp ID so we know who we are
-  try {
-    const info = client.info;
-    if (info && info.wid) {
-      MY_WHATSAPP_ID = info.wid._serialized;
-      console.log("[wa-bridge] My WhatsApp ID: " + MY_WHATSAPP_ID);
-    }
-  } catch (e) {
-    console.warn("[wa-bridge] Could not get own WhatsApp ID:", e.message);
-  }
-
-  resolveAgentIds();
-  startOutboundPoller();
-});
-
-client.on("authenticated", () => {
-  console.log("[wa-bridge] Session authenticated (saved for next restart)");
-});
-
-client.on("auth_failure", (msg) => {
-  clientStatus = "auth_failed";
-  console.error("[wa-bridge] Authentication failed:", msg);
-});
-
-client.on("disconnected", (reason) => {
+async function connectToWhatsApp() {
+  clientStatus = "initializing";
   clientReady = false;
-  clientStatus = "disconnected: " + reason;
-  console.warn("[wa-bridge] Disconnected:", reason);
-  console.log("[wa-bridge] Attempting reconnect in 10s...");
-  setTimeout(() => {
-    console.log("[wa-bridge] Reconnecting...");
-    client.initialize();
-  }, 10000);
-});
 
-// ── Inbound: WhatsApp → crew-bus ────────────────────────────────────
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  const { version } = await fetchLatestBaileysVersion();
 
-// Inbound from OTHER people messaging you → forward to Crew Boss
-client.on("message", async (msg) => {
-  if (msg.isGroupMsg || msg.from === "status@broadcast") return;
-  const text = msg.body;
-  if (!text || !text.trim()) return;
+  sock = makeWASocket({
+    version,
+    auth: state,
+    // Don't mark as online (saves battery, reduces detection)
+    markOnlineOnConnect: false,
+    // Suppress verbose Baileys logging
+    logger: {
+      level: "silent",
+      trace: () => {},
+      debug: () => {},
+      info: () => {},
+      warn: (msg) => console.warn("[baileys]", msg),
+      error: (msg) => console.error("[baileys]", msg),
+      fatal: (msg) => console.error("[baileys]", msg),
+      child: () => ({
+        level: "silent",
+        trace: () => {},
+        debug: () => {},
+        info: () => {},
+        warn: (msg) => console.warn("[baileys]", msg),
+        error: (msg) => console.error("[baileys]", msg),
+        fatal: (msg) => console.error("[baileys]", msg),
+        child: function () { return this; },
+      }),
+    },
+  });
 
-  console.log("[wa-bridge] ← Inbound from " + msg.from + ": " + text.substring(0, 80));
+  // Save credentials whenever they update (session persistence)
+  sock.ev.on("creds.update", saveCreds);
 
-  try {
-    await postToBus("/api/compose", {
-      to_agent: "Crew-Boss",
-      message_type: "task",
-      subject: "WhatsApp message",
-      body: text,
-      priority: "normal",
-    });
-    console.log("[wa-bridge]   → Delivered to crew-bus");
-  } catch (err) {
-    console.error("[wa-bridge]   ✗ Failed:", err.message);
-  }
-});
+  // ── Connection state changes ──────────────────────────────────
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-// Messages YOU send from your phone → also forward to Crew Boss
-// This lets you type on WhatsApp as a way to talk to Crew Boss
-client.on("message_create", async (msg) => {
-  if (!msg.fromMe) return; // inbound handled by "message" event above
-  if (msg.isGroupMsg || msg.to === "status@broadcast") return;
+    // QR code received — store for HTTP endpoint
+    if (qr) {
+      latestQR = qr;
+      qrTimestamp = Date.now();
+      clientStatus = "waiting_for_qr_scan";
+      console.log("\n╔══════════════════════════════════════════╗");
+      console.log("║  Scan this QR code with WhatsApp:        ║");
+      console.log("║  Phone → Settings → Linked Devices       ║");
+      console.log("╚══════════════════════════════════════════╝\n");
+    }
 
-  const text = msg.body;
-  if (!text || !text.trim()) return;
+    if (connection === "open") {
+      clientReady = true;
+      clientStatus = "connected";
+      latestQR = null;
 
-  // Skip Crew Boss replies we sent (echo prevention)
-  if (text.startsWith("[Crew Boss]")) return;
+      // Get our own JID
+      if (sock.user && sock.user.id) {
+        // Baileys JID format: "15551234567:42@s.whatsapp.net"
+        // Normalize to standard format
+        MY_WHATSAPP_ID = sock.user.id.replace(/:.*@/, "@");
+        console.log("[wa-bridge] My WhatsApp ID: " + MY_WHATSAPP_ID);
+      }
 
-  console.log("[wa-bridge] ← You sent on WhatsApp: " + text.substring(0, 80));
+      console.log("[wa-bridge] WhatsApp connected ✓ (Baileys/WebSocket)");
+      console.log("[wa-bridge] Listening on http://localhost:" + PORT);
+      console.log("[wa-bridge] Polling crew-bus every " + POLL_INTERVAL_MS + "ms");
 
-  try {
-    await postToBus("/api/compose", {
-      to_agent: "Crew-Boss",
-      message_type: "task",
-      subject: "WhatsApp message",
-      body: text,
-      priority: "normal",
-    });
-    console.log("[wa-bridge]   → Delivered to crew-bus");
-  } catch (err) {
-    console.error("[wa-bridge]   ✗ Failed:", err.message);
-  }
-});
+      resolveAgentIds();
+      startOutboundPoller();
+    }
+
+    if (connection === "close") {
+      clientReady = false;
+      const statusCode =
+        lastDisconnect?.error?.output?.statusCode;
+      const loggedOut = statusCode === DisconnectReason.loggedOut;
+
+      if (loggedOut) {
+        clientStatus = "logged_out";
+        console.warn("[wa-bridge] Logged out — delete wa-session/baileys-auth and restart to re-scan");
+      } else {
+        clientStatus = "reconnecting";
+        const reason = lastDisconnect?.error?.message || "unknown";
+        console.warn("[wa-bridge] Disconnected (" + reason + "), reconnecting...");
+        // Auto-reconnect (Baileys handles the backoff internally)
+        setTimeout(connectToWhatsApp, 3000);
+      }
+    }
+  });
+
+  // ── Inbound messages ──────────────────────────────────────────
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    if (type !== "notify") return; // only real-time messages, not history sync
+
+    for (const msg of messages) {
+      // Skip group messages and status broadcasts
+      const jid = msg.key.remoteJid || "";
+      if (jid.endsWith("@g.us") || jid === "status@broadcast") continue;
+
+      // Extract text from message
+      const text =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        "";
+      if (!text || !text.trim()) continue;
+
+      if (msg.key.fromMe) {
+        // Messages YOU sent from your phone → forward to Crew Boss
+        // Skip our own outbound echoes
+        if (text.startsWith("[Crew Boss]")) return;
+
+        console.log("[wa-bridge] ← You sent on WhatsApp: " + text.substring(0, 80));
+      } else {
+        // Messages from others → forward to Crew Boss
+        console.log("[wa-bridge] ← Inbound from " + jid + ": " + text.substring(0, 80));
+      }
+
+      try {
+        await postToBus("/api/compose", {
+          to_agent: "Crew-Boss",
+          message_type: "task",
+          subject: "WhatsApp message",
+          body: text,
+          priority: "normal",
+        });
+        console.log("[wa-bridge]   → Delivered to crew-bus");
+      } catch (err) {
+        console.error("[wa-bridge]   ✗ Failed:", err.message);
+      }
+    }
+  });
+}
 
 // ── Outbound: crew-bus → WhatsApp ───────────────────────────────────
-
-let pollTimer = null;
 
 function startOutboundPoller() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(pollOutbound, POLL_INTERVAL_MS);
-  // Initial poll
   pollOutbound();
 }
 
 async function pollOutbound() {
-  if (!clientReady || !MY_WHATSAPP_ID) return;
+  if (!clientReady || !MY_WHATSAPP_ID || !sock) return;
   if (!crewBossAgentId) {
     await resolveAgentIds();
     if (!crewBossAgentId) return;
   }
 
   try {
-    // Fetch recent messages and find ones from Crew-Boss to any human
     const msgs = await getFromBus("/api/messages?limit=20");
     if (!Array.isArray(msgs)) return;
 
@@ -198,13 +221,10 @@ async function pollOutbound() {
         continue;
       }
 
-      // New message from Crew-Boss → forward to WhatsApp
       const text = msg.body || msg.subject || "(empty)";
-      console.log(
-        "[wa-bridge] → Outbound to WhatsApp: " + text.substring(0, 80)
-      );
+      console.log("[wa-bridge] → Outbound to WhatsApp: " + text.substring(0, 80));
       try {
-        await client.sendMessage(MY_WHATSAPP_ID, "[Crew Boss] " + text);
+        await sock.sendMessage(MY_WHATSAPP_ID, { text: "[Crew Boss] " + text });
         console.log("[wa-bridge]   ✓ Sent to WhatsApp");
       } catch (err) {
         console.error("[wa-bridge]   ✗ Send failed:", err.message);
@@ -212,7 +232,6 @@ async function pollOutbound() {
       lastSeenMessageId = msg.id;
     }
   } catch (err) {
-    // Silent — bus might not be running yet
     if (err.code !== "ECONNREFUSED") {
       console.error("[wa-bridge] Poll error:", err.message);
     }
@@ -240,18 +259,13 @@ async function resolveAgentIds() {
           crewBossAgentId
       );
 
-      // Seed lastSeenMessageId so we don't replay old messages
       const msgs = await getFromBus("/api/messages?limit=1");
       if (Array.isArray(msgs) && msgs.length > 0) {
         lastSeenMessageId = msgs[0].id;
-        console.log(
-          "[wa-bridge] Seeded last message ID: " + lastSeenMessageId
-        );
+        console.log("[wa-bridge] Seeded last message ID: " + lastSeenMessageId);
       }
     } else {
-      console.warn(
-        "[wa-bridge] Could not find Human or Crew-Boss agent in bus"
-      );
+      console.warn("[wa-bridge] Could not find Human or Crew-Boss agent in bus");
     }
   } catch (err) {
     console.warn("[wa-bridge] Agent resolution failed (bus offline?):", err.message);
@@ -260,10 +274,10 @@ async function resolveAgentIds() {
 
 // ── HTTP Helpers (bus communication) ────────────────────────────────
 
-function postToBus(path, data) {
+function postToBus(urlPath, data) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(data);
-    const url = new URL(path, BUS_URL);
+    const url = new URL(urlPath, BUS_URL);
     const req = http.request(
       url,
       {
@@ -291,9 +305,9 @@ function postToBus(path, data) {
   });
 }
 
-function getFromBus(path) {
+function getFromBus(urlPath) {
   return new Promise((resolve, reject) => {
-    const url = new URL(path, BUS_URL);
+    const url = new URL(urlPath, BUS_URL);
     http
       .get(url, (res) => {
         let chunks = "";
@@ -308,6 +322,26 @@ function getFromBus(path) {
       })
       .on("error", reject);
   });
+}
+
+// ── QR SVG Generation ───────────────────────────────────────────────
+
+function generateQRSvg(qrString) {
+  // Simple QR → SVG using the qr data modules
+  // Baileys gives us a raw QR string; we encode it ourselves
+  try {
+    const QRCode = require("qrcode");
+    // Return a promise that resolves to SVG string
+    return new Promise((resolve, reject) => {
+      QRCode.toString(qrString, { type: "svg", margin: 2 }, (err, svg) => {
+        if (err) reject(err);
+        else resolve(svg);
+      });
+    });
+  } catch {
+    // Fallback: return null if qrcode module not available
+    return Promise.resolve(null);
+  }
 }
 
 // ── HTTP Server (for manual sends + status) ─────────────────────────
@@ -336,6 +370,7 @@ const server = http.createServer(async (req, res) => {
       crew_boss_agent_id: crewBossAgentId,
       last_seen_message_id: lastSeenMessageId,
       poll_interval_ms: POLL_INTERVAL_MS,
+      engine: "baileys",
     });
     return;
   }
@@ -353,25 +388,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const QRCode = require("qrcode-terminal/vendor/QRCode");
-      const QRErrorCorrectLevel = require("qrcode-terminal/vendor/QRCode/QRErrorCorrectLevel");
-      const qr = new QRCode(-1, QRErrorCorrectLevel.M);
-      qr.addData(latestQR);
-      qr.make();
-      const count = qr.getModuleCount();
-      const cellSize = 4;
-      const margin = 16;
-      const size = count * cellSize + margin * 2;
-      let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + " " + size + '">';
-      svg += '<rect width="' + size + '" height="' + size + '" fill="white"/>';
-      for (let r = 0; r < count; r++) {
-        for (let c = 0; c < count; c++) {
-          if (qr.isDark(r, c)) {
-            svg += '<rect x="' + (c * cellSize + margin) + '" y="' + (r * cellSize + margin) + '" width="' + cellSize + '" height="' + cellSize + '" fill="black"/>';
-          }
-        }
-      }
-      svg += "</svg>";
+      const svg = await generateQRSvg(latestQR);
       respond(res, 200, { svg: svg, status: clientStatus });
     } catch (err) {
       respond(res, 500, { error: "QR generation failed: " + err.message });
@@ -381,13 +398,13 @@ const server = http.createServer(async (req, res) => {
 
   // POST /send — manually send a WhatsApp message
   if (req.method === "POST" && url.pathname === "/send") {
-    if (!clientReady) {
+    if (!clientReady || !sock) {
       respond(res, 503, { error: "WhatsApp not connected" });
       return;
     }
     if (!MY_WHATSAPP_ID) {
       respond(res, 400, {
-        error: "No WhatsApp ID yet — send a message from WhatsApp first to register your number",
+        error: "No WhatsApp ID yet — send a message from WhatsApp first",
       });
       return;
     }
@@ -400,7 +417,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      await client.sendMessage(MY_WHATSAPP_ID, text);
+      await sock.sendMessage(MY_WHATSAPP_ID, { text: text });
       respond(res, 200, { ok: true, sent_to: MY_WHATSAPP_ID });
     } catch (err) {
       respond(res, 500, { error: err.message });
@@ -446,13 +463,16 @@ function readBody(req) {
 function gracefulShutdown() {
   console.log("\n[wa-bridge] Shutting down...");
   if (pollTimer) clearInterval(pollTimer);
-  client
-    .destroy()
-    .then(() => {
-      console.log("[wa-bridge] WhatsApp client destroyed");
-      server.close(() => process.exit(0));
-    })
-    .catch(() => process.exit(0));
+  if (sock) {
+    try {
+      sock.end(undefined);
+    } catch {
+      // ignore
+    }
+  }
+  server.close(() => process.exit(0));
+  // Force exit after 5s if graceful close hangs
+  setTimeout(() => process.exit(0), 5000);
 }
 
 process.on("SIGINT", gracefulShutdown);
@@ -461,9 +481,13 @@ process.on("SIGTERM", gracefulShutdown);
 // ── Start ───────────────────────────────────────────────────────────
 
 console.log("[wa-bridge] crew-bus WhatsApp Bridge — Crew Boss Only");
-console.log("[wa-bridge] Initializing WhatsApp client...");
-console.log("[wa-bridge] Session dir: ./wa-session/");
+console.log("[wa-bridge] Engine: Baileys (WebSocket, no Puppeteer)");
+console.log("[wa-bridge] Session dir: " + AUTH_DIR);
 
 server.listen(PORT, () => {
-  client.initialize();
+  console.log("[wa-bridge] HTTP server listening on port " + PORT);
+  connectToWhatsApp().catch((err) => {
+    console.error("[wa-bridge] Fatal connection error:", err.message);
+    clientStatus = "error: " + err.message;
+  });
 });
