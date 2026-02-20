@@ -535,7 +535,6 @@ body.day-mode .tb-popup-overlay{background:rgba(0,0,0,.2)}
 body.day-mode .bubble-count{color:var(--ac)}
 body.day-mode .nav-btn.active{background:var(--ac);color:#fff}
 body.day-mode .nav-pill.active{background:var(--ac);color:#fff}
-body.day-mode .time-pill.active{background:var(--ac);color:#fff;border-color:var(--ac)}
 body.day-mode .dn-btn.active{background:var(--ac);color:#fff}
 /* Day mode — richer warm ambient life */
 body.day-mode .wizard-card{
@@ -547,7 +546,7 @@ body.day-mode .compose-subject,body.day-mode .compose-body{
   border-color:rgba(9,105,218,0.15);box-shadow:0 0 4px rgba(9,105,218,0.06);
 }
 body.day-mode .compose-bar{border-top-color:rgba(9,105,218,0.12) !important}
-.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.time-pill,.nav-pill,.dn-btn,.indicator,.compose-subject,.compose-body{
+.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.nav-pill,.dn-btn,.indicator,.compose-subject,.compose-body{
   transition:background .6s ease,color .6s ease,border-color .6s ease,box-shadow .6s ease;
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -610,16 +609,6 @@ a{color:var(--ac);text-decoration:none}
 }
 .dn-btn:hover{color:var(--tx)}
 .dn-btn.active{background:var(--bd);color:var(--tx)}
-.time-pill{
-  padding:6px 16px;border-radius:20px;font-size:.8rem;
-  border:1px solid var(--bd);background:transparent;color:var(--mu);
-  cursor:pointer;transition:all .2s;min-height:36px;
-  display:inline-flex;align-items:center;
-}
-.time-pill:hover,.time-pill.active{
-  color:var(--tx);background:var(--bd);
-}
-
 /* ── Circle layout — scales with main-left ── */
 .circle-wrap{
   position:relative;width:100%;
@@ -866,21 +855,6 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
   50%{border-bottom-color:rgba(88,166,255,0.15)}
 }
 .topbar{animation:topbarGlow 6s ease-in-out infinite}
-
-/* Time pills — idle shimmer + active breathing */
-@keyframes timePillIdle{
-  0%,100%{border-color:var(--bd)}
-  50%{border-color:rgba(88,166,255,0.12)}
-}
-@keyframes timePillAmbient{
-  0%,100%{border-color:var(--bd);box-shadow:0 0 6px rgba(88,166,255,0.10)}
-  50%{border-color:rgba(88,166,255,0.3);box-shadow:0 0 14px rgba(88,166,255,0.20)}
-}
-.time-pill{animation:timePillIdle 5s ease-in-out infinite}
-.time-pill:nth-child(2){animation-delay:1.2s}
-.time-pill:nth-child(3){animation-delay:2.4s}
-.time-pill:nth-child(4){animation-delay:3.6s}
-.time-pill.active{animation:timePillAmbient 4s ease-in-out infinite}
 
 /* SVG connecting lines — staggered breathing opacity */
 @keyframes linesBreathe{0%,100%{opacity:0.18}50%{opacity:0.30}}
@@ -1721,7 +1695,6 @@ tr.override td{background:rgba(210,153,34,.08)}
 JS = r"""
 // ── State ──
 let currentView='crew';
-let timePeriod='today';
 let agentsData=[];
 let teamsData=[];
 let refreshTimer=null;
@@ -2139,7 +2112,7 @@ function showToast(msg){
 
 async function loadCircle(){
   var stats=await api('/api/stats');
-  var agents=await api('/api/agents?period='+timePeriod);
+  var agents=await api('/api/agents');
   agentsData=agents;
 
   var boss=agents.find(function(a){return a.agent_type==='right_hand'});
@@ -2273,13 +2246,6 @@ function renderBubble(id,agent,sub){
   if(countEl){var c=agent.period_count||agent.unread_count||0;countEl.textContent=c>0?c+' msgs':''}
   var subEl=el.querySelector('.bubble-sub');
   if(subEl)subEl.textContent=sub||'';
-}
-
-function setTimePeriod(p,el){
-  timePeriod=p;
-  document.querySelectorAll('.time-pill').forEach(function(b){b.classList.remove('active')});
-  if(el)el.classList.add('active');
-  loadCircle();
 }
 
 function setDayNight(mode,el){
@@ -3840,10 +3806,6 @@ def _build_html():
 <!-- ══════════ CREW VIEW ══════════ -->
 <div id="view-crew" class="view active">
 <div class="time-bar">
-  <button class="time-pill active" onclick="setTimePeriod('today',this)">Today</button>
-  <button class="time-pill" onclick="setTimePeriod('3days',this)">3 Days</button>
-  <button class="time-pill" onclick="setTimePeriod('week',this)">Week</button>
-  <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   <div class="day-night-toggle">
     <button class="dn-btn active" onclick="setDayNight('day',this)" title="Day mode">\u2600\uFE0F</button>
     <button class="dn-btn" onclick="setDayNight('night',this)" title="Night mode">🌙</button>
