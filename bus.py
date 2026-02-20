@@ -1908,6 +1908,7 @@ def quarantine_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
         "WHERE id=?", (agent_id,),
     )
     _audit(conn, "agent_quarantined", agent_id, {"previous_status": agent["status"]})
+    _alert_agent_status_change(conn, dict(agent), "quarantined")
     conn.commit()
 
     updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
@@ -1963,6 +1964,7 @@ def terminate_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
     _audit(conn, "agent_terminated", agent_id, {
         "previous_status": agent["status"], "name": agent["name"],
     })
+    _alert_agent_status_change(conn, dict(agent), "terminated")
     conn.commit()
 
     updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
@@ -2012,11 +2014,57 @@ def deactivate_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
         (agent_id,),
     )
     _audit(conn, "agent_deactivated", agent_id, {"name": agent["name"]})
+    _alert_agent_status_change(conn, dict(agent), "deactivated")
     conn.commit()
 
     updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
     conn.close()
     return dict(updated)
+
+
+# ---------------------------------------------------------------------------
+# Agent Status Alerts — notify the human when agents are removed
+# ---------------------------------------------------------------------------
+
+def _alert_agent_status_change(conn, agent: dict, action: str):
+    """Send an alert to the human via Crew Boss when an agent's status changes.
+
+    Fires on quarantine, deactivate, and terminate. The alert lands in the
+    Crew Boss chat so the human sees it immediately.
+    """
+    try:
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        boss = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='right_hand' AND status='active' LIMIT 1"
+        ).fetchone()
+        if not human or not boss:
+            return
+
+        # Find which team the agent belongs to (if any)
+        team_info = ""
+        if agent.get("parent_agent_id"):
+            parent = conn.execute(
+                "SELECT name FROM agents WHERE id=?", (agent["parent_agent_id"],)
+            ).fetchone()
+            if parent:
+                # Manager name is like "Marketing-Manager" → team is "Marketing"
+                team_info = f" from the {parent['name'].replace('-Manager', '')} team"
+
+        emoji = {"quarantined": "\u26a0\ufe0f", "terminated": "\u274c",
+                 "deactivated": "\u23f8\ufe0f"}.get(action, "\u2757")
+
+        conn.execute(
+            "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
+            "subject, body, priority, status) VALUES (?, ?, 'alert', "
+            "?, ?, 'high', 'delivered')",
+            (boss["id"], human["id"],
+             f"Agent {action}",
+             f"{emoji} **{agent['name']}** has been {action}{team_info}."),
+        )
+    except Exception:
+        pass  # alert is best-effort, never block the actual operation
 
 
 # ---------------------------------------------------------------------------
