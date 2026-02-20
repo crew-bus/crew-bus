@@ -20,7 +20,7 @@ Every AI tool today gives you a chatbot. You type, it responds, you move on.
 
 Crew Bus gives you a **crew** — a team of AI agents that know you, protect you, and work together behind the scenes so you can focus on living your life.
 
-Your **Crew Boss** is your right hand. It handles 80% of everything — messages, tasks, scheduling, coordination. It runs on the smartest model you can afford because it's worth it. Behind Crew Boss, six inner circle agents quietly watch over your wellbeing, your goals, your finances, your daily logistics, your learning, and your rights. They never bother you directly — they report to Crew Boss, who decides what reaches you and when.
+Your **Crew Boss** is your right hand. It handles 80% of everything — messages, tasks, scheduling, coordination. It runs on the smartest model you can afford because it's worth it. Behind Crew Boss, five inner circle agents quietly watch over your wellbeing, your goals, your finances, your daily logistics, and your security. They never bother you directly — they report to Crew Boss, who decides what reaches you and when.
 
 A **Guardian** agent is always on, always watching. It scans every skill that enters the system, detects threats, and protects your data. It never sleeps.
 
@@ -54,16 +54,15 @@ If you're a human being, this was built for you.
 
 ## Your Inner Circle
 
-Six agents who work behind the scenes to support the most important parts of your life. They never contact you directly — they send everything through Crew Boss, who decides the right moment to share it.
+Five agents who work behind the scenes to support the most important parts of your life. They never contact you directly — they send everything through Crew Boss, who decides the right moment to share it.
 
 | Agent | Skill | What It Does |
 |-------|-------|-------------|
+| **Guardian** | sentinel-shield | Protects the system 24/7. Scans skills for threats. Manages setup. Watches for anomalies |
 | **Wellness** | gentle-guardian | Watches for burnout, maps your energy, celebrates your wins, shields you from stress overload |
 | **Strategy** | north-star-navigator | Helps you find purpose when old paths close. Finds new doors. Breaks big dreams into small steps |
 | **Communications** | life-orchestrator | Handles daily logistics, tracks relationships, reminds you to call your mom, simplifies your day |
 | **Financial** | peace-of-mind-finance | Judgment-free financial clarity. Spots spending patterns. Helps you prepare without anxiety |
-| **Knowledge** | wisdom-filter | Filters information noise. Finds the 3 headlines that actually matter to YOU. Sparks curiosity |
-| **Legal** | rights-compass | Translates legalese to plain language. Spots red flags. Tracks deadlines. Helps you feel less small |
 
 Each agent has its own unique skill that no other agent has. They are specialists — not generalists pretending to know everything.
 
@@ -72,7 +71,6 @@ Each agent has its own unique skill that no other agent has. They are specialist
 | Agent | Skill | Role |
 |-------|-------|------|
 | **Crew Boss** | crew-mind | The brain. Knows every agent, every skill, every rule. Routes, filters, translates, and protects your time. Runs on the best model because it's worth every token |
-| **Guardian** | sentinel-shield | The shield. Always on. Scans skills for threats. Enforces the charter. Watches for anomalies. Setup guide on first install, silent sentinel forever after |
 
 ---
 
@@ -115,8 +113,8 @@ Everything that matters is free. Forever. MIT License.
 
 - Full message bus with routing rules and audit trail
 - Crew Boss — your AI right-hand running on your choice of model
-- 6 inner circle agents with unique skills (Wellness, Strategy, Communications, Financial, Knowledge, Legal)
-- Guardian — always-on setup guide and protector
+- 5 inner circle agents with unique skills (Guardian, Wellness, Strategy, Communications, Financial)
+- Guardian — always-on protector, now part of the inner circle
 - INTEGRITY.md protection — no agent can ever gaslight you
 - CREW_CHARTER.md enforcement — worker discipline with real consequences
 - Inner Circle Protocol — energy protection through smart routing
@@ -156,15 +154,12 @@ Human (you — always in charge)
   |
 Crew Boss (crew-mind) ← highest IQ, best model, 9000 char context
   |
-  |--- Guardian (sentinel-shield) ← always-on, direct human access for emergencies
-  |
   |--- Inner Circle (all report ONLY to Crew Boss)
+  |     |--- Guardian (sentinel-shield)
   |     |--- Wellness (gentle-guardian)
   |     |--- Strategy (north-star-navigator)
   |     |--- Communications (life-orchestrator)
   |     |--- Financial (peace-of-mind-finance)
-  |     |--- Knowledge (wisdom-filter)
-  |     |--- Legal (rights-compass)
   |
   |--- Teams (hired as needed)
         |--- Manager → Workers (up to 10 per team)
