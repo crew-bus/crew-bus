@@ -3898,11 +3898,6 @@ def _build_html():
   </div>
 </div>
 <div class="main-right">
-  <div class="wizard-card" onclick="openHelpAgent()">
-    <div class="wizard-icon">🛡️</div>
-    <div class="wizard-info"><div class="wizard-title">Guardian</div><div class="wizard-sub">Protector & guide — always on</div></div>
-    <div class="wizard-status"><span class="status-dot dot-green" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--gn)"></span></div>
-  </div>
   <div class="teams-section">
     <div class="teams-header"><h2>Teams</h2>
       <button class="btn-add" onclick="openTemplatePicker()">+ Add Team</button>
