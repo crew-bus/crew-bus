@@ -1562,14 +1562,14 @@ def _check_routing(conn: sqlite3.Connection,
                    sender: sqlite3.Row, recipient: sqlite3.Row) -> dict:
     """Validate whether sender is allowed to message recipient.
 
-    V2 routing rules:
+    V3 routing rules:
     - Only Crew Boss delivers to human (except wellness critical + safety escalation)
     - Crew Boss can message any agent
     - Core crew reports to Crew Boss only
     - Department workers report to their manager
-    - Managers report to Crew Boss
+    - Same-team workers can message each other (collaboration)
+    - Managers report to Crew Boss and can message other managers
     - Workers can safety-escalate to Crew Boss (bypassing manager)
-    - Workers CANNOT message other workers
 
     Returns dict: {allowed: bool, require_approval: bool, reason: str}
     """
@@ -1656,6 +1656,18 @@ def _check_routing(conn: sqlite3.Connection,
     if recipient["parent_agent_id"] == sender["id"]:
         return {"allowed": True, "require_approval": False,
                 "reason": "Direct report in hierarchy"}
+
+    # Same-team workers can talk to each other (shared parent manager)
+    if (from_role == "worker" and to_role == "worker"
+            and sender["parent_agent_id"] is not None
+            and sender["parent_agent_id"] == recipient["parent_agent_id"]):
+        return {"allowed": True, "require_approval": False,
+                "reason": "Same-team colleagues"}
+
+    # Managers can talk to other managers (cross-team coordination)
+    if from_role == "manager" and to_role == "manager":
+        return {"allowed": True, "require_approval": False,
+                "reason": "Manager-to-manager coordination"}
 
     # Lookup role-based rule
     rule = conn.execute(
@@ -1749,11 +1761,15 @@ def send_message(from_id: int, to_id: int, message_type: str,
             f"{recipient['name']} ({recipient['agent_type']}): {routing['reason']}"
         )
 
+    # Messages TO the human are instantly visible (no worker processes them).
+    # Messages TO agents stay 'queued' for the agent_worker to pick up.
+    initial_status = "delivered" if recipient["agent_type"] == "human" else "queued"
+
     # Insert message
     cur = conn.execute(
-        "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (from_id, to_id, message_type, subject, body, priority),
+        "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (from_id, to_id, message_type, subject, body, priority, initial_status),
     )
     msg_id = cur.lastrowid
 

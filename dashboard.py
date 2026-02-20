@@ -4389,11 +4389,13 @@ def _get_agent_chat(db_path, agent_id, limit=50):
             return []
         hid = human["id"]
         rows = conn.execute("""
-            SELECT m.id, m.from_agent_id, m.subject, m.body, m.created_at, m.private_session_id
-            FROM messages m
-            WHERE (m.from_agent_id=? AND m.to_agent_id=?)
-               OR (m.from_agent_id=? AND m.to_agent_id=?)
-            ORDER BY m.created_at ASC LIMIT ?
+            SELECT * FROM (
+                SELECT m.id, m.from_agent_id, m.subject, m.body, m.created_at, m.private_session_id
+                FROM messages m
+                WHERE (m.from_agent_id=? AND m.to_agent_id=?)
+                   OR (m.from_agent_id=? AND m.to_agent_id=?)
+                ORDER BY m.created_at DESC LIMIT ?
+            ) sub ORDER BY sub.created_at ASC
         """, (hid, agent_id, agent_id, hid, limit)).fetchall()
         return [{"id": r["id"],
                  "direction": "from_human" if r["from_agent_id"] == hid else "from_agent",
