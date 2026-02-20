@@ -1304,6 +1304,10 @@ def _process_single_message(row, db_path: Path):
         if agent_type == "manager" and row["from_agent_id"] != agent_id:
             _fan_out_to_workers(db_path, agent_id, user_text)
 
+        # Don't store empty replies (can happen when LLM returns only action blocks)
+        if not clean_reply or not clean_reply.strip():
+            return
+
         # Insert reply directly — always works, bypasses routing rules
         _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
                              human_msg=user_text, agent_type=agent_type)

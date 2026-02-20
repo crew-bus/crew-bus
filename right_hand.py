@@ -1312,16 +1312,24 @@ class Heartbeat:
         cycle_index = (day_of_year * 6 + now.hour // interval_hours) % len(self._CONTENT_CALENDAR)
         theme = self._CONTENT_CALENDAR[cycle_index]
 
-        # Find marketing team agents
+        # Find agents that can create social content.
+        # Teams are built from agent hierarchy (parent_agent_id), not a teams table.
+        # Look for: managers whose workers handle content, or the Communications agent.
         conn = bus.get_conn(self.db_path)
         try:
+            # First try: workers under a manager (real team structure)
             agents = conn.execute(
                 "SELECT a.id, a.name, a.agent_type FROM agents a "
-                "JOIN teams t ON a.team_id = t.id "
-                "WHERE t.name IN ('Marketing', 'Launch') "
-                "AND a.active = 1 "
-                "AND a.agent_type NOT IN ('human', 'right_hand', 'guardian')"
+                "JOIN agents mgr ON a.parent_agent_id = mgr.id "
+                "WHERE a.active = 1 AND mgr.agent_type = 'manager'"
             ).fetchall()
+
+            # Fallback: if no teams exist yet, use the Communications core agent
+            if not agents:
+                agents = conn.execute(
+                    "SELECT id, name, agent_type FROM agents "
+                    "WHERE active = 1 AND agent_type = 'communications'"
+                ).fetchall()
 
             # Check what was posted recently to avoid duplicates
             recent_posts = conn.execute(

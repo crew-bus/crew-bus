@@ -4397,11 +4397,22 @@ def _get_agent_chat(db_path, agent_id, limit=50):
                 ORDER BY m.created_at DESC LIMIT ?
             ) sub ORDER BY sub.created_at ASC
         """, (hid, agent_id, agent_id, hid, limit)).fetchall()
-        return [{"id": r["id"],
-                 "direction": "from_human" if r["from_agent_id"] == hid else "from_agent",
-                 "text": r["body"] if r["body"] else r["subject"],
-                 "time": r["created_at"],
-                 "private": r["private_session_id"] is not None} for r in rows]
+        result = []
+        for r in rows:
+            text = r["body"] if r["body"] else ""
+            # Don't show empty messages or raw subject-only messages to the user
+            if not text and r["from_agent_id"] != hid:
+                continue
+            if not text:
+                text = r["subject"] or ""
+            result.append({
+                "id": r["id"],
+                "direction": "from_human" if r["from_agent_id"] == hid else "from_agent",
+                "text": text,
+                "time": r["created_at"],
+                "private": r["private_session_id"] is not None,
+            })
+        return result
     finally:
         conn.close()
 
