@@ -1191,7 +1191,11 @@ def create_team(team_name: str, manager_name: str = "",
             mgr_def = {
                 "name": manager_name,
                 "agent_type": "manager",
-                "description": f"Manages the {team_name} team.",
+                "description": (
+                    f"You are the manager of the {team_name} team. "
+                    f"You coordinate your workers, delegate tasks, and report results to the human. "
+                    f"When the human asks something, you direct your team and summarize their work."
+                ),
                 "parent": parent_name,
                 "model": model,
             }

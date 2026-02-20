@@ -2951,6 +2951,18 @@ async function resumeTeam(teamId,teamName){
     loadTeams();
   }catch(e){showToast('Failed to resume team.','error')}
 }
+async function startTeamMeeting(teamId,mgrId){
+  showToast('Team meeting started! \u{1F91D}');
+  try{
+    // Send meeting prompt to the manager — fan-out handles the rest.
+    // Manager sends topic to workers, workers reply, manager synthesizes.
+    await apiPost('/api/agent/'+mgrId+'/message',{
+      message:'Hold a quick team meeting. Ask each of your team members to report their current status, progress, and any blockers. Then summarize everything for me.'
+    });
+    // Open the manager chat so the human can see the synthesis when it arrives
+    openAgentSpace(mgrId);
+  }catch(e){showToast('Could not start meeting.','error')}
+}
 async function deleteTeam(teamId,teamName){
   var ok=await showConfirm(
     'Delete Team',
@@ -3191,6 +3203,12 @@ async function openTeamDash(teamId){
     '<button onclick="submitHire('+teamId+')" style="background:var(--ac);color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:.85rem">Hire</button>'+
     '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--s2);color:var(--fg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
     '<div id="hire-msg-'+teamId+'" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
+
+  // Team Meeting button — kicks off manager+workers sync
+  if(mgr){
+    html+='<div style="text-align:center;margin:16px 0">'+
+      '<button onclick="startTeamMeeting('+teamId+','+mgr.id+')" style="background:linear-gradient(135deg,var(--ac),#b388ff);color:#000;border:none;padding:10px 24px;border-radius:20px;cursor:pointer;font-weight:700;font-size:.9rem;box-shadow:0 2px 8px rgba(0,0,0,.3)">\u{1F91D} Team Meeting</button></div>';
+  }
 
   // Mailbox section
   html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
@@ -5687,7 +5705,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 conn.execute(
                     "UPDATE agents SET name=?, description=?, "
                     "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
-                    (new_mgr_name, f"Manages the {new_name} team.", team_id))
+                    (new_mgr_name,
+                     f"You are the manager of the {new_name} team. "
+                     f"You coordinate your workers, delegate tasks, and report results to the human. "
+                     f"When the human asks something, you direct your team and summarize their work.",
+                     team_id))
                 conn.commit()
             finally:
                 conn.close()

@@ -293,7 +293,7 @@ def _build_system_prompt(agent_type: str, agent_name: str,
                 + charter
             )
 
-    # --- Inject team roster for managers ---
+    # --- Inject team roster + delegation ability for managers ---
     if agent_type == "manager":
         try:
             conn = bus.get_conn(db_path)
@@ -306,11 +306,47 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             finally:
                 conn.close()
             if workers:
-                roster = "YOUR TEAM:\n" + "\n".join(
-                    f"- {w['name']}" + (f": {w['description'][:60]}" if w['description'] else "")
-                    for w in workers
+                roster = (
+                    "YOUR TEAM (you manage these agents directly):\n"
+                    + "\n".join(
+                        f"- {w['name']}"
+                        + (f": {w['description'][:80]}" if w['description'] else "")
+                        for w in workers
+                    )
+                    + "\n\nYOU CAN DELEGATE TASKS to any of your workers. "
+                    "When the human asks you something, your workers "
+                    "automatically receive the task too. You coordinate "
+                    "their work and summarize results for the human.\n"
+                    "To explicitly assign a specific task to a worker, include:\n"
+                    '{"delegate": {"to": "Worker-Name", "task": "what to do"}}\n'
+                    "You ARE the team lead. You DO have direct access to your workers. "
+                    "Never say you can't reach them — they report to you."
                 )
                 parts.append(roster)
+        except Exception:
+            pass
+
+    # --- Inject team context for workers ---
+    if agent_type == "worker":
+        try:
+            conn = bus.get_conn(db_path)
+            try:
+                mgr = conn.execute(
+                    "SELECT name FROM agents WHERE id=?",
+                    (conn.execute(
+                        "SELECT parent_agent_id FROM agents WHERE id=?",
+                        (agent_id,)
+                    ).fetchone()["parent_agent_id"],)
+                ).fetchone()
+            finally:
+                conn.close()
+            if mgr:
+                parts.append(
+                    f"You report to {mgr['name']} (your team manager). "
+                    "When the human or your manager sends you a task, "
+                    "do your best work and reply with helpful results. "
+                    "You're a specialist — focus on what you do best."
+                )
         except Exception:
             pass
 
@@ -338,6 +374,8 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         max_chars = 9000
     elif agent_type == "guardian":
         max_chars = 7000
+    elif agent_type == "manager":
+        max_chars = 5500  # managers need room for team roster + delegation
     else:
         max_chars = 4000
     combined = "\n\n".join(parts)
@@ -1205,8 +1243,21 @@ def _process_queued_messages(db_path: Path):
     for row in human_msgs:
         _process_single_message(row, db_path)
 
+    # Track which managers had tasks fanned out to workers this cycle.
+    # After workers process those tasks (and reply via _insert_reply_direct),
+    # we'll have the manager synthesize the worker reports for the human.
+    managers_with_fanout: set[int] = set()
+
     for row in agent_msgs:
+        # Track manager→worker fan-out tasks so we can synthesize after
+        if row["sender_type"] == "manager" and row["agent_type"] == "worker":
+            managers_with_fanout.add(row["from_agent_id"])
         _process_single_message(row, db_path)
+
+    # After workers have processed their tasks and replied to their manager,
+    # have each manager synthesize the worker reports for the human.
+    for manager_id in managers_with_fanout:
+        _synthesize_team_reports(manager_id, db_path)
 
 
 def _process_single_message(row, db_path: Path):
@@ -1383,6 +1434,87 @@ def _fan_out_to_workers(db_path: Path, manager_id: int, task_text: str):
             print(f"[fan-out] manager #{manager_id} → {w['name']}")
         except Exception as e:
             print(f"[fan-out] failed → {w['name']}: {e}")
+
+
+def _synthesize_team_reports(manager_id: int, db_path: Path):
+    """After workers reply to their manager, synthesize a team report for the human.
+
+    Communication flows through the bus (no LLM needed for agent↔agent messages).
+    The only LLM call is the manager synthesizing worker reports into a summary
+    for the human. Workers already replied via _insert_reply_direct — we read
+    those recent replies and have the manager combine them.
+    """
+    conn = bus.get_conn(db_path)
+    try:
+        mgr = conn.execute(
+            "SELECT name, description, model FROM agents WHERE id=?",
+            (manager_id,)
+        ).fetchone()
+        human = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+        ).fetchone()
+        # Get recent worker→manager replies (delivered in this cycle)
+        worker_replies = conn.execute("""
+            SELECT a.name, m.body
+            FROM messages m
+            JOIN agents a ON m.from_agent_id = a.id
+            WHERE m.to_agent_id = ?
+              AND a.parent_agent_id = ?
+              AND a.active = 1
+              AND m.body IS NOT NULL AND m.body != ''
+            ORDER BY m.created_at DESC LIMIT 10
+        """, (manager_id, manager_id)).fetchall()
+    finally:
+        conn.close()
+
+    if not mgr or not human or not worker_replies:
+        return
+
+    human_id = human["id"] if isinstance(human, dict) else human[0]
+
+    # Build worker reports
+    reports = []
+    for w in reversed(worker_replies):  # oldest first
+        reports.append(f"**{w['name']}**: {w['body']}")
+
+    if not reports:
+        return
+
+    team_input = "\n\n".join(reports)
+
+    # Manager synthesizes worker reports for the human (one LLM call)
+    desc = mgr["description"] or ""
+    system_prompt = _build_system_prompt(
+        "manager", mgr["name"], desc,
+        agent_id=manager_id, db_path=db_path
+    )
+
+    synthesis_prompt = (
+        "Your team just completed their work. Here are their reports:\n\n"
+        + team_input
+        + "\n\nSynthesize your team's work into a clear, concise summary "
+        "for the human. Highlight the key findings and any action items. "
+        "Speak as the team lead reporting results."
+    )
+
+    chat_history = _get_recent_chat(db_path, human_id, manager_id)
+
+    model = mgr["model"] if mgr["model"] else ""
+    reply = call_llm(system_prompt, synthesis_prompt, chat_history,
+                     model=model, db_path=db_path)
+
+    if reply and reply.strip():
+        clean_reply = _execute_wizard_actions(reply, db_path)
+        clean_reply = _extract_social_drafts(clean_reply, manager_id, db_path)
+        clean_reply = _extract_delegations(clean_reply, manager_id, db_path)
+
+        if clean_reply and clean_reply.strip():
+            _insert_reply_direct(
+                db_path, manager_id, human_id, clean_reply,
+                human_msg=synthesis_prompt, agent_type="manager"
+            )
+            print(f"[team-report] {mgr['name']} synthesized "
+                  f"{len(reports)} worker reports → human")
 
 
 def _extract_delegations(reply: str, manager_id: int, db_path: Path) -> str:
