@@ -1239,7 +1239,7 @@ def _process_queued_messages(db_path: Path):
     agent_msgs = [r for r in rows if r["sender_type"] != "human"]
 
     for row in human_msgs:
-        _process_single_message(row, db_path)
+        _process_with_timeout(row, db_path)
 
     # Track which managers had tasks fanned out to workers this cycle.
     # After workers process those tasks (and reply via _insert_reply_direct),
@@ -1250,12 +1250,32 @@ def _process_queued_messages(db_path: Path):
         # Track manager→worker fan-out tasks so we can synthesize after
         if row["sender_type"] == "manager" and row["agent_type"] == "worker":
             managers_with_fanout.add(row["from_agent_id"])
-        _process_single_message(row, db_path)
+        _process_with_timeout(row, db_path)
 
     # After workers have processed their tasks and replied to their manager,
     # have each manager synthesize the worker reports for the human.
     for manager_id in managers_with_fanout:
         _synthesize_team_reports(manager_id, db_path)
+
+
+MSG_TIMEOUT = 90  # seconds — hard cap per message so one hung LLM can't freeze the queue
+
+
+def _process_with_timeout(row, db_path: Path):
+    """Run _process_single_message in a thread with a hard timeout.
+
+    If the LLM hangs or takes too long, the worker loop continues to the
+    next message instead of blocking forever.
+    """
+    t = threading.Thread(
+        target=_process_single_message, args=(row, db_path),
+        daemon=True, name=f"msg-{row['id']}")
+    t.start()
+    t.join(timeout=MSG_TIMEOUT)
+    if t.is_alive():
+        agent_name = row.get("name", "?")
+        print(f"[agent_worker] TIMEOUT processing msg {row['id']} "
+              f"for {agent_name} — skipping (>{MSG_TIMEOUT}s)")
 
 
 def _process_single_message(row, db_path: Path):
@@ -1269,6 +1289,11 @@ def _process_single_message(row, db_path: Path):
     user_text = row["body"] if row["body"] else row["subject"]
 
     if not user_text:
+        return
+
+    # Self-messages (e.g. heartbeat reports) — store only, never LLM-process.
+    # This prevents Crew Boss from responding to its own hourly reports in a loop.
+    if human_id == agent_id:
         return
 
     # Check for memory commands first (remember/forget/list)
