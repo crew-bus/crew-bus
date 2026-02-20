@@ -18,10 +18,12 @@ activates with a paid license key. Everything else works without it.
 """
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -30,6 +32,15 @@ from typing import Optional
 import yaml
 
 DB_PATH = Path(__file__).parent / "crew_bus.db"
+
+# ---------------------------------------------------------------------------
+# SQLite write serialization
+# ---------------------------------------------------------------------------
+# SQLite only supports one writer at a time. In WAL mode, concurrent readers
+# are fine, but concurrent writers will get "database is locked" even with a
+# timeout. This lock ensures all write operations are serialized across ALL
+# threads (HTTP handler threads + agent worker thread).
+_db_write_lock = threading.Lock()
 
 # Activation verification key (signing key lives on crew-bus.dev server)
 GUARD_ACTIVATION_VERIFY_KEY = "38cd1c83d599dcd7c8eb1fad1a494436939b7462c3b93c11d3f1f0eb280a0b26"
@@ -103,12 +114,37 @@ def _role_for_type(agent_type: str) -> str:
 def get_conn(db_path: Optional[Path] = None) -> sqlite3.Connection:
     """Return a connection to the crew-bus database with row factory enabled."""
     path = db_path or DB_PATH
-    conn = sqlite3.connect(str(path))
+    conn = sqlite3.connect(str(path), timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=FULL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+@contextlib.contextmanager
+def db_write(db_path: Optional[Path] = None):
+    """Context manager that serializes all database writes.
+
+    Usage:
+        with bus.db_write(db_path) as conn:
+            conn.execute("INSERT ...")
+            # commit happens automatically on clean exit
+
+    Acquires _db_write_lock so only one thread writes at a time.
+    Commits on success, rolls back on exception, always closes.
+    """
+    _db_write_lock.acquire()
+    conn = get_conn(db_path)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+        _db_write_lock.release()
 
 
 def init_db(db_path: Optional[Path] = None) -> None:
@@ -1078,13 +1114,14 @@ def create_agent(name: str, agent_type: str = "worker",
         return {"ok": False, "error": f"Invalid type '{agent_type}'. Valid: {', '.join(VALID_AGENT_TYPES)}"}
 
     db = db_path or DB_PATH
+
+    # Phase 1: read-only checks
     conn = get_conn(db)
     try:
         existing = conn.execute("SELECT id FROM agents WHERE name=?", (name,)).fetchone()
         if existing:
             return {"ok": False, "error": f"Agent '{name}' already exists"}
 
-        # Enforce team agent limit when adding to a team
         if parent_name:
             parent = conn.execute(
                 "SELECT id, agent_type FROM agents WHERE name=?", (parent_name,)
@@ -1094,30 +1131,31 @@ def create_agent(name: str, agent_type: str = "worker",
                     "SELECT COUNT(*) as c FROM agents WHERE parent_agent_id=?",
                     (parent["id"],)
                 ).fetchone()["c"]
-                # +1 for the manager itself
                 if team_count + 1 >= MAX_TEAM_AGENTS:
                     return {
                         "ok": False,
                         "error": f"Team is full ({MAX_TEAM_AGENTS} agents max). "
                                  f"Create a new team and link it to this one.",
                     }
+    finally:
+        conn.close()
 
-        agent_def = {
-            "name": name,
-            "agent_type": agent_type,
-            "description": description,
-            "model": model,
-        }
-        if parent_name:
-            agent_def["parent"] = parent_name
+    # Phase 2: write under lock
+    agent_def = {
+        "name": name,
+        "agent_type": agent_type,
+        "description": description,
+        "model": model,
+    }
+    if parent_name:
+        agent_def["parent"] = parent_name
 
-        agent_id = _upsert_agent(conn, agent_def)
-        conn.commit()
+    try:
+        with db_write(db) as wconn:
+            agent_id = _upsert_agent(wconn, agent_def)
         return {"ok": True, "agent_id": agent_id, "name": name}
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
 
 
 def create_team(team_name: str, manager_name: str = "",
@@ -1132,7 +1170,6 @@ def create_team(team_name: str, manager_name: str = "",
         return {"ok": False, "error": "Team name is required"}
 
     db = db_path or DB_PATH
-    conn = get_conn(db)
     worker_names = worker_names or []
     worker_descriptions = worker_descriptions or []
 
@@ -1144,31 +1181,31 @@ def create_team(team_name: str, manager_name: str = "",
         return {"ok": False, "error": f"Teams can have at most {MAX_TEAM_AGENTS} agents (1 manager + {MAX_TEAM_AGENTS - 1} workers)"}
 
     try:
-        # Create manager
-        mgr_def = {
-            "name": manager_name,
-            "agent_type": "manager",
-            "description": f"Manages the {team_name} team.",
-            "parent": parent_name,
-            "model": model,
-        }
-        mgr_id = _upsert_agent(conn, mgr_def)
-
-        # Create workers
-        w_ids = []
-        for i, wname in enumerate(worker_names):
-            wdesc = worker_descriptions[i] if i < len(worker_descriptions) else ""
-            w_def = {
-                "name": wname,
-                "agent_type": "worker",
-                "description": wdesc,
-                "parent": manager_name,
+        with db_write(db) as conn:
+            # Create manager
+            mgr_def = {
+                "name": manager_name,
+                "agent_type": "manager",
+                "description": f"Manages the {team_name} team.",
+                "parent": parent_name,
                 "model": model,
             }
-            w_ids.append(_upsert_agent(conn, w_def))
+            mgr_id = _upsert_agent(conn, mgr_def)
 
-        # Insert into team_mailbox meta (team uses manager's id as team_id)
-        conn.commit()
+            # Create workers
+            w_ids = []
+            for i, wname in enumerate(worker_names):
+                wdesc = worker_descriptions[i] if i < len(worker_descriptions) else ""
+                w_def = {
+                    "name": wname,
+                    "agent_type": "worker",
+                    "description": wdesc,
+                    "parent": manager_name,
+                    "model": model,
+                }
+                w_ids.append(_upsert_agent(conn, w_def))
+            # db_write commits automatically
+
         return {
             "ok": True,
             "team_name": team_name,
@@ -1178,8 +1215,6 @@ def create_team(team_name: str, manager_name: str = "",
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
 
 
 def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
@@ -1324,16 +1359,12 @@ def get_linked_teams(team_id: int, db_path: Optional[Path] = None) -> list:
 def set_config(key: str, value: str, db_path: Optional[Path] = None) -> None:
     """Set a crew config value (e.g. 'default_model', 'kimi_api_key')."""
     db = db_path or DB_PATH
-    conn = get_conn(db)
-    try:
+    with db_write(db) as conn:
         conn.execute(
             "INSERT INTO crew_config (key, value, updated_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now')) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
             (key, value),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def get_config(key: str, default: str = "", db_path: Optional[Path] = None) -> str:
@@ -1562,145 +1593,47 @@ def _check_routing(conn: sqlite3.Connection,
                    sender: sqlite3.Row, recipient: sqlite3.Row) -> dict:
     """Validate whether sender is allowed to message recipient.
 
-    V3 routing rules:
-    - Only Crew Boss delivers to human (except wellness critical + safety escalation)
-    - Crew Boss can message any agent
-    - Core crew reports to Crew Boss only
-    - Department workers report to their manager
-    - Same-team workers can message each other (collaboration)
-    - Managers report to Crew Boss and can message other managers
-    - Workers can safety-escalate to Crew Boss (bypassing manager)
+    V4 routing — open internal comms:
+    - Human can message anyone
+    - Any active agent can message any other active agent
+    - Only Crew Boss, Security, and Wellness can message the human directly
+      (all other agents communicate within the crew)
+    - Paused/quarantined/deactivated agents can't send or receive
 
     Returns dict: {allowed: bool, require_approval: bool, reason: str}
     """
     from_type = sender["agent_type"]
     to_type = recipient["agent_type"]
-    from_role = sender["role"]
-    to_role = recipient["role"]
 
-    # Private session override: if there's an active private session between
-    # these two agents, allow direct communication regardless of normal rules
-    if _has_active_private_session(sender["id"], recipient["id"], conn=conn):
-        return {"allowed": True, "require_approval": False, "reason": "Active private session"}
+    # --- Safety checks (agent must be active and deployed) ---
+    if sender["status"] != "active":
+        return {"allowed": False, "require_approval": False,
+                "reason": "Sender is " + sender["status"]}
+    if recipient["status"] != "active":
+        return {"allowed": False, "require_approval": False,
+                "reason": "Recipient is " + recipient["status"]}
+    if not sender["active"]:
+        return {"allowed": False, "require_approval": False,
+                "reason": "Sender '" + sender["name"] + "' is not activated"}
+    if not recipient["active"]:
+        return {"allowed": False, "require_approval": False,
+                "reason": "Recipient '" + recipient["name"] + "' is not activated"}
 
-    # Human can always send (ultimate authority)
+    # --- Human can always send ---
     if from_type == "human":
         return {"allowed": True, "require_approval": False, "reason": "Human authority"}
 
-    # Crew Boss can message any agent
-    if from_type == "right_hand":
-        return {"allowed": True, "require_approval": False, "reason": "Crew Boss authority"}
-
-    # Security agent: can ONLY message Crew Boss (unless direct_security_feed)
-    if from_type == "security":
-        if to_type == "right_hand":
+    # --- Messages TO human: only Crew Boss, Security, Wellness ---
+    if to_type == "human":
+        if from_type in ("right_hand", "security", "wellness", "guardian"):
             return {"allowed": True, "require_approval": False,
-                    "reason": "Security reports to Crew Boss"}
-        # Check if direct human feed is enabled (stored in trust_config)
-        if to_type == "human":
-            tc = conn.execute(
-                "SELECT escalation_overrides FROM trust_config WHERE human_id=?",
-                (recipient["id"],)
-            ).fetchone()
-            if tc:
-                import json as _json
-                overrides = _json.loads(tc["escalation_overrides"]) if tc["escalation_overrides"] else []
-                if "direct_security_feed" in [str(o).lower() for o in overrides]:
-                    return {"allowed": True, "require_approval": False,
-                            "reason": "Security direct feed to human enabled"}
-            return {"allowed": False, "require_approval": False,
-                    "reason": "Security must go through Crew Boss (direct feed not enabled)"}
+                    "reason": from_type + " can reach human"}
         return {"allowed": False, "require_approval": False,
-                "reason": "Security can only message Crew Boss"}
+                "reason": "Agents message the human through Crew Boss"}
 
-    # INNER CIRCLE PROTOCOL: core crew talks ONLY to Crew Boss
-    # (private sessions already handled above)
-    if from_type in CORE_CREW_TYPES:
-        if to_type != "right_hand":
-            return {"allowed": False, "require_approval": False,
-                    "reason": f"Inner circle protocol: {from_type} agents communicate exclusively with Crew Boss"}
-
-    # If recipient is human and sender is not right_hand/security, block (reroute to RH)
-    if to_type == "human" and from_type not in ("right_hand", "wellness"):
-        return {"allowed": False, "require_approval": False,
-                "reason": f"Agent type '{from_type}' must go through Crew Boss to reach human"}
-
-    # Check sender status
-    if sender["status"] != "active":
-        return {"allowed": False, "require_approval": False,
-                "reason": f"Sender is {sender['status']}"}
-    if recipient["status"] != "active":
-        return {"allowed": False, "require_approval": False,
-                "reason": f"Recipient is {recipient['status']}"}
-
-    # Check if sender is active (deployed)
-    if not sender["active"]:
-        return {"allowed": False, "require_approval": False,
-                "reason": f"Sender '{sender['name']}' is not activated"}
-
-    # SPECIAL: Wellness agent can deliver critical alerts directly to human
-    if from_type == "wellness" and to_type == "human":
-        # This will be checked at send time - only critical priority allowed
-        return {"allowed": True, "require_approval": False,
-                "reason": "Wellness critical alert to human (must be critical priority)"}
-
-    # SPECIAL: Any agent can safety-escalate to Crew Boss
-    if to_type == "right_hand" and sender["parent_agent_id"] is not None:
-        return {"allowed": True, "require_approval": False,
-                "reason": "Safety escalation to Crew Boss"}
-
-    # Direct parent/child always allowed (chain of command)
-    if sender["parent_agent_id"] == recipient["id"]:
-        return {"allowed": True, "require_approval": False,
-                "reason": "Direct parent in hierarchy"}
-    if recipient["parent_agent_id"] == sender["id"]:
-        return {"allowed": True, "require_approval": False,
-                "reason": "Direct report in hierarchy"}
-
-    # Same-team workers can talk to each other (shared parent manager)
-    if (from_role == "worker" and to_role == "worker"
-            and sender["parent_agent_id"] is not None
-            and sender["parent_agent_id"] == recipient["parent_agent_id"]):
-        return {"allowed": True, "require_approval": False,
-                "reason": "Same-team colleagues"}
-
-    # Managers can talk to other managers (cross-team coordination)
-    if from_role == "manager" and to_role == "manager":
-        return {"allowed": True, "require_approval": False,
-                "reason": "Manager-to-manager coordination"}
-
-    # Lookup role-based rule
-    rule = conn.execute(
-        "SELECT allowed, require_approval, description FROM routing_rules "
-        "WHERE from_role = ? AND to_role = ?",
-        (from_role, to_role),
-    ).fetchone()
-
-    if not rule:
-        return {"allowed": False, "require_approval": False,
-                "reason": f"No routing rule for {from_role} ({from_type}) -> {to_role} ({to_type})"}
-
-    if not rule["allowed"]:
-        return {"allowed": False, "require_approval": False,
-                "reason": rule["description"]}
-
-    # Worker -> manager: verify it's their own manager
-    if from_role == "worker" and to_role == "manager":
-        if sender["parent_agent_id"] != recipient["id"]:
-            return {"allowed": False, "require_approval": False,
-                    "reason": "Workers can only message their own manager"}
-
-    # Manager -> worker: verify it's their own worker
-    if from_role == "manager" and to_role == "worker":
-        if recipient["parent_agent_id"] != sender["id"]:
-            return {"allowed": False, "require_approval": False,
-                    "reason": "Managers can only message their own workers"}
-
-    return {
-        "allowed": bool(rule["allowed"]),
-        "require_approval": bool(rule["require_approval"]),
-        "reason": rule["description"],
-    }
+    # --- All agent-to-agent communication is open ---
+    return {"allowed": True, "require_approval": False,
+            "reason": "Internal crew communication"}
 
 
 # ---------------------------------------------------------------------------
@@ -1722,40 +1655,29 @@ def send_message(from_id: int, to_id: int, message_type: str,
     if priority not in VALID_PRIORITIES:
         raise ValueError(f"Invalid priority '{priority}'. Must be one of {VALID_PRIORITIES}")
 
+    # --- Phase 1: Read-only lookups (no write lock needed) ---
     conn = get_conn(db_path)
+    try:
+        sender = conn.execute("SELECT * FROM agents WHERE id = ?", (from_id,)).fetchone()
+        if not sender:
+            raise ValueError(f"Sender agent id={from_id} not found")
 
-    sender = conn.execute("SELECT * FROM agents WHERE id = ?", (from_id,)).fetchone()
-    if not sender:
+        recipient = conn.execute("SELECT * FROM agents WHERE id = ?", (to_id,)).fetchone()
+        if not recipient:
+            raise ValueError(f"Recipient agent id={to_id} not found")
+
+        routing = _check_routing(conn, sender, recipient)
+    finally:
         conn.close()
-        raise ValueError(f"Sender agent id={from_id} not found")
-
-    recipient = conn.execute("SELECT * FROM agents WHERE id = ?", (to_id,)).fetchone()
-    if not recipient:
-        conn.close()
-        raise ValueError(f"Recipient agent id={to_id} not found")
-
-    # Validate routing
-    routing = _check_routing(conn, sender, recipient)
 
     # Extra check: wellness -> human only allowed for critical priority
-    # (but private sessions override this restriction)
     if (sender["agent_type"] == "wellness" and recipient["agent_type"] == "human"
             and priority != "critical"
             and routing.get("reason") != "Active private session"):
         routing = {"allowed": False, "require_approval": False,
                    "reason": "Wellness can only message human with critical priority"}
 
-    _audit(conn, "message_attempt", from_id, {
-        "to": to_id,
-        "type": message_type,
-        "subject": subject,
-        "priority": priority,
-        "routing": routing,
-    })
-
     if not routing["allowed"]:
-        conn.commit()
-        conn.close()
         raise PermissionError(
             f"Message blocked: {sender['name']} ({sender['agent_type']}) -> "
             f"{recipient['name']} ({recipient['agent_type']}): {routing['reason']}"
@@ -1765,23 +1687,30 @@ def send_message(from_id: int, to_id: int, message_type: str,
     # Messages TO agents stay 'queued' for the agent_worker to pick up.
     initial_status = "delivered" if recipient["agent_type"] == "human" else "queued"
 
-    # Insert message
-    cur = conn.execute(
-        "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (from_id, to_id, message_type, subject, body, priority, initial_status),
-    )
-    msg_id = cur.lastrowid
+    # --- Phase 2: Write under the serialization lock ---
+    with db_write(db_path) as wconn:
+        _audit(wconn, "message_attempt", from_id, {
+            "to": to_id,
+            "type": message_type,
+            "subject": subject,
+            "priority": priority,
+            "routing": routing,
+        })
 
-    _audit(conn, "message_sent", from_id, {
-        "message_id": msg_id,
-        "to": to_id,
-        "type": message_type,
-        "priority": priority,
-    })
+        cur = wconn.execute(
+            "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (from_id, to_id, message_type, subject, body, priority, initial_status),
+        )
+        msg_id = cur.lastrowid
 
-    conn.commit()
-    conn.close()
+        _audit(wconn, "message_sent", from_id, {
+            "message_id": msg_id,
+            "to": to_id,
+            "type": message_type,
+            "priority": priority,
+        })
+        # db_write commits and closes automatically
 
     return {
         "message_id": msg_id,
@@ -1987,80 +1916,91 @@ def restore_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
 def terminate_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
     """Terminate an agent - archives all messages, sets status to terminated."""
     conn = get_conn(db_path)
-    agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-    if not agent:
+    try:
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+        if not agent:
+            raise ValueError(f"Agent id={agent_id} not found")
+        if agent["agent_type"] == "human":
+            raise ValueError("Cannot terminate the human principal")
+    finally:
         conn.close()
-        raise ValueError(f"Agent id={agent_id} not found")
-    if agent["agent_type"] == "human":
+
+    with db_write(db_path) as wconn:
+        wconn.execute(
+            "UPDATE messages SET status='archived' WHERE from_agent_id=? OR to_agent_id=?",
+            (agent_id, agent_id),
+        )
+        wconn.execute(
+            "UPDATE agents SET status='terminated', updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+            "WHERE id=?", (agent_id,),
+        )
+        _audit(wconn, "agent_terminated", agent_id, {
+            "previous_status": agent["status"], "name": agent["name"],
+        })
+        _alert_agent_status_change(wconn, dict(agent), "terminated")
+
+    conn = get_conn(db_path)
+    try:
+        updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+    finally:
         conn.close()
-        raise ValueError("Cannot terminate the human principal")
-
-    conn.execute(
-        "UPDATE messages SET status='archived' WHERE from_agent_id=? OR to_agent_id=?",
-        (agent_id, agent_id),
-    )
-    conn.execute(
-        "UPDATE agents SET status='terminated', updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
-        "WHERE id=?", (agent_id,),
-    )
-    _audit(conn, "agent_terminated", agent_id, {
-        "previous_status": agent["status"], "name": agent["name"],
-    })
-    _alert_agent_status_change(conn, dict(agent), "terminated")
-    conn.commit()
-
-    updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-    conn.close()
     return dict(updated)
 
 
 def activate_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
     """Activate an inactive agent (deploy it)."""
     conn = get_conn(db_path)
-    agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-    if not agent:
+    try:
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+        if not agent:
+            raise ValueError(f"Agent id={agent_id} not found")
+        if agent["active"]:
+            raise ValueError(f"Agent '{agent['name']}' is already active")
+    finally:
         conn.close()
-        raise ValueError(f"Agent id={agent_id} not found")
-    if agent["active"]:
+
+    with db_write(db_path) as wconn:
+        wconn.execute(
+            "UPDATE agents SET active=1, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+            (agent_id,),
+        )
+        _audit(wconn, "agent_activated", agent_id, {"name": agent["name"]})
+
+    conn = get_conn(db_path)
+    try:
+        updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+    finally:
         conn.close()
-        raise ValueError(f"Agent '{agent['name']}' is already active")
-
-    conn.execute(
-        "UPDATE agents SET active=1, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
-        (agent_id,),
-    )
-    _audit(conn, "agent_activated", agent_id, {"name": agent["name"]})
-    conn.commit()
-
-    updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-    conn.close()
     return dict(updated)
 
 
 def deactivate_agent(agent_id: int, db_path: Optional[Path] = None) -> dict:
     """Deactivate an agent (softer than quarantine - just marks inactive)."""
     conn = get_conn(db_path)
-    agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-    if not agent:
+    try:
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+        if not agent:
+            raise ValueError(f"Agent id={agent_id} not found")
+        if agent["agent_type"] in ("human", "right_hand"):
+            raise ValueError(f"Cannot deactivate {agent['agent_type']} agent")
+        if not agent["active"]:
+            raise ValueError(f"Agent '{agent['name']}' is already inactive")
+    finally:
         conn.close()
-        raise ValueError(f"Agent id={agent_id} not found")
-    if agent["agent_type"] in ("human", "right_hand"):
-        conn.close()
-        raise ValueError(f"Cannot deactivate {agent['agent_type']} agent")
-    if not agent["active"]:
-        conn.close()
-        raise ValueError(f"Agent '{agent['name']}' is already inactive")
 
-    conn.execute(
-        "UPDATE agents SET active=0, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
-        (agent_id,),
-    )
-    _audit(conn, "agent_deactivated", agent_id, {"name": agent["name"]})
-    _alert_agent_status_change(conn, dict(agent), "deactivated")
-    conn.commit()
+    with db_write(db_path) as wconn:
+        wconn.execute(
+            "UPDATE agents SET active=0, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+            (agent_id,),
+        )
+        _audit(wconn, "agent_deactivated", agent_id, {"name": agent["name"]})
+        _alert_agent_status_change(wconn, dict(agent), "deactivated")
 
-    updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-    conn.close()
+    conn = get_conn(db_path)
+    try:
+        updated = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+    finally:
+        conn.close()
     return dict(updated)
 
 
@@ -2589,19 +2529,17 @@ def remember(agent_id: int, content: str, memory_type: str = "fact",
     Called when user says "remember X" or when agent extracts facts from
     conversation.  Returns the new memory_id.
     """
-    conn = get_conn(db_path)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    cur = conn.execute(
-        "INSERT INTO agent_memory "
-        "(agent_id, memory_type, content, source, importance, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (agent_id, memory_type, content, source, importance, now, now),
-    )
-    memory_id = cur.lastrowid
-    _audit(conn, "memory_stored", agent_id,
-           {"memory_id": memory_id, "type": memory_type, "source": source})
-    conn.commit()
-    conn.close()
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "INSERT INTO agent_memory "
+            "(agent_id, memory_type, content, source, importance, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (agent_id, memory_type, content, source, importance, now, now),
+        )
+        memory_id = cur.lastrowid
+        _audit(conn, "memory_stored", agent_id,
+               {"memory_id": memory_id, "type": memory_type, "source": source})
     return memory_id
 
 
@@ -2612,32 +2550,29 @@ def forget(agent_id: int, memory_id: int = None, content_match: str = None,
     Can match by memory_id or by content substring.
     Returns {ok: bool, forgotten_count: int}.
     """
-    conn = get_conn(db_path)
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    if memory_id is not None:
-        cur = conn.execute(
-            "UPDATE agent_memory SET active=0, updated_at=? "
-            "WHERE id=? AND agent_id=? AND active=1",
-            (now, memory_id, agent_id),
-        )
-    elif content_match:
-        cur = conn.execute(
-            "UPDATE agent_memory SET active=0, updated_at=? "
-            "WHERE agent_id=? AND active=1 AND content LIKE ?",
-            (now, agent_id, f"%{content_match}%"),
-        )
-    else:
-        conn.close()
+    if memory_id is None and not content_match:
         return {"ok": False, "forgotten_count": 0}
 
-    count = cur.rowcount
-    if count > 0:
-        _audit(conn, "memory_forgotten", agent_id,
-               {"forgotten_count": count,
-                "by": "id" if memory_id else "match"})
-    conn.commit()
-    conn.close()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db_path) as conn:
+        if memory_id is not None:
+            cur = conn.execute(
+                "UPDATE agent_memory SET active=0, updated_at=? "
+                "WHERE id=? AND agent_id=? AND active=1",
+                (now, memory_id, agent_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE agent_memory SET active=0, updated_at=? "
+                "WHERE agent_id=? AND active=1 AND content LIKE ?",
+                (now, agent_id, f"%{content_match}%"),
+            )
+
+        count = cur.rowcount
+        if count > 0:
+            _audit(conn, "memory_forgotten", agent_id,
+                   {"forgotten_count": count,
+                    "by": "id" if memory_id else "match"})
     return {"ok": True, "forgotten_count": count}
 
 
@@ -2713,16 +2648,17 @@ def synthesize_memories(agent_id: int, older_than_days: int = 7,
     conn = get_conn(db_path)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)
               ).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    old_memories = conn.execute(
-        "SELECT * FROM agent_memory WHERE agent_id=? AND active=1 "
-        "AND memory_type NOT IN ('summary','persona') AND created_at < ? "
-        "ORDER BY memory_type, importance DESC",
-        (agent_id, cutoff),
-    ).fetchall()
+    try:
+        old_memories = conn.execute(
+            "SELECT * FROM agent_memory WHERE agent_id=? AND active=1 "
+            "AND memory_type NOT IN ('summary','persona') AND created_at < ? "
+            "ORDER BY memory_type, importance DESC",
+            (agent_id, cutoff),
+        ).fetchall()
+    finally:
+        conn.close()
 
     if not old_memories:
-        conn.close()
         return {"ok": True, "compacted": 0, "summaries_created": 0}
 
     # Group by type
@@ -2733,38 +2669,36 @@ def synthesize_memories(agent_id: int, older_than_days: int = 7,
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     summaries_created = 0
 
-    for mtype, memories in groups.items():
-        items = [m["content"] for m in memories[:50]]
-        summary_content = f"[Synthesized from {len(memories)} {mtype} memories]\n"
-        summary_content += "\n".join(f"- {item}" for item in items)
+    with db_write(db_path) as wconn:
+        for mtype, memories in groups.items():
+            items = [m["content"] for m in memories[:50]]
+            summary_content = f"[Synthesized from {len(memories)} {mtype} memories]\n"
+            summary_content += "\n".join(f"- {item}" for item in items)
 
-        # Cap at 2000 chars
-        if len(summary_content) > 2000:
-            summary_content = summary_content[:1997] + "..."
+            if len(summary_content) > 2000:
+                summary_content = summary_content[:1997] + "..."
 
-        conn.execute(
-            "INSERT INTO agent_memory "
-            "(agent_id, memory_type, content, source, importance, "
-            "created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
-            (agent_id, "summary", summary_content, "synthesis", 7, now, now),
+            wconn.execute(
+                "INSERT INTO agent_memory "
+                "(agent_id, memory_type, content, source, importance, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+                (agent_id, "summary", summary_content, "synthesis", 7, now, now),
+            )
+            summaries_created += 1
+
+        # Soft-delete originals
+        ids = [m["id"] for m in old_memories]
+        placeholders = ",".join("?" * len(ids))
+        wconn.execute(
+            f"UPDATE agent_memory SET active=0, updated_at=? "
+            f"WHERE id IN ({placeholders})",
+            [now] + ids,
         )
-        summaries_created += 1
 
-    # Soft-delete originals
-    ids = [m["id"] for m in old_memories]
-    placeholders = ",".join("?" * len(ids))
-    conn.execute(
-        f"UPDATE agent_memory SET active=0, updated_at=? "
-        f"WHERE id IN ({placeholders})",
-        [now] + ids,
-    )
-
-    _audit(conn, "memory_synthesis", agent_id, {
-        "compacted": len(old_memories),
-        "summaries_created": summaries_created,
-    })
-    conn.commit()
-    conn.close()
+        _audit(wconn, "memory_synthesis", agent_id, {
+            "compacted": len(old_memories),
+            "summaries_created": summaries_created,
+        })
 
     return {"ok": True, "compacted": len(old_memories),
             "summaries_created": summaries_created}
@@ -3194,8 +3128,7 @@ def update_extended_profile(human_id: int, updates: dict,
 
     If no human_profile row exists, creates one with defaults first.
     """
-    conn = get_conn(db_path)
-    try:
+    with db_write(db_path) as conn:
         # Ensure row exists
         existing = conn.execute(
             "SELECT extended_profile FROM human_profile WHERE human_id=?",
@@ -3203,7 +3136,6 @@ def update_extended_profile(human_id: int, updates: dict,
         ).fetchone()
 
         if not existing:
-            # Create default profile row first
             conn.execute(
                 "INSERT INTO human_profile (human_id) VALUES (?)",
                 (human_id,),
@@ -3220,7 +3152,6 @@ def update_extended_profile(human_id: int, updates: dict,
             if isinstance(value, dict) and isinstance(profile.get(key), dict):
                 profile[key].update(value)
             elif isinstance(value, list) and isinstance(profile.get(key), list):
-                # Append without duplicates
                 for item in value:
                     if item not in profile[key]:
                         profile[key].append(item)
@@ -3237,9 +3168,6 @@ def update_extended_profile(human_id: int, updates: dict,
             "WHERE human_id=?",
             (json.dumps(profile), human_id),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -3390,21 +3318,28 @@ def get_human_state(human_id: int,
                     db_path: Optional[Path] = None) -> dict:
     """Return current human state. Creates default if not exists."""
     conn = get_conn(db_path)
-    row = conn.execute(
-        "SELECT * FROM human_state WHERE human_id=?", (human_id,)
-    ).fetchone()
-
-    if not row:
-        # Auto-create default state
-        conn.execute(
-            "INSERT INTO human_state (human_id) VALUES (?)", (human_id,)
-        )
-        conn.commit()
+    try:
         row = conn.execute(
             "SELECT * FROM human_state WHERE human_id=?", (human_id,)
         ).fetchone()
+    finally:
+        conn.close()
 
-    conn.close()
+    if not row:
+        # Auto-create default state under write lock
+        with db_write(db_path) as wconn:
+            wconn.execute(
+                "INSERT OR IGNORE INTO human_state (human_id) VALUES (?)",
+                (human_id,)
+            )
+        conn = get_conn(db_path)
+        try:
+            row = conn.execute(
+                "SELECT * FROM human_state WHERE human_id=?", (human_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+
     return dict(row)
 
 
@@ -3427,22 +3362,20 @@ def log_security_event(security_agent_id: int, threat_domain: str,
     if severity not in VALID_SEVERITY_LEVELS:
         raise ValueError(f"Invalid severity '{severity}'")
 
-    conn = get_conn(db_path)
-    cur = conn.execute(
-        "INSERT INTO security_events "
-        "(security_agent_id, threat_domain, severity, title, details, recommended_action) "
-        "VALUES (?,?,?,?,?,?)",
-        (security_agent_id, threat_domain, severity, title,
-         json.dumps(details or {}), recommended_action),
-    )
-    event_id = cur.lastrowid
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "INSERT INTO security_events "
+            "(security_agent_id, threat_domain, severity, title, details, recommended_action) "
+            "VALUES (?,?,?,?,?,?)",
+            (security_agent_id, threat_domain, severity, title,
+             json.dumps(details or {}), recommended_action),
+        )
+        event_id = cur.lastrowid
 
-    _audit(conn, "security_event_logged", security_agent_id, {
-        "event_id": event_id, "domain": threat_domain,
-        "severity": severity, "title": title,
-    })
-    conn.commit()
-    conn.close()
+        _audit(conn, "security_event_logged", security_agent_id, {
+            "event_id": event_id, "domain": threat_domain,
+            "severity": severity, "title": title,
+        })
     return event_id
 
 
@@ -4116,15 +4049,13 @@ def create_social_draft(agent_id: int, platform: str, body: str,
     """Create a social media draft for human review."""
     if platform not in VALID_PLATFORMS:
         return {"ok": False, "error": f"Invalid platform '{platform}'"}
-    conn = get_conn(db_path)
-    cur = conn.execute(
-        "INSERT INTO social_drafts (agent_id, platform, title, body, target) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (agent_id, platform, title, body, target),
-    )
-    draft_id = cur.lastrowid
-    conn.commit()
-    conn.close()
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "INSERT INTO social_drafts (agent_id, platform, title, body, target) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (agent_id, platform, title, body, target),
+        )
+        draft_id = cur.lastrowid
     return {"ok": True, "draft_id": draft_id, "platform": platform}
 
 

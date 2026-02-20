@@ -4416,15 +4416,15 @@ def _clear_agent_chat(db_path, agent_id):
         if not human:
             return {"ok": False, "error": "no human agent"}
         hid = human["id"]
-        conn.execute("""
+    finally:
+        conn.close()
+    with bus.db_write(db_path) as wconn:
+        wconn.execute("""
             DELETE FROM messages
             WHERE (from_agent_id=? AND to_agent_id=?)
                OR (from_agent_id=? AND to_agent_id=?)
         """, (hid, agent_id, agent_id, hid))
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -4527,7 +4527,7 @@ def _send_chat(db_path, agent_id, text):
             from_id=human["id"], to_id=agent_id,
             message_type="task", subject="Chat message",
             body=text, priority="normal", db_path=db_path)
-    except (PermissionError, ValueError) as e:
+    except Exception as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "message_id": result["message_id"]}
 
@@ -6741,23 +6741,21 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
 
     # Log startup / recovery (helps track power outage restarts)
     try:
-        _sc = bus.get_conn(actual_db)
-        _sc.execute(
-            "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
-            ("system_startup", 1, json.dumps({"port": port, "db": str(actual_db)})),
-        )
-        # Re-queue any messages stuck from a crash (shouldn't happen with WAL+FULL, but safety net)
-        stuck = _sc.execute(
-            "UPDATE messages SET status='queued' WHERE status='processing'"
-        ).rowcount
-        if stuck:
+        with bus.db_write(actual_db) as _sc:
             _sc.execute(
                 "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
-                ("crash_recovery", 1, json.dumps({"requeued_messages": stuck})),
+                ("system_startup", 1, json.dumps({"port": port, "db": str(actual_db)})),
             )
-            print(f"  \u26a0\ufe0f  Recovered {stuck} messages stuck from last shutdown")
-        _sc.commit()
-        _sc.close()
+            # Re-queue any messages stuck from a crash (shouldn't happen with WAL+FULL, but safety net)
+            stuck = _sc.execute(
+                "UPDATE messages SET status='queued' WHERE status='processing'"
+            ).rowcount
+            if stuck:
+                _sc.execute(
+                    "INSERT INTO audit_log (event_type, agent_id, details) VALUES (?, ?, ?)",
+                    ("crash_recovery", 1, json.dumps({"requeued_messages": stuck})),
+                )
+                print(f"  \u26a0\ufe0f  Recovered {stuck} messages stuck from last shutdown")
     except Exception:
         pass  # don't block startup
 

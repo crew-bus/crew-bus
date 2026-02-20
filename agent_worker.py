@@ -1082,11 +1082,16 @@ def call_ollama(system_prompt: str, user_message: str,
 # Chat history helper
 # ---------------------------------------------------------------------------
 
-def _get_recent_chat(db_path: Path, human_id: int, agent_id: int,
+def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
                      limit: int = 6) -> list:
-    """Fetch recent chat messages and format for Ollama context."""
+    """Fetch recent chat context for an agent.
+
+    Pulls messages between sender↔agent. For managers, also includes
+    recent messages from their workers so they have team awareness.
+    """
     conn = bus.get_conn(db_path)
     try:
+        # Direct conversation between sender and this agent
         rows = conn.execute("""
             SELECT from_agent_id, body, subject
             FROM messages
@@ -1094,13 +1099,38 @@ def _get_recent_chat(db_path: Path, human_id: int, agent_id: int,
                 OR (from_agent_id=? AND to_agent_id=?))
               AND body IS NOT NULL AND body != ''
             ORDER BY created_at DESC LIMIT ?
-        """, (human_id, agent_id, agent_id, human_id, limit)).fetchall()
+        """, (sender_id, agent_id, agent_id, sender_id, limit)).fetchall()
+
+        # For managers: also pull recent messages TO this agent from workers
+        agent_row = conn.execute(
+            "SELECT agent_type FROM agents WHERE id=?", (agent_id,)
+        ).fetchone()
+        worker_rows = []
+        if agent_row and agent_row["agent_type"] == "manager":
+            worker_rows = conn.execute("""
+                SELECT a.name, m.body
+                FROM messages m
+                JOIN agents a ON m.from_agent_id = a.id
+                WHERE m.to_agent_id = ?
+                  AND a.parent_agent_id = ?
+                  AND m.body IS NOT NULL AND m.body != ''
+                ORDER BY m.created_at DESC LIMIT 10
+            """, (agent_id, agent_id)).fetchall()
     finally:
         conn.close()
 
     history = []
+
+    # Inject team updates as system context if available
+    if worker_rows:
+        team_summary = "Recent updates from your team:\n" + "\n".join(
+            f"- {w['name']}: {w['body'][:150]}" for w in reversed(worker_rows)
+        )
+        history.append({"role": "user", "content": team_summary})
+        history.append({"role": "assistant", "content": "Got it, I have my team's updates."})
+
     for row in reversed(rows):  # oldest first
-        role = "user" if row["from_agent_id"] == human_id else "assistant"
+        role = "user" if row["from_agent_id"] == sender_id else "assistant"
         text = row["body"] if row["body"] else row["subject"]
         if text:
             history.append({"role": role, "content": text})
@@ -1173,21 +1203,24 @@ def _process_queued_messages(db_path: Path):
     if not rows:
         return
 
-    # Human→agent: LLM reply.  Everything else: just deliver (no LLM).
+    # Mark all as 'delivered' immediately so they don't get re-picked
+    # on the next poll cycle while we're processing them.
+    with bus.db_write(db_path) as conn:
+        for row in rows:
+            conn.execute("UPDATE messages SET status='delivered' WHERE id=?",
+                         (row["id"],))
+
+    # Every message gets processed — agent reads it, thinks, replies.
+    # Human messages first (priority), then all others sequentially.
+    # Sequential avoids SQLite write contention from parallel threads.
     human_msgs = [r for r in rows if r["sender_type"] == "human"]
     agent_msgs = [r for r in rows if r["sender_type"] != "human"]
 
-    # Deliver agent-to-agent messages instantly (no LLM cost)
-    for row in agent_msgs:
-        _mark_delivered(db_path, row["id"])
+    for row in human_msgs:
+        _process_single_message(row, db_path)
 
-    # Process human messages with LLM (parallel, up to 4 threads)
-    if len(human_msgs) == 1:
-        _process_single_message(human_msgs[0], db_path)
-    elif human_msgs:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="agent") as pool:
-            pool.map(lambda r: _process_single_message(r, db_path), human_msgs)
+    for row in agent_msgs:
+        _process_single_message(row, db_path)
 
 
 def _process_single_message(row, db_path: Path):
@@ -1201,14 +1234,12 @@ def _process_single_message(row, db_path: Path):
     user_text = row["body"] if row["body"] else row["subject"]
 
     if not user_text:
-        _mark_delivered(db_path, msg_id)
         return
 
     # Check for memory commands first (remember/forget/list)
     memory_response = _check_memory_command(user_text, agent_id, db_path)
     if memory_response:
         _insert_reply_direct(db_path, agent_id, human_id, memory_response)
-        _mark_delivered(db_path, msg_id)
         return
 
     # Get agent description from DB for dynamic prompts
@@ -1228,7 +1259,6 @@ def _process_single_message(row, db_path: Path):
         r'\bwhatsapp\b', user_text, _re.IGNORECASE
     ):
         _handle_whatsapp_setup(db_path, agent_id, human_id)
-        _mark_delivered(db_path, msg_id)
         return
 
     # Social draft shortcut: process directly — no LLM needed
@@ -1245,7 +1275,6 @@ def _process_single_message(row, db_path: Path):
             _reply_text = "Task received — processing social content."
         _insert_reply_direct(db_path, agent_id, human_id, _reply_text,
                              human_msg=user_text, agent_type=agent_type)
-        _mark_delivered(db_path, msg_id)
         return
 
     # Build system prompt — injects memories + skills
@@ -1278,9 +1307,6 @@ def _process_single_message(row, db_path: Path):
         # Insert reply directly — always works, bypasses routing rules
         _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
                              human_msg=user_text, agent_type=agent_type)
-
-    # Mark original message as delivered
-    _mark_delivered(db_path, msg_id)
 
 
 import re as _re
@@ -1703,12 +1729,10 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             new_model = action.get("model", "")
             if agent_name and new_model:
                 try:
-                    conn = bus.get_conn(db_path)
-                    conn.execute(
-                        "UPDATE agents SET model=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
-                        "WHERE name=?", (new_model, agent_name))
-                    conn.commit()
-                    conn.close()
+                    with bus.db_write(db_path) as wconn:
+                        wconn.execute(
+                            "UPDATE agents SET model=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                            "WHERE name=?", (new_model, agent_name))
                     print(f"[wizard] set model for {agent_name}: {new_model}")
                 except Exception as e:
                     print(f"[wizard] set_agent_model error: {e}")
@@ -1845,31 +1869,23 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
 
 def _mark_delivered(db_path: Path, message_id: int):
     """Mark a message as delivered so we don't re-process it."""
-    conn = bus.get_conn(db_path)
-    try:
+    with bus.db_write(db_path) as conn:
         conn.execute(
             "UPDATE messages SET status='delivered', delivered_at=? WHERE id=?",
             (datetime.now(timezone.utc).isoformat(), message_id),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def _insert_reply_direct(db_path: Path, from_id: int, to_id: int, body: str,
                          human_msg: str = "", agent_type: str = ""):
     """Insert a reply directly (bypass routing rules for chat responses)."""
-    conn = bus.get_conn(db_path)
-    try:
+    with bus.db_write(db_path) as conn:
         conn.execute(
             "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
             "subject, body, priority, status) VALUES (?, ?, 'report', "
             "'Chat reply', ?, 'normal', 'delivered')",
             (from_id, to_id, body),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
     # Real-time integrity check — scan every agent reply as it's sent
     _check_reply_integrity(db_path, from_id, body)
