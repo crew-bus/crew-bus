@@ -2752,9 +2752,10 @@ function closeAgentSpace(){
   setTimeout(function(){space.classList.remove('open','closing')},200);
 }
 async function startNewChat(){
-  if(!currentAgentId)return;
+  var agentId=document.getElementById('agent-space').dataset.agentId;
+  if(!agentId)return;
   if(!confirm('Start a fresh conversation? Chat history will be cleared.'))return;
-  await apiPost('/api/agent/'+currentAgentId+'/chat/clear',{});
+  await apiPost('/api/agent/'+agentId+'/chat/clear',{});
   renderChat([]);
   showToast('Fresh conversation started');
 }
