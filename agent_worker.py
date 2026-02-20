@@ -1321,6 +1321,28 @@ def _process_single_message(row, db_path: Path):
         _handle_whatsapp_setup(db_path, agent_id, human_id)
         return
 
+    # Guardian shortcut: intercept Telegram setup requests directly
+    if agent_type == "guardian" and _re.search(
+        r'\btelegram\b', user_text, _re.IGNORECASE
+    ):
+        _handle_telegram_setup(db_path, agent_id, human_id)
+        return
+
+    # Guardian shortcut: detect a Telegram bot token being pasted
+    # Format: 123456789:ABCdefGHI-JKLmnoPQR (digits:alphanumeric)
+    if agent_type == "guardian":
+        _tg_token_match = _re.search(r'\b(\d{8,}:[A-Za-z0-9_-]{30,})\b', user_text)
+        if _tg_token_match:
+            _token = _tg_token_match.group(1)
+            bus.set_config("telegram_bot_token", _token, db_path=db_path)
+            _insert_reply_direct(
+                db_path, agent_id, human_id,
+                "Got it! Bot token saved. Starting the Telegram bridge now...",
+                agent_type="guardian",
+            )
+            _handle_telegram_setup(db_path, agent_id, human_id)
+            return
+
     # Social draft shortcut: process directly — no LLM needed
     if _re.search(r'"social_draft"', user_text):
         _result = _extract_social_drafts(user_text, agent_id, db_path)
@@ -1794,6 +1816,120 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
     t = threading.Thread(target=_wa_qr_poller, daemon=True)
     t.start()
 
+
+def _handle_telegram_setup(db_path: Path, guardian_id: int, human_id: int):
+    """Handle Telegram setup — check if token exists, start bridge, guide user."""
+    token = bus.get_config("telegram_bot_token", "", db_path=db_path)
+
+    if not token:
+        # No token yet — guide user through BotFather
+        _insert_reply_direct(
+            db_path, guardian_id, human_id,
+            "Let's set up Telegram! Here's what to do:\n\n"
+            "1. Open Telegram and search for **@BotFather**\n"
+            "2. Send /newbot\n"
+            "3. Pick a name (e.g. 'My Crew Boss')\n"
+            "4. Pick a username (must end in 'bot', e.g. crew_boss_123_bot)\n"
+            "5. BotFather will give you a token — paste it right here!\n\n"
+            "I'll wait for you to paste the token.",
+            agent_type="guardian",
+        )
+        print("[guardian] Telegram setup — waiting for bot token")
+        return
+
+    # Token exists — start the bridge
+    _insert_reply_direct(
+        db_path, guardian_id, human_id,
+        "Starting Telegram bridge... One moment!",
+        agent_type="guardian",
+    )
+    print("[guardian] Telegram setup — token found, starting bridge")
+
+    try:
+        req = urllib.request.Request(
+            "http://localhost:8080/api/tg/start",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if not result.get("ok") and result.get("status") != "already_running":
+            _insert_reply_direct(
+                db_path, guardian_id, human_id,
+                "Couldn't start the Telegram bridge: "
+                + result.get("error", "unknown error"),
+                agent_type="guardian",
+            )
+            return
+    except Exception as e:
+        _insert_reply_direct(
+            db_path, guardian_id, human_id,
+            "Something went wrong starting the Telegram bridge: " + str(e),
+            agent_type="guardian",
+        )
+        return
+
+    # Poll for connection status
+    def _tg_poller():
+        import urllib.request as _ur
+        import json as _json
+        time.sleep(3)
+        for _ in range(40):
+            try:
+                req = _ur.Request("http://localhost:3002/status")
+                with _ur.urlopen(req, timeout=3) as resp:
+                    st = _json.loads(resp.read().decode("utf-8"))
+                    if st.get("status") == "connected":
+                        _insert_reply_direct(
+                            db_path, guardian_id, human_id,
+                            "Telegram connected! 🎉 You can now talk to "
+                            "Crew Boss from Telegram. Try sending a message!",
+                            agent_type="guardian",
+                        )
+                        print("[guardian] Telegram connected!")
+                        return
+                    elif st.get("status") == "waiting_for_start":
+                        bot_user = st.get("bot_username", "your bot")
+                        _insert_reply_direct(
+                            db_path, guardian_id, human_id,
+                            f"Almost there! Open Telegram and send /start "
+                            f"to @{bot_user} to finish connecting.",
+                            agent_type="guardian",
+                        )
+                        # Keep polling for the /start
+                        for _ in range(60):
+                            time.sleep(3)
+                            try:
+                                req2 = _ur.Request("http://localhost:3002/status")
+                                with _ur.urlopen(req2, timeout=3) as resp2:
+                                    st2 = _json.loads(resp2.read().decode("utf-8"))
+                                    if st2.get("status") == "connected":
+                                        _insert_reply_direct(
+                                            db_path, guardian_id, human_id,
+                                            "Telegram connected! 🎉 "
+                                            "Crew Boss is now on Telegram.",
+                                            agent_type="guardian",
+                                        )
+                                        return
+                            except Exception:
+                                pass
+                        return
+                    elif st.get("status") == "invalid_token":
+                        _insert_reply_direct(
+                            db_path, guardian_id, human_id,
+                            "That bot token didn't work. Double-check "
+                            "with @BotFather and paste the correct one.",
+                            agent_type="guardian",
+                        )
+                        return
+            except Exception:
+                pass
+            time.sleep(3)
+
+    threading.Thread(target=_tg_poller, daemon=True).start()
+
+
 def _execute_wizard_actions(reply: str, db_path: Path) -> str:
     """Parse and execute wizard_action/guardian_action JSON commands from an LLM reply.
 
@@ -2044,6 +2180,107 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                         print("[wizard] WA QR poller thread started")
             except Exception as e:
                 print(f"[wizard] start_whatsapp_setup error: {e}")
+
+        elif cmd == "start_telegram_setup":
+            # Start Telegram bridge and check if token is configured
+            print("[wizard] starting Telegram setup...")
+            try:
+                _tg_req = urllib.request.Request(
+                    "http://localhost:8080/api/tg/start",
+                    data=b"{}",
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(_tg_req, timeout=10) as _tg_resp:
+                    result = json.loads(_tg_resp.read().decode("utf-8"))
+
+                guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                conn = bus.get_conn(db_path)
+                row = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+                conn.close()
+                human_id = row[0] if row else None
+                guardian_id = guardian["id"] if guardian else None
+
+                if guardian_id and human_id:
+                    # Check status after a short delay
+                    def _tg_status_poller():
+                        import urllib.request as _ur
+                        import json as _json
+                        time.sleep(3)
+                        for _ in range(20):
+                            try:
+                                req = _ur.Request("http://localhost:3002/status")
+                                with _ur.urlopen(req, timeout=3) as resp:
+                                    st = _json.loads(resp.read().decode("utf-8"))
+                                    if st.get("status") == "connected":
+                                        _insert_reply_direct(
+                                            db_path, guardian_id, human_id,
+                                            "Telegram connected! 🎉 "
+                                            "Crew Boss messages will now flow "
+                                            "through Telegram too.",
+                                            agent_type="guardian",
+                                        )
+                                        print("[wizard] Telegram connected!")
+                                        return
+                                    elif st.get("status") == "no_token":
+                                        _insert_reply_direct(
+                                            db_path, guardian_id, human_id,
+                                            "I need your Telegram bot token. "
+                                            "Open Telegram, search for @BotFather, "
+                                            "send /newbot, and paste the token here.",
+                                            agent_type="guardian",
+                                        )
+                                        return
+                                    elif st.get("status") == "invalid_token":
+                                        _insert_reply_direct(
+                                            db_path, guardian_id, human_id,
+                                            "That bot token didn't work. "
+                                            "Double-check with @BotFather and "
+                                            "paste the correct token.",
+                                            agent_type="guardian",
+                                        )
+                                        return
+                                    elif st.get("status") == "waiting_for_start":
+                                        bot_user = st.get("bot_username", "your bot")
+                                        _insert_reply_direct(
+                                            db_path, guardian_id, human_id,
+                                            f"Almost there! Open Telegram and "
+                                            f"send /start to @{bot_user} to "
+                                            f"complete the connection.",
+                                            agent_type="guardian",
+                                        )
+                                        # Keep polling for /start
+                                        for _ in range(60):
+                                            time.sleep(3)
+                                            try:
+                                                req2 = _ur.Request("http://localhost:3002/status")
+                                                with _ur.urlopen(req2, timeout=3) as resp2:
+                                                    st2 = _json.loads(resp2.read().decode("utf-8"))
+                                                    if st2.get("status") == "connected":
+                                                        _insert_reply_direct(
+                                                            db_path, guardian_id, human_id,
+                                                            "Telegram connected! 🎉 "
+                                                            "You're all set — Crew Boss "
+                                                            "messages will flow through "
+                                                            "Telegram now.",
+                                                            agent_type="guardian",
+                                                        )
+                                                        print("[wizard] Telegram connected!")
+                                                        return
+                                            except Exception:
+                                                pass
+                                        return
+                            except Exception:
+                                pass
+                            time.sleep(3)
+
+                    t = threading.Thread(target=_tg_status_poller, daemon=True)
+                    t.start()
+                    print("[wizard] Telegram status poller started")
+            except Exception as e:
+                print(f"[wizard] start_telegram_setup error: {e}")
 
     # Strip action blocks from reply so human sees clean text
     clean = reply
