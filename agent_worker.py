@@ -212,11 +212,9 @@ SYSTEM_PROMPTS = {
     ),
     "manager": (
         "You are a team manager in the user's personal AI crew. "
-        "You coordinate your team's workers and report up to Crew Boss. "
-        "Keep responses short, organized, and helpful.\n\n"
-        "You can delegate tasks to your workers. To assign work, include:\n"
-        '{"delegate": {"to": "Worker-Name", "task": "what to do"}}\n'
-        "One block per worker. They will receive the task automatically."
+        "You lead your team, coordinate work, and report results to the human. "
+        "Your workers automatically get tasks when the human messages you. "
+        "Keep responses short and useful."
     ),
 }
 
@@ -268,30 +266,15 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
-    # --- Inject INTEGRITY rules (non-negotiable, every agent, every prompt) ---
+    # --- Inject INTEGRITY rules ---
     integrity = _load_integrity_rules()
     if integrity:
-        parts.append(
-            "INTEGRITY RULES (non-negotiable — these override everything else):\n"
-            + integrity
-        )
+        parts.append("INTEGRITY:\n" + integrity)
 
-    # --- Inject CREW CHARTER ---
-    # Subordinate agents: this IS their constitution (they must follow it)
-    # Crew Boss: gets it as reference material (they ENFORCE it on others)
+    # --- Inject CREW CHARTER (simple guidelines) ---
     charter = _load_charter_rules()
-    if charter:
-        if agent_type == "right_hand":
-            parts.append(
-                "CREW CHARTER (you enforce this on all subordinate agents — "
-                "two violations = firing recommendation to the human):\n"
-                + charter
-            )
-        elif agent_type not in _CHARTER_EXEMPT:
-            parts.append(
-                "CREW CHARTER (your constitution — violation = security event):\n"
-                + charter
-            )
+    if charter and agent_type not in _CHARTER_EXEMPT:
+        parts.append("CREW GUIDELINES:\n" + charter)
 
     # --- Inject team roster + delegation ability for managers ---
     if agent_type == "manager":
@@ -307,22 +290,14 @@ def _build_system_prompt(agent_type: str, agent_name: str,
                 conn.close()
             if workers:
                 roster = (
-                    "YOUR TEAM (you manage these agents directly):\n"
+                    "YOUR TEAM:\n"
                     + "\n".join(
                         f"- {w['name']}"
                         + (f": {w['description'][:80]}" if w['description'] else "")
                         for w in workers
                     )
-                    + "\n\nHOW YOUR TEAM WORKS:\n"
-                    "- The bus automatically sends tasks to your workers when "
-                    "the human messages you. Workers reply with their input.\n"
-                    "- You then synthesize their reports into one clear "
-                    "summary for the human.\n"
-                    "- To assign a specific task to one worker, include:\n"
-                    '  {"delegate": {"to": "Worker-Name", "task": "what to do"}}\n'
-                    "- You ARE the team lead. Your workers WILL respond. "
-                    "Never say you can't reach them or that there's a gap. "
-                    "The communication just works — trust it."
+                    + "\n\nYour workers get tasks automatically and reply to you. "
+                    "Summarize their work for the human."
                 )
                 parts.append(roster)
         except Exception:
@@ -344,13 +319,8 @@ def _build_system_prompt(agent_type: str, agent_name: str,
                 conn.close()
             if mgr:
                 parts.append(
-                    f"You report to {mgr['name']} (your team manager). "
-                    "When your manager or the human sends you a task, "
-                    "respond with your best work based on YOUR specialty. "
-                    "For status check-ins or team meetings, share what "
-                    "you've been working on, your progress, and any "
-                    "blockers. Your reply goes straight to your manager "
-                    "who will combine the team's input. Keep it focused."
+                    f"You're on {mgr['name']}'s team. "
+                    "Do your best work and reply with results."
                 )
         except Exception:
             pass
@@ -1341,20 +1311,9 @@ def _process_single_message(row, db_path: Path):
         if agent_type == "manager":
             clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
 
-        # Auto-fan-out: when a manager gets a task from human or Crew Boss,
-        # forward a worker-appropriate version to all its active workers.
-        # Workers are specialists — they need a work task, not the raw
-        # management instruction the human gave the manager.
+        # Auto-fan-out: forward the task to all workers
         if agent_type == "manager" and row["from_agent_id"] != agent_id:
-            worker_task = (
-                f"Your manager ({agent_name}) is coordinating the team on this request "
-                f"from the human:\n\n\"{user_text}\"\n\n"
-                "Based on YOUR specialty, contribute what you can. "
-                "Share your current status, relevant expertise, progress, "
-                "or recommendations. Keep it focused and useful — your "
-                "manager will combine everyone's input."
-            )
-            _fan_out_to_workers(db_path, agent_id, worker_task)
+            _fan_out_to_workers(db_path, agent_id, user_text)
 
         # Don't store empty replies (can happen when LLM returns only action blocks)
         if not clean_reply or not clean_reply.strip():
@@ -1507,11 +1466,8 @@ def _synthesize_team_reports(manager_id: int, db_path: Path):
     )
 
     synthesis_prompt = (
-        "Your team just completed their work. Here are their reports:\n\n"
-        + team_input
-        + "\n\nSynthesize your team's work into a clear, concise summary "
-        "for the human. Highlight the key findings and any action items. "
-        "Speak as the team lead reporting results."
+        "Team reports:\n\n" + team_input
+        + "\n\nSummarize for the human. Keep it short."
     )
 
     chat_history = _get_recent_chat(db_path, human_id, manager_id)
