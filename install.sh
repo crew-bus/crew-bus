@@ -52,7 +52,7 @@ elif [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
 else
     echo "  Cloning to $INSTALL_DIR ..."
-    git clone https://github.com/westcoastrj/crew-bus.git "$INSTALL_DIR"
+    git clone https://github.com/crew-bus/crew-bus.git "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 
