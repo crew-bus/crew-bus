@@ -43,6 +43,7 @@ KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions"
 KIMI_DEFAULT_MODEL = "kimi-k2.5"
 POLL_INTERVAL = 0.5  # seconds between queue checks
 WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:8420")
 
 # Provider registry — model_prefix → (api_url, default_model, config_key_for_api_key)
 PROVIDERS = {
@@ -2258,7 +2259,7 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
     # Start the bridge via dashboard's HTTP API (avoids module import issues)
     try:
         req = urllib.request.Request(
-            "http://localhost:8080/api/wa/start",
+            f"{DASHBOARD_URL}/api/wa/start",
             data=b"{}",
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -2408,7 +2409,7 @@ def _handle_telegram_setup(db_path: Path, guardian_id: int, human_id: int):
 
     try:
         req = urllib.request.Request(
-            "http://localhost:8080/api/tg/start",
+            f"{DASHBOARD_URL}/api/tg/start",
             data=b"{}",
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -2599,7 +2600,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             try:
                 # Start bridge via dashboard HTTP API
                 _wa_req = urllib.request.Request(
-                    "http://localhost:8080/api/wa/start",
+                    f"{DASHBOARD_URL}/api/wa/start",
                     data=b"{}",
                     headers={"Content-Type": "application/json"},
                     method="POST",
@@ -2747,7 +2748,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             print("[wizard] starting Telegram setup...")
             try:
                 _tg_req = urllib.request.Request(
-                    "http://localhost:8080/api/tg/start",
+                    f"{DASHBOARD_URL}/api/tg/start",
                     data=b"{}",
                     headers={"Content-Type": "application/json"},
                     method="POST",

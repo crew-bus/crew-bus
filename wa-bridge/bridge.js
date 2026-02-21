@@ -28,14 +28,14 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-} = require("baileys");
+} = require("@whiskeysockets/baileys");
 const http = require("http");
 const path = require("path");
 
 // ── Config ──────────────────────────────────────────────────────────
 
 const PORT = parseInt(process.env.WA_PORT || "3001", 10);
-const BUS_URL = process.env.BUS_URL || "http://localhost:8080";
+const BUS_URL = process.env.BUS_URL || "http://localhost:8420";
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL || "1000", 10);
 const AUTH_DIR = path.join(__dirname, "wa-session", "baileys-auth");
 

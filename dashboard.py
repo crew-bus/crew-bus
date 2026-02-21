@@ -88,8 +88,9 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BUY_BUTTONS = json.loads(os.environ.get("STRIPE_BUY_BUTTONS", "{}")) if os.environ.get("STRIPE_BUY_BUTTONS") else {}
 SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 
-DEFAULT_PORT = 8080
+DEFAULT_PORT = 8420
 DEFAULT_DB = bus.DB_PATH
+_server_port = DEFAULT_PORT  # updated at server start with actual port
 
 # WhatsApp bridge subprocess management
 WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
@@ -4502,7 +4503,7 @@ def _start_wa_bridge():
                 cwd=bridge_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                env={**os.environ, "BUS_URL": f"http://localhost:{DEFAULT_PORT}"},
+                env={**os.environ, "BUS_URL": f"http://localhost:{_server_port}"},
             )
             return {"ok": True, "status": "started", "pid": _wa_bridge_process.pid}
         except Exception as e:
@@ -4567,7 +4568,7 @@ def _start_tg_bridge():
                 [sys.executable, str(bridge_script)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                env={**os.environ, "BUS_URL": f"http://localhost:{DEFAULT_PORT}"},
+                env={**os.environ, "BUS_URL": f"http://localhost:{_server_port}"},
             )
             return {"ok": True, "status": "started", "pid": _tg_bridge_process.pid}
         except Exception as e:
@@ -6981,6 +6982,8 @@ def _auto_load_hierarchy(db_path):
         print(f"Auto-loaded config: {yamls[0].name}")
 
 def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
+    global _server_port
+    _server_port = port
     if db_path is None:
         db_path = DEFAULT_DB
     bus.init_db(db_path=db_path)
