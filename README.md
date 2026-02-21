@@ -19,7 +19,7 @@ Setting up a team of AI agents today is painful. You download a framework, wrest
 crew-bus takes a different approach:
 
 - **Runs on your hardware.** Your laptop, your desktop, your home server. Your data never leaves your network unless you tell it to.
-- **Works out of the box.** Five agents in a circle — Crew Boss at center, Guard, Wellness, Ideas, Wallet — ready to go in minutes, not hours.
+- **Works out of the box.** Three agents in a triangle — Crew Boss, Guardian, Vault — ready to go in minutes, not hours.
 - **Built-in security from day one.** The Guardian agent controls all external access, vets every skill before install, and monitors everything in real time. No other agent framework ships with an immune system.
 - **One price, forever.** $29 lifetime Guardian Activation key. No subscriptions. No per-token charges. No surprise bills.
 
@@ -29,25 +29,24 @@ crew-bus takes a different approach:
 
 ```
          ┌──────────┐
-         │  Guard   │
-         └────┬─────┘
-              │
-┌──────────┐  │  ┌──────────┐
-│  Ideas   │──┼──│ Wellness │
-└──────────┘  │  └──────────┘
-              │
-         ┌────┴─────┐
-         │Crew Boss │  ← center hub
-         └────┬─────┘
-              │
-         ┌────┴─────┐
-         │  Wallet  │
-         └──────────┘
+         │Crew Boss │  ← your AI right-hand
+         └──┬───┬───┘
+            │   │
+   ┌────────┘   └────────┐
+   │                      │
+┌──┴───────┐       ┌──────┴──┐
+│ Guardian │       │  Vault  │
+│ protects │       │remembers│
+└──────────┘       └─────────┘
 ```
 
-**Crew Boss** sits at the center and coordinates all agent communication. Every message flows through the bus — agents don't talk directly to each other, they talk through the system. This keeps things clean, auditable, and secure.
+**Boss talks, Guard protects, Vault remembers.**
 
-**Guardian** is the gatekeeper. It controls web access, vets skills for safety, monitors runtime health, and auto-quarantines anything that degrades. Think of it as your crew's security team.
+**Crew Boss** sits at the top and coordinates everything. Your AI right-hand — handles 80% of what you need so you can focus on living. Every message flows through the bus — agents don't talk directly to each other, they talk through the system.
+
+**Guardian** is the gatekeeper. It controls web access, vets skills for safety, monitors runtime health, and auto-quarantines anything that degrades. Your crew's immune system.
+
+**Vault** is your private journal and life-data agent. It remembers everything — moods, goals, money notes, relationship changes, dreams, wins, fears. Never nags, never checks in. Only speaks when spoken to. Like a journal that writes back.
 
 ---
 
@@ -65,7 +64,7 @@ pip install -r requirements.txt
 python3 dashboard.py
 ```
 
-Open `http://localhost:8420` and you're running. Five agents, ready to coordinate.
+Open `http://localhost:8420` and you're running. Three agents in a triangle, ready to coordinate.
 
 To unlock Guardian features (web search, Skill Store, Skill Sandbox), grab a [$29 lifetime activation key at crew-bus.dev](https://crew-bus.dev).
 
@@ -74,12 +73,13 @@ To unlock Guardian features (web search, Skill Store, Skill Sandbox), grab a [$2
 ## Features
 
 ### Core (Free & Open Source)
-- **5 coordinated agents** — Crew Boss, Guard, Wellness, Ideas, Wallet
+- **3 coordinated agents** — Crew Boss (right-hand), Guardian (security), Vault (private journal)
 - **Hierarchical message routing** — every message flows through the bus
 - **Private sessions** — isolated conversations per agent
 - **Team mailboxes** — agents can send structured messages to each other
 - **Local-first** — runs entirely on your machine
 - **Dashboard** — web UI to monitor and interact with your crew
+- **Expandable** — spawn additional teams and agents when you need them
 
 ### Guardian Activation ($29 lifetime)
 
@@ -116,17 +116,17 @@ Guardian monitors every installed skill in real time:
 
 CrewAI, AutoGen, and LangGraph are powerful frameworks built for developers who want to code agent systems from scratch. They assume you'll wire everything together yourself.
 
-**crew-bus is built for people who want agents working together *today*.** You get a pre-configured team, a security layer, a skill marketplace, and a dashboard — all running on your own machine. No PhD in prompt engineering required.
+**crew-bus is built for people who want agents working together *today*.** You get a pre-configured crew, a security layer, a skill marketplace, and a dashboard — all running on your own machine. No PhD in prompt engineering required.
 
 ---
 
 ## What People Use It For
 
-- **Personal productivity** — Ideas agent researches, Crew Boss organizes, Wellness agent keeps you on track
+- **Personal productivity** — Crew Boss organizes your life, Vault remembers everything, Guardian keeps it safe
+- **Private journaling** — Talk to Vault about your day, goals, fears, wins — it connects dots across weeks and months
 - **Content creation** — Install creative writing skills, coordinate research + drafting + editing across agents
-- **Budget & finance tracking** — Wallet agent manages financial data, never leaves your machine
+- **Budget & finance tracking** — Share money notes with Vault, get pattern insights when you ask
 - **Learning & homework help** — Install education skills, get tutoring from a coordinated agent team
-- **Lead generation** — Install lead-finding skills, prospect research stays on your hardware
 - **Small business operations** — Meal planning, fitness coaching, data analysis — all local, all private
 
 ---
@@ -137,12 +137,11 @@ CrewAI, AutoGen, and LangGraph are powerful frameworks built for developers who 
 ┌─────────────────────────────────────────┐
 │              Dashboard (Web UI)          │
 ├─────────────────────────────────────────┤
-│              API Layer (Flask)           │
+│              API Layer (stdlib)          │
 ├─────────────────────────────────────────┤
-│           Agent Worker Engine           │
+│           Agent Worker Engine            │
 │  ┌─────────────────────────────────┐    │
-│  │  Crew Boss  │  Guard  │ Wellness│    │
-│  │   Ideas     │  Wallet │         │    │
+│  │  Crew Boss  │ Guardian │  Vault │    │
 │  └─────────────────────────────────┘    │
 ├─────────────────────────────────────────┤
 │  Guardian Layer                         │
@@ -158,29 +157,13 @@ Everything runs in a single process on your machine. No Docker required. No clou
 
 ---
 
-## v0.2.0 — Guardian Awakens
-
-**Latest release:** [v0.2.0](https://github.com/crew-bus/crew-bus/releases/tag/v0.2.0)
-
-- Web Search via DuckDuckGo (no API key needed)
-- Skill Store with 20 curated skills across 10 categories
-- Skill Sandbox with real-time health monitoring and auto-quarantine
-- 8 new Guardian action commands
-- 11 new API endpoints
-- 222 tests passing, 0 failures
-- 67 commits, 2,581 lines added since v0.1.0-beta
-
-[Full release notes →](https://github.com/crew-bus/crew-bus/releases/tag/v0.2.0)
-
----
-
 ## Roadmap
 
 - [ ] Voice interface — talk to your crew
 - [ ] Mobile companion app
 - [ ] Plugin SDK — build and share your own skills
 - [ ] Multi-machine crew networking (LAN)
-- [ ] Agent memory & learning across sessions
+- [ ] WhatsApp & Telegram bridge for on-the-go access
 
 ---
 
