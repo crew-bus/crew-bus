@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Install — Crew Bus</title>
+    <meta name="description" content="Install Crew Bus in one command. Free, local, private. No cloud accounts, no API keys, no sign-ups.">
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+        <div class="nav-links" id="navLinks">
+            <a href="/#why-different">Why It's Different</a>
+            <a href="/#your-crew">Your Crew</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/install" class="active" style="color:var(--highlight)">Install</a>
+            <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Hero -->
+<section class="section" style="padding-top: 8rem; padding-bottom: 2rem;">
+    <div class="container container-narrow text-center">
+        <h1 class="section-title">Install Crew Bus</h1>
+        <p class="section-sub">Free. Local. Private. Your personal AI crew running on your own hardware — no cloud, no sign-ups, no strings attached.</p>
+    </div>
+</section>
+
+<!-- One-Command Install -->
+<section class="section" style="padding-top: 0;">
+    <div class="container container-narrow">
+        <h2 class="section-title">One-Command Install</h2>
+        <p class="section-sub">Copy, paste, done. Your crew is five minutes away.</p>
+        <div class="step-terminal" style="max-width: 100%;">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 14px 0 0;">
+                <code>curl -sL https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh | bash</code>
+                <button onclick="navigator.clipboard.writeText('curl -sL https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh | bash').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
+            </div>
+        </div>
+        <p style="text-align:center;color:var(--text-dim);margin-top:1rem;font-size:0.9rem;">Works on macOS and Linux. Takes about 5 minutes.</p>
+    </div>
+</section>
+
+<!-- What the Installer Does -->
+<section class="section section-dark">
+    <div class="container">
+        <h2 class="section-title">What the Installer Does</h2>
+        <p class="section-sub">Three steps, fully automated. Here's what happens behind the scenes.</p>
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Checks &amp; Clones</h3>
+                <p>Verifies Python 3.10+ is installed, then clones the Crew Bus repo to your machine.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Installs Dependencies</h3>
+                <p>Sets up a virtual environment, installs Python packages, and installs Ollama for local AI.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Launches Your Crew</h3>
+                <p>Starts the dashboard — your crew is live. Guardian walks you through the rest.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Add Skills Anytime -->
+<section class="section">
+    <div class="container container-narrow text-center">
+        <h2 class="section-title">Add Skills Anytime</h2>
+        <p style="font-size:1.1rem;color:var(--text-dim);max-width:600px;margin:0 auto 1.5rem;">What you install today is the full platform — but it's also a launchpad. Every agent can learn new skills from the Skill Store, downloaded and verified by Guardian. Wellness can learn breathing exercises. Strategy can learn market analysis. Crew Boss can learn anything you need. Your crew starts simple and grows with you.</p>
+        <a href="/activate" class="btn btn-outline">Learn About the Skill Store</a>
+    </div>
+</section>
+
+<!-- System Requirements -->
+<section class="section">
+    <div class="container container-narrow">
+        <h2 class="section-title">System Requirements</h2>
+        <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; max-width: 480px; margin: 0 auto;">
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 1rem; line-height: 2.2;">
+                <li>&#9989; macOS or Linux</li>
+                <li>&#9989; Python 3.10+</li>
+                <li>&#9989; 4 GB+ RAM (8 GB recommended)</li>
+                <li>&#9989; 2 GB disk space</li>
+                <li>&#9989; Git installed</li>
+            </ul>
+            <p style="margin-top:1.2rem;color:var(--text-dim);font-size:0.9rem;">No cloud accounts. No API keys. No sign-ups.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Manual Install -->
+<section class="section section-dark">
+    <div class="container container-narrow">
+        <h2 class="section-title">Manual Install</h2>
+        <p class="section-sub">Prefer to do it yourself? Four commands, full control.</p>
+
+        <p style="font-weight:600;margin-bottom:0.5rem;">1. Clone the repo</p>
+        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
+                <code>git clone https://github.com/crew-bus/crew-bus.git &amp;&amp; cd crew-bus</code>
+                <button onclick="navigator.clipboard.writeText('git clone https://github.com/crew-bus/crew-bus.git && cd crew-bus').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
+            </div>
+        </div>
+
+        <p style="font-weight:600;margin-bottom:0.5rem;">2. Create a virtual environment</p>
+        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
+                <code>python3 -m venv .venv &amp;&amp; source .venv/bin/activate</code>
+                <button onclick="navigator.clipboard.writeText('python3 -m venv .venv && source .venv/bin/activate').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
+            </div>
+        </div>
+
+        <p style="font-weight:600;margin-bottom:0.5rem;">3. Install dependencies</p>
+        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
+                <code>pip install -r requirements.txt</code>
+                <button onclick="navigator.clipboard.writeText('pip install -r requirements.txt').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
+            </div>
+        </div>
+
+        <p style="font-weight:600;margin-bottom:0.5rem;">4. Launch the dashboard</p>
+        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
+                <code>python3 dashboard.py</code>
+                <button onclick="navigator.clipboard.writeText('python3 dashboard.py').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Need Help? -->
+<section class="section">
+    <div class="container container-narrow text-center">
+        <h2 class="section-title">Need Help?</h2>
+        <p style="font-size:1.1rem;color:var(--text-dim);margin-bottom:1.5rem;">Not a tech person? No problem. Verified installers can set up your crew for you — remotely or in person.</p>
+        <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+            <a href="/installer" class="btn btn-primary btn-lg">Find an Installer</a>
+            <a href="/faq" class="btn btn-outline btn-lg">Read the FAQ</a>
+        </div>
+    </div>
+</section>
+
+<!-- Deploy on a Server -->
+<section class="section section-dark">
+    <div class="container container-narrow text-center">
+        <h2 class="section-title">Deploy on a Server</h2>
+        <p style="font-size:1rem;color:var(--text-dim);margin-bottom:1rem;">Want to run Crew Bus on a dedicated server? We provide a one-command setup script for Hetzner/Ubuntu.</p>
+        <div class="step-terminal" style="max-width:100%;margin-bottom:1rem;">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
+                <code>bash deploy/setup.sh</code>
+                <button onclick="navigator.clipboard.writeText('bash deploy/setup.sh').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
+            </div>
+        </div>
+        <p style="font-size:0.9rem;color:var(--text-dim);">See the <a href="https://github.com/crew-bus/crew-bus/tree/main/deploy" style="color:var(--highlight)">deploy/</a> directory on GitHub for Nginx configs, systemd service files, and full docs.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-col"><h4>crew-bus</h4><p class="footer-desc">Your personal AI crew — Boss talks, Guard protects, Vault remembers. Free, open source, and built for every human.</p></div>
+            <div class="footer-col"><h4>Product</h4><ul><li><a href="/#your-crew">Your Crew</a></li><li><a href="/install">Install</a></li><li><a href="/pricing">Pricing</a></li><li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li></ul></div>
+            <div class="footer-col"><h4>Legal</h4><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul></div>
+        </div>
+        <div class="footer-bottom"><p>&copy; 2025-2026 Crew Bus. MIT License. One human at the top, always.</p></div>
+    </div>
+</footer>
+
+<script src="/js/site.js"></script>
+</body>
+</html>
