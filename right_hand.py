@@ -760,19 +760,19 @@ class Heartbeat:
     """
 
     DEFAULT_CHECKS = [
-        {"type": "morning_briefing", "enabled": True, "hour": 8},
-        {"type": "evening_summary", "enabled": True, "hour": 18},
-        {"type": "burnout_check", "enabled": True},
+        {"type": "morning_briefing", "enabled": False, "hour": 8},
+        {"type": "evening_summary", "enabled": False, "hour": 18},
+        {"type": "burnout_check", "enabled": False},
         {"type": "stale_messages", "enabled": True, "max_hours": 24},
-        {"type": "relationship_nudge", "enabled": True},
-        {"type": "dream_cycle", "enabled": True, "hour": 3},
-        {"type": "guardian_knowledge_refresh", "enabled": True, "hour": 4},
+        {"type": "relationship_nudge", "enabled": False},
+        {"type": "dream_cycle", "enabled": False, "hour": 3},
+        {"type": "guardian_knowledge_refresh", "enabled": False, "hour": 4},
         {"type": "integrity_audit", "enabled": True},
-        {"type": "weekly_reflection", "enabled": True, "day_of_week": 0, "hour": 4},
-        {"type": "guardian_monthly_report", "enabled": True, "day_of_month": 1, "hour": 6},
-        {"type": "launch_hourly_report", "enabled": True},
-        {"type": "social_autopilot", "enabled": True, "interval_hours": 4},
-        {"type": "social_review", "enabled": True},
+        {"type": "weekly_reflection", "enabled": False, "day_of_week": 0, "hour": 4},
+        {"type": "guardian_monthly_report", "enabled": False, "day_of_month": 1, "hour": 6},
+        {"type": "launch_hourly_report", "enabled": False},
+        {"type": "social_autopilot", "enabled": False, "interval_hours": 4},
+        {"type": "social_review", "enabled": False},
     ]
 
     def __init__(self, right_hand: "RightHand",
