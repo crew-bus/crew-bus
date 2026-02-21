@@ -375,6 +375,7 @@ body::after {
     display: flex;
     justify-content: center;
     align-items: center;
+    min-height: 420px;
 }
 
 .circle-diagram {
@@ -494,7 +495,7 @@ body::after {
     width: 150px;
     height: 150px;
     padding: 1rem;
-    background: rgba(12, 14, 22, 0.9);
+    background: rgba(12, 14, 22, 0.95);
     border: 2.5px solid var(--border);
     border-radius: 50%;
     display: flex;
@@ -503,29 +504,40 @@ body::after {
     justify-content: center;
     gap: 0.25rem;
     transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    color: #fff;
 }
 .tri-node:hover { transform: scale(1.1); }
-.tri-node .node-icon { font-size: 2.4rem; }
-.tri-node .node-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+.tri-node .node-icon { font-size: 2.4rem; line-height: 1; }
+.tri-node .node-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #fff; }
 
 /* Guardian — warm gold glow */
 .node-guardian {
     border-color: #d18616 !important;
-    box-shadow: 0 0 25px rgba(209, 134, 22, 0.3), 0 0 60px rgba(209, 134, 22, 0.1), 0 0 90px rgba(209, 134, 22, 0.04);
+    box-shadow: 0 0 30px rgba(209, 134, 22, 0.45), 0 0 60px rgba(209, 134, 22, 0.2), 0 0 90px rgba(209, 134, 22, 0.08);
+    animation: breatheGoldSite 2.5s ease-in-out infinite;
 }
 .node-guardian:hover {
     border-color: #e8a020 !important;
-    box-shadow: 0 0 40px rgba(209, 134, 22, 0.5), 0 0 80px rgba(209, 134, 22, 0.2), 0 0 120px rgba(209, 134, 22, 0.08);
+    box-shadow: 0 0 45px rgba(209, 134, 22, 0.6), 0 0 80px rgba(209, 134, 22, 0.3), 0 0 120px rgba(209, 134, 22, 0.12);
+}
+@keyframes breatheGoldSite {
+    0%, 100% { box-shadow: 0 0 30px rgba(209, 134, 22, 0.45), 0 0 60px rgba(209, 134, 22, 0.2), 0 0 90px rgba(209, 134, 22, 0.08); }
+    50% { box-shadow: 0 0 45px rgba(209, 134, 22, 0.6), 0 0 80px rgba(209, 134, 22, 0.3), 0 0 120px rgba(209, 134, 22, 0.12); }
 }
 
 /* Vault — deep purple glow */
 .node-vault {
     border-color: #9c6bdb !important;
-    box-shadow: 0 0 25px rgba(156, 107, 219, 0.3), 0 0 60px rgba(156, 107, 219, 0.1), 0 0 90px rgba(156, 107, 219, 0.04);
+    box-shadow: 0 0 30px rgba(156, 107, 219, 0.45), 0 0 60px rgba(156, 107, 219, 0.2), 0 0 90px rgba(156, 107, 219, 0.08);
+    animation: breathePurpleSite 2.5s ease-in-out infinite;
 }
 .node-vault:hover {
     border-color: #b388f0 !important;
-    box-shadow: 0 0 40px rgba(156, 107, 219, 0.5), 0 0 80px rgba(156, 107, 219, 0.2), 0 0 120px rgba(156, 107, 219, 0.08);
+    box-shadow: 0 0 45px rgba(156, 107, 219, 0.6), 0 0 80px rgba(156, 107, 219, 0.3), 0 0 120px rgba(156, 107, 219, 0.12);
+}
+@keyframes breathePurpleSite {
+    0%, 100% { box-shadow: 0 0 30px rgba(156, 107, 219, 0.45), 0 0 60px rgba(156, 107, 219, 0.2), 0 0 90px rgba(156, 107, 219, 0.08); }
+    50% { box-shadow: 0 0 45px rgba(156, 107, 219, 0.6), 0 0 80px rgba(156, 107, 219, 0.3), 0 0 120px rgba(156, 107, 219, 0.12); }
 }
 
 /* Soft teal — Friend & Family Helper (larger for long name) */
