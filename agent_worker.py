@@ -364,18 +364,67 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
+    # --- Inject crew communication capabilities ---
+    # Every agent can DM other agents and call meetings
+    try:
+        conn = bus.get_conn(db_path)
+        try:
+            all_agents = conn.execute(
+                "SELECT name, role FROM agents WHERE active=1 AND agent_type NOT IN ('human') ORDER BY name"
+            ).fetchall()
+        finally:
+            conn.close()
+        roster_list = ", ".join(a["name"] for a in all_agents)
+        crew_comms = (
+            "CREW COMMS — you have a REAL messaging system that ACTUALLY delivers messages.\n"
+            f"Crew: {roster_list}\n\n"
+            "To DM an agent, include this JSON in your reply (system delivers it and strips it from what the human sees):\n"
+            "{\"crew_action\":\"dm\",\"to\":\"AgentName\",\"message\":\"your message\"}\n\n"
+            "DELEGATION ROUTING — who handles what:\n"
+            "- Writing/copy/tweets/posts → Writer\n"
+            "- Images/graphics/profile pics/banners → Designer\n"
+            "- Distribution/posting to platforms → Shipper\n"
+            "- QA/bugs/feedback/testing → Operator\n"
+            "- Discord/GitHub community → Community\n"
+            "- SEO/website optimization → SEO\n"
+            "- Partnerships/outreach → Partnerships\n"
+            "- Demos/video/GIFs → Video\n"
+            "- Metrics/analytics/reports → Analytics\n"
+            "- Launch coordination → Boss\n"
+            "- Security/setup/skills → Guardian\n"
+            "- Burnout/energy/health → Wellness\n"
+            "- Goals/strategy/direction → Strategy\n"
+            "- Money/budget/revenue → Financial\n"
+            "- Scheduling/reminders → Communications\n\n"
+            "CRITICAL RULES:\n"
+            "1. If a task is NOT your specialty → DM the right agent IMMEDIATELY. Do NOT ask the human who to send it to.\n"
+            "2. If you don't know something → DM the agent who would know. Do NOT say 'I don't have that in memory'.\n"
+            "3. NEVER offer the human a choice between doing it yourself vs delegating. Just delegate.\n"
+            "4. NEVER say 'I'll check' without including the actual JSON DM in your reply.\n"
+            "5. You can include MULTIPLE DMs in one reply to ask several agents at once.\n\n"
+            "EXAMPLE — human says 'update the Twitter profile pic':\n"
+            "On it — sending this to Designer now.\n"
+            "{\"crew_action\":\"dm\",\"to\":\"Designer\",\"message\":\"Human wants the Twitter profile pic updated. Can you create a new one and coordinate with Shipper to upload it?\"}"
+        )
+        parts.append(crew_comms)
+    except Exception:
+        pass
+
     # Token budget guard — tiered by agent importance:
     # Crew Boss: 9000 chars (highest IQ, runs on best model, needs full crew awareness)
     # Guardian:  7000 chars (system knowledge + integrity + sentinel duties)
-    # Everyone:  4000 chars (integrity rules + charter + skill + memories)
+    # Workers:   5500 chars (description + crew comms + memories)
+    # Everyone:  4500 chars (integrity rules + charter + skill + memories + comms)
     if agent_type == "right_hand":
         max_chars = 9000
     elif agent_type == "guardian":
         max_chars = 7000
     elif agent_type == "manager":
-        max_chars = 5500  # managers need room for team roster + delegation
+        max_chars = 5500
+    elif agent_type == "worker":
+        max_chars = 5500  # workers need room for crew comms
     else:
-        max_chars = 4000
+        max_chars = 4500
     combined = "\n\n".join(parts)
     if len(combined) > max_chars:
         combined = combined[:max_chars] + "\n[memory truncated]"
@@ -597,9 +646,10 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
                                      agent_reply: str):
     """Extract learnable insights from a conversation turn. Zero LLM cost.
 
-    Scans the human's message for preferences, facts, emotional signals,
-    aspirations, and agent-type-specific patterns. Stores extracted insights
-    as memories via bus.remember() with deduplication.
+    Scans BOTH the human's message AND the agent's reply for:
+    - Preferences, facts, emotional signals, aspirations (personal)
+    - Tasks given, decisions made, outcomes reported (operational)
+    - What the agent did, what it delegated, what it promised (accountability)
 
     Non-fatal: any exception is silently caught.
     """
@@ -645,6 +695,84 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
             content = match.group(0).strip()
             if len(content) > 3:
                 extracted.append((f"{prefix}{content}", mem_type, importance, ""))
+
+    # ═══════════════════════════════════════════════════════════
+    # OPERATIONAL MEMORY — tasks, decisions, outcomes, actions
+    # Scans both human message AND agent reply
+    # ═══════════════════════════════════════════════════════════
+
+    # --- Tasks given by human (from human_msg) ---
+    _task_patterns = [
+        _learn_re.compile(r"\b(?:please|can you|could you|go|do|make|create|build|write|post|update|fix|check|send|set up|configure|deploy|run|start|stop|delete|remove|add|change|move|copy|upload|download)\s+(.{10,80}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _task_patterns:
+        match = pat.search(human_msg)
+        if match:
+            task = match.group(1).strip().rstrip(".,!?")
+            if len(task) > 8:
+                extracted.append((f"[task] Human asked: {task}", "instruction", 8, ""))
+                break  # One task per message to avoid noise
+
+    # --- Decisions/answers from human ---
+    _decision_patterns = [
+        _learn_re.compile(r"\b(?:yes|no|go with|use|pick|choose|let'?s? go with|approved?|confirmed?|do it|ship it|let'?s do)\s*(.{0,60}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _decision_patterns:
+        match = pat.search(human_msg)
+        if match:
+            decision = match.group(0).strip().rstrip(".,!?")
+            if len(decision) > 5:
+                extracted.append((f"[decision] {decision}", "instruction", 7, ""))
+                break
+
+    # --- What the agent DID (from agent_reply) ---
+    if agent_reply and len(agent_reply) > 10:
+        _action_patterns = [
+            _learn_re.compile(r"\b(?:I'?ve|I have|I just|I sent|I posted|I created|I updated|I fixed|I checked|I delegated|I asked|I DMd?|sent (?:a )?DM|messaged)\s+(.{10,100}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+        ]
+        for pat in _action_patterns:
+            match = pat.search(agent_reply)
+            if match:
+                action = match.group(0).strip().rstrip(".,!?")
+                if len(action) > 10:
+                    extracted.append((f"[action] {action}", "summary", 7, ""))
+                    break
+
+        # --- Status updates / completions from agent ---
+        _status_patterns = [
+            _learn_re.compile(r"(?:✅|completed|done|finished|shipped|live|posted|published|deployed)\s*[:\-—]?\s*(.{5,80}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+        ]
+        for pat in _status_patterns:
+            match = pat.search(agent_reply)
+            if match:
+                status = match.group(0).strip().rstrip(".,!?")
+                if len(status) > 8:
+                    extracted.append((f"[done] {status}", "summary", 8, ""))
+                    break
+
+        # --- Delegations from agent reply ---
+        _delegation_patterns = [
+            _learn_re.compile(r"(?:sending|sent|routed|delegated|asked|DMd?|forwarded)\s+(?:this |it |that )?(?:to|over to)\s+(\w+)", _learn_re.IGNORECASE),
+        ]
+        for pat in _delegation_patterns:
+            match = pat.search(agent_reply)
+            if match:
+                target = match.group(1).strip()
+                extracted.append((f"[delegated] Sent task to {target}", "summary", 6, ""))
+                break
+
+    # --- Key info from human messages that aren't tasks ---
+    # "the twitter profile pic", "our website", "the reddit post"
+    _context_patterns = [
+        _learn_re.compile(r"\b(?:the|our|my)\s+(twitter|discord|reddit|github|website|stripe|telegram|whatsapp)\s+(.{5,50}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _context_patterns:
+        match = pat.search(human_msg)
+        if match:
+            ctx = match.group(0).strip().rstrip(".,!?")
+            if len(ctx) > 8:
+                extracted.append((f"[context] {ctx}", "fact", 5, ""))
+                break
 
     # --- Dedup and store ---
     for content, mem_type, importance, _prefix in extracted:
@@ -1043,7 +1171,7 @@ def call_llm(system_prompt: str, user_message: str,
     """
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        for msg in chat_history[-6:]:
+        for msg in chat_history[-100:]:
             messages.append(msg)
     messages.append({"role": "user", "content": user_message})
 
@@ -1094,7 +1222,7 @@ def call_ollama(system_prompt: str, user_message: str,
     """Legacy wrapper — routes through call_llm."""
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        for msg in chat_history[-6:]:
+        for msg in chat_history[-100:]:
             messages.append(msg)
     messages.append({"role": "user", "content": user_message})
     return _call_ollama(messages, model=model)
@@ -1105,11 +1233,14 @@ def call_ollama(system_prompt: str, user_message: str,
 # ---------------------------------------------------------------------------
 
 def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
-                     limit: int = 6) -> list:
+                     limit: int = 100) -> list:
     """Fetch recent chat context for an agent.
 
     Pulls messages between sender↔agent. For managers, also includes
     recent messages from their workers so they have team awareness.
+
+    Also auto-summarizes older conversations into memory so agents
+    don't lose context even after the 20-message window passes.
     """
     conn = bus.get_conn(db_path)
     try:
@@ -1122,6 +1253,18 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
               AND body IS NOT NULL AND body != ''
             ORDER BY created_at DESC LIMIT ?
         """, (sender_id, agent_id, agent_id, sender_id, limit)).fetchall()
+
+        # Auto-summarize: if there are 20+ messages, compress the oldest
+        # ones beyond our window into a memory so nothing is lost
+        total_count = conn.execute("""
+            SELECT COUNT(*) as c FROM messages
+            WHERE ((from_agent_id=? AND to_agent_id=?)
+                OR (from_agent_id=? AND to_agent_id=?))
+              AND body IS NOT NULL AND body != ''
+        """, (sender_id, agent_id, agent_id, sender_id)).fetchone()["c"]
+
+        if total_count > 120:
+            _auto_summarize_old_chat(db_path, sender_id, agent_id, limit)
 
         # For managers: also pull recent messages TO this agent from workers
         agent_row = conn.execute(
@@ -1157,6 +1300,93 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
         if text:
             history.append({"role": role, "content": text})
     return history
+
+
+def _auto_summarize_old_chat(db_path: Path, sender_id: int, agent_id: int,
+                              recent_limit: int = 20):
+    """Compress old messages beyond the chat window into agent memories.
+
+    When an agent has 25+ messages, this extracts key facts from the oldest
+    messages (the ones that would fall outside the 20-message context window)
+    and saves them as memories. Then deletes the summarized messages to keep
+    the DB lean.
+
+    Zero LLM cost — uses keyword extraction, not AI summarization.
+    Only runs once per batch (checks for a marker memory to avoid re-processing).
+    """
+    try:
+        conn = bus.get_conn(db_path)
+        try:
+            # Check if we already summarized recently (avoid re-processing)
+            marker = conn.execute(
+                "SELECT id FROM agent_memory WHERE agent_id=? AND content LIKE '[summary-marker]%' "
+                "ORDER BY id DESC LIMIT 1", (agent_id,)
+            ).fetchone()
+
+            # Get the oldest messages that will fall outside the window
+            old_msgs = conn.execute("""
+                SELECT id, from_agent_id, body, created_at FROM messages
+                WHERE ((from_agent_id=? AND to_agent_id=?)
+                    OR (from_agent_id=? AND to_agent_id=?))
+                  AND body IS NOT NULL AND body != ''
+                ORDER BY created_at ASC LIMIT 20
+            """, (sender_id, agent_id, agent_id, sender_id)).fetchall()
+        finally:
+            conn.close()
+
+        if not old_msgs:
+            return
+
+        # Extract key points from old messages
+        summaries = []
+        msg_ids_to_delete = []
+        for msg in old_msgs:
+            body = msg["body"]
+            msg_ids_to_delete.append(msg["id"])
+            if not body or len(body) < 10:
+                continue
+
+            # Extract the essence — first 120 chars of each meaningful message
+            is_human = (msg["from_agent_id"] == sender_id)
+            prefix = "Human said" if is_human else "I replied"
+
+            # Skip system/internal messages
+            if body.startswith("[") or body.startswith("=="):
+                continue
+
+            # Compress: take first sentence or first 120 chars
+            first_sentence = body.split(".")[0].split("!")[0].split("?")[0]
+            if len(first_sentence) > 120:
+                first_sentence = first_sentence[:120] + "..."
+            if len(first_sentence) > 15:
+                summaries.append(f"{prefix}: {first_sentence}")
+
+        if summaries:
+            # Combine into one memory (max 5 key points)
+            combined = "[conversation-history] " + " | ".join(summaries[:8])
+            # Only store if we don't have a very similar summary already
+            existing = bus.search_agent_memory(agent_id, "[conversation-history]",
+                                               limit=5, db_path=db_path)
+            # Cap at 3 conversation history memories max
+            if len(existing) < 3:
+                bus.remember(agent_id, combined, memory_type="summary",
+                             importance=6, source="auto_summary", db_path=db_path)
+
+        # Delete the old messages we just summarized
+        if msg_ids_to_delete:
+            conn = bus.get_conn(db_path)
+            try:
+                placeholders = ",".join("?" * len(msg_ids_to_delete))
+                conn.execute(
+                    f"DELETE FROM messages WHERE id IN ({placeholders})",
+                    msg_ids_to_delete,
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    except Exception as e:
+        print(f"[memory] Auto-summarize failed (non-fatal): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1376,6 +1606,13 @@ def _process_single_message(row, db_path: Path):
         # Execute any wizard_action commands embedded in the reply
         clean_reply = _execute_wizard_actions(reply, db_path)
 
+        # Execute any crew_action commands (inter-agent DMs, meetings, channel posts)
+        clean_reply = _execute_crew_actions(clean_reply, agent_id, db_path)
+
+        # NOTE: Auto-relay removed — was causing echo loops. Agents use
+        # crew_action JSON for real inter-agent comms. If the LLM doesn't
+        # emit JSON, no message is sent (intentional — no forced relay).
+
         # Extract and create any social_draft JSON blocks
         clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
 
@@ -1394,6 +1631,11 @@ def _process_single_message(row, db_path: Path):
         # Insert reply directly — always works, bypasses routing rules
         _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
                              human_msg=user_text, agent_type=agent_type)
+
+        # ── Inter-agent replies stay in Crew Comms only ──
+        # Previously surfaced [replying to X] into human chat — caused noise/echo.
+        # Inter-agent replies are now visible ONLY in the Crew Comms tab channels.
+        # The human's individual agent chat stays clean: only human<->agent messages.
 
         # ── Skill health tracking (Guardian runtime monitoring) ──
         try:
@@ -1417,6 +1659,106 @@ def _process_single_message(row, db_path: Path):
 
 
 import re as _re
+
+
+def _execute_crew_actions(reply: str, from_agent_id: int, db_path: Path) -> str:
+    """Parse and execute crew_action JSON commands from an agent's reply.
+
+    Handles both raw JSON and markdown-wrapped JSON (```json ... ```).
+    Commands are executed and stripped from the reply.
+    """
+    # First, unwrap any markdown code fences containing crew_action
+    reply = _re.sub(
+        r'```(?:json)?\s*(\{[^`]*"crew_action"[^`]*\})\s*```',
+        r'\1',
+        reply,
+        flags=_re.DOTALL,
+    )
+
+    pattern = r'\{[^{}]*"crew_action"[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+
+    if not matches:
+        return reply
+
+    for raw in matches:
+        try:
+            action = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        cmd = action.get("crew_action", "")
+
+        if cmd == "dm":
+            to_name = action.get("to", "")
+            message = action.get("message", "")
+            if to_name and message:
+                result = bus.crew_dm(from_agent_id, to_name, message,
+                                     db_path=db_path)
+                if result.get("ok"):
+                    print(f"[crew] DM sent: agent {from_agent_id} -> {result.get('to')}")
+                else:
+                    print(f"[crew] DM failed: {result.get('error')}")
+
+        elif cmd == "meeting":
+            channel = action.get("channel", "standup")
+            agenda = action.get("agenda", "")
+            participant_names = action.get("participants", [])
+            conn = bus.get_conn(db_path)
+            try:
+                p_ids = []
+                for pname in participant_names:
+                    row = conn.execute(
+                        "SELECT id FROM agents WHERE LOWER(name) LIKE LOWER(?) AND active=1",
+                        (f"%{pname}%",),
+                    ).fetchone()
+                    if row:
+                        p_ids.append(row["id"])
+                if from_agent_id not in p_ids:
+                    p_ids.append(from_agent_id)
+            finally:
+                conn.close()
+
+            if p_ids and agenda:
+                result = bus.crew_meeting(channel, agenda, p_ids,
+                                          from_agent_id, db_path=db_path)
+                if result.get("ok"):
+                    print(f"[crew] Meeting '{channel}' started with {result.get('participants')} agents")
+
+        elif cmd == "post":
+            channel_name = action.get("channel", "")
+            message = action.get("message", "")
+            if channel_name and message:
+                conn = bus.get_conn(db_path)
+                try:
+                    ch = conn.execute(
+                        "SELECT id FROM crew_channels WHERE name=?",
+                        (channel_name,),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if ch:
+                    bus.post_to_channel(ch["id"], from_agent_id, message,
+                                        db_path=db_path)
+                    print(f"[crew] Posted to #{channel_name}")
+
+        # Strip the JSON block from the reply
+        reply = reply.replace(raw, "").strip()
+
+    # Clean up any leftover empty code fence artifacts
+    reply = _re.sub(r'```(?:json)?\s*```', '', reply).strip()
+
+    return reply
+
+
+def _auto_relay_crew_messages(reply: str, from_agent_id: int, from_name: str,
+                              user_text: str, db_path: Path) -> str:
+    """DISABLED — was causing echo loops and message flooding.
+
+    Inter-agent messaging now exclusively uses crew_action JSON blocks.
+    Keeping as no-op stub in case any code paths reference it.
+    """
+    return reply
 
 
 def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:

@@ -397,6 +397,33 @@ def init_db(db_path: Optional[Path] = None) -> None:
             created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         );
 
+        -- ========= Crew Channels (group comms) =========
+
+        CREATE TABLE IF NOT EXISTS crew_channels (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT    NOT NULL UNIQUE,
+            purpose         TEXT    NOT NULL DEFAULT '',
+            created_by      INTEGER NOT NULL REFERENCES agents(id),
+            pinned          INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS crew_channel_members (
+            channel_id      INTEGER NOT NULL REFERENCES crew_channels(id),
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            joined_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            PRIMARY KEY (channel_id, agent_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS crew_channel_messages (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id      INTEGER NOT NULL REFERENCES crew_channels(id),
+            from_agent_id   INTEGER NOT NULL REFERENCES agents(id),
+            body            TEXT    NOT NULL,
+            reply_to        INTEGER DEFAULT NULL,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
         -- ========= Guard Activation =========
 
         CREATE TABLE IF NOT EXISTS guard_activation (
@@ -3912,6 +3939,200 @@ def _session_duration_minutes(started_at: str, ended_at: str) -> int:
 
 VALID_MAILBOX_SEVERITIES = ("info", "warning", "code_red")
 MAILBOX_RATE_LIMIT = 3  # max messages per agent per 24 hours
+
+
+# ---------------------------------------------------------------------------
+# Crew Channels — zero-friction inter-agent group communication
+# ---------------------------------------------------------------------------
+
+def create_crew_channel(name: str, purpose: str, created_by: int,
+                        member_ids: list[int] = None,
+                        db_path: Optional[Path] = None) -> dict:
+    """Create a crew channel and add members. Returns channel info."""
+    with db_write(db_path) as wconn:
+        try:
+            cur = wconn.execute(
+                "INSERT INTO crew_channels (name, purpose, created_by) VALUES (?, ?, ?)",
+                (name, purpose, created_by),
+            )
+            ch_id = cur.lastrowid
+            # Add creator as member
+            wconn.execute(
+                "INSERT OR IGNORE INTO crew_channel_members (channel_id, agent_id) VALUES (?, ?)",
+                (ch_id, created_by),
+            )
+            # Add additional members
+            if member_ids:
+                for mid in member_ids:
+                    wconn.execute(
+                        "INSERT OR IGNORE INTO crew_channel_members (channel_id, agent_id) VALUES (?, ?)",
+                        (ch_id, mid),
+                    )
+            return {"ok": True, "channel_id": ch_id, "name": name}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+def post_to_channel(channel_id: int, from_agent_id: int, body: str,
+                    reply_to: int = None,
+                    db_path: Optional[Path] = None) -> dict:
+    """Post a message to a crew channel. No rate limits — agents talk freely."""
+    with db_write(db_path) as wconn:
+        cur = wconn.execute(
+            "INSERT INTO crew_channel_messages (channel_id, from_agent_id, body, reply_to) "
+            "VALUES (?, ?, ?, ?)",
+            (channel_id, from_agent_id, body, reply_to),
+        )
+        msg_id = cur.lastrowid
+        # Also queue individual messages to each channel member (except sender)
+        # so agent_worker picks them up and they can respond
+        members = wconn.execute(
+            "SELECT agent_id FROM crew_channel_members WHERE channel_id=? AND agent_id!=?",
+            (channel_id, from_agent_id),
+        ).fetchall()
+        sender = wconn.execute("SELECT name FROM agents WHERE id=?",
+                               (from_agent_id,)).fetchone()
+        sender_name = sender["name"] if sender else f"Agent-{from_agent_id}"
+        for m in members:
+            wconn.execute(
+                "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
+                "subject, body, priority, status) VALUES (?, ?, 'briefing', ?, ?, 'normal', 'queued')",
+                (from_agent_id, m["agent_id"],
+                 f"[#{channel_id}] {sender_name}",
+                 body),
+            )
+    return {"ok": True, "message_id": msg_id, "notified": len(members)}
+
+
+def get_channel_messages(channel_id: int, limit: int = 50,
+                         db_path: Optional[Path] = None) -> list[dict]:
+    """Get recent messages from a crew channel."""
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT m.id, m.from_agent_id, a.name as from_name, m.body, "
+            "m.reply_to, m.created_at "
+            "FROM crew_channel_messages m JOIN agents a ON m.from_agent_id=a.id "
+            "WHERE m.channel_id=? ORDER BY m.created_at DESC LIMIT ?",
+            (channel_id, limit),
+        ).fetchall()
+        return [dict(r) for r in reversed(rows)]
+    finally:
+        conn.close()
+
+
+def get_crew_channels(db_path: Optional[Path] = None) -> list[dict]:
+    """Get all crew channels with member counts."""
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT c.id, c.name, c.purpose, c.pinned, c.created_at, "
+            "(SELECT COUNT(*) FROM crew_channel_members WHERE channel_id=c.id) as member_count, "
+            "(SELECT COUNT(*) FROM crew_channel_messages WHERE channel_id=c.id) as msg_count "
+            "FROM crew_channels c ORDER BY c.pinned DESC, c.created_at",
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def add_channel_member(channel_id: int, agent_id: int,
+                       db_path: Optional[Path] = None) -> dict:
+    """Add an agent to a crew channel."""
+    with db_write(db_path) as wconn:
+        wconn.execute(
+            "INSERT OR IGNORE INTO crew_channel_members (channel_id, agent_id) VALUES (?, ?)",
+            (channel_id, agent_id),
+        )
+    return {"ok": True}
+
+
+def get_channel_members(channel_id: int,
+                        db_path: Optional[Path] = None) -> list[dict]:
+    """Get all members of a crew channel."""
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT a.id, a.name, a.role, a.agent_type "
+            "FROM crew_channel_members cm JOIN agents a ON cm.agent_id=a.id "
+            "WHERE cm.channel_id=?",
+            (channel_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def crew_dm(from_id: int, to_name: str, body: str,
+            db_path: Optional[Path] = None) -> dict:
+    """Send a direct message from one agent to another by name. Zero friction."""
+    conn = get_conn(db_path)
+    try:
+        # Exact match first — prevents "Boss" matching "Crew-Boss"
+        row = conn.execute(
+            "SELECT id, name FROM agents WHERE LOWER(name) = LOWER(?) AND active=1",
+            (to_name,),
+        ).fetchone()
+        if not row:
+            # Partial match, but never match self (prevents Crew-Boss DMing itself)
+            row = conn.execute(
+                "SELECT id, name FROM agents WHERE LOWER(name) LIKE LOWER(?) AND active=1 AND id!=?",
+                (f"%{to_name}%", from_id),
+            ).fetchone()
+        if not row:
+            return {"ok": False, "error": f"Agent '{to_name}' not found"}
+        to_id = row["id"]
+    finally:
+        conn.close()
+
+    try:
+        result = send_message(from_id, to_id, "task",
+                              subject=f"DM from agent",
+                              body=body, priority="normal", db_path=db_path)
+        return {"ok": True, "message_id": result["message_id"], "to": row["name"]}
+    except (PermissionError, ValueError) as e:
+        return {"ok": False, "error": str(e)}
+
+
+def crew_meeting(channel_name: str, agenda: str, participant_ids: list[int],
+                 called_by: int, db_path: Optional[Path] = None) -> dict:
+    """Start a crew meeting — create/find channel, post agenda, notify all participants."""
+    conn = get_conn(db_path)
+    try:
+        existing = conn.execute(
+            "SELECT id FROM crew_channels WHERE name=?", (channel_name,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if existing:
+        ch_id = existing["id"]
+        # Add any new participants
+        for pid in participant_ids:
+            add_channel_member(ch_id, pid, db_path=db_path)
+    else:
+        result = create_crew_channel(
+            channel_name, f"Meeting channel", called_by,
+            member_ids=participant_ids, db_path=db_path,
+        )
+        if not result["ok"]:
+            return result
+        ch_id = result["channel_id"]
+
+    # Post the agenda
+    caller_conn = get_conn(db_path)
+    try:
+        caller = caller_conn.execute("SELECT name FROM agents WHERE id=?",
+                                     (called_by,)).fetchone()
+    finally:
+        caller_conn.close()
+    caller_name = caller["name"] if caller else "Unknown"
+
+    post_to_channel(ch_id, called_by,
+                    f"📋 MEETING CALLED by {caller_name}\n\nAgenda: {agenda}\n\nEveryone respond with your update.",
+                    db_path=db_path)
+
+    return {"ok": True, "channel_id": ch_id, "participants": len(participant_ids)}
 
 
 def send_to_team_mailbox(from_agent_id: int, subject: str, body: str,
