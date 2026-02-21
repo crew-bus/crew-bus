@@ -25,15 +25,22 @@ import time
 import threading
 import urllib.request
 import urllib.error
+from collections import deque
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 # ── Config ──────────────────────────────────────────────────────────
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
+TELEGRAM_FILE_API = "https://api.telegram.org/file/bot{token}"
 BUS_URL = os.environ.get("BUS_URL", "http://localhost:8080")
 HTTP_PORT = int(os.environ.get("TG_PORT", "3002"))
 OUTBOUND_POLL = 1  # seconds — check bus for new replies (fast = snappy responses)
+
+# Retry config
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1  # seconds — exponential backoff: 1s, 2s, 4s
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 
 # ── State ───────────────────────────────────────────────────────────
 
@@ -47,28 +54,113 @@ last_update_id = 0       # Telegram update offset
 running = True
 status = "initializing"
 
+# Message queue for bus downtime
+_message_queue = deque(maxlen=1000)
+_queue_lock = threading.Lock()
+
 # ── Telegram Bot API helpers ────────────────────────────────────────
 
 
-def tg_request(method: str, data: dict = None) -> dict:
-    """Call a Telegram Bot API method."""
+def tg_request(method: str, data: dict = None, retries: int = MAX_RETRIES) -> dict:
+    """Call a Telegram Bot API method with exponential backoff retry."""
     url = f"{TELEGRAM_API.format(token=bot_token)}/{method}"
-    if data:
-        payload = json.dumps(data).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/json"})
-    else:
-        req = urllib.request.Request(url)
+    for attempt in range(retries + 1):
+        if data:
+            payload = json.dumps(data).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"})
+        else:
+            req = urllib.request.Request(url)
+        try:
+            with urllib.request.urlopen(req, timeout=35) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")[:200]
+            # Token expired/revoked — attempt reload
+            if e.code == 401:
+                print(f"[tg-bridge] TOKEN EXPIRED/REVOKED (401): {body}")
+                if _try_reload_token():
+                    url = f"{TELEGRAM_API.format(token=bot_token)}/{method}"
+                    print("[tg-bridge] Token reloaded from crew_config, retrying...")
+                    continue
+                return {"ok": False, "error": body, "token_expired": True}
+            # Retryable server/rate-limit errors
+            if e.code in RETRYABLE_HTTP_CODES and attempt < retries:
+                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                print(f"[tg-bridge] API error {e.code}, retry {attempt+1}/{retries} in {delay}s")
+                time.sleep(delay)
+                continue
+            print(f"[tg-bridge] API error {e.code}: {body}")
+            return {"ok": False, "error": body}
+        except (urllib.error.URLError, OSError) as e:
+            # Network errors — retryable
+            if attempt < retries:
+                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                print(f"[tg-bridge] Network error, retry {attempt+1}/{retries} in {delay}s: {e}")
+                time.sleep(delay)
+                continue
+            print(f"[tg-bridge] Request error after {retries} retries: {e}")
+            return {"ok": False, "error": str(e)}
+        except Exception as e:
+            print(f"[tg-bridge] Request error: {e}")
+            return {"ok": False, "error": str(e)}
+    return {"ok": False, "error": "max retries exceeded"}
+
+
+def _try_reload_token() -> bool:
+    """Attempt to reload bot token from crew_config after expiration."""
+    global bot_token
     try:
-        with urllib.request.urlopen(req, timeout=35) as resp:
+        sys.path.insert(0, str(Path(__file__).parent))
+        import bus as _bus
+        new_token = _bus.get_config("telegram_bot_token", "")
+        if new_token and new_token != bot_token:
+            bot_token = new_token
+            print("[tg-bridge] Loaded new token from crew_config")
+            return True
+        print("[tg-bridge] No new token found in crew_config")
+    except Exception as e:
+        print(f"[tg-bridge] Token reload failed: {e}")
+    return False
+
+
+def tg_request_multipart(method: str, data: dict, file_field: str,
+                         file_bytes: bytes, filename: str,
+                         content_type: str = "application/octet-stream") -> dict:
+    """Call a Telegram Bot API method with a file upload (multipart/form-data)."""
+    url = f"{TELEGRAM_API.format(token=bot_token)}/{method}"
+    boundary = "----CrewBusBoundary"
+    body_parts = []
+    for key, val in data.items():
+        body_parts.append(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+            f"{val}\r\n"
+        )
+    body_parts.append(
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    )
+    payload = b""
+    for part in body_parts:
+        payload += part.encode("utf-8")
+    payload += file_bytes
+    payload += f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")[:200]
-        print(f"[tg-bridge] API error {e.code}: {body}")
+        print(f"[tg-bridge] Upload error {e.code}: {body}")
         return {"ok": False, "error": body}
     except Exception as e:
-        print(f"[tg-bridge] Request error: {e}")
+        print(f"[tg-bridge] Upload error: {e}")
         return {"ok": False, "error": str(e)}
 
 
@@ -91,12 +183,133 @@ def send_message(text: str) -> bool:
     return result.get("ok", False)
 
 
+# ── Media helpers ──────────────────────────────────────────────────
+
+
+def send_photo(photo_bytes: bytes, filename: str = "photo.jpg",
+               caption: str = "") -> bool:
+    """Send a photo to the paired Telegram chat."""
+    if not chat_id:
+        return False
+    data = {"chat_id": str(chat_id)}
+    if caption:
+        data["caption"] = caption
+    result = tg_request_multipart("sendPhoto", data, "photo",
+                                  photo_bytes, filename, "image/jpeg")
+    return result.get("ok", False)
+
+
+def send_document(doc_bytes: bytes, filename: str = "file.pdf",
+                  caption: str = "") -> bool:
+    """Send a document to the paired Telegram chat."""
+    if not chat_id:
+        return False
+    data = {"chat_id": str(chat_id)}
+    if caption:
+        data["caption"] = caption
+    result = tg_request_multipart("sendDocument", data, "document",
+                                  doc_bytes, filename, "application/octet-stream")
+    return result.get("ok", False)
+
+
+def send_voice(voice_bytes: bytes, caption: str = "") -> bool:
+    """Send a voice message to the paired Telegram chat."""
+    if not chat_id:
+        return False
+    data = {"chat_id": str(chat_id)}
+    if caption:
+        data["caption"] = caption
+    result = tg_request_multipart("sendVoice", data, "voice",
+                                  voice_bytes, "voice.ogg", "audio/ogg")
+    return result.get("ok", False)
+
+
+def download_tg_file(file_id: str) -> tuple:
+    """Download a file from Telegram by file_id.
+
+    Returns (bytes, file_path) or (None, None) on failure.
+    """
+    info = tg_request("getFile", {"file_id": file_id})
+    if not info.get("ok"):
+        return None, None
+    file_path = info["result"].get("file_path", "")
+    if not file_path:
+        return None, None
+    url = f"{TELEGRAM_FILE_API.format(token=bot_token)}/{file_path}"
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            return resp.read(), file_path
+    except Exception as e:
+        print(f"[tg-bridge] File download error: {e}")
+        return None, None
+
+
+def _extract_media_info(msg: dict) -> dict:
+    """Extract media info from a Telegram message, if any.
+
+    Returns dict with keys: type, file_id, caption, filename (or empty dict).
+    """
+    caption = msg.get("caption", "")
+
+    if msg.get("photo"):
+        # photo is a list of sizes, pick the largest
+        largest = max(msg["photo"], key=lambda p: p.get("file_size", 0))
+        return {"type": "photo", "file_id": largest["file_id"],
+                "caption": caption, "filename": "photo.jpg"}
+
+    if msg.get("document"):
+        doc = msg["document"]
+        return {"type": "document", "file_id": doc["file_id"],
+                "caption": caption,
+                "filename": doc.get("file_name", "document")}
+
+    if msg.get("voice"):
+        voice = msg["voice"]
+        return {"type": "voice", "file_id": voice["file_id"],
+                "caption": caption, "filename": "voice.ogg"}
+
+    return {}
+
+
+# ── Message queue (bus downtime resilience) ────────────────────────
+
+
+def _enqueue_message(payload: dict):
+    """Queue a message for later delivery to the bus."""
+    with _queue_lock:
+        _message_queue.append(payload)
+    print(f"[tg-bridge] Queued message (queue size: {len(_message_queue)})")
+
+
+def _drain_queue():
+    """Try to deliver all queued messages to the bus. Called periodically."""
+    if not _message_queue:
+        return
+    with _queue_lock:
+        pending = list(_message_queue)
+    delivered = 0
+    for payload in pending:
+        try:
+            post_to_bus("/api/compose", payload)
+            delivered += 1
+            with _queue_lock:
+                if _message_queue and _message_queue[0] is payload:
+                    _message_queue.popleft()
+        except Exception:
+            break  # bus still down, stop draining
+    if delivered:
+        print(f"[tg-bridge] Drained {delivered} queued messages")
+
+
 # ── Inbound: Telegram → crew-bus ────────────────────────────────────
 
 
 def poll_telegram():
     """Long-poll Telegram for new messages and forward to crew-bus."""
     global last_update_id, chat_id, status
+
+    # Try draining queued messages first
+    _drain_queue()
 
     result = tg_request("getUpdates", {
         "offset": last_update_id + 1,
@@ -116,16 +329,22 @@ def poll_telegram():
         if not msg:
             continue
 
-        # Extract text
-        text = msg.get("text", "")
         from_user = msg.get("from", {})
         msg_chat_id = msg.get("chat", {}).get("id")
 
-        if not text or not msg_chat_id:
+        if not msg_chat_id:
             continue
 
         # Only accept DMs (private chat), not groups
         if msg.get("chat", {}).get("type") != "private":
+            continue
+
+        # Extract text and/or media
+        text = msg.get("text", "")
+        media = _extract_media_info(msg)
+
+        # Skip messages with neither text nor media
+        if not text and not media:
             continue
 
         # Pair on first message or /start
@@ -153,19 +372,38 @@ def poll_telegram():
             send_message("Already connected! Just type your message.")
             continue
 
-        # Forward to crew-bus
-        print(f"[tg-bridge] ← Inbound: {text[:80]}")
+        # Build body from text and/or media
+        body = text
+        if media:
+            media_desc = f"[{media['type']}: {media['filename']}]"
+            if media.get("caption"):
+                media_desc += f" {media['caption']}"
+            body = f"{body}\n{media_desc}" if body else media_desc
+            print(f"[tg-bridge] ← Inbound media: {media['type']} ({media['filename']})")
+        else:
+            print(f"[tg-bridge] ← Inbound: {text[:80]}")
+
+        # Forward to crew-bus (queue on failure)
+        payload = {
+            "to_agent": "Crew-Boss",
+            "message_type": "task",
+            "subject": "Telegram message",
+            "body": body,
+            "priority": "normal",
+        }
+        if media:
+            payload["metadata"] = {
+                "media_type": media["type"],
+                "file_id": media["file_id"],
+                "filename": media["filename"],
+            }
+
         try:
-            post_to_bus("/api/compose", {
-                "to_agent": "Crew-Boss",
-                "message_type": "task",
-                "subject": "Telegram message",
-                "body": text,
-                "priority": "normal",
-            })
+            post_to_bus("/api/compose", payload)
             print("[tg-bridge]   → Delivered to crew-bus")
         except Exception as e:
-            print(f"[tg-bridge]   ✗ Failed: {e}")
+            print(f"[tg-bridge]   ✗ Bus unreachable, queuing: {e}")
+            _enqueue_message(payload)
 
 
 # ── Outbound: crew-bus → Telegram ───────────────────────────────────
@@ -333,6 +571,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "human_agent_id": human_agent_id,
                 "crew_boss_agent_id": crew_boss_agent_id,
                 "last_seen_message_id": last_seen_message_id,
+                "queued_messages": len(_message_queue),
                 "engine": "telegram-bot-api",
             })
         else:

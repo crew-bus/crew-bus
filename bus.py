@@ -113,18 +113,110 @@ def _role_for_type(agent_type: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Database
+# Database — thread-local connection caching
 # ---------------------------------------------------------------------------
+# SQLite connections are not thread-safe, but each thread can safely reuse
+# its own connection. This avoids the overhead of creating a new connection
+# (and re-running PRAGMAs) on every call to get_conn().
+#
+# Existing code throughout bus.py calls conn.close() after use. To avoid
+# breaking those callers while still reusing connections, get_conn() returns
+# a thin wrapper whose close() is a no-op. The real connection stays alive
+# in the thread-local cache. Call close_thread_connections() at thread exit
+# to truly release resources.
 
-def get_conn(db_path: Optional[Path] = None) -> sqlite3.Connection:
-    """Return a connection to the crew-bus database with row factory enabled."""
-    path = db_path or DB_PATH
+_thread_local = threading.local()
+
+
+class _CachedConnection:
+    """Wrapper around sqlite3.Connection that ignores close() calls.
+
+    All attribute access is forwarded to the real connection. The only
+    overridden method is close(), which is a no-op so that existing code
+    like ``conn = get_conn(); ...; conn.close()`` doesn't break the cache.
+    """
+
+    __slots__ = ("_real",)
+
+    def __init__(self, real_conn: sqlite3.Connection):
+        object.__setattr__(self, "_real", real_conn)
+
+    def close(self):
+        """No-op — the connection is managed by the thread-local cache."""
+        pass
+
+    def _actually_close(self):
+        """Really close the underlying connection (called by cache cleanup)."""
+        try:
+            self._real.close()
+        except Exception:
+            pass
+
+    # Forward everything else to the real connection
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def __setattr__(self, name, value):
+        if name in _CachedConnection.__slots__:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._real, name, value)
+
+    # Make it work as a context manager (sqlite3 connections support this)
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        # Don't close — just like close() is a no-op
+        pass
+
+
+def _make_conn(path: Path) -> sqlite3.Connection:
+    """Create a fresh SQLite connection with standard PRAGMAs."""
     conn = sqlite3.connect(str(path), timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=FULL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def get_conn(db_path: Optional[Path] = None) -> sqlite3.Connection:
+    """Return a connection to the crew-bus database with row factory enabled.
+
+    Connections are cached per-thread and per-db-path. The returned object's
+    close() is a no-op so existing call sites that close after use don't
+    invalidate the cache. Call close_thread_connections() to truly release.
+    """
+    path = db_path or DB_PATH
+    cache_key = f"_conn_{path}"
+
+    wrapper = getattr(_thread_local, cache_key, None)
+    if wrapper is not None:
+        try:
+            # Quick health check on the real connection
+            wrapper._real.execute("SELECT 1")
+            return wrapper
+        except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+            wrapper._actually_close()
+
+    real_conn = _make_conn(path)
+    wrapper = _CachedConnection(real_conn)
+    setattr(_thread_local, cache_key, wrapper)
+    return wrapper
+
+
+def close_thread_connections():
+    """Close all cached connections for the current thread.
+
+    Call this when a thread is about to exit, or in test teardown.
+    """
+    for attr in list(vars(_thread_local)):
+        if attr.startswith("_conn_"):
+            wrapper = getattr(_thread_local, attr, None)
+            if wrapper is not None:
+                wrapper._actually_close()
+            delattr(_thread_local, attr)
 
 
 @contextlib.contextmanager
@@ -137,10 +229,12 @@ def db_write(db_path: Optional[Path] = None):
             # commit happens automatically on clean exit
 
     Acquires _db_write_lock so only one thread writes at a time.
-    Commits on success, rolls back on exception, always closes.
+    Uses a fresh (non-cached) connection to avoid holding a cached
+    connection in a half-committed state on error.
     """
+    path = db_path or DB_PATH
     _db_write_lock.acquire()
-    conn = get_conn(db_path)
+    conn = _make_conn(path)
     try:
         yield conn
         conn.commit()
