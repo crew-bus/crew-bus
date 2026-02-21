@@ -38,7 +38,7 @@
         <h2 class="section-title">Download the Installer</h2>
         <p class="section-sub">One file. Five minutes. Your crew is ready.</p>
         <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0;">
-            <a href="https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh" download="install-crewbus.sh" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;">
+            <a href="https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh" download="install-crewbus.command" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;">
                 &#63743; Download for macOS
             </a>
             <a href="https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh" download="install-crewbus.sh" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;">
@@ -46,14 +46,16 @@
             </a>
         </div>
         <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 2rem;max-width:520px;margin:0 auto;text-align:left;">
-            <p style="font-weight:600;margin-bottom:0.8rem;">After downloading:</p>
-            <ol style="margin:0;padding-left:1.3rem;line-height:2;color:var(--text-dim);">
-                <li>Open <strong>Terminal</strong> (search "Terminal" in Spotlight or your app launcher)</li>
-                <li>Type: <code style="background:#0d1117;padding:2px 8px;border-radius:4px;color:var(--success);">bash ~/Downloads/install-crewbus.sh</code></li>
-                <li>That's it — the installer handles everything else</li>
+            <p style="font-weight:600;margin-bottom:0.8rem;font-size:1.1rem;">Three steps:</p>
+            <ol style="margin:0;padding-left:1.3rem;line-height:2.2;font-size:1.05rem;">
+                <li>Click the download button above</li>
+                <li>Double-click the downloaded file</li>
+                <li>The installer does the rest — your crew is ready in minutes</li>
             </ol>
+            <p style="margin-top:1rem;color:var(--text-dim);font-size:0.85rem;">macOS may ask you to confirm the first time — right-click the file and choose "Open" if it does.</p>
         </div>
-        <p style="color:var(--text-dim);margin-top:1.2rem;font-size:0.9rem;">No accounts. No credit card. Works on macOS and Linux. Takes about 5 minutes.</p>
+        <p style="color:var(--text-dim);margin-top:1.2rem;font-size:0.9rem;">No accounts. No credit card. Takes about 5 minutes.</p>
+        <p style="margin-top:1.5rem;font-size:1rem;">Don't want to install it yourself? <a href="/installer" style="color:var(--highlight);font-weight:600;">Let a verified installer do it for you</a> — remotely or in person.</p>
     </div>
 </section>
 
@@ -108,86 +110,6 @@
     </div>
 </section>
 
-<!-- Developer Install -->
-<section class="section section-dark">
-    <div class="container container-narrow">
-        <h2 class="section-title">Developer Install</h2>
-        <p class="section-sub">Prefer the terminal? One-liner or step-by-step — your choice.</p>
-
-        <p style="font-weight:600;margin-bottom:0.5rem;">One-command install</p>
-        <div class="step-terminal" style="max-width:100%;margin-bottom:2rem;">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <span class="terminal-title">Terminal</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
-                <code>curl -sL https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh | bash</code>
-                <button onclick="navigator.clipboard.writeText('curl -sL https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh | bash').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
-            </div>
-        </div>
-
-        <p style="font-weight:600;margin-bottom:0.5rem;">Or step-by-step:</p>
-
-        <p style="font-weight:600;margin-bottom:0.5rem;">1. Clone the repo</p>
-        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <span class="terminal-title">Terminal</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
-                <code>git clone https://github.com/crew-bus/crew-bus.git &amp;&amp; cd crew-bus</code>
-                <button onclick="navigator.clipboard.writeText('git clone https://github.com/crew-bus/crew-bus.git && cd crew-bus').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
-            </div>
-        </div>
-
-        <p style="font-weight:600;margin-bottom:0.5rem;">2. Create a virtual environment</p>
-        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <span class="terminal-title">Terminal</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
-                <code>python3 -m venv .venv &amp;&amp; source .venv/bin/activate</code>
-                <button onclick="navigator.clipboard.writeText('python3 -m venv .venv && source .venv/bin/activate').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
-            </div>
-        </div>
-
-        <p style="font-weight:600;margin-bottom:0.5rem;">3. Install dependencies</p>
-        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <span class="terminal-title">Terminal</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
-                <code>pip install -r requirements.txt</code>
-                <button onclick="navigator.clipboard.writeText('pip install -r requirements.txt').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
-            </div>
-        </div>
-
-        <p style="font-weight:600;margin-bottom:0.5rem;">4. Launch the dashboard</p>
-        <div class="step-terminal" style="max-width:100%;margin-bottom:1.5rem;">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <span class="terminal-title">Terminal</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
-                <code>python3 dashboard.py</code>
-                <button onclick="navigator.clipboard.writeText('python3 dashboard.py').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
-            </div>
-        </div>
-    </div>
-</section>
-
 <!-- Need Help? -->
 <section class="section">
     <div class="container container-narrow text-center">
@@ -197,27 +119,6 @@
             <a href="/installer" class="btn btn-primary btn-lg">Find an Installer</a>
             <a href="/faq" class="btn btn-outline btn-lg">Read the FAQ</a>
         </div>
-    </div>
-</section>
-
-<!-- Deploy on a Server -->
-<section class="section section-dark">
-    <div class="container container-narrow text-center">
-        <h2 class="section-title">Deploy on a Server</h2>
-        <p style="font-size:1rem;color:var(--text-dim);margin-bottom:1rem;">Want to run Crew Bus on a dedicated server? We provide a one-command setup script for Hetzner/Ubuntu.</p>
-        <div class="step-terminal" style="max-width:100%;margin-bottom:1rem;">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <span class="terminal-title">Terminal</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 0;">
-                <code>bash deploy/setup.sh</code>
-                <button onclick="navigator.clipboard.writeText('bash deploy/setup.sh').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)})" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;margin-left:12px;">Copy</button>
-            </div>
-        </div>
-        <p style="font-size:0.9rem;color:var(--text-dim);">See the <a href="https://github.com/crew-bus/crew-bus/tree/main/deploy" style="color:var(--highlight)">deploy/</a> directory on GitHub for Nginx configs, systemd service files, and full docs.</p>
     </div>
 </section>
 
