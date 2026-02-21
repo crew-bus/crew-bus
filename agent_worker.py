@@ -1008,6 +1008,90 @@ def _suggest_skill_draft(db_path: Path, agent_id: int, topic: str):
 
 
 # ---------------------------------------------------------------------------
+# LLM circuit breaker — tracks provider failures for fallback decisions
+# ---------------------------------------------------------------------------
+
+import logging
+
+_logger = logging.getLogger("agent_worker")
+
+
+class _CircuitBreaker:
+    """Simple per-provider circuit breaker.
+
+    States:
+      CLOSED  — normal operation, requests flow through
+      OPEN    — provider is failing, skip it (use fallback)
+      HALF    — cooldown expired, allow one probe request
+
+    Opens after `failure_threshold` consecutive failures.
+    Stays open for `cooldown_seconds`, then moves to HALF_OPEN.
+    A success in HALF_OPEN resets to CLOSED; a failure reopens.
+    """
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    def __init__(self, failure_threshold: int = 3, cooldown_seconds: float = 60):
+        self._states: dict[str, str] = {}          # provider → state
+        self._fail_counts: dict[str, int] = {}     # provider → consecutive fails
+        self._open_since: dict[str, float] = {}    # provider → time.monotonic
+        self._threshold = failure_threshold
+        self._cooldown = cooldown_seconds
+        self._lock = threading.Lock()
+
+    def allow_request(self, provider: str) -> bool:
+        with self._lock:
+            state = self._states.get(provider, self.CLOSED)
+            if state == self.CLOSED:
+                return True
+            if state == self.OPEN:
+                elapsed = time.monotonic() - self._open_since.get(provider, 0)
+                if elapsed >= self._cooldown:
+                    self._states[provider] = self.HALF_OPEN
+                    return True
+                return False
+            # HALF_OPEN — allow one probe
+            return True
+
+    def record_success(self, provider: str):
+        with self._lock:
+            self._states[provider] = self.CLOSED
+            self._fail_counts[provider] = 0
+
+    def record_failure(self, provider: str):
+        with self._lock:
+            count = self._fail_counts.get(provider, 0) + 1
+            self._fail_counts[provider] = count
+            state = self._states.get(provider, self.CLOSED)
+            if state == self.HALF_OPEN or count >= self._threshold:
+                self._states[provider] = self.OPEN
+                self._open_since[provider] = time.monotonic()
+                _logger.warning("Circuit OPEN for provider '%s' after %d failures",
+                                provider, count)
+
+
+_circuit = _CircuitBreaker(failure_threshold=3, cooldown_seconds=60)
+
+# Fallback order when the primary provider fails.
+# Ollama is always last because it's local and doesn't need an API key.
+_FALLBACK_ORDER = ("groq", "openai", "gemini", "kimi", "claude", "ollama")
+
+
+def _is_llm_error(text: str) -> bool:
+    """Return True if the response text looks like an error, not a real reply."""
+    if not text:
+        return True
+    error_prefixes = ("(Ollama not reachable", "(Error", "(API error",
+                      "(Kimi API error", "(Claude API error",
+                      "(Empty response", "(API key not configured",
+                      "(Kimi API key not configured",
+                      "(Claude API key not configured")
+    return any(text.startswith(p) for p in error_prefixes)
+
+
+# ---------------------------------------------------------------------------
 # LLM callers — routes to the right backend per agent
 # ---------------------------------------------------------------------------
 
@@ -1154,10 +1238,42 @@ def _call_openai_compat(messages: list, model: str, api_url: str,
         return f"(Error: {e})"
 
 
+def _call_provider(provider: str, messages: list, specific_model: str = "",
+                   db_path: Path = None) -> str:
+    """Call a single LLM provider. Returns the response text (or error string)."""
+    if provider == "ollama":
+        use_model = specific_model or OLLAMA_MODEL
+        return _call_ollama(messages, model=use_model)
+
+    if provider == "kimi":
+        use_model = specific_model or KIMI_DEFAULT_MODEL
+        api_key = bus.get_config("kimi_api_key", "", db_path=db_path) if db_path else ""
+        return _call_kimi(messages, model=use_model, api_key=api_key)
+
+    if provider == "claude":
+        use_model = specific_model or PROVIDERS["claude"][1]
+        api_key = bus.get_config("claude_api_key", "", db_path=db_path) if db_path else ""
+        return _call_claude(messages, model=use_model, api_key=api_key)
+
+    if provider in PROVIDERS:
+        api_url, default_model, key_name = PROVIDERS[provider]
+        use_model = specific_model or default_model
+        api_key = bus.get_config(key_name, "", db_path=db_path) if (db_path and key_name) else ""
+        return _call_openai_compat(messages, model=use_model, api_url=api_url, api_key=api_key)
+
+    # Unknown provider — try Ollama with the full string as model name
+    return _call_ollama(messages, model=provider)
+
+
 def call_llm(system_prompt: str, user_message: str,
              chat_history: Optional[list] = None,
              model: str = "", db_path: Path = None) -> str:
     """Route to the correct LLM backend based on model string.
+
+    Includes automatic fallback chain with circuit breaker:
+      - If the primary provider fails, tries the next configured provider
+      - Providers with open circuits (recent repeated failures) are skipped
+      - Exponential backoff between retries (0.5s, 1s)
 
     Model resolution order:
       1. Per-agent model field (passed in)
@@ -1179,40 +1295,67 @@ def call_llm(system_prompt: str, user_message: str,
     if not model:
         model = bus.get_config("default_model", "", db_path=db_path) if db_path else ""
 
+    # Parse provider from model string
     if not model or model == "ollama":
-        return _call_ollama(messages)
+        primary_provider = "ollama"
+        specific_model = ""
+    else:
+        primary_provider = model.split(":")[0] if ":" in model else model
+        specific_model = model.split(":", 1)[1] if ":" in model else ""
 
-    # Parse "provider" or "provider:specific-model"
-    provider = model.split(":")[0] if ":" in model else model
-    specific_model = model.split(":", 1)[1] if ":" in model else ""
+    # Build fallback list: primary first, then others (skip duplicates)
+    providers_to_try = [primary_provider]
+    for fb in _FALLBACK_ORDER:
+        if fb != primary_provider:
+            providers_to_try.append(fb)
 
-    # Kimi K2.5 — has its own caller (thinking param, reasoning_content)
-    if provider == "kimi":
-        kimi_model = specific_model or KIMI_DEFAULT_MODEL
-        api_key = bus.get_config("kimi_api_key", "", db_path=db_path) if db_path else ""
-        return _call_kimi(messages, model=kimi_model, api_key=api_key)
+    backoff = 0.5
+    last_error = ""
 
-    # Claude — Anthropic Messages API (different format)
-    if provider == "claude":
-        claude_model = specific_model or PROVIDERS["claude"][1]
-        api_key = bus.get_config("claude_api_key", "", db_path=db_path) if db_path else ""
-        return _call_claude(messages, model=claude_model, api_key=api_key)
+    for i, provider in enumerate(providers_to_try):
+        # Check circuit breaker — skip providers that are failing repeatedly
+        if not _circuit.allow_request(provider):
+            _logger.debug("Skipping provider '%s' (circuit open)", provider)
+            continue
 
-    # OpenAI, Groq, Gemini — all OpenAI-compatible
-    if provider in PROVIDERS:
-        api_url, default_model, key_name = PROVIDERS[provider]
-        use_model = specific_model or default_model
-        api_key = bus.get_config(key_name, "", db_path=db_path) if (db_path and key_name) else ""
-        if provider == "ollama":
-            return _call_ollama(messages, model=use_model)
-        return _call_openai_compat(messages, model=use_model, api_url=api_url, api_key=api_key)
+        # For fallback providers, only use default model (not the primary's specific model)
+        use_model = specific_model if provider == primary_provider else ""
 
-    # Ollama with specific model name (e.g. "ollama:mistral")
-    if model.startswith("ollama:"):
-        return _call_ollama(messages, model=model.split(":", 1)[1])
+        try:
+            result = _call_provider(provider, messages, use_model, db_path)
+        except Exception as e:
+            _circuit.record_failure(provider)
+            last_error = f"(Exception calling {provider}: {e})"
+            _logger.warning("Provider '%s' raised exception: %s", provider, e)
+            if i < len(providers_to_try) - 1:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 4)
+            continue
 
-    # Generic fallback: assume Ollama local model name
-    return _call_ollama(messages, model=model)
+        if _is_llm_error(result):
+            _circuit.record_failure(provider)
+            last_error = result
+            if provider != primary_provider:
+                _logger.info("Fallback provider '%s' also failed: %s",
+                             provider, result[:80])
+            else:
+                _logger.warning("Primary provider '%s' failed: %s",
+                                provider, result[:80])
+            if i < len(providers_to_try) - 1:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 4)
+            continue
+
+        # Success
+        _circuit.record_success(provider)
+        if provider != primary_provider:
+            _logger.info("Fallback to '%s' succeeded (primary '%s' was down)",
+                         provider, primary_provider)
+        return result
+
+    # All providers failed — return the last error
+    _logger.error("All LLM providers failed. Last error: %s", last_error[:120])
+    return last_error or "(All LLM providers failed — check your configuration.)"
 
 
 # Keep legacy name for backwards compat with tests
@@ -1509,7 +1652,15 @@ def _process_with_timeout(row, db_path: Path):
 
 
 def _process_single_message(row, db_path: Path):
-    """Process one queued message — call LLM, insert reply, handle shortcuts."""
+    """Process one queued message — call LLM, insert reply, handle shortcuts.
+
+    Error handling strategy:
+      - DB errors reading agent info: log and continue with defaults
+      - LLM errors: handled by call_llm's fallback chain; if all providers
+        fail, a friendly error message is delivered to the human
+      - Post-processing errors (actions, social drafts): caught individually
+        so one failure doesn't block the reply from being delivered
+    """
     msg_id = row["id"]
     human_id = row["from_agent_id"]
     agent_id = row["to_agent_id"]
@@ -1527,10 +1678,13 @@ def _process_single_message(row, db_path: Path):
         return
 
     # Check for memory commands first (remember/forget/list)
-    memory_response = _check_memory_command(user_text, agent_id, db_path)
-    if memory_response:
-        _insert_reply_direct(db_path, agent_id, human_id, memory_response)
-        return
+    try:
+        memory_response = _check_memory_command(user_text, agent_id, db_path)
+        if memory_response:
+            _insert_reply_direct(db_path, agent_id, human_id, memory_response)
+            return
+    except Exception as e:
+        _logger.warning("Memory command check failed for msg %d: %s", msg_id, e)
 
     # Get agent description from DB for dynamic prompts
     desc = ""
@@ -1540,9 +1694,8 @@ def _process_single_message(row, db_path: Path):
                              (agent_id,)).fetchone()
         if _row:
             desc = _row["description"] or ""
-        _conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("Failed to load description for agent %d: %s", agent_id, e)
 
     # Guardian shortcut: intercept WhatsApp setup requests directly
     if agent_type == "guardian" and _re.search(
@@ -1590,39 +1743,78 @@ def _process_single_message(row, db_path: Path):
         return
 
     # Build system prompt — injects memories + skills
-    system_prompt = _build_system_prompt(agent_type, agent_name, desc,
-                                         agent_id=agent_id, db_path=db_path)
+    try:
+        system_prompt = _build_system_prompt(agent_type, agent_name, desc,
+                                             agent_id=agent_id, db_path=db_path)
+    except Exception as e:
+        _logger.warning("Failed to build system prompt for %s: %s", agent_name, e)
+        system_prompt = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
 
     # Get recent chat history for context
-    chat_history = _get_recent_chat(db_path, human_id, agent_id)
+    try:
+        chat_history = _get_recent_chat(db_path, human_id, agent_id)
+    except Exception as e:
+        _logger.warning("Failed to load chat history for %s: %s", agent_name, e)
+        chat_history = []
 
-    # Call LLM — routes to Kimi/Ollama/etc based on agent's model field
+    # Call LLM — routes to Kimi/Ollama/etc based on agent's model field.
+    # call_llm handles fallback chain and circuit breaker internally.
     _llm_start = time.monotonic()
-    reply = call_llm(system_prompt, user_text, chat_history,
-                     model=agent_model, db_path=db_path)
+    try:
+        reply = call_llm(system_prompt, user_text, chat_history,
+                         model=agent_model, db_path=db_path)
+    except Exception as e:
+        _logger.error("Unhandled LLM exception for %s (msg %d): %s",
+                      agent_name, msg_id, e)
+        reply = ""
     _response_ms = int((time.monotonic() - _llm_start) * 1000)
+
+    # If the LLM returned an error string, deliver a friendly message
+    # so the human isn't left waiting with no response.
+    if _is_llm_error(reply):
+        _logger.warning("LLM failed for %s (msg %d, %dms): %s",
+                        agent_name, msg_id, _response_ms, reply[:100])
+        friendly = (
+            "I'm having trouble connecting to my AI brain right now. "
+            "Your message is safe — I'll try again on the next cycle, "
+            "or you can resend it in a moment."
+        )
+        _insert_reply_direct(db_path, agent_id, human_id, friendly)
+        return
 
     if reply:
         # Execute any wizard_action commands embedded in the reply
-        clean_reply = _execute_wizard_actions(reply, db_path)
+        try:
+            clean_reply = _execute_wizard_actions(reply, db_path)
+        except Exception as e:
+            _logger.warning("Wizard action failed for %s: %s", agent_name, e)
+            clean_reply = reply
 
         # Execute any crew_action commands (inter-agent DMs, meetings, channel posts)
-        clean_reply = _execute_crew_actions(clean_reply, agent_id, db_path)
-
-        # NOTE: Auto-relay removed — was causing echo loops. Agents use
-        # crew_action JSON for real inter-agent comms. If the LLM doesn't
-        # emit JSON, no message is sent (intentional — no forced relay).
+        try:
+            clean_reply = _execute_crew_actions(clean_reply, agent_id, db_path)
+        except Exception as e:
+            _logger.warning("Crew action failed for %s: %s", agent_name, e)
 
         # Extract and create any social_draft JSON blocks
-        clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+        try:
+            clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+        except Exception as e:
+            _logger.warning("Social draft extraction failed for %s: %s", agent_name, e)
 
         # Extract explicit delegation JSON (if manager included any)
         if agent_type == "manager":
-            clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
+            try:
+                clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
+            except Exception as e:
+                _logger.warning("Delegation extraction failed for %s: %s", agent_name, e)
 
         # Auto-fan-out: forward the task to all workers
         if agent_type == "manager" and row["from_agent_id"] != agent_id:
-            _fan_out_to_workers(db_path, agent_id, user_text)
+            try:
+                _fan_out_to_workers(db_path, agent_id, user_text)
+            except Exception as e:
+                _logger.warning("Fan-out failed for %s: %s", agent_name, e)
 
         # Don't store empty replies (can happen when LLM returns only action blocks)
         if not clean_reply or not clean_reply.strip():
@@ -1632,17 +1824,11 @@ def _process_single_message(row, db_path: Path):
         _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
                              human_msg=user_text, agent_type=agent_type)
 
-        # ── Inter-agent replies stay in Crew Comms only ──
-        # Previously surfaced [replying to X] into human chat — caused noise/echo.
-        # Inter-agent replies are now visible ONLY in the Crew Comms tab channels.
-        # The human's individual agent chat stays clean: only human<->agent messages.
-
         # ── Skill health tracking (Guardian runtime monitoring) ──
         try:
             _agent_skills = bus.get_agent_skills(agent_id, db_path=db_path)
             if _agent_skills and bus.is_guard_activated(db_path):
                 import skill_sandbox
-                # Check reply for charter/integrity issues
                 from security import scan_reply_integrity, scan_reply_charter
                 _integrity = scan_reply_integrity(clean_reply)
                 _charter = scan_reply_charter(clean_reply)
