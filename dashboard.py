@@ -6948,12 +6948,12 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
 
 def _create_desktop_shortcut(url):
     """Drop a clickable shortcut on the user's Desktop to reopen the dashboard."""
-    import platform
-    desktop = Path.home() / "Desktop"
-    if not desktop.exists():
-        desktop = Path.home()  # fallback if no Desktop folder
-    system = platform.system()
     try:
+        import platform
+        desktop = Path.home() / "Desktop"
+        if not desktop.exists():
+            desktop = Path.home()  # fallback if no Desktop folder
+        system = platform.system()
         if system == "Darwin":  # macOS
             shortcut = desktop / "Crew Bus.webloc"
             if not shortcut.exists():
@@ -6981,8 +6981,8 @@ def _create_desktop_shortcut(url):
                 )
                 shortcut.chmod(0o755)
                 print(f"  \U0001f4ce Desktop shortcut created: {shortcut}")
-    except Exception as e:
-        print(f"  (Could not create desktop shortcut: {e})")
+    except Exception:
+        pass  # Non-critical — skip on headless/restricted servers
 
 _ollama_ready = False
 
