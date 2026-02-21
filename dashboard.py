@@ -48,6 +48,7 @@ FREE AND OPEN SOURCE — crew-bus is free infrastructure for the world.
 Security Guard module available separately (paid activation key).
 """
 
+import base64
 import hashlib
 import json
 import os
@@ -2240,6 +2241,8 @@ function setDayNight(mode,el){
   }else{
     document.body.classList.remove('day-mode');
   }
+  var tc=document.querySelector('meta[name="theme-color"]');
+  if(tc)tc.content=mode==='day'?'#f0f2f5':'#0d1117';
 }
 
 // FIX 3: Trust/Burnout popup instead of old sliders
@@ -3757,9 +3760,209 @@ function submitSetup(){
     });
 }
 
+// ── PWA Service Worker Registration ──
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('/sw.js').then(function(reg){
+      setInterval(function(){reg.update()},30*60*1000);
+    }).catch(function(){});
+  });
+}
+
 // ── Boot ──
 document.addEventListener('DOMContentLoaded',function(){checkSetupNeeded()});
 """
+
+# ── PWA Constants ──────────────────────────────────────────────────
+
+PWA_MANIFEST = json.dumps({
+    "name": "Crew Bus",
+    "short_name": "Crew Bus",
+    "description": "Your personal AI crew \u2014 private, local, sovereign.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0d1117",
+    "theme_color": "#0d1117",
+    "orientation": "any",
+    "icons": [
+        {"src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+        {"src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        {"src": "/pwa/icon.svg", "sizes": "any", "type": "image/svg+xml"},
+    ],
+}, indent=2)
+
+PWA_SERVICE_WORKER = """\
+var CACHE_NAME='crew-bus-v1';
+var ICON_URLS=['/pwa/icon-192.png','/pwa/icon-512.png','/pwa/icon.svg'];
+
+self.addEventListener('install',function(e){
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(function(c){return c.addAll(ICON_URLS)})
+    .then(function(){return self.skipWaiting()})
+  );
+});
+
+self.addEventListener('activate',function(e){
+  e.waitUntil(
+    caches.keys().then(function(names){
+      return Promise.all(names.filter(function(n){return n!==CACHE_NAME}).map(function(n){return caches.delete(n)}));
+    }).then(function(){return self.clients.claim()})
+  );
+});
+
+self.addEventListener('fetch',function(e){
+  var url=new URL(e.request.url);
+  if(e.request.method!=='GET')return;
+
+  // Icons — cache-first
+  if(url.pathname.startsWith('/pwa/')){
+    e.respondWith(caches.match(e.request).then(function(r){return r||fetch(e.request)}));
+    return;
+  }
+
+  // API calls — network-first with cache fallback
+  if(url.pathname.startsWith('/api/')){
+    e.respondWith(
+      fetch(e.request).then(function(r){
+        var cl=r.clone();
+        caches.open(CACHE_NAME).then(function(c){c.put(e.request,cl)});
+        return r;
+      }).catch(function(){return caches.match(e.request)})
+    );
+    return;
+  }
+
+  // Navigation/HTML — stale-while-revalidate
+  if(e.request.mode==='navigate'||e.request.headers.get('accept').indexOf('text/html')!==-1){
+    e.respondWith(
+      caches.open(CACHE_NAME).then(function(c){
+        return c.match(e.request).then(function(cached){
+          var fetched=fetch(e.request).then(function(r){
+            c.put(e.request,r.clone());
+            return r;
+          });
+          return cached||fetched;
+        });
+      })
+    );
+    return;
+  }
+});
+"""
+
+PWA_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#1a1a2e"/><circle cx="16" cy="16" r="5" fill="none" stroke="#e94560" stroke-width="2"/><circle cx="16" cy="16" r="2" fill="#e94560"/><circle cx="16" cy="7" r="2.5" fill="#2ea043"/><circle cx="24" cy="12.5" r="2.5" fill="#d18616"/><circle cx="22" cy="22" r="2.5" fill="#bc8cff"/><circle cx="10" cy="22" r="2.5" fill="#74b9ff"/><circle cx="8" cy="12.5" r="2.5" fill="#39d0d0"/></svg>'
+
+PWA_ICON_192 = base64.b64decode(
+    "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"
+)
+
+PWA_ICON_512 = base64.b64decode(
+    "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"
+)
 
 # ── HTML ────────────────────────────────────────────────────────────
 
@@ -3770,6 +3973,13 @@ def _build_html():
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>crew-bus</title>
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crew Bus">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/pwa/icon.svg">
+<link rel="apple-touch-icon" href="/pwa/icon-192.png">
 <style>{CSS}</style>
 <script async src="https://js.stripe.com/v3/buy-button.js"></script>
 <script>window.__STRIPE_PK={json.dumps(STRIPE_PUBLISHABLE_KEY)};window.__STRIPE_BUTTONS={json.dumps(STRIPE_BUY_BUTTONS)};</script>
@@ -5205,6 +5415,50 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
+
+        # PWA assets
+        if path == "/manifest.json":
+            body = PWA_MANIFEST.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            return self.wfile.write(body)
+
+        if path == "/sw.js":
+            body = PWA_SERVICE_WORKER.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            return self.wfile.write(body)
+
+        if path == "/pwa/icon.svg":
+            body = PWA_ICON_SVG.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            return self.wfile.write(body)
+
+        if path == "/pwa/icon-192.png":
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(PWA_ICON_192)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            return self.wfile.write(PWA_ICON_192)
+
+        if path == "/pwa/icon-512.png":
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(PWA_ICON_512)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            return self.wfile.write(PWA_ICON_512)
 
         # Pages — SPA serves same HTML for all routes
         if path in ("/", "/messages", "/decisions", "/audit", "/drafts") or path.startswith("/team/"):
