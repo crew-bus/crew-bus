@@ -2128,7 +2128,7 @@ async function loadCircle(){
   var bossName=stats.boss_name||'Crew Boss';
   var humanName=stats.human_name||'Human';
   if(trustLbl)trustLbl.textContent=bossName+' Trust Score';
-  if(energyLbl)energyLbl.textContent=humanName+' Energy Score';
+  if(energyLbl)energyLbl.textContent='Your Energy Score';
 
   loadTeams();
   loadGuardianBanner();
@@ -3807,22 +3807,22 @@ def _build_html():
 <div class="main-left">
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 540 490" preserveAspectRatio="xMidYMid meet">
-      <!-- Boss to Guardian (diagonal left) -->
-      <line x1="270" y1="270" x2="135" y2="100" stroke="#d18616"/>
-      <!-- Boss to Vault (diagonal right) -->
-      <line x1="270" y1="270" x2="405" y2="100" stroke="#9c6bdb"/>
+      <!-- Boss to Guardian (diagonal down-left) -->
+      <line x1="270" y1="130" x2="135" y2="340" stroke="#d18616"/>
+      <!-- Boss to Vault (diagonal down-right) -->
+      <line x1="270" y1="130" x2="405" y2="340" stroke="#9c6bdb"/>
     </svg>
-    <!-- Crew Boss — center -->
-    <div class="bubble center" id="bubble-boss" style="left:50%;top:55%;transform:translate(-50%,-50%)">
+    <!-- Crew Boss — top center -->
+    <div class="bubble center" id="bubble-boss" style="left:50%;top:20%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span>    </div>
-    <!-- Guardian — upper left -->
-    <div class="bubble outer" id="bubble-guardian" style="left:25%;top:20%;transform:translate(-50%,-50%)">
+    <!-- Guardian — lower left -->
+    <div class="bubble outer" id="bubble-guardian" style="left:25%;top:65%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🛡</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Guardian</span><span class="bubble-sub"></span>
     </div>
-    <!-- Vault — upper right -->
-    <div class="bubble outer" id="bubble-vault" style="left:75%;top:20%;transform:translate(-50%,-50%)">
+    <!-- Vault — lower right -->
+    <div class="bubble outer" id="bubble-vault" style="left:75%;top:65%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🔮</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Vault</span><span class="bubble-sub"></span>
     </div>
