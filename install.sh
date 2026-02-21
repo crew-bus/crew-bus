@@ -23,7 +23,7 @@ echo "  Platform: $PLATFORM"
 
 # ── 2. Check Python 3.10+ ──
 PYTHON=""
-for cmd in python3 python; do
+for cmd in python3 python python3.13 python3.12 python3.11 python3.10; do
     if command -v "$cmd" &>/dev/null; then
         ver=$("$cmd" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
         major=$(echo "$ver" | cut -d. -f1)
