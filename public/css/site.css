@@ -651,11 +651,15 @@ body::after {
 .hd-line-growth  { width: 120px; transform: rotate(118deg);  animation: hdFadeIn 0.4s ease 4.5s forwards; background: linear-gradient(90deg, rgba(255,171,87,0.3), rgba(255,171,87,0.03)); }
 .hd-line-life    { width: 108px; transform: rotate(198deg);  animation: hdFadeIn 0.4s ease 5.0s forwards; background: linear-gradient(90deg, rgba(100,181,246,0.3), rgba(100,181,246,0.03)); }
 
+/* Triangle demo lines — Boss to Guardian (down-left), Boss to Vault (down-right) */
+.hd-line-guardian { width: 120px; transform: rotate(120deg); animation: hdFadeIn 0.4s ease 3.0s forwards; background: linear-gradient(90deg, rgba(209,134,22,0.4), rgba(209,134,22,0.03)); }
+.hd-line-vault    { width: 120px; transform: rotate(60deg);  animation: hdFadeIn 0.4s ease 3.5s forwards; background: linear-gradient(90deg, rgba(156,107,219,0.4), rgba(156,107,219,0.03)); }
+
 @keyframes hdFadeIn { to { opacity: 1; } }
 
-/* Crew Boss */
+/* Crew Boss — top of triangle */
 .hd-boss {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    position: absolute; top: 30%; left: 50%; transform: translate(-50%,-50%);
     width: 96px; height: 96px; border-radius: 50%;
     background: rgba(12,14,22,0.95); border: 2.5px solid rgba(255,255,255,0.95);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -735,6 +739,22 @@ body::after {
     animation: hdAgentIn 0.8s ease 5.0s forwards, hdBreatheBlue 2.5s ease-in-out 7.7s infinite;
     box-shadow: 0 0 20px rgba(100,181,246,0.3), 0 0 45px rgba(100,181,246,0.1);
 }
+
+/* Triangle demo — Guardian lower-left, Vault lower-right */
+.hd-guardian {
+    margin-top: 75px; margin-left: -80px;
+    border-color: #d18616;
+    animation: hdAgentIn 0.8s ease 3.0s forwards, hdBreatheGoldDemo 2.5s ease-in-out 6.5s infinite;
+    box-shadow: 0 0 20px rgba(209,134,22,0.3), 0 0 45px rgba(209,134,22,0.1);
+}
+.hd-vault {
+    margin-top: 75px; margin-left: 80px;
+    border-color: #9c6bdb;
+    animation: hdAgentIn 0.8s ease 3.5s forwards, hdBreathePurpleDemo 2.5s ease-in-out 6.8s infinite;
+    box-shadow: 0 0 20px rgba(156,107,219,0.3), 0 0 45px rgba(156,107,219,0.1);
+}
+@keyframes hdBreatheGoldDemo { 0%,100% { box-shadow: 0 0 20px rgba(209,134,22,0.3), 0 0 45px rgba(209,134,22,0.1); } 50% { box-shadow: 0 0 35px rgba(209,134,22,0.5), 0 0 60px rgba(209,134,22,0.2); } }
+@keyframes hdBreathePurpleDemo { 0%,100% { box-shadow: 0 0 20px rgba(156,107,219,0.3), 0 0 45px rgba(156,107,219,0.1); } 50% { box-shadow: 0 0 35px rgba(156,107,219,0.5), 0 0 60px rgba(156,107,219,0.2); } }
 
 @keyframes hdBreatheTeal   { 0%,100% { box-shadow: 0 0 20px rgba(77,208,184,0.3), 0 0 45px rgba(77,208,184,0.1); } 50% { box-shadow: 0 0 35px rgba(77,208,184,0.5), 0 0 60px rgba(77,208,184,0.2); } }
 @keyframes hdBreathePurple { 0%,100% { box-shadow: 0 0 20px rgba(179,136,255,0.3), 0 0 45px rgba(179,136,255,0.1); } 50% { box-shadow: 0 0 35px rgba(179,136,255,0.5), 0 0 60px rgba(179,136,255,0.2); } }
