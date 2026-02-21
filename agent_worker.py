@@ -1116,7 +1116,7 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
     req = urllib.request.Request(
         KIMI_API_URL, data=payload,
         headers={
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "Authorization": f"Bearer {api_key}",
         },
     )
@@ -1389,7 +1389,7 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
         if total_count > 120:
             _auto_summarize_old_chat(db_path, sender_id, agent_id, limit)
 
-        # For managers: also pull recent messages TO this agent from workers
+        # For managers and right_hand: pull recent DMs from other agents
         agent_row = conn.execute(
             "SELECT agent_type FROM agents WHERE id=?", (agent_id,)
         ).fetchone()
@@ -1404,24 +1404,38 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
                   AND m.body IS NOT NULL AND m.body != ''
                 ORDER BY m.created_at DESC LIMIT 10
             """, (agent_id, agent_id)).fetchall()
+        # Crew Boss (right_hand): see recent DMs from any agent
+        if agent_row and agent_row["agent_type"] == "right_hand":
+            worker_rows = conn.execute("""
+                SELECT a.name, m.body
+                FROM messages m
+                JOIN agents a ON m.from_agent_id = a.id
+                WHERE m.to_agent_id = ?
+                  AND m.from_agent_id != ?
+                  AND a.agent_type != 'human'
+                  AND m.body IS NOT NULL AND m.body != ''
+                ORDER BY m.created_at DESC LIMIT 15
+            """, (agent_id, sender_id)).fetchall()
     finally:
         conn.close()
 
     history = []
-
-    # Inject team updates as system context if available
-    if worker_rows:
-        team_summary = "Recent updates from your team:\n" + "\n".join(
-            f"- {w['name']}: {w['body'][:150]}" for w in reversed(worker_rows)
-        )
-        history.append({"role": "user", "content": team_summary})
-        history.append({"role": "assistant", "content": "Got it, I have my team's updates."})
 
     for row in reversed(rows):  # oldest first
         role = "user" if row["from_agent_id"] == sender_id else "assistant"
         text = row["body"] if row["body"] else row["subject"]
         if text:
             history.append({"role": role, "content": text})
+
+    # Inject crew/team DMs AFTER chat history (near the end) so the LLM
+    # sees them as fresh context right before the user's latest message
+    if worker_rows:
+        team_summary = "CREW REPLIES (DMs to you from other agents):\n" + "\n".join(
+            f"- {w['name']}: {w['body'][:150]}" for w in reversed(worker_rows)
+        )
+        history.append({"role": "user", "content": team_summary})
+        history.append({"role": "assistant", "content": "Got it, I see my crew's replies."})
+
     return history
 
 
