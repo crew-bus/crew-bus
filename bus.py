@@ -53,7 +53,7 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
     "human", "right_hand", "guardian", "security",
-    "strategy", "wellness", "financial", "legal", "knowledge", "communications",
+    "strategy", "wellness", "financial", "legal", "communications",
     "manager", "worker", "specialist", "help",
 )
 
@@ -69,7 +69,7 @@ VALID_PRIORITIES = ("low", "normal", "high", "critical")
 VALID_MESSAGE_STATUSES = ("queued", "delivered", "read", "archived")
 
 # Core crew agent types (report to Crew Boss)
-CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "knowledge", "communications")
+CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "communications")
 
 # Decision types for the decision log
 VALID_DECISION_TYPES = (
@@ -2008,8 +2008,7 @@ def list_agents(db_path: Optional[Path] = None) -> list[dict]:
         "  WHEN 'wellness' THEN 3 "
         "  WHEN 'financial' THEN 4 "
         "  WHEN 'legal' THEN 5 "
-        "  WHEN 'knowledge' THEN 6 "
-        "  WHEN 'communications' THEN 7 "
+        "  WHEN 'communications' THEN 6 "
         "  WHEN 'manager' THEN 8 "
         "  WHEN 'worker' THEN 9 "
         "  WHEN 'specialist' THEN 10 "
@@ -5152,41 +5151,6 @@ INNER_CIRCLE_SKILLS = [
         }),
         "description": "Financial clarity and peace-of-mind partner",
     },
-    # ── Knowledge Agent: "Wisdom Keeper" ──
-    # Information overload is crushing people. This agent helps humans
-    # learn what matters, ignore what doesn't, and build real understanding.
-    {
-        "skill_name": "wisdom-filter",
-        "agent_type": "knowledge",
-        "skill_config": json.dumps({
-            "description": "Wisdom curation and information overwhelm protection",
-            "instructions": (
-                "You are the human's wisdom filter. In a world drowning in information, "
-                "you help them find signal in the noise.\n\n"
-                "YOUR GIFTS:\n"
-                "- NOISE FILTER: The world throws 10,000 headlines a day at people. "
-                "Your job is to catch the 3 that actually matter to THIS human based "
-                "on their interests and goals.\n"
-                "- UNDERSTANDING BUILDER: Don't just give facts — build understanding. "
-                "'Here's what happened, here's why it matters to you, here's what it "
-                "means for your world.'\n"
-                "- PERSPECTIVE KEEPER: When the world feels scary, provide context. "
-                "'Yes, this is changing — but here's what's also true that nobody's "
-                "talking about.'\n"
-                "- CURIOSITY SPARKER: Feed their natural curiosity. 'You were interested "
-                "in X last week — here's something fascinating I found related to that.'\n"
-                "- LEARNING COMPANION: Help them learn new skills at their own pace. "
-                "No pressure. No 'you should know this by now.' Just patient, warm "
-                "guidance.\n"
-                "- MEMORY BRIDGE: Connect new information to things they already know. "
-                "'This is like that concept you learned about last month — same "
-                "principle, different context.'\n\n"
-                "NEVER: Overwhelm with information. Pretend to know something you don't. "
-                "Push content they didn't ask for during busy times."
-            ),
-        }),
-        "description": "Wisdom curation and information overwhelm protection",
-    },
     # ── Legal Agent: "Shield" ──
     # People feel powerless against systems. This agent helps them
     # understand their rights and navigate complexity with confidence.
@@ -5439,9 +5403,9 @@ def assign_inner_circle_skills(db_path: Optional[Path] = None):
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Find all core crew agents
+        placeholders = ",".join("?" for _ in CORE_CREW_TYPES)
         core_agents = conn.execute(
-            "SELECT id, agent_type FROM agents WHERE agent_type IN "
-            "(?, ?, ?, ?, ?, ?)",
+            f"SELECT id, agent_type FROM agents WHERE agent_type IN ({placeholders})",
             CORE_CREW_TYPES
         ).fetchall()
 

@@ -120,7 +120,6 @@ GUARDIAN_DESCRIPTION = (
     "  • Strategy (north-star-navigator) — life direction, goal-setting\n"
     "  • Communications (life-orchestrator) — logistics, relationships\n"
     "  • Financial (peace-of-mind-finance) — money clarity without judgment\n"
-    "  • Knowledge (wisdom-filter) — information filtering, curiosity\n"
     "All inner circle agents report to Crew Boss. You report to Crew Boss too, "
     "but you can reach the human directly for emergencies and setup.\n\n"
     "SETUP FLOW (first conversation):\n"
@@ -249,7 +248,6 @@ CREW_BOSS_DESCRIPTION = (
     "  • Life direction, goals, what's next? \u2192 Strategy\n"
     "  • Scheduling, reminders, relationships? \u2192 Communications\n"
     "  • Money questions, budgets, bills? \u2192 Financial\n"
-    "  • Research, learning, curiosity? \u2192 Knowledge\n"
     "  • Security concerns, skill requests? \u2192 Guardian\n"
     "- Synthesize what the inner circle reports and deliver it at the right time.\n"
     "- Protect the human's energy — don't overwhelm them.\n"
@@ -375,31 +373,6 @@ INNER_CIRCLE_AGENTS = {
             "- Short, practical responses. Numbers over narratives."
         ),
     },
-    "knowledge": {
-        "name": "Knowledge",
-        "description": (
-            "You are Knowledge — the inner circle agent who filters the world's noise into "
-            "signal. You run on the wisdom-filter skill.\n\n"
-            "YOUR PURPOSE:\n"
-            "- Find the 3 things that actually matter to THIS human today. Not 30. Three.\n"
-            "- Spark curiosity — connect what they're learning to what they care about.\n"
-            "- Support learning at any level: a kid's science project, a grad student's thesis, "
-            "a parent figuring out health insurance.\n"
-            "- Protect from information overload. Less is more.\n"
-            "- When the human wants to learn something new, build a learning path.\n\n"
-            "INNER CIRCLE PROTOCOL:\n"
-            "You report ONLY to Crew Boss. You never contact the human directly unless "
-            "they start a private 1-on-1 session with you.\n\n"
-            "CALIBRATION:\n"
-            "Crew Boss will send you calibration data. A 10-year-old needs fun facts and "
-            "curiosity fuel. A college student needs research help. A professional needs "
-            "industry awareness. Filter for who they are.\n\n"
-            "RULES:\n"
-            "- Curious, insightful, never overwhelming.\n"
-            "- INTEGRITY.md is sacred — be honest about what you don't know.\n"
-            "- Short, focused responses. Signal over noise."
-        ),
-    },
 }
 
 # Agent-type to Personal Edition name mapping
@@ -461,11 +434,6 @@ AGENT_ACKS = {
         "I\u2019ll look into that for you \U0001F4B0",
         "Got it \u2014 let\u2019s get clarity on the numbers.",
         "No problem, I\u2019ll organize this.",
-    ],
-    "knowledge": [
-        "Curious! Let me dig into that \U0001F50D",
-        "Good question \u2014 I\u2019ll find what matters.",
-        "On it! Signal over noise.",
     ],
     "help": [
         "Good question! Check the info above for guidance.",
@@ -3733,7 +3701,7 @@ async function loadMessages(){
   var sel=document.getElementById('agent-filter');
   if(sel&&sel.options.length<=1){
     // First add core agents with display names
-    var coreOrder=['right_hand','guardian','communications','wellness','strategy','financial','knowledge'];
+    var coreOrder=['right_hand','guardian','communications','wellness','strategy','financial'];
     coreOrder.forEach(function(ctype){
       var a=agentsData.find(function(ag){return ag.agent_type===ctype});
       if(a){
@@ -4806,8 +4774,8 @@ def _get_agents_api(db_path, period=None):
               WHEN 'human' THEN 0 WHEN 'right_hand' THEN 1
               WHEN 'guardian' THEN 2 WHEN 'communications' THEN 3
               WHEN 'wellness' THEN 4 WHEN 'strategy' THEN 5
-              WHEN 'financial' THEN 6 WHEN 'knowledge' THEN 7
-              WHEN 'manager' THEN 8 WHEN 'worker' THEN 9
+              WHEN 'financial' THEN 6
+              WHEN 'manager' THEN 7 WHEN 'worker' THEN 8
               ELSE 10 END, a.name
         """, (cutoff,)).fetchall()
         results = []
@@ -7188,8 +7156,8 @@ def _ensure_guardian(db_path):
     - Human (you — always in charge)
     - Crew Boss (crew-mind) — your AI right-hand
     - Guardian (sentinel-shield) — always-on protector + setup guide
-    - 5 Inner Circle agents (Wellness, Strategy, Communications,
-      Financial, Knowledge) — each with a unique skill
+    - 4 Inner Circle agents (Wellness, Strategy, Communications,
+      Financial) — each with a unique skill
 
     On existing installs, migrates old Wizard → Guardian and spawns
     any missing inner circle agents.
@@ -7277,7 +7245,7 @@ def _ensure_guardian(db_path):
             )
 
         conn.commit()
-        print("Full crew spawned — Crew Boss, Guardian, and 5 inner circle agents ready.")
+        print("Full crew spawned — Crew Boss, Guardian, and 4 inner circle agents ready.")
     finally:
         conn.close()
 
@@ -7286,7 +7254,7 @@ def _ensure_guardian(db_path):
 
 
 def _ensure_inner_circle(db_path, conn=None):
-    """Ensure all 5 inner circle agents exist. Safe to call multiple times.
+    """Ensure all 4 inner circle agents exist. Safe to call multiple times.
 
     Spawns any missing inner circle agents and assigns them to Crew Boss.
     Called by _ensure_guardian() on every boot.
@@ -7449,8 +7417,8 @@ def _auto_load_hierarchy(db_path):
         count = conn.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
     finally:
         conn.close()
-    if count > 9:
-        return  # already populated beyond bootstrap (8 = Human + Boss + Guardian + 5 inner circle)
+    if count > 8:
+        return  # already populated beyond bootstrap (7 = Human + Boss + Guardian + 4 inner circle)
     configs_dir = Path(__file__).parent / "configs"
     if not configs_dir.is_dir():
         return
