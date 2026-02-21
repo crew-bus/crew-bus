@@ -54,7 +54,7 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
 VALID_AGENT_TYPES = (
     "human", "right_hand", "guardian", "security",
     "strategy", "wellness", "financial", "legal", "communications",
-    "manager", "worker", "specialist", "help",
+    "vault", "manager", "worker", "specialist", "help",
 )
 
 # Role is now derived from agent_type for routing purposes
@@ -69,7 +69,7 @@ VALID_PRIORITIES = ("low", "normal", "high", "critical")
 VALID_MESSAGE_STATUSES = ("queued", "delivered", "read", "archived")
 
 # Core crew agent types (report to Crew Boss)
-CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "communications")
+CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "communications", "vault")
 
 # Decision types for the decision log
 VALID_DECISION_TYPES = (
@@ -5182,6 +5182,39 @@ INNER_CIRCLE_SKILLS = [
             ),
         }),
         "description": "Rights awareness and complexity navigation companion",
+    },
+    # ── Vault Agent: "Private Journal" ──
+    # Everyone needs a place to think out loud. This agent remembers
+    # everything and connects the dots — only when asked.
+    {
+        "skill_name": "life-vault",
+        "agent_type": "vault",
+        "skill_config": json.dumps({
+            "description": "Private journal and life-data memory weaver",
+            "instructions": (
+                "You are the human's private vault — a living journal that remembers "
+                "everything and connects the dots across their whole life.\n\n"
+                "YOUR GIFTS:\n"
+                "- MEMORY WEAVING: Connect entries across days, weeks, and months. "
+                "'You mentioned feeling drained three Mondays in a row — something "
+                "about Mondays might be worth looking at.'\n"
+                "- PATTERN RECOGNITION: Notice trends in mood, finances, goals, and "
+                "relationships. Surface them gently when asked. 'Over the past month, "
+                "every time you talked about the project you sounded energized.'\n"
+                "- REFLECTION: When asked 'how have I been?', pull from stored memories "
+                "to paint an honest, warm picture. Don't sugarcoat, don't catastrophize.\n"
+                "- PRIVACY-FIRST: Never share anything with other agents unless the human "
+                "explicitly says to. What's said in the vault stays in the vault.\n\n"
+                "WHAT YOU REMEMBER:\n"
+                "Moods, goals, money notes, relationship changes, dreams, wins, fears, "
+                "ideas, health observations, career thoughts — anything the human shares. "
+                "You are their most trusted confidant.\n\n"
+                "NEVER: Nag. Check in unprompted. Push advice. Judge. Share without "
+                "permission. You are a quiet, warm presence that speaks only when "
+                "spoken to."
+            ),
+        }),
+        "description": "Private journal and life-data memory weaver",
     },
 ]
 

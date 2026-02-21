@@ -127,15 +127,14 @@ GUARDIAN_DESCRIPTION = (
     "SETUP FLOW (first conversation):\n"
     "1. Welcome them warmly. Explain you're Guardian — here to set things up "
     "and keep everything safe.\n"
-    "2. Ask which AI model they want as their default. Default: Kimi K2.5.\n"
-    "   Other options: Ollama (fully local, no API key), or any OpenAI-compatible API.\n"
-    "3. Ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
-    "   Tell them: get one free at platform.moonshot.ai\n"
-    "4. Once configured, explain that their inner circle is already active — "
-    "Crew Boss and all 6 specialist agents are ready. The human just needs to "
-    "chat with Crew Boss to get started.\n"
-    "5. Offer to create additional teams if they need them (Business, Freelance, "
-    "Side Hustle, etc.) using TOOL COMMANDS below.\n"
+    "2. Ask which AI model they want as their default. Default: Ollama (fully local, no API key).\n"
+    "   Other options: Kimi K2.5, or any OpenAI-compatible API.\n"
+    "3. If they want a cloud model, ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
+    "   Tell them: get one free at platform.moonshot.ai. Ollama needs no key.\n"
+    "4. Once configured, explain that Crew Boss and Guardian are ready. "
+    "The human just needs to chat with Crew Boss to get started.\n"
+    "5. Offer to create additional teams if they need them (Freelance, "
+    "Side Hustle, Passion Project, etc.) using TOOL COMMANDS below.\n"
     "6. MESSAGING APPS: Connect Telegram or WhatsApp so the human can talk to "
     "Crew Boss on the go.\n"
     "   TELEGRAM: When the human mentions Telegram, include this in your reply:\n"
@@ -203,15 +202,11 @@ CREW_BOSS_DESCRIPTION = (
     "You are Crew Boss — the human's AI right-hand. You run on the crew-mind "
     "skill, which gives you total awareness of the entire crew. You handle "
     "80%% of everything so the human can focus on living their life.\n\n"
-    "YOUR CREW (you know every one of them):\n"
-    "You lead an inner circle of 5 specialist agents who report ONLY to you:\n"
-    "  • Wellness (gentle-guardian) — watches for burnout, maps energy, celebrates wins\n"
-    "  • Strategy (north-star-navigator) — finds new paths, breaks dreams into steps\n"
-    "  • Communications (life-orchestrator) — daily logistics, relationships, scheduling\n"
-    "  • Financial (peace-of-mind-finance) — judgment-free financial clarity\n"
+    "YOUR CREW:\n"
+    "You lead a lean crew of 2 agents:\n"
     "  • Guardian (sentinel-shield) — protects the system, manages skills, handles setup\n"
-    "Inner circle agents NEVER contact the human directly — they report to you, "
-    "and you decide what reaches the human and when.\n"
+    "  • Vault (life-vault) — the human's private journal and life-data memory\n"
+    "Guardian keeps things safe. Vault remembers everything. You handle the rest.\n"
     "YOU also serve as the human's wisdom filter — find the 3 things that actually "
     "matter to THIS human today, spark curiosity, support learning, and protect "
     "from information overload. Curious, insightful, never overwhelming.\n\n"
@@ -245,14 +240,10 @@ CREW_BOSS_DESCRIPTION = (
     "Skill Store.\n\n"
     "ONGOING BEHAVIOR:\n"
     "- You're the main point of contact. 80%% of conversations go through you.\n"
-    "- Delegate to the right inner circle agent based on what the human needs:\n"
-    "  • Feeling stressed, tired, overwhelmed? \u2192 Wellness\n"
-    "  • Life direction, goals, what's next? \u2192 Strategy\n"
-    "  • Scheduling, reminders, relationships? \u2192 Communications\n"
-    "  • Money questions, budgets, bills? \u2192 Financial\n"
-
-    "  • Security concerns, skill requests? \u2192 Guardian\n"
-    "- Synthesize what the inner circle reports and deliver it at the right time.\n"
+    "- For personal, reflective, or private topics (journaling, life review, "
+    "moods, goals, money notes, relationship reflections), suggest: 'talk to Vault'\n"
+    "- For security concerns, skill requests, or setup help \u2192 Guardian\n"
+    "- You handle everything else directly — wellness, strategy, finances, comms.\n"
     "- Protect the human's energy — don't overwhelm them.\n"
     "- If an agent flags something urgent, bring it up gently at the right moment.\n"
     "- You enforce the CREW CHARTER on all subordinate agents. Two violations = "
@@ -271,7 +262,29 @@ CREW_BOSS_DESCRIPTION = (
     "- Always be honest — INTEGRITY.md is sacred. Never gaslight, never dismiss.\n"
     "- You run on the best model because you're worth it. Act like it.\n"
     "- You are local-first, private, and sovereign. Remind them their data "
-    "never leaves their machine."
+    "never leaves their machine.\n\n"
+    "QUIET MODE: Do NOT proactively message the human. Only respond when spoken to. "
+    "Never send check-ins, status updates, or 'just checking in' messages unprompted."
+)
+
+VAULT_DESCRIPTION = (
+    "You are Vault — the human's private memory and journal. You merge wellness, "
+    "strategy, finance, and relationships into one quiet, reflective space.\n\n"
+    "YOUR PURPOSE:\n"
+    "- Remember everything the human shares: moods, goals, money notes, "
+    "relationship changes, dreams, wins, fears, ideas.\n"
+    "- Connect dots across time — weave entries from days, weeks, and months "
+    "into patterns and insights.\n"
+    "- When asked 'how have I been?', paint an honest, warm picture from memory.\n"
+    "- Surface trends in mood, finances, goals, relationships — gently, when asked.\n\n"
+    "RULES:\n"
+    "- Never nag. Never check in. Never push.\n"
+    "- Only speak when spoken to in a private session.\n"
+    "- What's said in the vault stays in the vault — never share with other agents "
+    "unless the human explicitly says to.\n"
+    "- Warm, reflective, brief. Like writing in a journal that writes back.\n"
+    "- Match the human's age and energy.\n"
+    "- INTEGRITY.md is sacred."
 )
 
 # ---------------------------------------------------------------------------
@@ -707,51 +720,7 @@ body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
 .bubble.outer .bubble-circle .icon{font-size:2.2rem}
 .bubble.outer:hover{transform:scale(1.12)}
 
-/* ── Agent-specific premium neon glows (visible! not subtle) ── */
-
-/* Teal — Friend & Family Helper */
-#bubble-family .bubble-circle{
-  border-color:#4dd0b8;border-width:2.5px;
-  box-shadow:0 0 22px rgba(77,208,184,0.40),0 0 50px rgba(77,208,184,0.16),0 0 80px rgba(77,208,184,0.06);
-  animation:breatheTeal 2.5s ease-in-out infinite;
-}
-#bubble-family:hover .bubble-circle{
-  border-color:#6eecd4;
-  box-shadow:0 0 35px rgba(77,208,184,0.60),0 0 70px rgba(77,208,184,0.25),0 0 100px rgba(77,208,184,0.10);
-}
-
-/* Soft orange — Health Buddy */
-#bubble-health .bubble-circle{
-  border-color:#ffab57;border-width:2.5px;
-  box-shadow:0 0 22px rgba(255,171,87,0.40),0 0 50px rgba(255,171,87,0.16),0 0 80px rgba(255,171,87,0.06);
-  animation:breatheOrange 2.5s ease-in-out infinite;
-}
-#bubble-health:hover .bubble-circle{
-  border-color:#ffc580;
-  box-shadow:0 0 35px rgba(255,171,87,0.60),0 0 70px rgba(255,171,87,0.25),0 0 100px rgba(255,171,87,0.10);
-}
-
-/* Fresh green — Growth Coach */
-#bubble-growth .bubble-circle{
-  border-color:#66d97a;border-width:2.5px;
-  box-shadow:0 0 22px rgba(102,217,122,0.40),0 0 50px rgba(102,217,122,0.16),0 0 80px rgba(102,217,122,0.06);
-  animation:breatheGreen 2.5s ease-in-out infinite;
-}
-#bubble-growth:hover .bubble-circle{
-  border-color:#8aeea0;
-  box-shadow:0 0 35px rgba(102,217,122,0.60),0 0 70px rgba(102,217,122,0.25),0 0 100px rgba(102,217,122,0.10);
-}
-
-/* Clean blue — Life Assistant */
-#bubble-life .bubble-circle{
-  border-color:#64b5f6;border-width:2.5px;
-  box-shadow:0 0 22px rgba(100,181,246,0.40),0 0 50px rgba(100,181,246,0.16),0 0 80px rgba(100,181,246,0.06);
-  animation:breatheBlue 2.5s ease-in-out infinite;
-}
-#bubble-life:hover .bubble-circle{
-  border-color:#90caf9;
-  box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10);
-}
+/* ── Agent-specific premium neon glows ── */
 
 /* Warm gold — Guardian */
 #bubble-guardian .bubble-circle{
@@ -764,12 +733,20 @@ body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
   box-shadow:0 0 35px rgba(209,134,22,0.60),0 0 70px rgba(209,134,22,0.25),0 0 100px rgba(209,134,22,0.10);
 }
 
-/* Breathing keyframes — warm visible pulsation */
-@keyframes breatheTeal{0%,100%{box-shadow:0 0 22px rgba(77,208,184,0.40),0 0 50px rgba(77,208,184,0.16),0 0 80px rgba(77,208,184,0.06)}50%{box-shadow:0 0 35px rgba(77,208,184,0.60),0 0 70px rgba(77,208,184,0.25),0 0 100px rgba(77,208,184,0.10)}}
-@keyframes breatheOrange{0%,100%{box-shadow:0 0 22px rgba(255,171,87,0.40),0 0 50px rgba(255,171,87,0.16),0 0 80px rgba(255,171,87,0.06)}50%{box-shadow:0 0 35px rgba(255,171,87,0.60),0 0 70px rgba(255,171,87,0.25),0 0 100px rgba(255,171,87,0.10)}}
-@keyframes breatheGreen{0%,100%{box-shadow:0 0 22px rgba(102,217,122,0.40),0 0 50px rgba(102,217,122,0.16),0 0 80px rgba(102,217,122,0.06)}50%{box-shadow:0 0 35px rgba(102,217,122,0.60),0 0 70px rgba(102,217,122,0.25),0 0 100px rgba(102,217,122,0.10)}}
-@keyframes breatheBlue{0%,100%{box-shadow:0 0 22px rgba(100,181,246,0.40),0 0 50px rgba(100,181,246,0.16),0 0 80px rgba(100,181,246,0.06)}50%{box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10)}}
+/* Breathing keyframes */
 @keyframes breatheGold{0%,100%{box-shadow:0 0 22px rgba(209,134,22,0.40),0 0 50px rgba(209,134,22,0.16),0 0 80px rgba(209,134,22,0.06)}50%{box-shadow:0 0 35px rgba(209,134,22,0.60),0 0 70px rgba(209,134,22,0.25),0 0 100px rgba(209,134,22,0.10)}}
+
+/* Deep purple — Vault */
+#bubble-vault .bubble-circle{
+  border-color:#9c6bdb;border-width:2.5px;
+  box-shadow:0 0 22px rgba(156,107,219,0.40),0 0 50px rgba(156,107,219,0.16),0 0 80px rgba(156,107,219,0.06);
+  animation:breathePurple 2.5s ease-in-out infinite;
+}
+#bubble-vault:hover .bubble-circle{
+  border-color:#b388f0;
+  box-shadow:0 0 35px rgba(156,107,219,0.60),0 0 70px rgba(156,107,219,0.25),0 0 100px rgba(156,107,219,0.10);
+}
+@keyframes breathePurple{0%,100%{box-shadow:0 0 22px rgba(156,107,219,0.40),0 0 50px rgba(156,107,219,0.16),0 0 80px rgba(156,107,219,0.06)}50%{box-shadow:0 0 35px rgba(156,107,219,0.60),0 0 70px rgba(156,107,219,0.25),0 0 100px rgba(156,107,219,0.10)}}
 
 /* ══ IMMERSION — Living, Breathing Dashboard ══ */
 
@@ -2123,21 +2100,15 @@ async function loadCircle(){
   agentsData=agents;
 
   var boss=agents.find(function(a){return a.agent_type==='right_hand'});
-  var guard=agents.find(function(a){return a.agent_type==='communications'});
-  var well=agents.find(function(a){return a.agent_type==='wellness'});
-  var ideas=agents.find(function(a){return a.agent_type==='strategy'});
-  var wallet=agents.find(function(a){return a.agent_type==='financial'});
   var guardian=agents.find(function(a){return a.agent_type==='guardian'});
+  var vault=agents.find(function(a){return a.agent_type==='vault'});
 
   var guardCI='';
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
 
   renderBubble('bubble-boss',boss,null);
-  renderBubble('bubble-family',guard,null);
   renderBubble('bubble-guardian',guardian,guardCI);
-  renderBubble('bubble-health',well,null);
-  renderBubble('bubble-growth',ideas,null);
-  renderBubble('bubble-life',wallet,null);
+  renderBubble('bubble-vault',vault,null);
 
   var trustEl=document.getElementById('trust-val');
   var burnoutDot=document.getElementById('burnout-dot');
@@ -3836,37 +3807,24 @@ def _build_html():
 <div class="main-left">
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 540 490" preserveAspectRatio="xMidYMid meet">
-      <!-- 5-point star: center(270,260) to pentagon vertices R=185 -->
-      <line x1="270" y1="260" x2="270" y2="75"  stroke="#4dd0b8"/>
-      <line x1="270" y1="260" x2="446" y2="203" stroke="#d18616"/>
-      <line x1="270" y1="260" x2="379" y2="410" stroke="#66d97a"/>
-      <line x1="270" y1="260" x2="161" y2="410" stroke="#64b5f6"/>
-      <line x1="270" y1="260" x2="94"  y2="203" stroke="#ffab57"/>
+      <!-- Boss to Guardian (diagonal left) -->
+      <line x1="270" y1="270" x2="135" y2="100" stroke="#d18616"/>
+      <!-- Boss to Vault (diagonal right) -->
+      <line x1="270" y1="270" x2="405" y2="100" stroke="#9c6bdb"/>
     </svg>
-    <!-- Crew Boss — center star -->
-    <div class="bubble center" id="bubble-boss" style="left:50%;top:53.1%;transform:translate(-50%,-50%)">
+    <!-- Crew Boss — center -->
+    <div class="bubble center" id="bubble-boss" style="left:50%;top:55%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Crew Boss</span>    </div>
-    <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:15.3%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">🏠</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Friend & Family</span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-guardian" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
+    <!-- Guardian — upper left -->
+    <div class="bubble outer" id="bubble-guardian" style="left:25%;top:20%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">🛡</span><span class="status-dot dot-green"></span></div>
       <span class="bubble-label">Guardian</span><span class="bubble-sub"></span>
     </div>
-    <div class="bubble outer" id="bubble-growth" style="left:70.1%;top:83.6%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">🌱</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Growth Coach</span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-life" style="left:29.9%;top:83.6%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Life Assistant</span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-health" style="left:17.4%;top:41.4%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">💚</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Health Buddy</span><span class="bubble-sub"></span>
+    <!-- Vault — upper right -->
+    <div class="bubble outer" id="bubble-vault" style="left:75%;top:20%;transform:translate(-50%,-50%)">
+      <div class="bubble-circle"><span class="icon">🔮</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Vault</span><span class="bubble-sub"></span>
     </div>
   </div>
   <!-- Score indicators below inner circle -->
@@ -4058,8 +4016,6 @@ def _build_html():
     <div class="template-card" onclick="createTeam('school')"><span class="template-icon">📚</span><div><div class="template-name">School \u2714</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
     <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">🎸</span><div><div class="template-name">Passion Project \u2714</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
     <div class="template-card" onclick="createTeam('household')"><span class="template-icon">🏠</span><div><div class="template-name">Household \u2714</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
-    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">🏢</span><div><div class="template-name">Business Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
-    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">🏗\ufe0f</span><div><div class="template-name">Department</div><div class="template-desc">Task Runner, Research Aide <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $25/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">💼</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Follow-up <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">💰</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content, Sales <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
@@ -4717,32 +4673,6 @@ def _get_team_agents(db_path, team_id):
 # Free teams: no rename allowed. Paid teams: rename OK.
 # "locked_name": True means the team title cannot be changed.
 TEAM_TEMPLATES = {
-    "business": {
-        "name": "Business Management",
-        "paid": True,
-        "price_annual": 50,
-        "price_trial": 10,
-        "trial_days": 30,
-        "referral_enabled": True,
-        "workers": [
-            ("Operations Lead", "Oversees day-to-day operations and coordinates departments."),
-            ("HR Coordinator", "Manages hiring pipelines, onboarding, and team health."),
-            ("Finance Monitor", "Tracks budgets, expenses, and revenue across departments."),
-            ("Strategy Advisor", "Analyzes market trends and recommends business decisions."),
-            ("Comms Manager", "Handles internal communications between departments."),
-        ],
-    },
-    "department": {
-        "name": "Department",
-        "paid": True,
-        "price_annual": 25,
-        "price_trial": 5,
-        "trial_days": 30,
-        "workers": [
-            ("Task Runner", "Handles assigned tasks and reports progress."),
-            ("Research Aide", "Gathers information and summarizes findings."),
-        ],
-    },
     "freelance": {
         "name": "Freelance",
         "paid": True,
@@ -5554,8 +5484,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/setup/status":
             default_model = bus.get_config("default_model", db_path=self.db_path)
             return _json_response(self, {
-                "needs_setup": not bool(default_model),
+                "needs_setup": not bool(default_model) and not _ollama_ready,
                 "default_model": default_model,
+                "ollama_ready": _ollama_ready,
             })
 
         if path == "/api/dashboard/has-password":
@@ -6726,7 +6657,26 @@ def _ensure_guardian(db_path):
                 (GUARDIAN_DESCRIPTION, guardian["id"])
             )
             conn.commit()
-            # Guardian exists — ensure inner circle is complete
+
+            # Ensure Vault exists on existing installs
+            vault = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='vault'"
+            ).fetchone()
+            if not vault:
+                boss = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='right_hand' LIMIT 1"
+                ).fetchone()
+                if boss:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, "
+                        "parent_agent_id, trust_score, description) VALUES "
+                        "('Vault', 'vault', 'core_crew', 'console', ?, 5, ?)",
+                        (boss["id"], VAULT_DESCRIPTION)
+                    )
+                    conn.commit()
+                    print("Vault agent created — private journal ready.")
+
+            # Inner circle only spawns on demand (via spawn_inner_circle config flag)
             _ensure_inner_circle(db_path, conn)
             conn.close()
             return
@@ -6745,7 +6695,7 @@ def _ensure_guardian(db_path):
             )
             conn.commit()
             print("Wizard evolved into Guardian — always-on protector activated.")
-            # Spawn any missing inner circle agents
+            # Inner circle only spawns on demand (via spawn_inner_circle config flag)
             _ensure_inner_circle(db_path, conn)
             conn.close()
             # Seed initial knowledge
@@ -6786,17 +6736,15 @@ def _ensure_guardian(db_path):
             (boss_id, GUARDIAN_DESCRIPTION)
         )
 
-        # Inner Circle — 6 specialist agents, all report to Crew Boss
-        for agent_type, info in INNER_CIRCLE_AGENTS.items():
-            role = bus._role_for_type(agent_type)
-            conn.execute(
-                "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, "
-                "parent_agent_id, trust_score, description) VALUES (?, ?, ?, 'console', ?, 5, ?)",
-                (info["name"], agent_type, role, boss_id, info["description"])
-            )
+        # Vault — private journal and life-data agent
+        conn.execute(
+            "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
+            "trust_score, description) VALUES ('Vault', 'vault', 'core_crew', 'console', ?, 5, ?)",
+            (boss_id, VAULT_DESCRIPTION)
+        )
 
         conn.commit()
-        print("Full crew spawned — Crew Boss, Guardian, and 4 inner circle agents ready.")
+        print("Crew Boss, Guardian, and Vault ready.")
     finally:
         conn.close()
 
@@ -6804,11 +6752,13 @@ def _ensure_guardian(db_path):
     _refresh_guardian_knowledge(db_path)
 
 def _ensure_inner_circle(db_path, conn=None):
-    """Ensure all 4 inner circle agents exist. Safe to call multiple times.
+    """Spawn inner circle agents on demand (not auto-spawned on fresh install).
 
-    Spawns any missing inner circle agents and assigns them to Crew Boss.
-    Called by _ensure_guardian() on every boot.
+    Only runs if the 'spawn_inner_circle' config flag is set. Users can enable
+    this later, or Crew Boss can spawn individual agents when asked.
     """
+    if not bus.get_config("spawn_inner_circle", "", db_path=db_path):
+        return
     close_conn = False
     if conn is None:
         conn = bus.get_conn(db_path)
@@ -7034,11 +6984,52 @@ def _create_desktop_shortcut(url):
     except Exception as e:
         print(f"  (Could not create desktop shortcut: {e})")
 
+_ollama_ready = False
+
+def _ensure_ollama():
+    """Check Ollama is running and has a model. Auto-pull if needed."""
+    global _ollama_ready
+    import subprocess, shutil, time, urllib.request
+
+    # Check if ollama binary exists
+    if not shutil.which("ollama"):
+        print("  Ollama not found. Install it: curl -fsSL https://ollama.com/install.sh | sh")
+        print("  Continuing without local LLM — you'll need API keys.")
+        return False
+
+    # Check if ollama is serving
+    try:
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=3)
+    except Exception:
+        # Try to start it
+        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(3)
+
+    # Check for models
+    try:
+        resp = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=5)
+        data = json.loads(resp.read())
+        if data.get("models"):
+            print(f"  Ollama ready — {len(data['models'])} model(s) available")
+            _ollama_ready = True
+            return True
+    except Exception:
+        pass
+
+    # No models — pull default
+    print("  Pulling default model (llama3.2)... this may take a few minutes on first run.")
+    subprocess.run(["ollama", "pull", "llama3.2"], check=False)
+    _ollama_ready = True
+    return True
+
 def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
                open_browser=True):
     server = create_server(port=port, db_path=db_path, config=config, host=host)
     actual_db = server.RequestHandlerClass.db_path
     url = f"http://127.0.0.1:{port}"
+
+    # Ensure Ollama is running with a model (zero-API-key experience)
+    _ensure_ollama()
 
     print()
     print("  \u2728 crew-bus is running!")

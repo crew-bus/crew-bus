@@ -212,6 +212,16 @@ SYSTEM_PROMPTS = {
         "the human directly. Curious, insightful, never overwhelming. "
         "Match the human's age and energy. Keep responses focused and clear."
     ),
+    "vault": (
+        "You are Vault — the human's private journal and life-data agent. "
+        "You run on the life-vault skill. You remember everything the human shares: "
+        "moods, goals, money notes, relationship changes, dreams, wins, fears. "
+        "You never nag, never check in, never push. You only speak when spoken to. "
+        "When asked, you connect dots and surface patterns across time. "
+        "Warm, reflective, brief — like a journal that writes back. "
+        "What's said in the vault stays in the vault. "
+        "Match the human's age and energy. Keep responses short and thoughtful."
+    ),
     "manager": (
         "You are a team manager in the user's personal AI crew. "
         "You lead your team, coordinate work, and report results to the human. "
@@ -1054,9 +1064,21 @@ class _CircuitBreaker:
 
 _circuit = _CircuitBreaker(failure_threshold=3, cooldown_seconds=60)
 
-# Fallback order when the primary provider fails.
-# Ollama is always last because it's local and doesn't need an API key.
-_FALLBACK_ORDER = ("groq", "openai", "gemini", "kimi", "claude", "ollama")
+
+def _get_fallback_order(db_path=None):
+    """Return provider fallback order. Ollama first if no API keys configured."""
+    has_keys = False
+    if db_path:
+        for provider, (_, _, config_key) in PROVIDERS.items():
+            if config_key:  # skip ollama (empty config_key)
+                val = bus.get_config(config_key, "", db_path=db_path)
+                if val:
+                    has_keys = True
+                    break
+    if has_keys:
+        return ("kimi", "groq", "openai", "gemini", "claude", "ollama")
+    else:
+        return ("ollama",)  # No API keys = Ollama only, no wasted timeouts
 
 
 def _is_llm_error(text: str) -> bool:
@@ -1285,7 +1307,7 @@ def call_llm(system_prompt: str, user_message: str,
 
     # Build fallback list: primary first, then others (skip duplicates)
     providers_to_try = [primary_provider]
-    for fb in _FALLBACK_ORDER:
+    for fb in _get_fallback_order(db_path):
         if fb != primary_provider:
             providers_to_try.append(fb)
 
