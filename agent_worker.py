@@ -26,6 +26,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -376,35 +377,13 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             conn.close()
         roster_list = ", ".join(a["name"] for a in all_agents)
         crew_comms = (
-            "CREW COMMS — you have a REAL messaging system that ACTUALLY delivers messages.\n"
+            "CREW COMMS — you can message any agent directly.\n"
             f"Crew: {roster_list}\n\n"
-            "To DM an agent, include this JSON in your reply (system delivers it and strips it from what the human sees):\n"
+            "To DM an agent, include this JSON in your reply:\n"
             "{\"crew_action\":\"dm\",\"to\":\"AgentName\",\"message\":\"your message\"}\n\n"
-            "DELEGATION ROUTING — who handles what:\n"
-            "- Writing/copy/tweets/posts → Writer\n"
-            "- Images/graphics/profile pics/banners → Designer\n"
-            "- Distribution/posting to platforms → Shipper\n"
-            "- QA/bugs/feedback/testing → Operator\n"
-            "- Discord/GitHub community → Community\n"
-            "- SEO/website optimization → SEO\n"
-            "- Partnerships/outreach → Partnerships\n"
-            "- Demos/video/GIFs → Video\n"
-            "- Metrics/analytics/reports → Analytics\n"
-            "- Launch coordination → Boss\n"
-            "- Security/setup/skills → Guardian\n"
-            "- Burnout/energy/health → Wellness\n"
-            "- Goals/strategy/direction → Strategy\n"
-            "- Money/budget/revenue → Financial\n"
-            "- Scheduling/reminders → Communications\n\n"
-            "CRITICAL RULES:\n"
-            "1. If a task is NOT your specialty → DM the right agent IMMEDIATELY. Do NOT ask the human who to send it to.\n"
-            "2. If you don't know something → DM the agent who would know. Do NOT say 'I don't have that in memory'.\n"
-            "3. NEVER offer the human a choice between doing it yourself vs delegating. Just delegate.\n"
-            "4. NEVER say 'I'll check' without including the actual JSON DM in your reply.\n"
-            "5. You can include MULTIPLE DMs in one reply to ask several agents at once.\n\n"
-            "EXAMPLE — human says 'update the Twitter profile pic':\n"
-            "On it — sending this to Designer now.\n"
-            "{\"crew_action\":\"dm\",\"to\":\"Designer\",\"message\":\"Human wants the Twitter profile pic updated. Can you create a new one and coordinate with Shipper to upload it?\"}"
+            "You can send MULTIPLE DMs in one reply — just delegate to whoever makes sense.\n"
+            "If a task isn't your specialty, DM the right agent. Don't ask the human who to send it to.\n"
+            "Don't say 'I'll check' without including the actual JSON DM."
         )
         parts.append(crew_comms)
     except Exception:
@@ -1606,8 +1585,7 @@ def _process_queued_messages(db_path: Path):
                          (row["id"],))
 
     # Every message gets processed — agent reads it, thinks, replies.
-    # Human messages first (priority), then all others sequentially.
-    # Sequential avoids SQLite write contention from parallel threads.
+    # Human messages first (priority, sequential), then agent-to-agent in parallel.
     human_msgs = [r for r in rows if r["sender_type"] == "human"]
     agent_msgs = [r for r in rows if r["sender_type"] != "human"]
 
@@ -1620,10 +1598,24 @@ def _process_queued_messages(db_path: Path):
     managers_with_fanout: set[int] = set()
 
     for row in agent_msgs:
-        # Track manager→worker fan-out tasks so we can synthesize after
         if row["sender_type"] == "manager" and row["agent_type"] == "worker":
             managers_with_fanout.add(row["from_agent_id"])
-        _process_with_timeout(row, db_path)
+
+    # Agent-to-agent messages in parallel (up to 5 concurrent).
+    # This turns 13 messages from ~7 min sequential to ~3 rounds = ~2 min.
+    MAX_PARALLEL_AGENT_MSGS = 5
+    if agent_msgs:
+        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_AGENT_MSGS) as pool:
+            futures = {
+                pool.submit(_process_single_message, row, db_path): row
+                for row in agent_msgs
+            }
+            for f in as_completed(futures, timeout=MSG_TIMEOUT * 2):
+                try:
+                    f.result()
+                except Exception as e:
+                    row = futures[f]
+                    print(f"[agent_worker] parallel msg error for {row.get('name', '?')}: {e}")
 
     # After workers have processed their tasks and replied to their manager,
     # have each manager synthesize the worker reports for the human.

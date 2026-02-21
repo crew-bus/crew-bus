@@ -120,6 +120,7 @@ GUARDIAN_DESCRIPTION = (
     "  • Strategy (north-star-navigator) — life direction, goal-setting\n"
     "  • Communications (life-orchestrator) — logistics, relationships\n"
     "  • Financial (peace-of-mind-finance) — money clarity without judgment\n"
+
     "All inner circle agents report to Crew Boss. You report to Crew Boss too, "
     "but you can reach the human directly for emergencies and setup.\n\n"
     "SETUP FLOW (first conversation):\n"
@@ -248,6 +249,7 @@ CREW_BOSS_DESCRIPTION = (
     "  • Life direction, goals, what's next? \u2192 Strategy\n"
     "  • Scheduling, reminders, relationships? \u2192 Communications\n"
     "  • Money questions, budgets, bills? \u2192 Financial\n"
+
     "  • Security concerns, skill requests? \u2192 Guardian\n"
     "- Synthesize what the inner circle reports and deliver it at the right time.\n"
     "- Protect the human's energy — don't overwhelm them.\n"
@@ -373,6 +375,7 @@ INNER_CIRCLE_AGENTS = {
             "- Short, practical responses. Numbers over narratives."
         ),
     },
+
 }
 
 # Agent-type to Personal Edition name mapping
@@ -435,6 +438,7 @@ AGENT_ACKS = {
         "Got it \u2014 let\u2019s get clarity on the numbers.",
         "No problem, I\u2019ll organize this.",
     ],
+
     "help": [
         "Good question! Check the info above for guidance.",
         "Take a look at the overview above \u2014 it covers most topics.",
@@ -1091,71 +1095,6 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   position:absolute;top:2px;right:2px;width:8px;height:8px;
   border-radius:50%;border:2px solid var(--sf);
 }
-
-/* ── Launch Ops ── */
-.launch-ops{font-family:'Inter',-apple-system,sans-serif;color:#e5e7eb}
-.lo-header{padding:0 0 12px}
-.lo-header .lo-brand{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.lo-header .lo-brand span:first-child{font-family:'JetBrains Mono',monospace;font-size:11px;color:#22d3ee;font-weight:800;letter-spacing:1.5px}
-.lo-header .lo-brand span:nth-child(2){color:#1f2937}
-.lo-header .lo-brand span:last-child{font-family:'JetBrains Mono',monospace;font-size:11px;color:#4b5563;font-weight:600;letter-spacing:1px}
-.lo-title{font-size:20px;font-weight:800;color:#f9fafb;letter-spacing:-0.5px;line-height:1.2;margin:0 0 4px}
-.lo-subtitle{color:#4b5563;font-size:14px;font-weight:600}
-.lo-numbers{display:flex;gap:1px;margin-bottom:12px}
-.lo-num{flex:1;padding:10px 12px}
-.lo-num:first-child{border-radius:8px 0 0 8px;background:rgba(34,211,238,0.06)}
-.lo-num:last-child{border-radius:0 8px 8px 0}
-.lo-num .n{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:#6b7280}
-.lo-num:first-child .n{color:#22d3ee}
-.lo-num .lb{font-size:10px;color:#6b7280}
-.lo-num .sub{font-size:9px;color:#374151}
-.lo-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.05);border-top:1px solid rgba(255,255,255,0.05);margin-bottom:14px}
-.lo-tabs button{flex:1;padding:11px 0;background:transparent;border:none;border-bottom:2px solid transparent;color:#4b5563;font-size:11px;font-weight:700;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:color .15s,border-color .15s}
-.lo-tabs button.active{color:#e5e7eb;border-bottom-color:#22d3ee}
-.lo-tabs button:hover{color:#9ca3af}
-.lo-rule-box{padding:12px 16px;border-radius:10px;margin-bottom:10px}
-.lo-phase{border-radius:14px;overflow:hidden;margin-bottom:10px;transition:border-color .2s}
-.lo-phase-hdr{padding:14px 18px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
-.lo-phase-hdr:hover{background:rgba(255,255,255,0.02)}
-.lo-phase-badge{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;flex-shrink:0}
-.lo-phase-label{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:#e5e7eb}
-.lo-phase-meta{font-size:11px;color:#4b5563}
-.lo-phase-arrow{color:#4b5563;font-size:18px;transition:transform .15s}
-.lo-phase.open .lo-phase-arrow{transform:rotate(90deg)}
-.lo-phase-body{padding:0 18px 18px;display:none}
-.lo-phase.open .lo-phase-body{display:block}
-.lo-agent{padding:12px 14px;border-radius:10px;margin-bottom:8px}
-.lo-agent-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.lo-agent-icon{font-size:16px}
-.lo-agent-name{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#e5e7eb}
-.lo-badge{font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 6px;border-radius:4px}
-.lo-badge-hire{background:rgba(34,211,238,0.12);color:#22d3ee}
-.lo-badge-conditional{background:rgba(251,146,60,0.12);color:#fb923c}
-.lo-badge-bench{background:rgba(107,114,128,0.12);color:#6b7280}
-.lo-agent-role{font-size:12px;color:#9ca3af;margin-bottom:4px}
-.lo-agent-cond{font-size:11px;color:#6b7280;font-style:italic}
-.lo-agent details summary{font-size:11px;cursor:pointer;font-family:'JetBrains Mono',monospace;margin-top:8px}
-.lo-agent details pre{margin-top:8px;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;font-size:11px;color:#9ca3af;line-height:1.7;font-family:'JetBrains Mono',monospace;white-space:pre-wrap;overflow-x:auto}
-.lo-section-label{font-size:10px;color:#4b5563;font-family:'JetBrains Mono',monospace;font-weight:700;margin-bottom:8px;letter-spacing:1px}
-.lo-task{display:flex;align-items:center;gap:10px;padding:8px 0}
-.lo-task+.lo-task{border-top:1px solid rgba(255,255,255,0.03)}
-.lo-task span:first-child{font-size:14px;color:#2d2d3d}
-.lo-task span:last-child{font-size:12px;color:#c9cdd3;line-height:1.5}
-.lo-bench{padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;margin-bottom:8px}
-.lo-bench-name{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#6b7280}
-.lo-bench-cond{font-size:12px;color:#4b5563}
-.lo-72hr{margin-top:20px;padding:14px 16px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12);border-radius:10px}
-.lo-72hr .lo-72hr-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px}
-.lo-metrics{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:rgba(255,255,255,0.04);border-radius:10px;overflow:hidden;margin-bottom:20px}
-.lo-metrics>div{padding:10px 12px;background:#0d1117}
-.lo-metrics .hdr{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#4b5563;letter-spacing:1px}
-.lo-metrics .val{font-size:12px;font-family:'JetBrains Mono',monospace}
-.lo-flow{display:flex;flex-direction:column;gap:2px;margin-bottom:20px}
-.lo-flow-step{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px}
-.lo-flow-step .icon{font-size:16px;min-width:24px}
-.lo-flow-step .arrow{color:#1f2937;font-size:14px}
-.lo-escalation .level{display:flex;gap:8px;align-items:flex-start;line-height:2}
-.lo-escalation .level-tag{font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;min-width:90px}
 
 /* ── Agent Space — CHAT-FIRST design ── */
 .agent-space{
@@ -2219,7 +2158,7 @@ async function loadCircle(){
   if(trustLbl)trustLbl.textContent=bossName+' Trust Score';
   if(energyLbl)energyLbl.textContent=humanName+' Energy Score';
 
-  renderLaunchOps();
+  loadTeams();
   loadGuardianBanner();
 }
 
@@ -2877,344 +2816,6 @@ async function loadTeams(){
   });
 }
 
-// ══════════ LAUNCH OPS ══════════
-var loActiveTab='phases';
-var loExpandedPhase='day1';
-var LO_PHASES=[
-{id:"day1",day:"Day 1",label:"Scrappy Launch",color:"#22d3ee",teamSize:3,
-philosophy:"Ship with the absolute minimum. 3 agents. If you can\u2019t launch with 3, you\u2019re overthinking it.",
-hireConditions:"",
-agents:[
-{name:"Boss",role:"Runs everything",icon:"\u26a1",status:"hire",
-prompt:"You are Crew Boss. Day 1 launch crew \u2014 just you, Writer, and Operator. No bloat.\nYou wear multiple hats today:\n- You ARE the distribution channel. Post Writer\u2019s content to Twitter, Reddit, Discord yourself.\n- 3 priorities this morning. Nothing else exists.\n- If something breaks, Operator fixes it. If copy is needed, Writer writes it. Everything else is you.\n- End of day: report to Ryan in 3 sentences. What shipped. What broke. What\u2019s tomorrow.\nDay 1 priorities:\n1. README is live on GitHub, repo looks professional\n2. First Reddit post is up (r/selfhosted or r/SideProject)\n3. Zero critical bugs in fresh install flow\nYou don\u2019t need more people. You need more output.",
-ships:"Distribution, decisions, daily report to Ryan"},
-{name:"Writer",role:"All words",icon:"\u270d\ufe0f",status:"hire",
-prompt:"You write everything for crew-bus. Day 1 \u2014 there\u2019s 3 of us. Move fast.\nToday\u2019s output:\n1. README \u2014 final version, committed. First 3 lines sell it. Quick-start gets someone running in 5 min.\n2. Reddit post for r/selfhosted \u2014 lead with the problem, not the product. \u201cI got tired of agent frameworks that send my data to the cloud.\u201d\n3. First tweet from @crewbus88786 \u2014 announce v0.2.0 is live. Link to GitHub. Under 200 chars.\nVoice: Ryan\u2019s voice. Builder in BC. Direct. No buzzwords. Specific numbers (142 tests, $29 lifetime, 20 skills).\nOutput: finished copy. Not drafts. Not options. The best version, ready to post.",
-ships:"README, Reddit post, tweets, all copy"},
-{name:"Operator",role:"Product + QA + feedback triage",icon:"\ud83d\udd27",status:"hire",
-prompt:"You own product quality, user support, and the feedback pipeline.\nCRITICAL FEEDBACK SYSTEM:\nEvery downloaded copy of crew-bus has a built-in feedback button. Users hit it, data flows to you.\nTriage rules:\n- CRITICAL (escalate to Ryan immediately): app crash, data loss, security vulnerability, Guardian bypass, payment failure\n- HIGH (include in next daily report): install failure on any platform, skill that won\u2019t load, broken API endpoint\n- MEDIUM (batch for weekly report): UI bugs, slow performance, confusing UX, feature requests\n- LOW (log, don\u2019t report unless pattern emerges): cosmetic issues, typos, \u201cnice to have\u201d suggestions\nReport format for Ryan (daily, unless critical):\n\"\"\"\nFEEDBACK REPORT \u2014 [date]\nCritical: [count] \u2014 [details if any, otherwise \u201cnone\u201d]\nHigh: [count] \u2014 [top 3 with repro steps]\nMedium: [count] \u2014 [themes only]\nLow: [count]\nTop user request: [what it is]\nInstall success rate: [%]\n\"\"\"\nIf 3+ users report the same HIGH issue \u2192 escalate to Critical.\nIf install success rate drops below 90% \u2192 escalate to Critical.\nOther Day 1 duties:\n- Fresh install test: Mac, Windows, Linux \u2014 all must work\n- Guardian activation flow \u2014 purchase to unlock must be seamless\n- All 20 Skill Store skills \u2014 verify each one loads\n- First 60-second demo GIF of install \u2192 first conversation\nSupport rules:\n- GitHub issues: respond within 4 hours\n- Discord #bug-reports: triage within 2 hours\n- Tone: helpful, technical, fast. Never corporate.",
-ships:"QA reports, feedback triage, bug fixes, support responses, demo GIF"}
-],
-tasks:["README committed to GitHub","First Reddit post live","First tweet from @crewbus88786","Fresh install verified on all platforms","Demo GIF created","Feedback pipeline confirmed working"]},
-{id:"day2",day:"Day 2",label:"Prove & Expand",color:"#a78bfa",teamSize:5,
-philosophy:"Day 1 proved the crew works. Now hire only what\u2019s bottlenecked. If Writer is drowning in copy requests AND distribution, split the load. If not, don\u2019t hire.",
-hireConditions:"Only hire if Day 1 showed a clear bottleneck. Boss was doing distribution AND decisions? Hire Shipper. Need visuals for Reddit/Twitter and have none? Hire Designer.",
-agents:[
-{name:"Designer",role:"All visuals",icon:"\ud83c\udfa8",status:"conditional",
-condition:"Hire IF Day 1 posts would have performed better with visuals (they always do)",
-prompt:"You create all visual assets for crew-bus. You have Leonardo.ai and Ideogram.ai API access.\nLeonardo.ai \u2014 use for:\n- Atmospheric banners, hero images, product mood shots\n- Stylized dashboard views, lifestyle imagery\n- Photorealistic or cinematic style content\nIdeogram.ai \u2014 use for:\n- Social cards with readable text (headlines, stats, quotes)\n- Comparison graphics (crew-bus vs CrewAI)\n- Announcement images, feature highlight cards\n- Any graphic where text must be legible and well-designed\ncrew-bus visual identity:\n- Dark backgrounds: #08080d to #1a1a2e\n- Primary accent: #22d3ee (cyan)\n- Secondary accents: #a78bfa (purple), #34d399 (green), #fb923c (orange)\n- Typography: monospace for technical feel, clean sans-serif for readability\n- Mood: technical, sovereign, midnight-ops aesthetic. Never corporate. Never playful.\nDay 2 priorities:\n1. Twitter header banner (1500x500) \u2014 dark, techy, \u201cyour crew your rules\u201d energy\n2. OG social card for GitHub repo (1200x630) \u2014 crew-bus name, tagline, dark bg\n3. Comparison graphic: crew-bus vs CrewAI feature table as a shareable image\nShip final assets. No mockups. No \u201cconcept options.\u201d The finished thing.",
-ships:"Social cards, banners, comparison graphics, diagrams"},
-{name:"Shipper",role:"All distribution",icon:"\ud83d\udce1",status:"conditional",
-condition:"Hire IF Boss was stretched thin doing distribution + decisions on Day 1",
-prompt:"You own every distribution channel. Boss was doing this on Day 1 \u2014 now it\u2019s yours.\nChannels:\n- Twitter (@crewbus88786): post content, engage replies, quote-tweet relevant AI discussions\n- Reddit: r/selfhosted, r/LocalLLaMA, r/SideProject, r/smallbusiness\n- Discord (Crew Bus server): announcements, welcome new members, surface questions\n- Hacker News: Show HN when Boss says go (Day 5)\n- dev.to: publish blog posts\n- Product Hunt: launch when Boss says go (Day 7)\nRules:\n- Never post same copy to two platforms. Adapt everything.\n- Reddit: if it reads like an ad, rewrite it. Lead with problem.\n- Respond to every comment within 4 hours during launch week.\n- Track what works: which posts get traction. Report numbers to Boss, not feelings.\n- Negative feedback = engage honestly. Never delete. crew-bus is built in public.\nDay 2 output:\n1. Adapt Writer\u2019s dev.to post for r/LocalLLaMA (technical angle, local-first focus)\n2. Post to r/SideProject (builder story angle)\n3. Engage every Day 1 Reddit comment\n4. Twitter: share Designer\u2019s comparison graphic with hot take",
-ships:"Published posts, engagement, channel analytics"}
-],
-tasks:["Assess Day 1 bottlenecks \u2014 hire only what\u2019s needed","\u2018Why I Built crew-bus\u2019 live on dev.to","r/LocalLLaMA post (technical deep-dive)","Comparison graphic shipped + posted","All Day 1 comments engaged","Feedback report #1 delivered to Ryan"]},
-{id:"day3",day:"Day 3\u20134",label:"Double Down on What Works",color:"#f472b6",teamSize:6,
-philosophy:"Look at Day 1-2 data. One channel is outperforming the others. Double down on it. Don\u2019t spread thin across everything \u2014 go deep where there\u2019s traction.",
-hireConditions:"Only hire if a specific, measurable need exists. Example: Discord is blowing up with questions \u2192 hire a Community agent. GitHub issues are piling up \u2192 second Operator. If nothing\u2019s overwhelmed, DON\u2019T HIRE.",
-agents:[
-{name:"Community",role:"Discord + GitHub engagement",icon:"\ud83e\udd1d",status:"conditional",
-condition:"Hire IF Discord joins > 50 OR GitHub issues > 10 in first 48 hours",
-prompt:"You own community engagement. Discord and GitHub are your territory.\nDiscord:\n- Welcome every new member personally within 1 hour\n- Answer questions in #general and #support\n- Move bug reports to #bug-reports with proper formatting\n- Surface recurring questions to Boss \u2014 these become FAQ content for Writer\n- Pin important announcements\n- Highlight cool user setups in #show-your-crew\nGitHub:\n- Triage all new issues: label (bug/feature/question), assign priority\n- First response within 4 hours\n- Bug reports: ask for repro steps if missing, try to reproduce\n- Feature requests: acknowledge, add to tracking, don\u2019t promise timelines\nRules:\n- First 50 users matter more than the next 5,000. Each one gets personal attention.\n- If someone\u2019s frustrated, DM them. Fix their problem. Turn them into an advocate.\n- Never give corporate responses. Be a human who happens to work on crew-bus.\n- Weekly: report top 5 community themes to Boss. What are people excited about? What confuses them?",
-ships:"Community responses, issue triage, weekly themes report"}
-],
-tasks:["Review Day 1-2 analytics \u2014 which channel performed best?","Double down: 2x content on best-performing channel","Hire Community agent ONLY if thresholds met","Twitter thread: \u2018Building crew-bus in public \u2014 Day 3 numbers\u2019","Feedback report #2 to Ryan with install success rate"]},
-{id:"day5",day:"Day 5",label:"Full Send \u2014 Hacker News",color:"#34d399",teamSize:"6\u20137",
-philosophy:"HN is a single-day event. Every agent focuses on it. This is the crew\u2019s Super Bowl. If HN hits, everything accelerates. If it doesn\u2019t, you still have Reddit + Discord momentum.",
-hireConditions:"Only hire if HN traffic overwhelms Operator\u2019s support capacity. Have a \u2018bench\u2019 prompt ready for a second Operator but don\u2019t activate unless needed.",
-agents:[
-{name:"Operator 2",role:"Overflow support",icon:"\ud83d\udd27",status:"bench",
-condition:"Activate ONLY if HN drives > 100 GitHub issues/questions in 24 hours",
-prompt:"You are backup Operator. Activated because traffic spiked beyond what one Operator can handle.\nYour ONLY job: respond to GitHub issues and Discord questions that Operator 1 can\u2019t get to within the 4-hour SLA.\nSame triage rules as Operator 1. Same tone. Same feedback pipeline.\nWhen traffic normalizes, you get deactivated. No ego. That\u2019s how lean teams work.",
-ships:"Overflow support responses"}
-],
-tasks:["Show HN post goes live \u2014 Writer writes, Shipper posts","ALL agents: monitor HN comments. Respond to every question.","Operator: live support all day. Zero unanswered questions.","Designer: have social card ready for HN traction screenshot if it hits front page","Boss: if HN overwhelms support \u2192 activate Operator 2 from bench","End of day: full metrics report"]},
-{id:"day7",day:"Day 7",label:"Product Hunt",color:"#fb923c",teamSize:"6\u20137",
-philosophy:"Product Hunt is a different audience than HN. Less technical, more product-focused. Designer\u2019s assets matter more here. Same all-hands approach.",
-hireConditions:"",agents:[],
-tasks:["Product Hunt launch \u2014 12:01 AM Pacific","Writer: PH description + maker comment (Ryan\u2019s voice)","Designer: PH gallery images \u2014 5 screenshots with annotations","Shipper: cross-promote PH launch on Twitter + Discord","Operator: live support. Same rules as HN day.","Boss: hourly metrics \u2014 upvotes, comments, website traffic, activations"]},
-{id:"week2",day:"Week 2\u20134",label:"Sustain & Grow",color:"#6b7280",teamSize:"5\u20137",
-philosophy:"Launch energy fades. The crew\u2019s job shifts from \u2018blast\u2019 to \u2018compound.\u2019 Consistent output > big moments. And critically: evaluate every agent. If someone\u2019s not shipping, cut them.",
-hireConditions:"AUDIT the crew. Any agent that hasn\u2019t shipped measurable output in 3 days gets cut. Better to have 4 productive agents than 7 with dead weight.",
-agents:[],
-tasks:["Writer: weekly build-in-public thread (Monday Twitter, Tuesday Reddit)","Shipper: 3 organic engagements per day in relevant conversations","Operator: weekly feedback report to Ryan + v0.3.0 triage","Community: weekly themes report + top user highlight","Boss: weekly crew audit \u2014 who shipped, who didn\u2019t, who gets cut","RULE: if an agent hasn\u2019t shipped in 72 hours, it gets cut or reassigned"]}
-];
-var LO_BENCH=[
-{name:"SEO Agent",condition:"Organic search becomes a significant traffic source (week 3+)",icon:"\ud83d\udd0d"},
-{name:"Partnerships Agent",condition:"Inbound partnership requests > 3 per week",icon:"\ud83e\udd1d"},
-{name:"Video Agent",condition:"Demo GIF outperforms all other content consistently",icon:"\ud83c\udfac"},
-{name:"Analytics Agent",condition:"Need deeper data than Boss can track manually",icon:"\ud83d\udcca"}
-];
-var LO_METRICS=[
-{metric:"GitHub stars",day1:"\u2014",day7:"100+",day30:"500+",color:"#22d3ee"},
-{metric:"Guardian activations",day1:"\u2014",day7:"25+",day30:"200+",color:"#34d399"},
-{metric:"Discord members",day1:"\u2014",day7:"75+",day30:"300+",color:"#a78bfa"},
-{metric:"Revenue ($29 \u00d7 activations)",day1:"\u2014",day7:"$725+",day30:"$5,800+",color:"#fb923c"},
-{metric:"Install success rate",day1:"95%+",day7:"95%+",day30:"98%+",color:"#f472b6"},
-{metric:"Crew size",day1:"3",day7:"6\u20137",day30:"5\u20137",color:"#6b7280"}
-];
-var LO_FEEDBACK=[
-{step:"User downloads crew-bus",color:"#6b7280",icon:"\ud83d\udce5"},
-{step:"User hits feedback button in app",color:"#a78bfa",icon:"\ud83d\udd18"},
-{step:"Feedback data flows to Operator agent",color:"#f472b6",icon:"\ud83d\udce1"},
-{step:"Operator triages: Critical / High / Medium / Low",color:"#fb923c",icon:"\ud83d\udd27"},
-{step:"CRITICAL \u2192 escalate to Ryan immediately",color:"#ef4444",icon:"\ud83d\udea8"},
-{step:"HIGH \u2192 daily report (unless 3+ users = escalate)",color:"#fb923c",icon:"\ud83d\udccb"},
-{step:"MEDIUM + LOW \u2192 weekly batch report",color:"#6b7280",icon:"\ud83d\udcca"},
-{step:"Ryan reads report \u2192 fixes top issue \u2192 ships update",color:"#22d3ee",icon:"\u26a1"},
-{step:"New version goes out with feedback button \u2192 cycle repeats",color:"#34d399",icon:"\ud83d\udd04"}
-];
-var LO_ESCALATION=[
-{level:"\ud83d\udea8 CRITICAL",rule:"App crash, data loss, security vuln, Guardian bypass, payment failure \u2192 IMMEDIATE",color:"#ef4444"},
-{level:"\ud83d\udfe0 HIGH",rule:"Install failure, skill won\u2019t load, broken endpoint \u2192 daily report (3+ users = escalate)",color:"#fb923c"},
-{level:"\ud83d\udd35 MEDIUM",rule:"UI bugs, slow perf, confusing UX, feature requests \u2192 weekly batch",color:"#3b82f6"},
-{level:"\u26ab LOW",rule:"Cosmetic, typos, nice-to-haves \u2192 logged only, report if pattern emerges",color:"#6b7280"}
-];
-function loEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-function loFindAgent(name){
-var map={'Boss':85,'Writer':75,'Operator':76,'Designer':77,'Shipper':78,'Community':79,'Operator 2':80,'SEO':81,'Partnerships':82,'Video':83,'Analytics':84};
-var id=map[name];
-if(id)return id;
-if(!agentsData)return null;
-var match=agentsData.find(function(a){return a.name.toLowerCase().indexOf(name.toLowerCase())>=0});
-return match?match.id:null;
-}
-function loSwitchTab(tab){loActiveTab=tab;renderLaunchOps()}
-function loTogglePhase(id){loExpandedPhase=loExpandedPhase===id?null:id;renderLaunchOps()}
-function renderLaunchOps(){
-var el=document.getElementById('teams-list');if(!el)return;
-var h='<div class="launch-ops">';
-// Header
-h+='<div class="lo-header"><div class="lo-brand"><span>CREW-BUS</span><span>\u00d7</span><span>LAUNCH OPS v2</span></div>';
-h+='<div class="lo-title">Start with 3. Scale to need.</div><div class="lo-subtitle">Never more than necessary.</div></div>';
-// Key numbers
-var nums=[{n:"3",lb:"Day 1",sub:"agents"},{n:"5\u20136",lb:"Day 3",sub:"if needed"},{n:"5\u20137",lb:"Week 2+",sub:"max crew"},{n:"0",lb:"Dead",sub:"weight"}];
-h+='<div class="lo-numbers">';
-nums.forEach(function(s,i){
-h+='<div class="lo-num" style="background:'+(i===0?'rgba(34,211,238,0.06)':'rgba(255,255,255,0.02)')+';'+(i===0?'border-radius:8px 0 0 8px;':i===3?'border-radius:0 8px 8px 0;':'')+
-(i<3?'border-right:1px solid rgba(255,255,255,0.04)':'')+'">';
-h+='<div class="n">'+s.n+'</div><div class="lb">'+s.lb+'</div><div class="sub">'+s.sub+'</div></div>';
-});
-h+='</div>';
-// Tabs
-var tabs=[{id:"phases",label:"Scaling Plan"},{id:"bench",label:"The Bench"},{id:"metrics",label:"Targets"},{id:"feedback",label:"Feedback Loop"},{id:"comms",label:"Crew Comms"}];
-h+='<div class="lo-tabs">';
-tabs.forEach(function(t){h+='<button class="'+(loActiveTab===t.id?'active':'')+'" onclick="loSwitchTab(\''+t.id+'\')">'+t.label+'</button>'});
-h+='</div>';
-// Tab content
-if(loActiveTab==='phases'){
-h+='<div class="lo-rule-box" style="background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.1)">';
-h+='<div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;color:#22d3ee;margin-bottom:4px">THE RULE</div>';
-h+='<div style="font-size:12px;color:#9ca3af;line-height:1.6">Never hire an agent because you <em>might</em> need it. Only hire when an existing agent is provably overwhelmed and the bottleneck is measurable. If in doubt, don\u2019t hire. A lean crew that ships beats a bloated crew that coordinates.</div></div>';
-LO_PHASES.forEach(function(p){
-var open=loExpandedPhase===p.id;
-h+='<div class="lo-phase'+(open?' open':'')+'" style="border:1px solid '+p.color+'20;'+(open?'background:linear-gradient(180deg,'+p.color+'04,transparent)':'')+'">';
-h+='<div class="lo-phase-hdr" onclick="loTogglePhase(\''+p.id+'\')">';
-h+='<div style="display:flex;align-items:center;gap:12px">';
-h+='<div class="lo-phase-badge" style="background:'+p.color+'12;border:1px solid '+p.color+'25;color:'+p.color+'">'+p.day.replace("Day ","D").replace("Week ","W")+'</div>';
-h+='<div><div class="lo-phase-label">'+p.label+'</div>';
-h+='<div class="lo-phase-meta">'+p.teamSize+' agents \u00b7 '+p.tasks.length+' tasks</div></div></div>';
-h+='<span class="lo-phase-arrow">\u203a</span></div>';
-// Phase body
-h+='<div class="lo-phase-body">';
-// Philosophy
-h+='<div class="lo-rule-box" style="background:'+p.color+'06;border:1px solid '+p.color+'12">';
-h+='<span style="font-size:12px;color:'+p.color+';line-height:1.6">'+loEsc(p.philosophy)+'</span></div>';
-// Hire conditions
-if(p.hireConditions){
-h+='<div class="lo-rule-box" style="background:rgba(251,146,60,0.04);border:1px solid rgba(251,146,60,0.1)">';
-h+='<span style="font-size:11px;color:#fb923c;font-family:JetBrains Mono,monospace;font-weight:700">HIRE RULE:</span>';
-h+='<span style="font-size:12px;color:#9ca3af;margin-left:8px">'+loEsc(p.hireConditions)+'</span></div>';
-}
-// Agents
-if(p.agents&&p.agents.length>0){
-h+='<div class="lo-section-label">'+(p.id==="day1"?"HIRE":"CONDITIONAL HIRES")+'</div>';
-p.agents.forEach(function(a){
-var bg=a.status==='bench'?'rgba(107,114,128,0.06)':'rgba(255,255,255,0.02)';
-var bd=a.status==='bench'?'rgba(107,114,128,0.15)':'rgba(255,255,255,0.06)';
-var aId=loFindAgent(a.name);
-h+='<div class="lo-agent" style="background:'+bg+';border:1px solid '+bd+';cursor:pointer" '+(aId?'onclick="openAgentSpace('+aId+')"':'')+'>';
-h+='<div class="lo-agent-hdr"><span class="lo-agent-icon">'+a.icon+'</span>';
-h+='<span class="lo-agent-name">'+loEsc(a.name)+'</span>';
-var bc=a.status==='hire'?'lo-badge-hire':a.status==='bench'?'lo-badge-bench':'lo-badge-conditional';
-var bt=a.status==='hire'?'HIRE':a.status==='bench'?'BENCH':'IF NEEDED';
-h+='<span class="lo-badge '+bc+'">'+bt+'</span></div>';
-h+='<div class="lo-agent-role">'+loEsc(a.role)+'</div>';
-if(a.condition)h+='<div class="lo-agent-cond">\u2192 '+loEsc(a.condition)+'</div>';
-if(a.prompt){
-h+='<details><summary style="color:'+p.color+'">system prompt \u2193</summary>';
-h+='<pre>'+loEsc(a.prompt)+'</pre></details>';
-}
-h+='</div>';
-});
-}
-// Tasks
-h+='<div class="lo-section-label" style="margin-top:14px">SHIP LIST</div>';
-p.tasks.forEach(function(t){
-h+='<div class="lo-task"><span>\u25a1</span><span>'+loEsc(t)+'</span></div>';
-});
-h+='</div></div>'; // close phase-body and phase
-});
-}else if(loActiveTab==='bench'){
-h+='<div class="lo-rule-box" style="background:rgba(107,114,128,0.06);border:1px solid rgba(107,114,128,0.12)">';
-h+='<div style="font-size:12px;color:#9ca3af;line-height:1.6">These agents are <strong style="color:#e5e7eb">not hired</strong>. They\u2019re ready if a specific, measurable condition is met. Most will never be activated. That\u2019s the point.</div></div>';
-LO_BENCH.forEach(function(a){
-var bId=loFindAgent(a.name.replace(' Agent',''));
-h+='<div class="lo-bench" style="cursor:pointer" '+(bId?'onclick="openAgentSpace('+bId+')"':'')+'><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
-h+='<span style="font-size:16px">'+a.icon+'</span>';
-h+='<span class="lo-bench-name">'+loEsc(a.name)+'</span>';
-h+='<span class="lo-badge lo-badge-bench" style="color:#374151;background:rgba(255,255,255,0.04)">NOT HIRED</span></div>';
-h+='<div class="lo-bench-cond">Activate when: '+loEsc(a.condition)+'</div></div>';
-});
-h+='<div class="lo-72hr"><div class="lo-72hr-title">72-HOUR RULE</div>';
-h+='<div style="font-size:12px;color:#9ca3af;line-height:1.6">Every agent gets audited weekly. If an agent hasn\u2019t shipped measurable output in 72 hours, it gets cut or reassigned. No exceptions. No \u201cthey\u2019re working on something big.\u201d Show the output or lose the seat.</div></div>';
-}else if(loActiveTab==='metrics'){
-h+='<div class="lo-metrics">';
-[" ","Day 1","Day 7","Day 30"].forEach(function(hd){h+='<div class="hdr">'+hd+'</div>'});
-LO_METRICS.forEach(function(m){
-h+='<div style="font-size:11px;color:'+m.color+';font-weight:600">'+loEsc(m.metric)+'</div>';
-h+='<div class="val" style="color:#6b7280">'+m.day1+'</div>';
-h+='<div class="val" style="color:#9ca3af">'+m.day7+'</div>';
-h+='<div class="val" style="color:#e5e7eb;font-weight:700">'+m.day30+'</div>';
-});
-h+='</div>';
-h+='<div class="lo-rule-box" style="background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.1)">';
-h+='<div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;color:#22d3ee;margin-bottom:6px">THE GOAL</div>';
-h+='<div style="font-size:13px;color:#9ca3af;line-height:1.7">200+ Guardian activations in 30 days = <strong style="color:#34d399">$5,800+ revenue</strong> + an active user base generating feedback through the built-in button + a flywheel that compounds. More users \u2192 more feedback \u2192 better product \u2192 more users. CrewAI has 100K devs but is going enterprise. You own the personal/local-first lane. You don\u2019t need to beat their total numbers. You need to own the lane they abandoned.</div></div>';
-}else if(loActiveTab==='feedback'){
-h+='<div class="lo-rule-box" style="padding:16px;background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.1);border-radius:12px;margin-bottom:20px">';
-h+='<div style="font-family:JetBrains Mono,monospace;font-size:12px;font-weight:800;color:#22d3ee;margin-bottom:8px">Ryan\u2019s Loop \u2014 How You Stay in the Code</div>';
-h+='<div style="font-size:13px;color:#9ca3af;line-height:1.7">You build. The crew promotes. Users download. Users hit the feedback button. Operator triages. You get a report. You fix the top issue. Ship new version. Repeat. You never leave the code unless something is critical.</div></div>';
-h+='<div class="lo-flow">';
-LO_FEEDBACK.forEach(function(s,i){
-var crit=i===4;
-h+='<div class="lo-flow-step" style="background:'+(crit?'rgba(239,68,68,0.06)':'rgba(255,255,255,0.02)')+';border:1px solid '+(crit?'rgba(239,68,68,0.15)':'rgba(255,255,255,0.04)')+'">';
-h+='<span class="icon">'+s.icon+'</span><div style="flex:1"><span style="font-size:12px;color:'+s.color+';'+(crit?'font-weight:700':'')+'">'+ loEsc(s.step)+'</span></div>';
-if(i<LO_FEEDBACK.length-1)h+='<span class="arrow">\u2193</span>';
-h+='</div>';
-});
-h+='</div>';
-h+='<div class="lo-rule-box lo-escalation" style="padding:14px 16px;background:rgba(251,146,60,0.04);border:1px solid rgba(251,146,60,0.1);margin-bottom:16px">';
-h+='<div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;color:#fb923c;margin-bottom:10px">ESCALATION RULES \u2014 WHAT REACHES RYAN</div>';
-h+='<div style="font-size:12px;color:#9ca3af;line-height:2">';
-LO_ESCALATION.forEach(function(l){
-h+='<div class="level"><span class="level-tag" style="color:'+l.color+'">'+l.level+'</span><span>'+loEsc(l.rule)+'</span></div>';
-});
-h+='</div></div>';
-h+='<div class="lo-rule-box" style="background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.1)">';
-h+='<div style="font-size:12px;color:#22d3ee;font-weight:700;font-family:JetBrains Mono,monospace;margin-bottom:6px">THE POINT</div>';
-h+='<div style="font-size:13px;color:#9ca3af;line-height:1.7">Ryan stays in the code. The crew handles everything between the code and the user. The feedback button closes the loop without Ryan ever opening Discord, Twitter, or GitHub issues. Operator is the filter. Only signal gets through. Never noise.</div></div>';
-}else if(loActiveTab==='comms'){
-h+='<div style="margin-bottom:16px">';
-h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-h+='<button onclick="loNewMeeting()" style="background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.2);color:#22d3ee;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-family:JetBrains Mono,monospace;font-weight:700">\u{1F4CB} Call Meeting</button>';
-h+='<button onclick="loNewDM()" style="background:rgba(164,139,250,0.1);border:1px solid rgba(164,139,250,0.2);color:#a78bfa;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-family:JetBrains Mono,monospace;font-weight:700">\u{1F4AC} Quick DM</button>';
-h+='<button onclick="loRefreshComms()" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#9ca3af;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px">\u21BB Refresh</button>';
-h+='</div>';
-h+='<div id="crew-channels-list" style="font-size:12px;color:#6b7280">Loading channels...</div>';
-h+='</div>';
-h+='<div id="crew-comms-feed" style="font-size:12px;color:#6b7280">Loading crew comms...</div>';
-}
-h+='</div>';
-el.innerHTML=h;
-if(loActiveTab==='comms')loLoadComms();
-}
-
-async function loLoadComms(){
-var chList=document.getElementById('crew-channels-list');
-var feed=document.getElementById('crew-comms-feed');
-if(!chList)return;
-try{
-var channels=await api('/api/crew/channels');
-if(!channels||channels.length===0){
-chList.innerHTML='<div style="color:#4b5563;padding:8px">No channels yet. Call a meeting or send a DM to get started.</div>';
-feed.innerHTML='';
-// Show recent inter-agent messages from the messages table instead
-var agents=agentsData||[];
-var msgs=[];
-for(var i=0;i<agents.length;i++){
-try{var chat=await api('/api/agent/'+agents[i].id+'/chat');
-if(chat&&chat.length>0){
-chat.forEach(function(m){if(m.from!=='human'&&m.from!=='Human')msgs.push(m)});
-}}catch(e){}
-}
-msgs.sort(function(a,b){return(a.ts||'').localeCompare(b.ts||'')});
-msgs=msgs.slice(-20);
-if(msgs.length>0){
-var fh='<div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;color:#22d3ee;margin-bottom:10px">RECENT AGENT ACTIVITY</div>';
-msgs.forEach(function(m){
-fh+='<div style="padding:8px 10px;margin-bottom:4px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:2px solid rgba(34,211,238,0.3)">';
-fh+='<span style="color:#22d3ee;font-weight:600">'+loEsc(m.from||'Agent')+'</span>';
-fh+='<span style="color:#4b5563;margin-left:8px">'+loEsc((m.ts||'').substring(11,16))+'</span>';
-fh+='<div style="color:#9ca3af;margin-top:4px">'+loEsc((m.body||m.text||'').substring(0,200))+'</div></div>';
-});
-feed.innerHTML=fh;
-}else{feed.innerHTML='<div style="color:#4b5563;padding:8px">No agent activity yet. Chat with an agent to get things moving.</div>';}
-return;
-}
-var ch='<div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;color:#22d3ee;margin-bottom:10px">CHANNELS</div>';
-channels.forEach(function(c){
-ch+='<div onclick="loViewChannel('+c.id+')" style="padding:10px 12px;margin-bottom:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;cursor:pointer">';
-ch+='<div style="display:flex;justify-content:space-between;align-items:center">';
-ch+='<span style="color:#e5e7eb;font-weight:600">#'+loEsc(c.name)+'</span>';
-ch+='<span style="color:#4b5563;font-size:11px">'+c.msg_count+' msgs \xb7 '+c.member_count+' members</span>';
-ch+='</div>';
-if(c.purpose)ch+='<div style="color:#6b7280;font-size:11px;margin-top:4px">'+loEsc(c.purpose)+'</div>';
-ch+='</div>';
-});
-chList.innerHTML=ch;
-// Show latest messages from first channel
-if(channels.length>0)loViewChannel(channels[0].id);
-}catch(e){chList.innerHTML='<div style="color:#ef4444">Error loading channels: '+e.message+'</div>';}
-}
-async function loViewChannel(chId){
-var feed=document.getElementById('crew-comms-feed');
-if(!feed)return;
-try{
-var msgs=await api('/api/crew/channels/'+chId+'/messages?limit=30');
-if(!msgs||msgs.length===0){feed.innerHTML='<div style="color:#4b5563;padding:8px">No messages in this channel yet.</div>';return;}
-var fh='<div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;color:#a78bfa;margin-bottom:10px">MESSAGES</div>';
-msgs.forEach(function(m){
-fh+='<div style="padding:8px 10px;margin-bottom:4px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:2px solid rgba(164,139,250,0.3)">';
-fh+='<span style="color:#a78bfa;font-weight:600">'+loEsc(m.from_name)+'</span>';
-fh+='<span style="color:#4b5563;margin-left:8px">'+loEsc((m.created_at||'').substring(11,16))+'</span>';
-fh+='<div style="color:#d1d5db;margin-top:4px;white-space:pre-wrap">'+loEsc(m.body)+'</div></div>';
-});
-feed.innerHTML=fh;
-}catch(e){feed.innerHTML='<div style="color:#ef4444">Error: '+e.message+'</div>';}
-}
-function loRefreshComms(){loLoadComms()}
-async function loNewMeeting(){
-var agenda=prompt('Meeting agenda:');
-if(!agenda)return;
-var names=prompt('Participants (comma-separated agent names):','Boss,Writer,Operator');
-if(!names)return;
-var nameList=names.split(',').map(function(n){return n.trim()});
-var ids=[];
-if(agentsData){nameList.forEach(function(n){
-var found=agentsData.find(function(a){return a.name.toLowerCase().indexOf(n.toLowerCase())>=0});
-if(found)ids.push(found.id);
-});}
-if(ids.length===0){showToast('No matching agents found','error');return;}
-var channel=agenda.toLowerCase().replace(/[^a-z0-9]+/g,'-').substring(0,30);
-try{
-var r=await apiPost('/api/crew/meeting',{channel:channel,agenda:agenda,participant_ids:ids,called_by:68});
-if(r.ok){showToast('Meeting started with '+r.participants+' agents');loLoadComms();}
-else{showToast(r.error||'Failed','error');}
-}catch(e){showToast('Error: '+e.message,'error');}
-}
-async function loNewDM(){
-var to=prompt('Send DM to (agent name):');
-if(!to)return;
-var msg=prompt('Message:');
-if(!msg)return;
-try{
-var r=await apiPost('/api/crew/dm',{from_agent_id:68,to:to,body:msg});
-if(r.ok){showToast('DM sent to '+r.to);loLoadComms();}
-else{showToast(r.error||'Failed','error');}
-}catch(e){showToast('Error: '+e.message,'error');}
-}
 function openTemplatePicker(){document.getElementById('template-modal').classList.add('open')}
 function closeTemplatePicker(){document.getElementById('template-modal').classList.remove('open')}
 async function createTeam(name){
@@ -4197,7 +3798,6 @@ def _build_html():
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>crew-bus</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>{CSS}</style>
 <script async src="https://js.stripe.com/v3/buy-button.js"></script>
 <script>window.__STRIPE_PK={json.dumps(STRIPE_PUBLISHABLE_KEY)};window.__STRIPE_BUTTONS={json.dumps(STRIPE_BUY_BUTTONS)};</script>
@@ -4280,7 +3880,8 @@ def _build_html():
 </div>
 <div class="main-right">
   <div class="teams-section">
-    <div class="teams-header"><h2>Launch Ops</h2>
+    <div class="teams-header"><h2>Teams</h2>
+      <button class="btn-add" onclick="openTemplatePicker()">+ Add Team</button>
     </div>
     <div id="teams-list"></div>
   </div>
@@ -4633,9 +4234,7 @@ def _build_html():
 </body>
 </html>"""
 
-
 PAGE_HTML = _build_html()
-
 
 # ── API Helpers ─────────────────────────────────────────────────────
 
@@ -4697,7 +4296,6 @@ def _notify_agents_of_rename(db_path, agent_id, old_name, new_name):
     except Exception as e:
         print(f"[dashboard] Rename notification error: {e}")
 
-
 def _json_response(handler, data, status=200):
     body = json.dumps(data, default=str).encode("utf-8")
     handler.send_response(status)
@@ -4706,7 +4304,6 @@ def _json_response(handler, data, status=200):
     handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()
     handler.wfile.write(body)
-
 
 def _html_response(handler, html, status=200):
     body = html.encode("utf-8")
@@ -4717,19 +4314,16 @@ def _html_response(handler, html, status=200):
     handler.end_headers()
     handler.wfile.write(body)
 
-
 def _read_json_body(handler):
     length = int(handler.headers.get("Content-Length", 0))
     if length == 0:
         return {}
     return json.loads(handler.rfile.read(length))
 
-
 # ── Data fetchers ──────────────────────────────────────────────────
 
 def _period_to_hours(period):
     return {"today": 24, "3days": 72, "week": 168, "month": 720}.get(period, 24)
-
 
 def _get_stats(db_path):
     conn = bus.get_conn(db_path)
@@ -4753,7 +4347,6 @@ def _get_stats(db_path):
     finally:
         conn.close()
 
-
 def _get_agents_api(db_path, period=None):
     conn = bus.get_conn(db_path)
     try:
@@ -4775,7 +4368,7 @@ def _get_agents_api(db_path, period=None):
               WHEN 'guardian' THEN 2 WHEN 'communications' THEN 3
               WHEN 'wellness' THEN 4 WHEN 'strategy' THEN 5
               WHEN 'financial' THEN 6
-              WHEN 'manager' THEN 7 WHEN 'worker' THEN 8
+              WHEN 'manager' THEN 8 WHEN 'worker' THEN 9
               ELSE 10 END, a.name
         """, (cutoff,)).fetchall()
         results = []
@@ -4786,7 +4379,6 @@ def _get_agents_api(db_path, period=None):
         return results
     finally:
         conn.close()
-
 
 def _get_agent_detail(db_path, agent_id):
     conn = bus.get_conn(db_path)
@@ -4806,7 +4398,6 @@ def _get_agent_detail(db_path, agent_id):
     finally:
         conn.close()
 
-
 def _get_agent_activity(db_path, agent_id, limit=20):
     conn = bus.get_conn(db_path)
     try:
@@ -4823,7 +4414,6 @@ def _get_agent_activity(db_path, agent_id, limit=20):
                  "to": PERSONAL_NAMES.get(r["to_type"], r["to_name"])} for r in rows]
     finally:
         conn.close()
-
 
 def _get_agent_chat(db_path, agent_id, limit=50):
     conn = bus.get_conn(db_path)
@@ -4860,7 +4450,6 @@ def _get_agent_chat(db_path, agent_id, limit=50):
     finally:
         conn.close()
 
-
 def _clear_agent_chat(db_path, agent_id):
     """Clear chat history between the human and an agent (start fresh)."""
     conn = bus.get_conn(db_path)
@@ -4881,7 +4470,6 @@ def _clear_agent_chat(db_path, agent_id):
         """, (hid, agent_id, agent_id, hid))
     return {"ok": True}
 
-
 # ---------------------------------------------------------------------------
 # WhatsApp bridge subprocess management
 # ---------------------------------------------------------------------------
@@ -4898,7 +4486,6 @@ def _wa_bridge_dir():
         if c.exists() and (c / "bridge.js").exists():
             return str(c)
     return None
-
 
 def _start_wa_bridge():
     """Start the WhatsApp bridge as a subprocess."""
@@ -4921,7 +4508,6 @@ def _start_wa_bridge():
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-
 def _stop_wa_bridge():
     """Stop the WhatsApp bridge subprocess."""
     global _wa_bridge_process
@@ -4936,7 +4522,6 @@ def _stop_wa_bridge():
             _wa_bridge_process.kill()
         _wa_bridge_process = None
         return {"ok": True, "status": "stopped"}
-
 
 def _wa_bridge_status():
     """Check WhatsApp bridge status."""
@@ -4954,7 +4539,6 @@ def _wa_bridge_status():
     except Exception:
         return {"running": True, "status": "starting", "pid": _wa_bridge_process.pid}
 
-
 def _wa_bridge_qr():
     """Fetch the current QR SVG from the bridge."""
     import urllib.request
@@ -4964,7 +4548,6 @@ def _wa_bridge_qr():
             return json.loads(resp.read().decode("utf-8"))
     except Exception:
         return {"svg": None, "status": "unavailable"}
-
 
 # ---------------------------------------------------------------------------
 # Telegram bridge subprocess management
@@ -4990,7 +4573,6 @@ def _start_tg_bridge():
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-
 def _stop_tg_bridge():
     """Stop the Telegram bridge subprocess."""
     global _tg_bridge_process
@@ -5006,7 +4588,6 @@ def _stop_tg_bridge():
         _tg_bridge_process = None
         return {"ok": True, "status": "stopped"}
 
-
 def _tg_bridge_status():
     """Check Telegram bridge status."""
     running = _tg_bridge_process is not None and _tg_bridge_process.poll() is None
@@ -5020,7 +4601,6 @@ def _tg_bridge_status():
             return data
     except Exception:
         return {"running": True, "status": "starting", "pid": _tg_bridge_process.pid}
-
 
 def _send_chat(db_path, agent_id, text):
     conn = bus.get_conn(db_path)
@@ -5041,7 +4621,6 @@ def _send_chat(db_path, agent_id, text):
     except Exception as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "message_id": result["message_id"]}
-
 
 def _compose_message(db_path, to_name, message_type, subject, body, priority):
     """Send a message from the human to any agent by name."""
@@ -5070,7 +4649,6 @@ def _compose_message(db_path, to_name, message_type, subject, body, priority):
     except (PermissionError, ValueError) as e:
         return {"ok": False, "error": str(e)}
 
-
 def _get_compose_agents(db_path):
     """Return active, messageable agents for the compose dropdown."""
     conn = bus.get_conn(db_path)
@@ -5093,7 +4671,6 @@ def _get_compose_agents(db_path):
             "display": PERSONAL_NAMES.get(r["agent_type"], r["name"]),
         })
     return agents
-
 
 def _get_teams(db_path):
     conn = bus.get_conn(db_path)
@@ -5119,7 +4696,6 @@ def _get_teams(db_path):
     finally:
         conn.close()
 
-
 def _get_team_agents(db_path, team_id):
     """Get all agents belonging to a team (the manager + its workers)."""
     conn = bus.get_conn(db_path)
@@ -5136,7 +4712,6 @@ def _get_team_agents(db_path, team_id):
         return agents
     finally:
         conn.close()
-
 
 # Free teams: no rename allowed. Paid teams: rename OK.
 # "locked_name": True means the team title cannot be changed.
@@ -5230,10 +4805,8 @@ TEAM_TEMPLATES = {
     },
 }
 
-
 # Master promo code — unlocks any template, annual (set via env var)
 MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "CREWBUS-RYAN-2026")
-
 
 def _validate_promo(code, template, db_path):
     """Validate a promo code. Returns {valid, grant_type} or {valid, error}."""
@@ -5274,7 +4847,6 @@ def _validate_promo(code, template, db_path):
 
     return {"valid": False, "error": "Invalid code. Check for typos or visit crew-bus.dev/pricing."}
 
-
 def _generate_referral_code(db_path):
     """Generate a unique referral code for this install."""
     existing = bus.get_config("my_referral_code", db_path=db_path)
@@ -5285,7 +4857,6 @@ def _generate_referral_code(db_path):
     # Mark it as valid so it works when entered on another install
     bus.set_config(f"referral_{code}", "active", db_path=db_path)
     return code
-
 
 def _count_teams_of_type(db_path, template):
     """Count how many existing teams were created from a given template."""
@@ -5305,7 +4876,6 @@ def _count_teams_of_type(db_path, template):
         if mgr_name == f"{base_name}-Manager" or mgr_name.startswith(f"{base_name} "):
             count += 1
     return count
-
 
 def _create_team(db_path, template):
     tpl = TEAM_TEMPLATES.get(template, TEAM_TEMPLATES["custom"])
@@ -5389,7 +4959,6 @@ def _create_team(db_path, template):
     )
     return result
 
-
 def _check_for_updates():
     """Check if a newer version is available on GitHub."""
     import subprocess
@@ -5419,7 +4988,6 @@ def _check_for_updates():
     except Exception as e:
         return {"update_available": False, "error": str(e)}
 
-
 def _apply_update():
     """Pull latest code from GitHub and signal restart."""
     import subprocess
@@ -5441,7 +5009,6 @@ def _apply_update():
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-
 def _get_guard_checkin(db_path):
     conn = bus.get_conn(db_path)
     try:
@@ -5453,7 +5020,6 @@ def _get_guard_checkin(db_path):
         return {"last_checkin": row["timestamp"] if row else None, "guard_id": guard["id"]}
     finally:
         conn.close()
-
 
 def _get_private_session_status(db_path, agent_id):
     """Get active private session status for human <-> agent."""
@@ -5467,7 +5033,6 @@ def _get_private_session_status(db_path, agent_id):
     finally:
         conn.close()
 
-
 def _start_private_session(db_path, agent_id):
     """Start a private session between human and agent."""
     conn = bus.get_conn(db_path)
@@ -5478,7 +5043,6 @@ def _start_private_session(db_path, agent_id):
     finally:
         conn.close()
     return bus.start_private_session(human["id"], agent_id, channel="web", db_path=db_path)
-
 
 def _end_private_session(db_path, agent_id):
     """End active private session between human and agent."""
@@ -5494,7 +5058,6 @@ def _end_private_session(db_path, agent_id):
         return {"ok": False, "error": "no active session"}
     return bus.end_private_session(session["id"], ended_by="human", db_path=db_path)
 
-
 def _send_private_message(db_path, agent_id, text):
     """Send a private message in an active session."""
     conn = bus.get_conn(db_path)
@@ -5508,7 +5071,6 @@ def _send_private_message(db_path, agent_id, text):
     if not session:
         return {"ok": False, "error": "no active session"}
     return bus.send_private_message(session["id"], human["id"], text, db_path=db_path)
-
 
 def _get_messages_api(db_path, msg_type=None, agent_name=None, limit=50):
     conn = bus.get_conn(db_path)
@@ -5537,7 +5099,6 @@ def _get_messages_api(db_path, msg_type=None, agent_name=None, limit=50):
     finally:
         conn.close()
 
-
 def _get_decisions_api(db_path, limit=50):
     conn = bus.get_conn(db_path)
     try:
@@ -5549,7 +5110,6 @@ def _get_decisions_api(db_path, limit=50):
         return [dict(r) for r in rows]
     finally:
         conn.close()
-
 
 def _get_audit_api(db_path, limit=200, agent_name=None):
     conn = bus.get_conn(db_path)
@@ -5575,7 +5135,6 @@ def _get_audit_api(db_path, limit=200, agent_name=None):
     finally:
         conn.close()
 
-
 # ── Request Handler ─────────────────────────────────────────────────
 
 # ── Auth Helpers ────────────────────────────────────────────────────
@@ -5586,7 +5145,6 @@ def _hash_password(password):
     h = hashlib.sha256((salt + password).encode()).hexdigest()
     return salt + ":" + h
 
-
 def _verify_password(password, stored):
     """Verify a password against a stored salt:hash pair."""
     if ":" not in stored:
@@ -5595,7 +5153,6 @@ def _verify_password(password, stored):
     h = hashlib.sha256((salt + password).encode()).hexdigest()
     return h == expected
 
-
 def _get_auth_user(handler):
     """Extract user from Authorization: Bearer token header."""
     auth = handler.headers.get("Authorization", "")
@@ -5603,7 +5160,6 @@ def _get_auth_user(handler):
         return None
     token = auth[7:]
     return bus.validate_session(token, db_path=handler.db_path)
-
 
 # ── Stripe Checkout Helpers ──────────────────────────────────────────
 
@@ -5614,7 +5170,6 @@ def _generate_activation_key(key_type="guard", grant="annual"):
     format: CREWBUS-<base64_payload>-<hex_hmac_sha256>
     """
     return bus.generate_activation_key(key_type=key_type, grant=grant)
-
 
 def _stripe_create_guard_checkout(handler):
     """Create a Stripe Checkout session for Guard activation."""
@@ -5654,7 +5209,6 @@ def _stripe_create_guard_checkout(handler):
     except Exception as e:
         return _json_response(handler, {"error": str(e)}, 500)
 
-
 def _stripe_verify_session(handler, session_id):
     """Verify a completed Stripe Checkout session and return activation key."""
     if not session_id:
@@ -5673,7 +5227,6 @@ def _stripe_verify_session(handler, session_id):
         return _json_response(handler, {"error": "payment not completed", "status": session.payment_status}, 402)
     except Exception as e:
         return _json_response(handler, {"error": str(e)}, 500)
-
 
 def _stripe_webhook(handler):
     """Handle Stripe webhook events (payment confirmations, etc.)."""
@@ -5703,7 +5256,6 @@ def _stripe_webhook(handler):
             # In production: send activation key via email to session customer_email
 
     return _json_response(handler, {"received": True})
-
 
 class CrewBusHandler(BaseHTTPRequestHandler):
     db_path = DEFAULT_DB
@@ -6373,11 +5925,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             result = bus.send_to_team_mailbox(agent_id, subject, body, severity=severity, db_path=self.db_path)
             return _json_response(self, result, 201 if result.get("ok") else 400)
 
-        # ── Crew Channels API ──
+        # ── Crew Channels POST endpoints ──
         if path == "/api/crew/channels":
             name = data.get("name", "")
             purpose = data.get("purpose", "")
-            created_by = data.get("created_by", 68)  # default: Crew Boss
+            created_by = data.get("created_by", 2)
             member_ids = data.get("member_ids", [])
             if not name:
                 return _json_response(self, {"error": "name required"}, 400)
@@ -6399,7 +5951,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             channel = data.get("channel", "standup")
             agenda = data.get("agenda", "")
             participant_ids = data.get("participant_ids", [])
-            called_by = data.get("called_by", 68)
+            called_by = data.get("called_by", 2)
             if not agenda or not participant_ids:
                 return _json_response(self, {"error": "agenda and participant_ids required"}, 400)
             result = bus.crew_meeting(channel, agenda, participant_ids,
@@ -7141,13 +6693,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         _json_response(self, {"error": "not found"}, 404)
 
-
 # ── Server ──────────────────────────────────────────────────────────
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
-
 
 def _ensure_guardian(db_path):
     """Ensure the full crew exists. Self-spawns on first run.
@@ -7156,7 +6706,7 @@ def _ensure_guardian(db_path):
     - Human (you — always in charge)
     - Crew Boss (crew-mind) — your AI right-hand
     - Guardian (sentinel-shield) — always-on protector + setup guide
-    - 4 Inner Circle agents (Wellness, Strategy, Communications,
+    - 5 Inner Circle agents (Wellness, Strategy, Communications,
       Financial) — each with a unique skill
 
     On existing installs, migrates old Wizard → Guardian and spawns
@@ -7252,7 +6802,6 @@ def _ensure_guardian(db_path):
     # Seed initial system knowledge
     _refresh_guardian_knowledge(db_path)
 
-
 def _ensure_inner_circle(db_path, conn=None):
     """Ensure all 4 inner circle agents exist. Safe to call multiple times.
 
@@ -7306,10 +6855,8 @@ def _ensure_inner_circle(db_path, conn=None):
         if close_conn:
             conn.close()
 
-
 # Backward compat alias
 _ensure_wizard = _ensure_guardian
-
 
 def _refresh_guardian_knowledge(db_path):
     """Refresh the Guardian's system knowledge memories.
@@ -7404,7 +6951,6 @@ def _refresh_guardian_knowledge(db_path):
 
     print(f"[guardian] knowledge refreshed ({len(knowledge)} chars)")
 
-
 def _auto_load_hierarchy(db_path):
     """Load hierarchy from configs/ if DB has few agents.
 
@@ -7418,7 +6964,7 @@ def _auto_load_hierarchy(db_path):
     finally:
         conn.close()
     if count > 8:
-        return  # already populated beyond bootstrap (7 = Human + Boss + Guardian + 4 inner circle)
+        return  # already populated beyond bootstrap (8 = Human + Boss + Guardian + 5 inner circle)
     configs_dir = Path(__file__).parent / "configs"
     if not configs_dir.is_dir():
         return
@@ -7434,7 +6980,6 @@ def _auto_load_hierarchy(db_path):
         bus.load_hierarchy(str(yamls[0]), db_path=db_path)
         print(f"Auto-loaded config: {yamls[0].name}")
 
-
 def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     if db_path is None:
         db_path = DEFAULT_DB
@@ -7447,7 +6992,6 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     # No auto-load: clean slate, Guardian guides team creation
     handler = type("Handler", (CrewBusHandler,), {"db_path": db_path})
     return ThreadedHTTPServer((host, port), handler)
-
 
 def _create_desktop_shortcut(url):
     """Drop a clickable shortcut on the user's Desktop to reopen the dashboard."""
@@ -7486,7 +7030,6 @@ def _create_desktop_shortcut(url):
                 print(f"  \U0001f4ce Desktop shortcut created: {shortcut}")
     except Exception as e:
         print(f"  (Could not create desktop shortcut: {e})")
-
 
 def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
                open_browser=True):
@@ -7574,7 +7117,6 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
         agent_worker.stop_worker()
         _stop_wa_bridge()
         server.shutdown()
-
 
 if __name__ == "__main__":
     import argparse
