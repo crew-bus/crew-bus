@@ -1601,9 +1601,8 @@ def _process_queued_messages(db_path: Path):
         if row["sender_type"] == "manager" and row["agent_type"] == "worker":
             managers_with_fanout.add(row["from_agent_id"])
 
-    # Agent-to-agent messages in parallel (up to 5 concurrent).
-    # This turns 13 messages from ~7 min sequential to ~3 rounds = ~2 min.
-    MAX_PARALLEL_AGENT_MSGS = 5
+    # Agent-to-agent messages in parallel (up to 10 concurrent).
+    MAX_PARALLEL_AGENT_MSGS = 10
     if agent_msgs:
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL_AGENT_MSGS) as pool:
             futures = {
@@ -1668,6 +1667,26 @@ def _process_single_message(row, db_path: Path):
     # This prevents Crew Boss from responding to its own hourly reports in a loop.
     if human_id == agent_id:
         return
+
+    # Fast-path: simple agent-to-agent status pings skip LLM entirely.
+    # Delivers the message directly — agent reads it in chat history on next cycle.
+    # This prevents a 3-8s LLM call for messages that are just acks/pings/status.
+    _FAST_PATH_PATTERNS = (
+        "status check", "status report", "confirm receipt", "acknowledged",
+        "all green", "standing by", "online and ready", "comms check",
+        "ping", "ack", "copy that", "roger", "noted", "received",
+    )
+    try:
+        sender_type = row["sender_type"]
+    except (KeyError, IndexError):
+        sender_type = "human"
+    if sender_type != "human" and user_text and len(user_text) < 120:
+        lower = user_text.lower()
+        if any(p in lower for p in _FAST_PATH_PATTERNS):
+            _insert_reply_direct(db_path, agent_id, human_id,
+                                 f"[received] {user_text[:200]}",
+                                 agent_type=agent_type)
+            return
 
     # Check for memory commands first (remember/forget/list)
     try:
