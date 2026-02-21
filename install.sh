@@ -59,7 +59,12 @@ fi
 # ── 4. Create venv & install deps ──
 if [ ! -d ".venv" ]; then
     echo "  Creating virtual environment..."
-    $PYTHON -m venv .venv
+    $PYTHON -m venv .venv 2>/dev/null || $PYTHON -m venv --without-pip .venv
+    # Bootstrap pip if venv was created without it
+    if [ ! -f ".venv/bin/pip" ]; then
+        echo "  Bootstrapping pip..."
+        curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+    fi
 fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
