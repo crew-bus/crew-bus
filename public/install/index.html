@@ -38,21 +38,21 @@
         <h2 class="section-title">Download the Installer</h2>
         <p class="section-sub">One file. Five minutes. Your crew is ready.</p>
         <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0;">
-            <a href="https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh" download="install-crewbus.command" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;">
+            <a href="/downloads/Install-Crew-Bus.dmg" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;text-decoration:none;">
                 &#63743; Download for macOS
             </a>
-            <a href="https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh" download="install-crewbus.sh" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;">
+            <button onclick="downloadInstaller('install-crewbus.sh')" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;cursor:pointer;">
                 &#128039; Download for Linux
-            </a>
+            </button>
         </div>
         <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 2rem;max-width:520px;margin:0 auto;text-align:left;">
             <p style="font-weight:600;margin-bottom:0.8rem;font-size:1.1rem;">Three steps:</p>
             <ol style="margin:0;padding-left:1.3rem;line-height:2.2;font-size:1.05rem;">
                 <li>Click the download button above</li>
-                <li>Double-click the downloaded file</li>
+                <li>Open the .dmg and double-click <strong>Install Crew Bus</strong></li>
                 <li>The installer does the rest — your crew is ready in minutes</li>
             </ol>
-            <p style="margin-top:1rem;color:var(--text-dim);font-size:0.85rem;">macOS may ask you to confirm the first time — right-click the file and choose "Open" if it does.</p>
+            <p style="margin-top:1rem;color:var(--text-dim);font-size:0.85rem;">macOS may ask you to confirm the first time — right-click the app and choose "Open" if it does.</p>
         </div>
         <p style="color:var(--text-dim);margin-top:1.2rem;font-size:0.9rem;">No accounts. No credit card. Takes about 5 minutes.</p>
         <p style="margin-top:1.5rem;font-size:1rem;">Don't want to install it yourself? <a href="/installer" style="color:var(--highlight);font-weight:600;">Let a verified installer do it for you</a> — remotely or in person.</p>
@@ -134,5 +134,18 @@
 </footer>
 
 <script src="../js/site.js"></script>
+<script>
+function downloadInstaller(filename) {
+    fetch('https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh')
+        .then(r => r.blob())
+        .then(blob => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
+}
+</script>
 </body>
 </html>
