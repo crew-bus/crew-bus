@@ -458,6 +458,76 @@ body::after {
     transform: rotate(var(--angle)) translateY(-255px) rotate(calc(-1 * var(--angle))) scale(1.1);
 }
 
+/* ── Triangle crew layout — Boss on top, Guardian + Vault below ── */
+.triangle-crew {
+    position: relative;
+    width: 500px;
+    height: 400px;
+    margin: 0 auto;
+}
+.tri-boss {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+.tri-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+.tri-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2rem;
+    z-index: 2;
+}
+.tri-node {
+    width: 150px;
+    height: 150px;
+    padding: 1rem;
+    background: rgba(12, 14, 22, 0.9);
+    border: 2.5px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.tri-node:hover { transform: scale(1.1); }
+.tri-node .node-icon { font-size: 2.4rem; }
+.tri-node .node-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+
+/* Guardian — warm gold glow */
+.node-guardian {
+    border-color: #d18616 !important;
+    box-shadow: 0 0 25px rgba(209, 134, 22, 0.3), 0 0 60px rgba(209, 134, 22, 0.1), 0 0 90px rgba(209, 134, 22, 0.04);
+}
+.node-guardian:hover {
+    border-color: #e8a020 !important;
+    box-shadow: 0 0 40px rgba(209, 134, 22, 0.5), 0 0 80px rgba(209, 134, 22, 0.2), 0 0 120px rgba(209, 134, 22, 0.08);
+}
+
+/* Vault — deep purple glow */
+.node-vault {
+    border-color: #9c6bdb !important;
+    box-shadow: 0 0 25px rgba(156, 107, 219, 0.3), 0 0 60px rgba(156, 107, 219, 0.1), 0 0 90px rgba(156, 107, 219, 0.04);
+}
+.node-vault:hover {
+    border-color: #b388f0 !important;
+    box-shadow: 0 0 40px rgba(156, 107, 219, 0.5), 0 0 80px rgba(156, 107, 219, 0.2), 0 0 120px rgba(156, 107, 219, 0.08);
+}
+
 /* Soft teal — Friend & Family Helper (larger for long name) */
 .node-family {
     width: 195px !important;
@@ -1425,6 +1495,11 @@ body::after {
     .node-boss { width: 160px; height: 160px; }
     .node-boss .node-icon { font-size: 2.5rem; }
     .node-boss .node-label { font-size: 0.7rem; }
+
+    .triangle-crew { width: 400px; height: 340px; }
+    .tri-node { width: 120px; height: 120px; }
+    .tri-node .node-icon { font-size: 2rem; }
+    .tri-node .node-label { font-size: 0.55rem; }
 
     .feature-grid { grid-template-columns: repeat(2, 1fr); }
     .steps { grid-template-columns: 1fr; gap: 2.5rem; }

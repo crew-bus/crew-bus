@@ -104,21 +104,25 @@
             <p class="hero-note">Open source &middot; MIT License &middot; Runs on your hardware &middot; No cloud ever</p>
         </div>
 
-        <!-- Agent Triangle Diagram — the lean crew -->
+        <!-- Agent Triangle Diagram — Boss on top, Guardian + Vault below -->
         <div class="hero-visual">
-            <div class="circle-diagram">
-                <div class="circle-center">
+            <div class="triangle-crew">
+                <div class="tri-boss">
                     <div class="circle-node node-boss">
                         <span class="node-icon">&#10025;</span>
                         <span class="node-label">Crew Boss</span>
                     </div>
                 </div>
-                <div class="circle-ring">
-                    <div class="circle-node" style="--angle: 210deg;">
+                <svg class="tri-lines" viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
+                    <line x1="250" y1="130" x2="100" y2="310" stroke="#d18616" stroke-width="1.5" opacity="0.4"/>
+                    <line x1="250" y1="130" x2="400" y2="310" stroke="#9c6bdb" stroke-width="1.5" opacity="0.4"/>
+                </svg>
+                <div class="tri-bottom">
+                    <div class="circle-node tri-node node-guardian">
                         <span class="node-icon">&#128737;</span>
                         <span class="node-label">Guardian</span>
                     </div>
-                    <div class="circle-node" style="--angle: 330deg;">
+                    <div class="circle-node tri-node node-vault">
                         <span class="node-icon">&#128302;</span>
                         <span class="node-label">Vault</span>
                     </div>
