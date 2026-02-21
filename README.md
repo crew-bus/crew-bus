@@ -8,7 +8,7 @@ crew-bus is open-source software that runs on your own machine and lets your AI 
 
 [![GitHub release](https://img.shields.io/github/v/release/crew-bus/crew-bus)](https://github.com/crew-bus/crew-bus/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)](#)
 
 ---
 
@@ -62,10 +62,10 @@ cd crew-bus
 pip install -r requirements.txt
 
 # Start crew-bus
-python main.py
+python3 dashboard.py
 ```
 
-Open the dashboard and you're running. Five agents, ready to coordinate.
+Open `http://localhost:8420` and you're running. Five agents, ready to coordinate.
 
 To unlock Guardian features (web search, Skill Store, Skill Sandbox), grab a [$29 lifetime activation key at crew-bus.dev](https://crew-bus.dev).
 
@@ -167,7 +167,7 @@ Everything runs in a single process on your machine. No Docker required. No clou
 - Skill Sandbox with real-time health monitoring and auto-quarantine
 - 8 new Guardian action commands
 - 11 new API endpoints
-- 142 tests passing, 0 failures
+- 222 tests passing, 0 failures
 - 67 commits, 2,581 lines added since v0.1.0-beta
 
 [Full release notes →](https://github.com/crew-bus/crew-bus/releases/tag/v0.2.0)
