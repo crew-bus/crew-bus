@@ -19,6 +19,10 @@ jobs:
             cd /opt/crew-bus
             git pull origin main
             /opt/crew-bus/venv/bin/pip install -r requirements.txt
-            sudo systemctl restart crew-bus
-            sleep 2
-            curl -sf http://localhost:8080/ > /dev/null && echo "Deploy OK" || echo "Deploy FAILED"
+            systemctl stop crew-bus
+            sleep 1
+            fuser -k 8080/tcp 2>/dev/null || true
+            sleep 1
+            systemctl start crew-bus
+            sleep 5
+            curl -sf http://localhost:8080/ > /dev/null && echo "Deploy OK" || (journalctl -u crew-bus --no-pager -n 20 && exit 1)
