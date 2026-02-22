@@ -33,7 +33,7 @@ targets:
         NSHighResolutionCapable: true
         NSApplicationSupportsSecureRestorableState: true
         SUFeedURL: "https://crew-bus.dev/appcast.xml"
-        SUPublicEDKey: ""
+        SUPublicEDKey: "zN6Wqmd98zMybysEFqK8w7Wf6Gpcdemh7wb0xVfIh8Y="
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
     settings:

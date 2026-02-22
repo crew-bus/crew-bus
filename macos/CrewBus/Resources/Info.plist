@@ -25,7 +25,7 @@
 	<key>SUFeedURL</key>
 	<string>https://crew-bus.dev/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string></string>
+	<string>zN6Wqmd98zMybysEFqK8w7Wf6Gpcdemh7wb0xVfIh8Y=</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
