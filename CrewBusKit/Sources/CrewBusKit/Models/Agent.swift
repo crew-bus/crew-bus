@@ -16,6 +16,10 @@ public struct Agent: Codable, Identifiable, Hashable {
     public let parentAgentId: Int?
     public let model: String?
     public let createdAt: String?
+    public let avatar: String?
+    public let soul: String?
+    public let thinkingLevel: String?
+    public let faceMode: String?
 
     public var resolvedDisplayName: String {
         displayName ?? name

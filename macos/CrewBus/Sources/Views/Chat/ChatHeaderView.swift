@@ -6,10 +6,8 @@ struct ChatHeaderView: View {
     var onRefresh: () -> Void = {}
     @Environment(AppState.self) private var appState
     @State private var statusPulse = false
-    @State private var isRenaming = false
-    @State private var editedName = ""
-    @State private var showTerminateAlert = false
     @State private var refreshTapped = false
+    @State private var showSettings = false
 
     private var typeInfo: AgentTypeInfo {
         AgentTypeInfo.info(for: agent.agentType)
@@ -54,7 +52,7 @@ struct ChatHeaderView: View {
             }
             .buttonStyle(.plain)
 
-            // Avatar circle (42px)
+            // Avatar circle (42px) — show emoji avatar or CrewFace
             ZStack {
                 Circle()
                     .fill(CrewTheme.surface)
@@ -64,36 +62,19 @@ struct ChatHeaderView: View {
                     )
                     .shadow(color: typeInfo.color.opacity(0.4), radius: 6)
 
-                Image(systemName: typeInfo.symbolName)
-                    .font(.system(size: 16))
-                    .foregroundStyle(typeInfo.color)
+                if let avatar = agent.avatar, !avatar.isEmpty {
+                    Text(avatar)
+                        .font(.system(size: 20))
+                } else {
+                    CrewFaceView(agentId: agent.id, size: 20, fallbackSymbol: typeInfo.symbolName, fallbackColor: typeInfo.color)
+                }
             }
 
             // Name + Online
             VStack(alignment: .leading, spacing: 2) {
-                if isRenaming {
-                    TextField("Name", text: $editedName, onCommit: {
-                        submitRename()
-                    })
+                Text(agent.resolvedDisplayName)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(CrewTheme.text)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(CrewTheme.bg)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(CrewTheme.accent, lineWidth: 1))
-                    .frame(width: 160)
-                } else {
-                    Text(agent.resolvedDisplayName)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(CrewTheme.text)
-                        .onTapGesture(count: 2) {
-                            editedName = agent.resolvedDisplayName
-                            isRenaming = true
-                        }
-                        .help("Double-click to rename")
-                }
 
                 HStack(spacing: 4) {
                     Circle()
@@ -137,28 +118,17 @@ struct ChatHeaderView: View {
                 }
                 .buttonStyle(.plain)
 
-                Menu {
-                    Button {
-                        editedName = agent.resolvedDisplayName
-                        isRenaming = true
-                    } label: {
-                        Label("Rename", systemImage: "pencil")
-                    }
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        showTerminateAlert = true
-                    } label: {
-                        Label("Terminate Agent", systemImage: "trash")
-                    }
+                Button {
+                    showSettings = true
                 } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 15))
                         .foregroundStyle(CrewTheme.muted)
+                        .frame(width: 30, height: 30)
+                        .background(CrewTheme.muted.opacity(0.1))
+                        .clipShape(Circle())
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
@@ -167,46 +137,13 @@ struct ChatHeaderView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(CrewTheme.border).frame(height: 1)
         }
-        .alert("Terminate Agent", isPresented: $showTerminateAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Terminate", role: .destructive) {
-                terminateAgent()
-            }
-        } message: {
-            Text("Terminate \"\(agent.resolvedDisplayName)\"? This retires the agent permanently and archives all messages.")
+        .sheet(isPresented: $showSettings) {
+            AgentSettingsView(agent: agent)
+                .environment(appState)
         }
     }
 
     private func refreshChat() {
         onRefresh()
     }
-
-    private func terminateAgent() {
-        Task {
-            try? await appState.client.post(
-                APIEndpoints.agentTerminate(agent.id),
-                body: [:]
-            )
-            await appState.loadInitialData()
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    appState.navDestination = backDestination
-                }
-            }
-        }
-    }
-
-    private func submitRename() {
-        let newName = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
-        isRenaming = false
-        guard !newName.isEmpty, newName != agent.resolvedDisplayName else { return }
-        Task {
-            try? await appState.client.post(
-                APIEndpoints.agentRename(agent.id),
-                body: ["name": newName]
-            )
-            await appState.loadInitialData()
-        }
-    }
-
 }

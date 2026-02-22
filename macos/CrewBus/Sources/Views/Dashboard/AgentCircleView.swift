@@ -27,9 +27,16 @@ struct AgentCircleView: View {
                             Circle().stroke(glowColor.opacity(0.6), lineWidth: 2)
                         )
                         .overlay(
-                            Image(systemName: typeInfo.symbolName)
-                                .font(.system(size: size * 0.32))
-                                .foregroundStyle(glowColor)
+                            Group {
+                                if let avatar = agent.avatar, !avatar.isEmpty {
+                                    Text(avatar)
+                                        .font(.system(size: size * 0.38))
+                                } else {
+                                    Image(systemName: typeInfo.symbolName)
+                                        .font(.system(size: size * 0.32))
+                                        .foregroundStyle(glowColor)
+                                }
+                            }
                         )
                         .shadow(color: glowColor.opacity(breathe ? 0.6 : 0.15), radius: breathe ? 20 : 8)
 

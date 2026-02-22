@@ -6,6 +6,20 @@ struct TeamDetailView: View {
     @Environment(AppState.self) private var appState
     @State private var showHireSheet = false
     @State private var agentToTerminate: Agent?
+    @State private var showPauseConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var deletePin = ""
+    @State private var isPausing = false
+    @State private var isDeleting = false
+    @State private var mailboxMessages: [MailboxMessage] = []
+    @State private var isLoadingMailbox = true
+
+    struct MailboxMessage: Decodable, Identifiable {
+        let id: Int
+        let sender: String
+        let content: String
+        let timestamp: String
+    }
 
     // Derive manager/workers from team agents
     private var managerAgent: Agent? {
@@ -44,7 +58,7 @@ struct TeamDetailView: View {
                     hierarchySection
 
                     // Team Meeting button
-                    Button {} label: {
+                    Button { startTeamMeeting() } label: {
                         Label("Team Meeting", systemImage: "person.2.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
@@ -86,6 +100,20 @@ struct TeamDetailView: View {
                 Text("Terminate \"\(agent.resolvedDisplayName)\"? This retires the agent permanently and archives all messages.")
             }
         }
+        .alert("Pause Team", isPresented: $showPauseConfirm) {
+            Button("Cancel", role: .cancel) { }
+            Button("Pause All", role: .destructive) { pauseTeam() }
+        } message: {
+            Text("Deactivate all agents in \"\(team.name)\"? You can reactivate them later.")
+        }
+        .alert("Delete Team", isPresented: $showDeleteConfirm) {
+            SecureField("Enter PIN to confirm", text: $deletePin)
+            Button("Cancel", role: .cancel) { deletePin = "" }
+            Button("Delete", role: .destructive) { deleteTeam() }
+        } message: {
+            Text("Permanently delete \"\(team.name)\" and all its agents? This cannot be undone.")
+        }
+        .task { await loadMailbox() }
     }
 
     // MARK: - Header
@@ -127,26 +155,40 @@ struct TeamDetailView: View {
             Spacer()
 
             // Pause Team
-            Button {} label: {
-                Text("Pause Team")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(CrewTheme.orange)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .overlay(Capsule().stroke(CrewTheme.orange, lineWidth: 1))
+            Button { showPauseConfirm = true } label: {
+                if isPausing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 80)
+                } else {
+                    Text("Pause Team")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(CrewTheme.orange)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .overlay(Capsule().stroke(CrewTheme.orange, lineWidth: 1))
+                }
             }
             .buttonStyle(.plain)
+            .disabled(isPausing)
 
             // Delete Team
-            Button {} label: {
-                Text("Delete Team")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: "#d63031"))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .overlay(Capsule().stroke(Color(hex: "#d63031"), lineWidth: 1))
+            Button { showDeleteConfirm = true } label: {
+                if isDeleting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 80)
+                } else {
+                    Text("Delete Team")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "#d63031"))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .overlay(Capsule().stroke(Color(hex: "#d63031"), lineWidth: 1))
+                }
             }
             .buttonStyle(.plain)
+            .disabled(isDeleting)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -299,9 +341,49 @@ struct TeamDetailView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(CrewTheme.text)
             }
-            Text("No messages yet. Your agents will post updates here as they work.")
-                .font(.system(size: 13))
-                .foregroundStyle(CrewTheme.muted)
+
+            if isLoadingMailbox {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            } else if mailboxMessages.isEmpty {
+                Text("No messages yet. Your agents will post updates here as they work.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(CrewTheme.muted)
+            } else {
+                ForEach(mailboxMessages) { msg in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(CrewTheme.accent)
+                            .frame(width: 24, height: 24)
+                            .background(CrewTheme.accent.opacity(0.1))
+                            .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(msg.sender)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(CrewTheme.text)
+                                Spacer()
+                                Text(msg.timestamp)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(CrewTheme.muted)
+                            }
+                            Text(msg.content)
+                                .font(.system(size: 12))
+                                .foregroundStyle(CrewTheme.text.opacity(0.85))
+                                .lineLimit(3)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    if msg.id != mailboxMessages.last?.id {
+                        Divider().background(CrewTheme.border)
+                    }
+                }
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -366,6 +448,80 @@ struct TeamDetailView: View {
         .background(CrewTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(CrewTheme.border, lineWidth: 1))
+    }
+}
+
+// MARK: - Team Actions
+
+extension TeamDetailView {
+    func startTeamMeeting() {
+        guard let mgr = managerAgent else { return }
+        let prompt = "Start a team meeting. Check in with each worker, summarize what everyone is working on, and identify any blockers."
+        Task {
+            try? await appState.client.post(
+                APIEndpoints.agentMessage(mgr.id),
+                body: ["message": prompt]
+            )
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    appState.navDestination = .agentChat(mgr)
+                }
+            }
+        }
+    }
+
+    func pauseTeam() {
+        isPausing = true
+        let allAgents = [managerAgent].compactMap { $0 } + workerAgents
+        Task {
+            for agent in allAgents {
+                try? await appState.client.post(
+                    APIEndpoints.agentDeactivate(agent.id),
+                    body: [:]
+                )
+            }
+            await appState.loadInitialData()
+            await MainActor.run { isPausing = false }
+        }
+    }
+
+    func deleteTeam() {
+        isDeleting = true
+        Task {
+            do {
+                try await appState.client.post(
+                    APIEndpoints.teamDelete(team.id),
+                    body: ["pin": deletePin]
+                )
+                await appState.loadInitialData()
+                await MainActor.run {
+                    deletePin = ""
+                    isDeleting = false
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        appState.navDestination = .dashboard
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    deletePin = ""
+                    isDeleting = false
+                }
+            }
+        }
+    }
+
+    func loadMailbox() async {
+        do {
+            let fetched: [MailboxMessage] = try await appState.client.get(
+                APIEndpoints.teamMailbox(team.id)
+            )
+            await MainActor.run {
+                mailboxMessages = fetched
+                isLoadingMailbox = false
+            }
+        } catch {
+            await MainActor.run { isLoadingMailbox = false }
+        }
     }
 }
 

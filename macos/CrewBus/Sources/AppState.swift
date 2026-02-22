@@ -7,12 +7,26 @@ enum NavDestination: Equatable {
     case dashboard
     case agentChat(Agent)
     case teamDetail(Team)
+    case messageFeed
+    case auditLog
+    case socialDrafts
+    case observability
+    case channelList
+    case channelDetail(CrewChannel)
+    case deviceManagement
 
     var transitionId: String {
         switch self {
-        case .dashboard:        return "dashboard"
-        case .agentChat(let a): return "chat-\(a.id)"
-        case .teamDetail(let t): return "team-\(t.id)"
+        case .dashboard:           return "dashboard"
+        case .agentChat(let a):    return "chat-\(a.id)"
+        case .teamDetail(let t):   return "team-\(t.id)"
+        case .messageFeed:         return "message-feed"
+        case .auditLog:            return "audit-log"
+        case .socialDrafts:        return "social-drafts"
+        case .observability:       return "observability"
+        case .channelList:         return "channel-list"
+        case .channelDetail(let c): return "channel-\(c.id)"
+        case .deviceManagement:    return "device-mgmt"
         }
     }
 }
@@ -33,6 +47,9 @@ final class AppState {
     var isServerReady = false
     var isLoading = false
     var serverError: String?
+    var needsSetup = false
+    var isDashboardLocked = false
+    var requiresPinAuth = false
 
     let client: APIClient
     let chatService: ChatService
@@ -72,6 +89,9 @@ final class AppState {
             }
 
             if serverManager.isReady {
+                await restoreAuthToken()
+                await checkAuthMode()
+                await checkSetupStatus()
                 await loadInitialData()
                 startPeriodicRefresh()
             }
@@ -114,12 +134,63 @@ final class AppState {
         }
     }
 
+    func checkSetupStatus() async {
+        struct SetupStatus: Decodable {
+            let needsSetup: Bool
+        }
+        do {
+            let status: SetupStatus = try await client.get(APIEndpoints.setupStatus)
+            await MainActor.run { self.needsSetup = status.needsSetup }
+        } catch {
+            // If setup endpoint fails, assume setup not needed
+            await MainActor.run { self.needsSetup = false }
+        }
+    }
+
+    func completeSetup(model: String, apiKey: String, pin: String) async throws {
+        var body: [String: Any] = ["model": model]
+        if !apiKey.isEmpty { body["api_key"] = apiKey }
+        if !pin.isEmpty { body["dashboard_pin"] = pin }
+        try await client.post(APIEndpoints.setupComplete, body: body)
+        await MainActor.run { self.needsSetup = false }
+    }
+
+    func lockDashboard() async {
+        do {
+            try await client.post(APIEndpoints.configSet, body: ["key": "dashboard_locked", "value": "true"])
+            await MainActor.run { self.isDashboardLocked = true }
+        } catch {
+            print("Failed to lock dashboard: \(error)")
+        }
+    }
+
     func retryConnection() {
         serverError = nil
         isServerReady = false
         serverManager.stop()
         serverManager.start()
         startMonitoring()
+    }
+
+    // MARK: - Auth
+
+    private func restoreAuthToken() async {
+        if let token = UserDefaults.standard.string(forKey: "crew_bus_device_token") {
+            await client.setAuthToken(token)
+        }
+    }
+
+    private func checkAuthMode() async {
+        struct AuthModeResponse: Decodable { let mode: String }
+        do {
+            let response: AuthModeResponse = try await client.get(APIEndpoints.authMode)
+            let hasToken = UserDefaults.standard.string(forKey: "crew_bus_device_token") != nil
+            if response.mode != "none" && !hasToken {
+                await MainActor.run { self.requiresPinAuth = true }
+            }
+        } catch {
+            // Auth endpoint may not exist, skip
+        }
     }
 
     private func startPeriodicRefresh() {

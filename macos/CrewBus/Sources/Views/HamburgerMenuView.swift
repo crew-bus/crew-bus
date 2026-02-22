@@ -1,31 +1,77 @@
 import SwiftUI
+import CrewBusKit
 
 struct HamburgerMenuView: View {
     @Binding var isPresented: Bool
+    @Environment(AppState.self) private var appState
+    @State private var showUpdateAlert = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            menuItem("Crew Message Trail", icon: "bubble.left.and.bubble.right")
-            menuItem("Crew Audit Trail",   icon: "doc.text.magnifyingglass")
-            menuItem("Social Media Drafts", icon: "pencil.and.outline")
+            menuItem("Crew Message Trail", icon: "bubble.left.and.bubble.right") {
+                navigate(to: .messageFeed)
+            }
+            menuItem("Crew Audit Trail", icon: "doc.text.magnifyingglass") {
+                navigate(to: .auditLog)
+            }
+            menuItem("Social Media Drafts", icon: "pencil.and.outline") {
+                navigate(to: .socialDrafts)
+            }
 
             Divider()
                 .background(CrewTheme.border)
                 .padding(.vertical, 4)
 
-            menuItem("Software Update", icon: "arrow.down.circle")
-            menuItem("Lock Dashboard",  icon: "lock.fill")
-            menuItem("Send Feedback",   icon: "envelope")
+            menuItem("Crew Channels", icon: "number") {
+                navigate(to: .channelList)
+            }
+            menuItem("Observability", icon: "chart.bar.xaxis") {
+                navigate(to: .observability)
+            }
+            menuItem("Security & Devices", icon: "lock.shield") {
+                navigate(to: .deviceManagement)
+            }
+
+            Divider()
+                .background(CrewTheme.border)
+                .padding(.vertical, 4)
+
+            menuItem("Software Update", icon: "arrow.down.circle") {
+                isPresented = false
+                showUpdateAlert = true
+            }
+            menuItem("Lock Dashboard", icon: "lock.fill") {
+                isPresented = false
+                Task { await appState.lockDashboard() }
+            }
+            menuItem("Send Feedback", icon: "envelope") {
+                isPresented = false
+                if let url = URL(string: "https://github.com/anthropics/claude-code/issues") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
         }
         .padding(.vertical, 8)
         .frame(width: 220)
         .background(CrewTheme.surface)
+        .alert("Software Update", isPresented: $showUpdateAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("You're running the latest version of Crew Bus.")
+        }
+    }
+
+    private func navigate(to destination: NavDestination) {
+        isPresented = false
+        withAnimation(.easeInOut(duration: 0.25)) {
+            appState.navDestination = destination
+        }
     }
 
     @ViewBuilder
-    private func menuItem(_ title: String, icon: String) -> some View {
+    private func menuItem(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button {
-            isPresented = false
+            action()
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)

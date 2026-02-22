@@ -2,6 +2,7 @@ import Foundation
 
 public actor APIClient {
     public let baseURL: URL
+    public var authToken: String?
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -13,9 +14,25 @@ public actor APIClient {
         self.baseURL = baseURL
     }
 
+    public func setAuthToken(_ token: String?) {
+        authToken = token
+    }
+
     public func get<T: Decodable>(_ path: String) async throws -> T {
         let url = baseURL.appendingPathComponent(path)
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        applyAuth(&request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    public func get<T: Decodable>(_ path: String, query: [String: String]) async throws -> T {
+        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        var request = URLRequest(url: components.url!)
+        applyAuth(&request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response)
         return try decoder.decode(T.self, from: data)
     }
@@ -26,6 +43,7 @@ public actor APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        applyAuth(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response)
         return try decoder.decode(T.self, from: data)
@@ -37,6 +55,7 @@ public actor APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        applyAuth(&request)
         let (_, response) = try await URLSession.shared.data(for: request)
         try validate(response)
     }
@@ -48,6 +67,12 @@ public actor APIClient {
             return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
             return false
+        }
+    }
+
+    private func applyAuth(_ request: inout URLRequest) {
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
     }
 
