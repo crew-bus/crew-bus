@@ -34,6 +34,9 @@ wa-bridge/wa-session/
 # Xcode user data
 xcuserdata/
 
+# SPM build cache
+CrewBusKit/.build/
+
 # Embedded repos / worktrees
 .claude/worktrees/
 crew-bus/
