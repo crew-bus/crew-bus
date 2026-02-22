@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Crew Bus — The First AI Crew That Actually Cares About You</title>
-    <meta name="description" content="Crew Bus is the world's first AI crew designed to protect you. Open source, runs on your hardware, free forever. Inner circle agents for wellbeing, purpose, finances, and more. For kids, teens, families, freelancers, businesses — every human.">
+    <meta name="description" content="Crew Bus is your personal AI crew — Crew Boss, Guardian, and Vault working together on your hardware. Open source, private, free forever. Boss talks, Guard protects, Vault remembers.">
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
@@ -16,7 +16,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://crew-bus.dev">
     <meta property="og:title" content="Crew Bus — The First AI Crew That Actually Cares About You">
-    <meta property="og:description" content="Open source AI crew that protects you. Inner circle agents for wellbeing, purpose, finances, and daily life. Runs on your hardware. Free forever.">
+    <meta property="og:description" content="Your personal AI crew — Boss talks, Guard protects, Vault remembers. Runs on your hardware. Open source. Free forever.">
     <meta property="og:image" content="https://crew-bus.dev/img/og-card.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Crew Bus — The First AI Crew That Actually Cares About You">
-    <meta name="twitter:description" content="Open source AI crew that protects you. Inner circle agents for wellbeing, purpose, finances, and daily life. Runs on your hardware. Free forever.">
+    <meta name="twitter:description" content="Your personal AI crew — Boss talks, Guard protects, Vault remembers. Runs on your hardware. Open source. Free forever.">
     <meta name="twitter:image" content="https://crew-bus.dev/img/og-card.png">
 
     <!-- JSON-LD Structured Data -->
@@ -41,10 +41,10 @@
             "priceCurrency": "USD",
             "description": "Your full AI crew — free and open source forever"
         },
-        "description": "The world's first AI crew designed to protect the human using it. Open source, runs on your hardware, with inner circle agents for wellbeing, purpose, finances, and daily life.",
+        "description": "The world's first AI crew designed to protect the human using it. Three agents in a triangle — Boss talks, Guard protects, Vault remembers. Open source, runs on your hardware.",
         "url": "https://crew-bus.dev",
         "downloadUrl": "https://github.com/crew-bus/crew-bus",
-        "softwareVersion": "1.0",
+        "softwareVersion": "0.3.0",
         "author": {
             "@type": "Organization",
             "name": "Crew Bus"
@@ -72,9 +72,10 @@
         </button>
         <div class="nav-links" id="navLinks">
             <a href="#why-different">Why It's Different</a>
-            <a href="#inner-circle">Inner Circle</a>
+            <a href="#your-crew">Your Crew</a>
             <a href="#for-you">For You</a>
             <a href="/pricing">Pricing</a>
+            <a href="/install">Install</a>
             <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
         </div>
     </div>
@@ -88,13 +89,13 @@
         <div class="hero-content">
             <h1 class="hero-title">The First AI Crew<br><span class="highlight">That Actually Cares About You.</span></h1>
             <p class="hero-sub">
-                Not just a chatbot. A full crew of AI agents that know you, protect you,
-                and work together behind the scenes. Your Crew Boss handles 80% of everything.
-                Six inner circle agents watch over your wellbeing, goals, finances, and daily life.
-                A Guardian that never sleeps. All on your own computer. Free forever.
+                Not just a chatbot. A crew of three AI agents that know you, protect you,
+                and work together behind the scenes. Crew Boss handles 80% of everything.
+                Guardian keeps you safe. Vault remembers your whole life — privately.
+                All on your own computer. Free forever.
             </p>
             <div class="hero-actions">
-                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary btn-lg" style="font-size: 1.2rem; padding: 1rem 2.5rem;">
+                <a href="/install" class="btn btn-primary btn-lg" style="font-size: 1.2rem; padding: 1rem 2.5rem;">
                     Get Your Crew Free
                 </a>
                 <a href="#why-different" class="btn btn-outline btn-lg">
@@ -104,39 +105,27 @@
             <p class="hero-note">Open source &middot; MIT License &middot; Runs on your hardware &middot; No cloud ever</p>
         </div>
 
-        <!-- Agent Circle Diagram — updated to show the real inner circle -->
+        <!-- Agent Triangle Diagram — Boss on top, Guardian + Vault below -->
         <div class="hero-visual">
-            <div class="circle-diagram">
-                <div class="circle-center">
+            <div class="triangle-crew">
+                <div class="tri-boss">
                     <div class="circle-node node-boss">
                         <span class="node-icon">&#10025;</span>
                         <span class="node-label">Crew Boss</span>
                     </div>
                 </div>
-                <div class="circle-ring">
-                    <div class="circle-node node-family" style="--angle: 0deg;">
-                        <span class="node-icon">&#128154;</span>
-                        <span class="node-label">Wellness</span>
-                    </div>
-                    <div class="circle-node node-muse" style="--angle: 60deg;">
-                        <span class="node-icon">&#127775;</span>
-                        <span class="node-label">Strategy</span>
-                    </div>
-                    <div class="circle-node node-health" style="--angle: 120deg;">
-                        <span class="node-icon">&#128172;</span>
-                        <span class="node-label">Comms</span>
-                    </div>
-                    <div class="circle-node node-growth" style="--angle: 180deg;">
-                        <span class="node-icon">&#128176;</span>
-                        <span class="node-label">Financial</span>
-                    </div>
-                    <div class="circle-node" style="--angle: 240deg;">
-                        <span class="node-icon">&#128218;</span>
-                        <span class="node-label">Knowledge</span>
-                    </div>
-                    <div class="circle-node" style="--angle: 300deg;">
+                <svg class="tri-lines" viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
+                    <line x1="250" y1="130" x2="100" y2="310" stroke="#d18616" stroke-width="1.5" opacity="0.4"/>
+                    <line x1="250" y1="130" x2="400" y2="310" stroke="#9c6bdb" stroke-width="1.5" opacity="0.4"/>
+                </svg>
+                <div class="tri-bottom">
+                    <div class="circle-node tri-node node-guardian">
                         <span class="node-icon">&#128737;</span>
                         <span class="node-label">Guardian</span>
+                    </div>
+                    <div class="circle-node tri-node node-vault">
+                        <span class="node-icon">&#128302;</span>
+                        <span class="node-label">Vault</span>
                     </div>
                 </div>
             </div>
@@ -159,31 +148,21 @@
                 <div class="hd-particle" style="left:45%;top:80%;animation-delay:3s;animation-duration:7s;"></div>
                 <div class="hd-particle" style="left:55%;top:65%;animation-delay:5s;animation-duration:9s;"></div>
                 <div class="hd-particle" style="left:35%;top:70%;animation-delay:6s;animation-duration:11s;"></div>
-                <!-- Circle diagram -->
+                <!-- Triangle diagram — Boss top, Guardian + Vault below -->
                 <div class="hd-diagram">
-                    <div class="hd-line hd-line-family"></div>
-                    <div class="hd-line hd-line-muse"></div>
-                    <div class="hd-line hd-line-health"></div>
-                    <div class="hd-line hd-line-growth"></div>
+                    <div class="hd-line hd-line-guardian"></div>
+                    <div class="hd-line hd-line-vault"></div>
                     <div class="hd-boss">
                         <span class="hd-boss-icon">&#10025;</span>
                         <span class="hd-boss-label">Crew Boss</span>
                     </div>
-                    <div class="hd-agent hd-family">
-                        <span class="hd-agent-icon">&#128154;</span>
-                        <span class="hd-agent-label">Wellness</span>
+                    <div class="hd-agent hd-guardian">
+                        <span class="hd-agent-icon">&#128737;</span>
+                        <span class="hd-agent-label">Guardian</span>
                     </div>
-                    <div class="hd-agent hd-muse">
-                        <span class="hd-agent-icon">&#127775;</span>
-                        <span class="hd-agent-label">Strategy</span>
-                    </div>
-                    <div class="hd-agent hd-health">
-                        <span class="hd-agent-icon">&#128172;</span>
-                        <span class="hd-agent-label">Comms</span>
-                    </div>
-                    <div class="hd-agent hd-growth">
-                        <span class="hd-agent-icon">&#128176;</span>
-                        <span class="hd-agent-label">Financial</span>
+                    <div class="hd-agent hd-vault">
+                        <span class="hd-agent-icon">&#128302;</span>
+                        <span class="hd-agent-label">Vault</span>
                     </div>
                 </div>
                 <!-- Chat panel -->
@@ -241,8 +220,8 @@
             </div>
             <div class="feature-card">
                 <div class="feature-icon">&#128274;</div>
-                <h3>Inner Circle Protocol</h3>
-                <p>Your support agents never bother you directly. They report to Crew Boss, who decides what reaches you and when. Your energy is precious — this system protects it.</p>
+                <h3>Boss Talks, Guard Protects, Vault Remembers</h3>
+                <p>Three agents, one triangle. Crew Boss handles 80% of everything. Guardian keeps you safe. Vault remembers your whole life privately. Clean, simple, powerful.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">&#128737;</div>
@@ -264,42 +243,27 @@
 </section>
 
 <!-- ============================================================
-     INNER CIRCLE — the 6 agents that make this special
+     YOUR CREW — the 3 agents that make this special
      ============================================================ -->
-<section class="section section-dark" id="inner-circle">
+<section class="section section-dark" id="your-crew">
     <div class="container">
-        <h2 class="section-title">Your Inner Circle</h2>
-        <p class="section-sub">Six agents working behind the scenes on the parts of life that matter most. Each has a unique skill no other agent has. They never contact you directly — Crew Boss delivers everything at the right moment.</p>
+        <h2 class="section-title">Your Crew</h2>
+        <p class="section-sub">Three agents working together in a triangle. Simple, powerful, private. Everything you need, nothing you don't.</p>
         <div class="feature-grid">
             <div class="feature-card">
-                <div class="feature-icon">&#128154;</div>
-                <h3>Wellness</h3>
-                <p><strong>gentle-guardian</strong> — Watches for burnout before you feel it. Maps your energy patterns. Celebrates wins you forget to celebrate. Shields you from stress overload.</p>
+                <div class="feature-icon">&#10025;</div>
+                <h3>Crew Boss</h3>
+                <p><strong>Your AI right-hand.</strong> Handles 80% of everything — wellness, strategy, finances, daily life. Asks you a few questions on day one, then calibrates the whole crew to you. Fun for kids, direct for adults, real talk for teens.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#127775;</div>
-                <h3>Strategy</h3>
-                <p><strong>north-star-navigator</strong> — Helps you find purpose when old paths close. Points at doors you can't see yet. Breaks big dreams into the smallest possible next step.</p>
+                <div class="feature-icon">&#128737;</div>
+                <h3>Guardian</h3>
+                <p><strong>Your always-on protector.</strong> Scans every skill for safety, guards your data, walks you through setup, controls all web access, and auto-quarantines anything suspicious. The crew's immune system.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#128172;</div>
-                <h3>Communications</h3>
-                <p><strong>life-orchestrator</strong> — Takes the invisible weight of daily logistics off your shoulders. Tracks relationships. Reminds you to call your mom. Simplifies everything.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#128176;</div>
-                <h3>Financial</h3>
-                <p><strong>peace-of-mind-finance</strong> — Judgment-free financial clarity. No shame, no jargon. Spots patterns, builds your future calmly, prepares you for storms without creating anxiety.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#128218;</div>
-                <h3>Knowledge</h3>
-                <p><strong>wisdom-filter</strong> — In a world drowning in information, finds the 3 things that actually matter to YOU. Builds understanding, not just awareness. Sparks your curiosity.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#9878;</div>
-                <h3>Legal</h3>
-                <p><strong>rights-compass</strong> — Translates legalese to plain language. Spots red flags in contracts. Tracks deadlines. Helps you feel less small against big systems.</p>
+                <div class="feature-icon">&#128302;</div>
+                <h3>Vault</h3>
+                <p><strong>Your private journal.</strong> Remembers everything — moods, goals, money notes, relationship changes, dreams, wins, fears. Connects dots across weeks and months. Never nags. Only speaks when spoken to. Like a journal that writes back.</p>
             </div>
         </div>
     </div>
@@ -341,7 +305,7 @@
             <div class="feature-card">
                 <div class="feature-icon">&#128151;</div>
                 <h3>Anyone Going Through It</h3>
-                <p>When the world is confusing and doors are closing, your inner circle helps you find new ones. Purpose-finding, financial clarity, burnout protection — all in one place.</p>
+                <p>When the world is confusing and doors are closing, your crew helps you find new ones. Talk to Vault about what's on your mind. Let Boss help you take the next step.</p>
             </div>
         </div>
     </div>
@@ -362,13 +326,13 @@
             </div>
             <div class="step">
                 <div class="step-number">2</div>
-                <h3>Meet Guardian</h3>
-                <p>Your Guardian walks you through setup — pick your AI model, choose a crew template, and you're live. No terminal knowledge needed.</p>
+                <h3>Meet Your Crew</h3>
+                <p>Guardian walks you through setup. Crew Boss asks a few questions to calibrate. Vault opens its pages. Three agents, ready to go.</p>
             </div>
             <div class="step">
                 <div class="step-number">3</div>
                 <h3>Talk to Crew Boss</h3>
-                <p>Your dashboard lights up. Your inner circle is already working behind the scenes. Just start talking to Crew Boss — your friendly right-hand for everything.</p>
+                <p>Your dashboard lights up with a triangle — Boss on top, Guardian and Vault below. Just start talking. Your crew takes it from there.</p>
             </div>
         </div>
     </div>
@@ -380,7 +344,7 @@
 <section class="section" id="teams">
     <div class="container">
         <h2 class="section-title">Add Teams When You're Ready</h2>
-        <p class="section-sub">Your inner circle is free. When you need specialized teams for school, business, or side projects — they're here.</p>
+        <p class="section-sub">Your core crew is free. When you need specialized teams for school, business, or side projects — they're here.</p>
         <div class="feature-grid">
             <div class="feature-card">
                 <div class="feature-icon">&#128218;</div>
@@ -428,7 +392,7 @@
             <p style="font-size: 1.4rem; font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">&#128274; Your data stays 100% on your machine.</p>
             <p style="font-size: 1.1rem; color: var(--text-dim);">No cloud. No tracking. No ads. No data collection. Open source forever. Just your crew, working for you, on your hardware.</p>
             <div style="margin-top: 1.5rem;">
-                <a href="https://github.com/crew-bus/crew-bus" class="btn btn-primary btn-lg" style="font-size: 1.1rem; padding: 0.9rem 2rem;">Get Your Crew Free</a>
+                <a href="/install" class="btn btn-primary btn-lg" style="font-size: 1.1rem; padding: 0.9rem 2rem;">Get Your Crew Free</a>
             </div>
         </div>
     </div>
@@ -442,13 +406,14 @@
         <div class="footer-grid">
             <div class="footer-col">
                 <h4>crew-bus</h4>
-                <p class="footer-desc">The world's first AI crew designed to protect the human using it. Free, open source, and built for everyone.</p>
+                <p class="footer-desc">Your personal AI crew — Boss talks, Guard protects, Vault remembers. Free, open source, and built for every human.</p>
             </div>
             <div class="footer-col">
                 <h4>Product</h4>
                 <ul>
-                    <li><a href="#inner-circle">Inner Circle</a></li>
+                    <li><a href="#your-crew">Your Crew</a></li>
                     <li><a href="#for-you">For You</a></li>
+                    <li><a href="/install">Install</a></li>
                     <li><a href="/pricing">Pricing</a></li>
                     <li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li>
                 </ul>

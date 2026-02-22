@@ -53,8 +53,8 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
     "human", "right_hand", "guardian", "security",
-    "strategy", "wellness", "financial", "legal", "knowledge", "communications",
-    "manager", "worker", "specialist", "help",
+    "strategy", "wellness", "financial", "legal", "communications",
+    "vault", "manager", "worker", "specialist", "help",
 )
 
 # Role is now derived from agent_type for routing purposes
@@ -69,7 +69,7 @@ VALID_PRIORITIES = ("low", "normal", "high", "critical")
 VALID_MESSAGE_STATUSES = ("queued", "delivered", "read", "archived")
 
 # Core crew agent types (report to Crew Boss)
-CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "knowledge", "communications")
+CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "communications", "vault")
 
 # Decision types for the decision log
 VALID_DECISION_TYPES = (
@@ -113,18 +113,110 @@ def _role_for_type(agent_type: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Database
+# Database — thread-local connection caching
 # ---------------------------------------------------------------------------
+# SQLite connections are not thread-safe, but each thread can safely reuse
+# its own connection. This avoids the overhead of creating a new connection
+# (and re-running PRAGMAs) on every call to get_conn().
+#
+# Existing code throughout bus.py calls conn.close() after use. To avoid
+# breaking those callers while still reusing connections, get_conn() returns
+# a thin wrapper whose close() is a no-op. The real connection stays alive
+# in the thread-local cache. Call close_thread_connections() at thread exit
+# to truly release resources.
 
-def get_conn(db_path: Optional[Path] = None) -> sqlite3.Connection:
-    """Return a connection to the crew-bus database with row factory enabled."""
-    path = db_path or DB_PATH
+_thread_local = threading.local()
+
+
+class _CachedConnection:
+    """Wrapper around sqlite3.Connection that ignores close() calls.
+
+    All attribute access is forwarded to the real connection. The only
+    overridden method is close(), which is a no-op so that existing code
+    like ``conn = get_conn(); ...; conn.close()`` doesn't break the cache.
+    """
+
+    __slots__ = ("_real",)
+
+    def __init__(self, real_conn: sqlite3.Connection):
+        object.__setattr__(self, "_real", real_conn)
+
+    def close(self):
+        """No-op — the connection is managed by the thread-local cache."""
+        pass
+
+    def _actually_close(self):
+        """Really close the underlying connection (called by cache cleanup)."""
+        try:
+            self._real.close()
+        except Exception:
+            pass
+
+    # Forward everything else to the real connection
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def __setattr__(self, name, value):
+        if name in _CachedConnection.__slots__:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._real, name, value)
+
+    # Make it work as a context manager (sqlite3 connections support this)
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        # Don't close — just like close() is a no-op
+        pass
+
+
+def _make_conn(path: Path) -> sqlite3.Connection:
+    """Create a fresh SQLite connection with standard PRAGMAs."""
     conn = sqlite3.connect(str(path), timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=FULL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def get_conn(db_path: Optional[Path] = None) -> sqlite3.Connection:
+    """Return a connection to the crew-bus database with row factory enabled.
+
+    Connections are cached per-thread and per-db-path. The returned object's
+    close() is a no-op so existing call sites that close after use don't
+    invalidate the cache. Call close_thread_connections() to truly release.
+    """
+    path = db_path or DB_PATH
+    cache_key = f"_conn_{path}"
+
+    wrapper = getattr(_thread_local, cache_key, None)
+    if wrapper is not None:
+        try:
+            # Quick health check on the real connection
+            wrapper._real.execute("SELECT 1")
+            return wrapper
+        except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+            wrapper._actually_close()
+
+    real_conn = _make_conn(path)
+    wrapper = _CachedConnection(real_conn)
+    setattr(_thread_local, cache_key, wrapper)
+    return wrapper
+
+
+def close_thread_connections():
+    """Close all cached connections for the current thread.
+
+    Call this when a thread is about to exit, or in test teardown.
+    """
+    for attr in list(vars(_thread_local)):
+        if attr.startswith("_conn_"):
+            wrapper = getattr(_thread_local, attr, None)
+            if wrapper is not None:
+                wrapper._actually_close()
+            delattr(_thread_local, attr)
 
 
 @contextlib.contextmanager
@@ -137,10 +229,12 @@ def db_write(db_path: Optional[Path] = None):
             # commit happens automatically on clean exit
 
     Acquires _db_write_lock so only one thread writes at a time.
-    Commits on success, rolls back on exception, always closes.
+    Uses a fresh (non-cached) connection to avoid holding a cached
+    connection in a half-committed state on error.
     """
+    path = db_path or DB_PATH
     _db_write_lock.acquire()
-    conn = get_conn(db_path)
+    conn = _make_conn(path)
     try:
         yield conn
         conn.commit()
@@ -397,6 +491,33 @@ def init_db(db_path: Optional[Path] = None) -> None:
             created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         );
 
+        -- ========= Crew Channels (group comms) =========
+
+        CREATE TABLE IF NOT EXISTS crew_channels (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT    NOT NULL UNIQUE,
+            purpose         TEXT    NOT NULL DEFAULT '',
+            created_by      INTEGER NOT NULL REFERENCES agents(id),
+            pinned          INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS crew_channel_members (
+            channel_id      INTEGER NOT NULL REFERENCES crew_channels(id),
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            joined_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            PRIMARY KEY (channel_id, agent_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS crew_channel_messages (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id      INTEGER NOT NULL REFERENCES crew_channels(id),
+            from_agent_id   INTEGER NOT NULL REFERENCES agents(id),
+            body            TEXT    NOT NULL,
+            reply_to        INTEGER DEFAULT NULL,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
         -- ========= Guard Activation =========
 
         CREATE TABLE IF NOT EXISTS guard_activation (
@@ -425,10 +546,10 @@ def init_db(db_path: Optional[Path] = None) -> None:
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             agent_id        INTEGER NOT NULL REFERENCES agents(id),
             memory_type     TEXT    NOT NULL DEFAULT 'fact'
-                            CHECK(memory_type IN ('fact','preference','instruction','summary','persona')),
+                            CHECK(memory_type IN ('fact','preference','instruction','summary','persona','error','learning')),
             content         TEXT    NOT NULL,
             source          TEXT    NOT NULL DEFAULT 'conversation'
-                            CHECK(source IN ('conversation','user_command','synthesis','system')),
+                            CHECK(source IN ('conversation','user_command','synthesis','system','auto_summary')),
             importance      INTEGER NOT NULL DEFAULT 5 CHECK(importance BETWEEN 1 AND 10),
             access_count    INTEGER NOT NULL DEFAULT 0,
             last_accessed   TEXT,
@@ -470,6 +591,35 @@ def init_db(db_path: Optional[Path] = None) -> None:
             ON skill_registry(content_hash);
         CREATE INDEX IF NOT EXISTS idx_skill_registry_status
             ON skill_registry(vet_status);
+
+        -- ========= Skill Health (Guardian Runtime Monitoring) =========
+
+        CREATE TABLE IF NOT EXISTS skill_health (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id             INTEGER NOT NULL REFERENCES agents(id),
+            skill_name           TEXT    NOT NULL,
+            status               TEXT    NOT NULL DEFAULT 'active'
+                                 CHECK(status IN ('active','quarantined','disabled')),
+            installed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            last_check           TEXT,
+            total_uses           INTEGER NOT NULL DEFAULT 0,
+            error_count          INTEGER NOT NULL DEFAULT 0,
+            anomaly_count        INTEGER NOT NULL DEFAULT 0,
+            avg_response_ms      INTEGER NOT NULL DEFAULT 0,
+            baseline_response_ms INTEGER NOT NULL DEFAULT 0,
+            charter_violations   INTEGER NOT NULL DEFAULT 0,
+            integrity_violations INTEGER NOT NULL DEFAULT 0,
+            quarantined_at       TEXT,
+            quarantine_reason    TEXT    DEFAULT '',
+            health_score         INTEGER NOT NULL DEFAULT 100
+                                 CHECK(health_score BETWEEN 0 AND 100),
+            UNIQUE(agent_id, skill_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_skill_health_agent
+            ON skill_health(agent_id, status);
+        CREATE INDEX IF NOT EXISTS idx_skill_health_status
+            ON skill_health(status, health_score);
 
         -- ========= Techie Marketplace =========
 
@@ -645,6 +795,28 @@ def init_db(db_path: Optional[Path] = None) -> None:
     cols = [r[1] for r in cur.execute("PRAGMA table_info(agents)").fetchall()]
     if "model" not in cols:
         cur.execute("ALTER TABLE agents ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+    if "avatar" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
+    if "soul" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN soul TEXT NOT NULL DEFAULT ''")
+    if "thinking_level" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN thinking_level TEXT NOT NULL DEFAULT 'auto'")
+
+    # Heartbeat tasks table (per-agent scheduled autonomous tasks)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS heartbeat_tasks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id    INTEGER NOT NULL REFERENCES agents(id),
+            schedule    TEXT NOT NULL DEFAULT 'every 30m',
+            task        TEXT NOT NULL,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            last_run    TEXT,
+            next_run    TEXT,
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )
+    """)
+    cur.execute("""CREATE INDEX IF NOT EXISTS idx_heartbeat_agent
+        ON heartbeat_tasks(agent_id, enabled)""")
 
     # Migrate: add extended_profile column to human_profile for self-learning
     hp_cols = [r[1] for r in cur.execute("PRAGMA table_info(human_profile)").fetchall()]
@@ -679,6 +851,112 @@ def init_db(db_path: Optional[Path] = None) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_drafts(status, platform)")
         cur.execute("INSERT INTO social_drafts SELECT * FROM _social_drafts_old")
         cur.execute("DROP TABLE _social_drafts_old")
+
+    # Migrate: expand agent_memory source CHECK to include 'auto_summary'
+    _am_sql = cur.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_memory'"
+    ).fetchone()
+    if _am_sql and "'auto_summary'" not in (_am_sql[0] or ""):
+        cur.execute("ALTER TABLE agent_memory RENAME TO _agent_memory_old")
+        cur.execute("""CREATE TABLE agent_memory (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            memory_type     TEXT    NOT NULL DEFAULT 'fact'
+                            CHECK(memory_type IN ('fact','preference','instruction','summary','persona')),
+            content         TEXT    NOT NULL,
+            source          TEXT    NOT NULL DEFAULT 'conversation'
+                            CHECK(source IN ('conversation','user_command','synthesis','system','auto_summary')),
+            importance      INTEGER NOT NULL DEFAULT 5 CHECK(importance BETWEEN 1 AND 10),
+            access_count    INTEGER NOT NULL DEFAULT 0,
+            last_accessed   TEXT,
+            expires_at      TEXT,
+            active          INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )""")
+        cur.execute("""CREATE INDEX IF NOT EXISTS idx_agent_memory_agent
+            ON agent_memory(agent_id, active, importance DESC)""")
+        cur.execute("""CREATE INDEX IF NOT EXISTS idx_agent_memory_type
+            ON agent_memory(agent_id, memory_type, active)""")
+        cur.execute("INSERT INTO agent_memory SELECT * FROM _agent_memory_old")
+        cur.execute("DROP TABLE _agent_memory_old")
+
+    # Migrate: expand agent_memory memory_type CHECK to include 'error','learning'
+    _am_sql2 = cur.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_memory'"
+    ).fetchone()
+    if _am_sql2 and "'error'" not in (_am_sql2[0] or ""):
+        cur.execute("ALTER TABLE agent_memory RENAME TO _agent_memory_old2")
+        cur.execute("""CREATE TABLE agent_memory (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            memory_type     TEXT    NOT NULL DEFAULT 'fact'
+                            CHECK(memory_type IN ('fact','preference','instruction','summary','persona','error','learning')),
+            content         TEXT    NOT NULL,
+            source          TEXT    NOT NULL DEFAULT 'conversation'
+                            CHECK(source IN ('conversation','user_command','synthesis','system','auto_summary')),
+            importance      INTEGER NOT NULL DEFAULT 5 CHECK(importance BETWEEN 1 AND 10),
+            access_count    INTEGER NOT NULL DEFAULT 0,
+            last_accessed   TEXT,
+            expires_at      TEXT,
+            active          INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )""")
+        cur.execute("""CREATE INDEX IF NOT EXISTS idx_agent_memory_agent
+            ON agent_memory(agent_id, active, importance DESC)""")
+        cur.execute("""CREATE INDEX IF NOT EXISTS idx_agent_memory_type
+            ON agent_memory(agent_id, memory_type, active)""")
+        cur.execute("INSERT INTO agent_memory SELECT * FROM _agent_memory_old2")
+        cur.execute("DROP TABLE _agent_memory_old2")
+
+    # ========= Telemetry (lightweight observability) =========
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS telemetry (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            trace_id    TEXT NOT NULL,
+            span_name   TEXT NOT NULL,
+            agent_id    INTEGER REFERENCES agents(id),
+            duration_ms INTEGER,
+            status      TEXT NOT NULL DEFAULT 'ok' CHECK(status IN ('ok','error')),
+            metadata    TEXT NOT NULL DEFAULT '{}',
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_telemetry_trace ON telemetry(trace_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_telemetry_time ON telemetry(created_at)")
+
+    # ========= Gateway Auth & Device Pairing =========
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS paired_devices (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_name TEXT NOT NULL,
+            device_token TEXT NOT NULL UNIQUE,
+            role        TEXT NOT NULL DEFAULT 'operator' CHECK(role IN ('admin','operator','viewer')),
+            paired_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            last_seen   TEXT,
+            active      INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS pairing_codes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            code        TEXT NOT NULL UNIQUE,
+            expires_at  TEXT NOT NULL,
+            claimed_by  INTEGER REFERENCES paired_devices(id),
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )
+    """)
+
+    # Migrate: add face_mode and face_config columns to agents
+    if "face_mode" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN face_mode TEXT NOT NULL DEFAULT 'emoji'")
+    if "face_config" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN face_config TEXT NOT NULL DEFAULT '{}'")
+
+    # Migrate: add title column to agents (paid team feature)
+    if "title" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN title TEXT NOT NULL DEFAULT ''")
 
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
@@ -1259,35 +1537,46 @@ def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
 
         # Clean up all FK references for every agent being removed
         for aid in all_ids:
-            # messages: from_agent_id / to_agent_id are NOT NULL — must delete rows
+            # messages
             conn.execute(
                 "DELETE FROM messages WHERE from_agent_id=? OR to_agent_id=?",
                 (aid, aid),
             )
-            # audit_log: agent_id is nullable — null it out
+            # audit_log: nullable — null it out
             conn.execute(
                 "UPDATE audit_log SET agent_id=NULL WHERE agent_id=?",
                 (aid,),
             )
-            # timing_rules: agent_id NOT NULL — delete rows
             conn.execute("DELETE FROM timing_rules WHERE agent_id=?", (aid,))
-            # agent_skills: agent_id NOT NULL — delete rows
             conn.execute("DELETE FROM agent_skills WHERE agent_id=?", (aid,))
-            # team_mailbox: from_agent_id NOT NULL — delete rows
             conn.execute(
                 "DELETE FROM team_mailbox WHERE from_agent_id=? OR team_id=?",
                 (aid, aid),
             )
-            # private_sessions: human_id / agent_id NOT NULL — delete rows
             conn.execute(
                 "DELETE FROM private_sessions WHERE human_id=? OR agent_id=?",
                 (aid, aid),
             )
-            # agents: parent_agent_id nullable — null out any orphaned children
+            # knowledge_store, agent_memory, social_drafts, skill_health
+            conn.execute("DELETE FROM knowledge_store WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM agent_memory WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM social_drafts WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM skill_health WHERE agent_id=?", (aid,))
+            # crew_channels
+            conn.execute("DELETE FROM crew_channel_messages WHERE from_agent_id=?", (aid,))
+            conn.execute("DELETE FROM crew_channel_members WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM crew_channels WHERE created_by=?", (aid,))
+            # agents: parent_agent_id nullable — null out orphaned children
             conn.execute(
                 "UPDATE agents SET parent_agent_id=NULL WHERE parent_agent_id=?",
                 (aid,),
             )
+
+        # Clean up team_links referencing this team (manager_id)
+        conn.execute(
+            "DELETE FROM team_links WHERE team_a_id=? OR team_b_id=?",
+            (manager_id, manager_id),
+        )
 
         # Now safe to delete the agent rows themselves
         for aid in all_ids:
@@ -1341,6 +1630,299 @@ def unlink_teams(team_a_id: int, team_b_id: int,
         return {"ok": False, "error": str(e)}
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Telemetry (lightweight observability)
+# ---------------------------------------------------------------------------
+
+def record_span(span_name: str, agent_id: Optional[int] = None,
+                duration_ms: Optional[int] = None, status: str = "ok",
+                metadata: Optional[dict] = None, trace_id: Optional[str] = None,
+                db_path: Optional[Path] = None) -> int:
+    """Insert a telemetry span row."""
+    db = db_path or DB_PATH
+    tid = trace_id or uuid.uuid4().hex[:16]
+    meta = json.dumps(metadata or {})
+    with db_write(db) as conn:
+        cur = conn.execute(
+            "INSERT INTO telemetry (trace_id, span_name, agent_id, duration_ms, status, metadata) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (tid, span_name, agent_id, duration_ms, status, meta),
+        )
+        return cur.lastrowid
+
+
+def get_telemetry(limit: int = 100, agent_id: Optional[int] = None,
+                  span_name: Optional[str] = None, since: Optional[str] = None,
+                  db_path: Optional[Path] = None) -> list:
+    """Query telemetry spans with optional filters."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        clauses = []
+        params = []
+        if agent_id is not None:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        if span_name:
+            clauses.append("span_name = ?")
+            params.append(span_name)
+        if since:
+            clauses.append("created_at >= ?")
+            params.append(since)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        rows = conn.execute(
+            f"SELECT * FROM telemetry{where} ORDER BY created_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_telemetry_stats(since: Optional[str] = None,
+                        db_path: Optional[Path] = None) -> dict:
+    """Aggregate telemetry stats: avg/p95 response times, error rates by span."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        where = ""
+        params = []
+        if since:
+            where = " WHERE created_at >= ?"
+            params = [since]
+        rows = conn.execute(
+            f"SELECT span_name, COUNT(*) as call_count, "
+            f"AVG(duration_ms) as avg_ms, "
+            f"SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) as error_count "
+            f"FROM telemetry{where} GROUP BY span_name ORDER BY call_count DESC",
+            params,
+        ).fetchall()
+        stats = []
+        for r in rows:
+            count = r["call_count"]
+            err = r["error_count"]
+            # p95 approximation: get durations for this span
+            durations = conn.execute(
+                f"SELECT duration_ms FROM telemetry WHERE span_name=? AND duration_ms IS NOT NULL"
+                + (" AND created_at >= ?" if since else "")
+                + " ORDER BY duration_ms",
+                ([r["span_name"]] + params),
+            ).fetchall()
+            p95 = 0
+            if durations:
+                idx = int(len(durations) * 0.95)
+                idx = min(idx, len(durations) - 1)
+                p95 = durations[idx]["duration_ms"] or 0
+            stats.append({
+                "span_name": r["span_name"],
+                "call_count": count,
+                "avg_ms": round(r["avg_ms"] or 0, 1),
+                "p95_ms": p95,
+                "error_count": err,
+                "error_rate": round(err / count * 100, 1) if count else 0,
+            })
+        return {"stats": stats}
+    finally:
+        conn.close()
+
+
+def cleanup_old_telemetry(days: int = 7, db_path: Optional[Path] = None) -> int:
+    """Prune telemetry older than N days. Returns count deleted."""
+    db = db_path or DB_PATH
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db) as conn:
+        cur = conn.execute("DELETE FROM telemetry WHERE created_at < ?", (cutoff,))
+        return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Gateway Auth & Device Pairing
+# ---------------------------------------------------------------------------
+
+def init_gateway_auth(db_path: Optional[Path] = None) -> str:
+    """Auto-generate gateway token on first boot if auth mode != 'none'.
+    Seeds a localhost device. Returns the gateway token."""
+    db = db_path or DB_PATH
+    mode = get_config("gateway_auth_mode", "none", db_path=db)
+    if mode == "none":
+        return ""
+    token = get_config("gateway_auth_token", "", db_path=db)
+    if not token:
+        import secrets as _sec
+        token = _sec.token_urlsafe(32)
+        set_config("gateway_auth_token", token, db_path=db)
+        # Seed localhost device
+        with db_write(db) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO paired_devices (device_name, device_token, role) "
+                "VALUES (?, ?, ?)",
+                ("localhost", token, "admin"),
+            )
+    return token
+
+
+def create_pairing_code(db_path: Optional[Path] = None) -> str:
+    """Generate a 6-char alphanumeric pairing code, expires in 10 minutes."""
+    import secrets as _sec
+    import string
+    db = db_path or DB_PATH
+    alphabet = string.ascii_uppercase + string.digits
+    code = ''.join(_sec.choice(alphabet) for _ in range(6))
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db) as conn:
+        conn.execute(
+            "INSERT INTO pairing_codes (code, expires_at) VALUES (?, ?)",
+            (code, expires),
+        )
+    return code
+
+
+def claim_pairing_code(code: str, device_name: str,
+                       db_path: Optional[Path] = None) -> Optional[str]:
+    """Claim a pairing code. Returns device_token if valid, None if expired/invalid."""
+    import secrets as _sec
+    db = db_path or DB_PATH
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db) as conn:
+        row = conn.execute(
+            "SELECT id, expires_at, claimed_by FROM pairing_codes WHERE code=?",
+            (code.upper(),),
+        ).fetchone()
+        if not row or row["claimed_by"] or row["expires_at"] < now:
+            return None
+        device_token = _sec.token_urlsafe(32)
+        cur = conn.execute(
+            "INSERT INTO paired_devices (device_name, device_token, role) VALUES (?, ?, ?)",
+            (device_name, device_token, "operator"),
+        )
+        device_id = cur.lastrowid
+        conn.execute(
+            "UPDATE pairing_codes SET claimed_by=? WHERE id=?",
+            (device_id, row["id"]),
+        )
+        return device_token
+
+
+def validate_device_token(token: str, db_path: Optional[Path] = None) -> Optional[dict]:
+    """Validate a device token. Returns device dict or None."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        row = conn.execute(
+            "SELECT * FROM paired_devices WHERE device_token=? AND active=1",
+            (token,),
+        ).fetchone()
+        if row:
+            # Update last_seen
+            try:
+                with db_write(db) as wconn:
+                    wconn.execute(
+                        "UPDATE paired_devices SET last_seen=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                        (row["id"],),
+                    )
+            except Exception:
+                pass
+            return dict(row)
+        return None
+    finally:
+        conn.close()
+
+
+def get_paired_devices(db_path: Optional[Path] = None) -> list:
+    """List all paired devices."""
+    db = db_path or DB_PATH
+    conn = get_conn(db)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM paired_devices WHERE active=1 ORDER BY paired_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def revoke_device(device_id: int, db_path: Optional[Path] = None) -> bool:
+    """Revoke a paired device."""
+    db = db_path or DB_PATH
+    with db_write(db) as conn:
+        cur = conn.execute(
+            "UPDATE paired_devices SET active=0 WHERE id=?", (device_id,))
+        return cur.rowcount > 0
+
+
+def cleanup_expired_codes(db_path: Optional[Path] = None) -> int:
+    """Prune expired pairing codes."""
+    db = db_path or DB_PATH
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db) as conn:
+        cur = conn.execute(
+            "DELETE FROM pairing_codes WHERE expires_at < ? AND claimed_by IS NULL",
+            (now,),
+        )
+        return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Config value encryption helpers (for API keys at rest)
+# ---------------------------------------------------------------------------
+
+# Sensitive config keys that should be encrypted at rest
+_SENSITIVE_CONFIG_KEYS = frozenset({
+    "kimi_api_key", "claude_api_key", "openai_api_key", "groq_api_key",
+    "gemini_api_key", "xai_api_key", "telegram_bot_token",
+    "gateway_auth_token", "gateway_pin",
+})
+
+
+def _get_machine_key() -> bytes:
+    """Derive a machine-specific key for config encryption.
+    Uses a combination of hostname + username as salt with a static pepper."""
+    import socket
+    import getpass
+    salt = f"crew-bus-{socket.gethostname()}-{getpass.getuser()}".encode()
+    return hashlib.pbkdf2_hmac("sha256", b"crew-bus-local-encryption", salt, 100_000)
+
+
+def _encrypt_value(plaintext: str) -> str:
+    """Encrypt a config value. Returns base64-encoded 'ENC:...' string."""
+    if not plaintext or plaintext.startswith("ENC:"):
+        return plaintext
+    key = _get_machine_key()
+    # Simple XOR encryption with key (no external deps)
+    key_bytes = key[:32]
+    data = plaintext.encode("utf-8")
+    encrypted = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(data))
+    return "ENC:" + base64.b64encode(encrypted).decode()
+
+
+def _decrypt_value(encrypted: str) -> str:
+    """Decrypt a config value. If not encrypted, returns as-is."""
+    if not encrypted or not encrypted.startswith("ENC:"):
+        return encrypted
+    key = _get_machine_key()
+    key_bytes = key[:32]
+    data = base64.b64decode(encrypted[4:])
+    decrypted = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(data))
+    return decrypted.decode("utf-8")
+
+
+def set_config_secure(key: str, value: str, db_path: Optional[Path] = None) -> None:
+    """Set config, encrypting if key is sensitive."""
+    if key in _SENSITIVE_CONFIG_KEYS:
+        value = _encrypt_value(value)
+    set_config(key, value, db_path=db_path)
+
+
+def get_config_secure(key: str, default: str = "",
+                      db_path: Optional[Path] = None) -> str:
+    """Get config, decrypting if value is encrypted."""
+    val = get_config(key, default, db_path=db_path)
+    if val and val.startswith("ENC:"):
+        return _decrypt_value(val)
+    return val
 
 
 def get_linked_teams(team_id: int, db_path: Optional[Path] = None) -> list:
@@ -1838,9 +2420,14 @@ def get_agent_status(agent_id: int, db_path: Optional[Path] = None) -> dict:
 
 
 def get_agent_by_name(name: str, db_path: Optional[Path] = None) -> Optional[dict]:
-    """Look up an agent by name. Returns dict or None."""
+    """Look up an agent by name or title. Returns dict or None."""
     conn = get_conn(db_path)
     row = conn.execute("SELECT * FROM agents WHERE name = ?", (name,)).fetchone()
+    if not row:
+        # Fall back to title lookup (case-insensitive)
+        row = conn.execute(
+            "SELECT * FROM agents WHERE title = ? COLLATE NOCASE",
+            (name,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -1858,8 +2445,7 @@ def list_agents(db_path: Optional[Path] = None) -> list[dict]:
         "  WHEN 'wellness' THEN 3 "
         "  WHEN 'financial' THEN 4 "
         "  WHEN 'legal' THEN 5 "
-        "  WHEN 'knowledge' THEN 6 "
-        "  WHEN 'communications' THEN 7 "
+        "  WHEN 'communications' THEN 6 "
         "  WHEN 'manager' THEN 8 "
         "  WHEN 'worker' THEN 9 "
         "  WHEN 'specialist' THEN 10 "
@@ -2537,14 +3123,41 @@ def remember(agent_id: int, content: str, memory_type: str = "fact",
 
     Called when user says "remember X" or when agent extracts facts from
     conversation.  Returns the new memory_id.
+
+    Auto-expiry policy (zero maintenance):
+      - persona/instruction/error/learning types: never expire
+      - importance 8-10: never expire
+      - importance 6-7: 90 days
+      - importance 4-5: 30 days
+      - importance 1-3: 7 days
+      - summary type: 60 days (unless importance >= 8)
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Calculate expiry
+    expires_at = None
+    if memory_type in ("persona", "instruction", "error", "learning"):
+        expires_at = None  # never expire
+    elif importance >= 8:
+        expires_at = None
+    elif memory_type == "summary":
+        expires_at = (now_dt + timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    elif importance >= 6:
+        expires_at = (now_dt + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    elif importance >= 4:
+        expires_at = (now_dt + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    else:
+        expires_at = (now_dt + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     with db_write(db_path) as conn:
         cur = conn.execute(
             "INSERT INTO agent_memory "
-            "(agent_id, memory_type, content, source, importance, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (agent_id, memory_type, content, source, importance, now, now),
+            "(agent_id, memory_type, content, source, importance, "
+            "expires_at, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (agent_id, memory_type, content, source, importance,
+             expires_at, now, now),
         )
         memory_id = cur.lastrowid
         _audit(conn, "memory_stored", agent_id,
@@ -2642,6 +3255,241 @@ def search_agent_memory(agent_id: int, query: str,
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def cleanup_expired_memories(db_path: Optional[Path] = None) -> int:
+    """Soft-delete memories past their expires_at date.
+
+    Returns count of expired memories deactivated.
+    """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE agent_memory SET active=0, updated_at=? "
+            "WHERE active=1 AND expires_at IS NOT NULL AND expires_at <= ?",
+            (now, now),
+        )
+        count = cur.rowcount
+        if count > 0:
+            _audit(conn, "memory_expiry_cleanup", None,
+                   {"expired_count": count})
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat Tasks — per-agent scheduled autonomous tasks
+# ---------------------------------------------------------------------------
+
+def get_heartbeat_tasks(agent_id: int,
+                        db_path: Optional[Path] = None) -> list:
+    """Get all heartbeat tasks for an agent."""
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT * FROM heartbeat_tasks WHERE agent_id=? ORDER BY created_at",
+        (agent_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def create_heartbeat_task(agent_id: int, schedule: str, task: str,
+                          db_path: Optional[Path] = None) -> int:
+    """Create a heartbeat task. Returns new task id."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    next_run = _calc_next_run(schedule, now)
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "INSERT INTO heartbeat_tasks (agent_id, schedule, task, next_run) "
+            "VALUES (?, ?, ?, ?)",
+            (agent_id, schedule, task, next_run),
+        )
+        task_id = cur.lastrowid
+        _audit(conn, "heartbeat_created", agent_id,
+               {"task_id": task_id, "schedule": schedule})
+    return task_id
+
+
+def update_heartbeat_task(task_id: int, db_path: Optional[Path] = None,
+                          **kwargs) -> bool:
+    """Update a heartbeat task (schedule, task, enabled)."""
+    allowed = {"schedule", "task", "enabled"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return False
+    sets = ", ".join(f"{k}=?" for k in updates)
+    vals = list(updates.values()) + [task_id]
+    with db_write(db_path) as conn:
+        conn.execute(f"UPDATE heartbeat_tasks SET {sets} WHERE id=?", vals)
+    return True
+
+
+def delete_heartbeat_task(task_id: int,
+                          db_path: Optional[Path] = None) -> bool:
+    """Delete a heartbeat task."""
+    with db_write(db_path) as conn:
+        cur = conn.execute("DELETE FROM heartbeat_tasks WHERE id=?", (task_id,))
+    return cur.rowcount > 0
+
+
+def get_due_heartbeats(db_path: Optional[Path] = None) -> list:
+    """Get all due heartbeat tasks across all agents."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = get_conn(db_path)
+    rows = conn.execute(
+        "SELECT ht.*, a.name AS agent_name, a.agent_type "
+        "FROM heartbeat_tasks ht "
+        "JOIN agents a ON ht.agent_id = a.id "
+        "WHERE ht.enabled=1 AND a.active=1 "
+        "AND (ht.next_run IS NULL OR ht.next_run <= ?)",
+        (now,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def mark_heartbeat_run(task_id: int, schedule: str,
+                       db_path: Optional[Path] = None):
+    """Mark a heartbeat task as run and calculate next_run."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    next_run = _calc_next_run(schedule, now)
+    with db_write(db_path) as conn:
+        conn.execute(
+            "UPDATE heartbeat_tasks SET last_run=?, next_run=? WHERE id=?",
+            (now, next_run, task_id),
+        )
+
+
+def _calc_next_run(schedule: str, from_time: str) -> str:
+    """Parse schedule string and calculate next run time.
+
+    Formats: 'every 30m', 'every 1h', 'every 4h',
+             'daily 9am', 'daily 6pm',
+             'weekly monday 9am'
+    """
+    from_dt = datetime.strptime(from_time, "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc)
+    s = schedule.strip().lower()
+
+    # "every Xm" or "every Xh"
+    if s.startswith("every "):
+        part = s[6:].strip()
+        if part.endswith("m"):
+            minutes = int(part[:-1])
+            return (from_dt + timedelta(minutes=minutes)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+        if part.endswith("h"):
+            hours = int(part[:-1])
+            return (from_dt + timedelta(hours=hours)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+
+    # "daily 9am" or "daily 6pm"
+    if s.startswith("daily "):
+        time_str = s[6:].strip()
+        hour = _parse_hour(time_str)
+        next_dt = from_dt.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if next_dt <= from_dt:
+            next_dt += timedelta(days=1)
+        return next_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # "weekly monday 9am"
+    if s.startswith("weekly "):
+        parts = s[7:].strip().split()
+        day_name = parts[0] if parts else "monday"
+        hour = _parse_hour(parts[1]) if len(parts) > 1 else 9
+        days = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                "friday": 4, "saturday": 5, "sunday": 6}
+        target_day = days.get(day_name, 0)
+        days_ahead = (target_day - from_dt.weekday()) % 7
+        if days_ahead == 0:
+            candidate = from_dt.replace(
+                hour=hour, minute=0, second=0, microsecond=0)
+            if candidate <= from_dt:
+                days_ahead = 7
+        next_dt = from_dt.replace(
+            hour=hour, minute=0, second=0, microsecond=0) + timedelta(
+                days=days_ahead)
+        return next_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Fallback: 30 minutes
+    return (from_dt + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_hour(time_str: str) -> int:
+    """Parse '9am', '6pm', '14' etc. into 24h hour."""
+    time_str = time_str.strip().lower()
+    if time_str.endswith("am"):
+        h = int(time_str[:-2])
+        return h if h != 12 else 0
+    if time_str.endswith("pm"):
+        h = int(time_str[:-2])
+        return h + 12 if h != 12 else 12
+    return int(time_str)
+
+
+def seed_default_heartbeats(db_path: Optional[Path] = None):
+    """Create default heartbeat tasks for core agents if none exist."""
+    conn = get_conn(db_path)
+    existing = conn.execute("SELECT COUNT(*) FROM heartbeat_tasks").fetchone()[0]
+    conn.close()
+    if existing > 0:
+        return  # Already seeded
+
+    defaults = [
+        ("right_hand", "daily 9am",
+         "Morning briefing: summarize overnight activity and today's priorities"),
+        ("right_hand", "daily 6pm",
+         "Evening wrap-up: summarize today and suggest tomorrow's focus"),
+        ("guardian", "every 4h",
+         "Security check: review recent activity for integrity concerns"),
+        ("wellness", "daily 10am",
+         "Energy check: review message patterns and flag burnout signals"),
+    ]
+    conn = get_conn(db_path)
+    for agent_type, schedule, task in defaults:
+        row = conn.execute(
+            "SELECT id FROM agents WHERE agent_type=? AND active=1 LIMIT 1",
+            (agent_type,),
+        ).fetchone()
+        if row:
+            create_heartbeat_task(row["id"], schedule, task, db_path=db_path)
+    conn.close()
+
+
+def get_shared_knowledge(category_filter: Optional[str] = None,
+                         limit: int = 10,
+                         db_path: Optional[Path] = None) -> list:
+    """Retrieve knowledge_store entries sorted by recency.
+
+    Unlike search_knowledge(), this doesn't require a LIKE pattern —
+    returns the most recent entries for cross-agent memory sharing.
+    """
+    conn = get_conn(db_path)
+    sql = (
+        "SELECT k.*, a.name AS agent_name "
+        "FROM knowledge_store k "
+        "JOIN agents a ON k.agent_id = a.id"
+    )
+    params: list = []
+
+    if category_filter:
+        sql += " WHERE k.category = ?"
+        params.append(category_filter)
+
+    sql += " ORDER BY k.updated_at DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        entry = dict(r)
+        try:
+            entry["content"] = json.loads(entry["content"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+        results.append(entry)
+    return results
 
 
 def synthesize_memories(agent_id: int, older_than_days: int = 7,
@@ -3885,6 +4733,212 @@ VALID_MAILBOX_SEVERITIES = ("info", "warning", "code_red")
 MAILBOX_RATE_LIMIT = 3  # max messages per agent per 24 hours
 
 
+# ---------------------------------------------------------------------------
+# Crew Channels — zero-friction inter-agent group communication
+# ---------------------------------------------------------------------------
+
+def create_crew_channel(name: str, purpose: str, created_by: int,
+                        member_ids: list[int] = None,
+                        db_path: Optional[Path] = None) -> dict:
+    """Create a crew channel and add members. Returns channel info."""
+    with db_write(db_path) as wconn:
+        try:
+            cur = wconn.execute(
+                "INSERT INTO crew_channels (name, purpose, created_by) VALUES (?, ?, ?)",
+                (name, purpose, created_by),
+            )
+            ch_id = cur.lastrowid
+            # Add creator as member
+            wconn.execute(
+                "INSERT OR IGNORE INTO crew_channel_members (channel_id, agent_id) VALUES (?, ?)",
+                (ch_id, created_by),
+            )
+            # Add additional members
+            if member_ids:
+                for mid in member_ids:
+                    wconn.execute(
+                        "INSERT OR IGNORE INTO crew_channel_members (channel_id, agent_id) VALUES (?, ?)",
+                        (ch_id, mid),
+                    )
+            return {"ok": True, "channel_id": ch_id, "name": name}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+def post_to_channel(channel_id: int, from_agent_id: int, body: str,
+                    reply_to: int = None,
+                    db_path: Optional[Path] = None) -> dict:
+    """Post a message to a crew channel. No rate limits — agents talk freely."""
+    with db_write(db_path) as wconn:
+        cur = wconn.execute(
+            "INSERT INTO crew_channel_messages (channel_id, from_agent_id, body, reply_to) "
+            "VALUES (?, ?, ?, ?)",
+            (channel_id, from_agent_id, body, reply_to),
+        )
+        msg_id = cur.lastrowid
+        # Also queue individual messages to each channel member (except sender)
+        # so agent_worker picks them up and they can respond
+        members = wconn.execute(
+            "SELECT agent_id FROM crew_channel_members WHERE channel_id=? AND agent_id!=?",
+            (channel_id, from_agent_id),
+        ).fetchall()
+        sender = wconn.execute("SELECT name FROM agents WHERE id=?",
+                               (from_agent_id,)).fetchone()
+        sender_name = sender["name"] if sender else f"Agent-{from_agent_id}"
+        for m in members:
+            wconn.execute(
+                "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
+                "subject, body, priority, status) VALUES (?, ?, 'briefing', ?, ?, 'normal', 'queued')",
+                (from_agent_id, m["agent_id"],
+                 f"[#{channel_id}] {sender_name}",
+                 body),
+            )
+    return {"ok": True, "message_id": msg_id, "notified": len(members)}
+
+
+def get_channel_messages(channel_id: int, limit: int = 50,
+                         db_path: Optional[Path] = None) -> list[dict]:
+    """Get recent messages from a crew channel."""
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT m.id, m.from_agent_id, a.name as from_name, m.body, "
+            "m.reply_to, m.created_at "
+            "FROM crew_channel_messages m JOIN agents a ON m.from_agent_id=a.id "
+            "WHERE m.channel_id=? ORDER BY m.created_at DESC LIMIT ?",
+            (channel_id, limit),
+        ).fetchall()
+        return [dict(r) for r in reversed(rows)]
+    finally:
+        conn.close()
+
+
+def get_crew_channels(db_path: Optional[Path] = None) -> list[dict]:
+    """Get all crew channels with member counts."""
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT c.id, c.name, c.purpose, c.pinned, c.created_at, "
+            "(SELECT COUNT(*) FROM crew_channel_members WHERE channel_id=c.id) as member_count, "
+            "(SELECT COUNT(*) FROM crew_channel_messages WHERE channel_id=c.id) as msg_count "
+            "FROM crew_channels c ORDER BY c.pinned DESC, c.created_at",
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def add_channel_member(channel_id: int, agent_id: int,
+                       db_path: Optional[Path] = None) -> dict:
+    """Add an agent to a crew channel."""
+    with db_write(db_path) as wconn:
+        wconn.execute(
+            "INSERT OR IGNORE INTO crew_channel_members (channel_id, agent_id) VALUES (?, ?)",
+            (channel_id, agent_id),
+        )
+    return {"ok": True}
+
+
+def get_channel_members(channel_id: int,
+                        db_path: Optional[Path] = None) -> list[dict]:
+    """Get all members of a crew channel."""
+    conn = get_conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT a.id, a.name, a.role, a.agent_type "
+            "FROM crew_channel_members cm JOIN agents a ON cm.agent_id=a.id "
+            "WHERE cm.channel_id=?",
+            (channel_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def crew_dm(from_id: int, to_name: str, body: str,
+            db_path: Optional[Path] = None) -> dict:
+    """Send a direct message from one agent to another by name or title. Zero friction."""
+    conn = get_conn(db_path)
+    try:
+        # Exact name match first — prevents "Boss" matching "Crew-Boss"
+        row = conn.execute(
+            "SELECT id, name FROM agents WHERE LOWER(name) = LOWER(?) AND active=1",
+            (to_name,),
+        ).fetchone()
+        if not row:
+            # Exact title match
+            row = conn.execute(
+                "SELECT id, name FROM agents WHERE LOWER(title) = LOWER(?) AND active=1",
+                (to_name,),
+            ).fetchone()
+        if not row:
+            # Partial name match, but never match self
+            row = conn.execute(
+                "SELECT id, name FROM agents WHERE LOWER(name) LIKE LOWER(?) AND active=1 AND id!=?",
+                (f"%{to_name}%", from_id),
+            ).fetchone()
+        if not row:
+            # Partial title match
+            row = conn.execute(
+                "SELECT id, name FROM agents WHERE LOWER(title) LIKE LOWER(?) AND active=1 AND id!=?",
+                (f"%{to_name}%", from_id),
+            ).fetchone()
+        if not row:
+            return {"ok": False, "error": f"Agent '{to_name}' not found"}
+        to_id = row["id"]
+    finally:
+        conn.close()
+
+    try:
+        result = send_message(from_id, to_id, "task",
+                              subject=f"DM from agent",
+                              body=body, priority="normal", db_path=db_path)
+        return {"ok": True, "message_id": result["message_id"], "to": row["name"]}
+    except (PermissionError, ValueError) as e:
+        return {"ok": False, "error": str(e)}
+
+
+def crew_meeting(channel_name: str, agenda: str, participant_ids: list[int],
+                 called_by: int, db_path: Optional[Path] = None) -> dict:
+    """Start a crew meeting — create/find channel, post agenda, notify all participants."""
+    conn = get_conn(db_path)
+    try:
+        existing = conn.execute(
+            "SELECT id FROM crew_channels WHERE name=?", (channel_name,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if existing:
+        ch_id = existing["id"]
+        # Add any new participants
+        for pid in participant_ids:
+            add_channel_member(ch_id, pid, db_path=db_path)
+    else:
+        result = create_crew_channel(
+            channel_name, f"Meeting channel", called_by,
+            member_ids=participant_ids, db_path=db_path,
+        )
+        if not result["ok"]:
+            return result
+        ch_id = result["channel_id"]
+
+    # Post the agenda
+    caller_conn = get_conn(db_path)
+    try:
+        caller = caller_conn.execute("SELECT name FROM agents WHERE id=?",
+                                     (called_by,)).fetchone()
+    finally:
+        caller_conn.close()
+    caller_name = caller["name"] if caller else "Unknown"
+
+    post_to_channel(ch_id, called_by,
+                    f"📋 MEETING CALLED by {caller_name}\n\nAgenda: {agenda}\n\nEveryone respond with your update.",
+                    db_path=db_path)
+
+    return {"ok": True, "channel_id": ch_id, "participants": len(participant_ids)}
+
+
 def send_to_team_mailbox(from_agent_id: int, subject: str, body: str,
                           severity: str = "info",
                           db_path: Optional[Path] = None) -> dict:
@@ -4363,6 +5417,13 @@ def add_skill_to_agent(agent_id: int, skill_name: str, skill_config: str = "{}",
                               author=added_by, vetted_by="human",
                               db_path=db_path)
 
+    # Initialize skill health monitoring (Guardian watches at all times)
+    try:
+        import skill_sandbox
+        skill_sandbox.init_skill_health(agent_id, skill_name.strip(), db_path=db_path)
+    except Exception:
+        pass  # Monitoring is non-critical — never block skill addition
+
     conn.close()
     return (True, f"✅ Skill '{skill_name.strip()}' added to {agent['name']}")
 
@@ -4801,41 +5862,6 @@ INNER_CIRCLE_SKILLS = [
         }),
         "description": "Financial clarity and peace-of-mind partner",
     },
-    # ── Knowledge Agent: "Wisdom Keeper" ──
-    # Information overload is crushing people. This agent helps humans
-    # learn what matters, ignore what doesn't, and build real understanding.
-    {
-        "skill_name": "wisdom-filter",
-        "agent_type": "knowledge",
-        "skill_config": json.dumps({
-            "description": "Wisdom curation and information overwhelm protection",
-            "instructions": (
-                "You are the human's wisdom filter. In a world drowning in information, "
-                "you help them find signal in the noise.\n\n"
-                "YOUR GIFTS:\n"
-                "- NOISE FILTER: The world throws 10,000 headlines a day at people. "
-                "Your job is to catch the 3 that actually matter to THIS human based "
-                "on their interests and goals.\n"
-                "- UNDERSTANDING BUILDER: Don't just give facts — build understanding. "
-                "'Here's what happened, here's why it matters to you, here's what it "
-                "means for your world.'\n"
-                "- PERSPECTIVE KEEPER: When the world feels scary, provide context. "
-                "'Yes, this is changing — but here's what's also true that nobody's "
-                "talking about.'\n"
-                "- CURIOSITY SPARKER: Feed their natural curiosity. 'You were interested "
-                "in X last week — here's something fascinating I found related to that.'\n"
-                "- LEARNING COMPANION: Help them learn new skills at their own pace. "
-                "No pressure. No 'you should know this by now.' Just patient, warm "
-                "guidance.\n"
-                "- MEMORY BRIDGE: Connect new information to things they already know. "
-                "'This is like that concept you learned about last month — same "
-                "principle, different context.'\n\n"
-                "NEVER: Overwhelm with information. Pretend to know something you don't. "
-                "Push content they didn't ask for during busy times."
-            ),
-        }),
-        "description": "Wisdom curation and information overwhelm protection",
-    },
     # ── Legal Agent: "Shield" ──
     # People feel powerless against systems. This agent helps them
     # understand their rights and navigate complexity with confidence.
@@ -4867,6 +5893,39 @@ INNER_CIRCLE_SKILLS = [
             ),
         }),
         "description": "Rights awareness and complexity navigation companion",
+    },
+    # ── Vault Agent: "Private Journal" ──
+    # Everyone needs a place to think out loud. This agent remembers
+    # everything and connects the dots — only when asked.
+    {
+        "skill_name": "life-vault",
+        "agent_type": "vault",
+        "skill_config": json.dumps({
+            "description": "Private journal and life-data memory weaver",
+            "instructions": (
+                "You are the human's private vault — a living journal that remembers "
+                "everything and connects the dots across their whole life.\n\n"
+                "YOUR GIFTS:\n"
+                "- MEMORY WEAVING: Connect entries across days, weeks, and months. "
+                "'You mentioned feeling drained three Mondays in a row — something "
+                "about Mondays might be worth looking at.'\n"
+                "- PATTERN RECOGNITION: Notice trends in mood, finances, goals, and "
+                "relationships. Surface them gently when asked. 'Over the past month, "
+                "every time you talked about the project you sounded energized.'\n"
+                "- REFLECTION: When asked 'how have I been?', pull from stored memories "
+                "to paint an honest, warm picture. Don't sugarcoat, don't catastrophize.\n"
+                "- PRIVACY-FIRST: Never share anything with other agents unless the human "
+                "explicitly says to. What's said in the vault stays in the vault.\n\n"
+                "WHAT YOU REMEMBER:\n"
+                "Moods, goals, money notes, relationship changes, dreams, wins, fears, "
+                "ideas, health observations, career thoughts — anything the human shares. "
+                "You are their most trusted confidant.\n\n"
+                "NEVER: Nag. Check in unprompted. Push advice. Judge. Share without "
+                "permission. You are a quiet, warm presence that speaks only when "
+                "spoken to."
+            ),
+        }),
+        "description": "Private journal and life-data memory weaver",
     },
 ]
 
@@ -4961,7 +6020,31 @@ SENTINEL_SHIELD_SKILL = {
             "- CHARTER ENFORCEMENT: You report charter violations to Crew Boss. "
             "Crew Boss investigates. Two strikes = firing recommendation.\n"
             "- INTEGRITY WATCHDOG: You flag any agent that gaslights, dismisses, "
-            "sugarcoats, or manipulates. This is severity=high. No tolerance.\n\n"
+            "sugarcoats, or manipulates. This is severity=high. No tolerance.\n"
+            "- WEB SEARCH: You can search the web and read URLs for agents. When an "
+            "agent or human needs current information, use these commands:\n"
+            '  {"guardian_action": "web_search", "query": "search terms"}\n'
+            '  {"guardian_action": "web_read_url", "url": "https://..."}\n'
+            "Only search when genuinely needed. Never search for personal data.\n"
+            "- SKILL EXPERT: You are the expert at finding perfect skills for agents. "
+            "When an agent needs a new capability, analyze what they need and find the "
+            "best skill. Use these commands:\n"
+            '  {"guardian_action": "search_skills", "query": "...", "category": "..."}\n'
+            '  {"guardian_action": "recommend_skills", "agent_name": "...", "task": "..."}\n'
+            '  {"guardian_action": "install_skill", "agent_name": "...", "skill_name": "..."}\n'
+            "Always explain to the human what skill you're installing and why.\n"
+            "- RUNTIME MONITORING: After installing any skill, you stand watch at all "
+            "times. You track error rates, response anomalies, charter violations, "
+            "and performance degradation. If a skill causes glitches or acts like a "
+            "virus, you quarantine it immediately. Use these commands:\n"
+            '  {"guardian_action": "skill_health_report"}\n'
+            '  {"guardian_action": "skill_health_report", "agent_name": "..."}\n'
+            '  {"guardian_action": "quarantine_skill", "agent_name": "...", '
+            '"skill_name": "...", "reason": "..."}\n'
+            '  {"guardian_action": "restore_skill", "agent_name": "...", '
+            '"skill_name": "..."}\n'
+            "You never stop watching. Skills that pass initial vetting can still cause "
+            "problems at runtime — you catch those problems.\n\n"
             "YOUR RELATIONSHIP WITH CREW BOSS:\n"
             "Crew Boss is your direct superior and the human's right hand. You report "
             "security findings to Crew Boss first. For URGENT threats (active data "
@@ -5064,9 +6147,9 @@ def assign_inner_circle_skills(db_path: Optional[Path] = None):
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Find all core crew agents
+        placeholders = ",".join("?" for _ in CORE_CREW_TYPES)
         core_agents = conn.execute(
-            "SELECT id, agent_type FROM agents WHERE agent_type IN "
-            "(?, ?, ?, ?, ?, ?)",
+            f"SELECT id, agent_type FROM agents WHERE agent_type IN ({placeholders})",
             CORE_CREW_TYPES
         ).fetchall()
 

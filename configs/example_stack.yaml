@@ -26,13 +26,6 @@ hierarchy:
       preferred_channel: console
       message_length: concise
       formality: casual
-    known_triggers:
-      - "unnecessary meetings"
-    relationship_priorities:
-      - name: "Family"
-        type: family
-        importance: 10
-        preferred_frequency_days: 7
 
   right_hand:
     name: Crew-Boss
@@ -42,9 +35,6 @@ hierarchy:
     trust_score: 5
     budget_limit: 500.00
     description: "Personal AI Chief of Staff. Filters all communication to you."
-    escalation_overrides:
-      - "financial decisions over $500"
-      - "legal matters"
 
   core_crew:
     security:
@@ -54,15 +44,6 @@ hierarchy:
       reports_to: Crew-Boss
       active: true
       description: "Watches everything including other agents."
-      monitors:
-        - physical
-        - digital
-        - financial
-        - legal
-        - reputation
-        - mutiny
-        - relationship
-      direct_human_feed: false
 
     wellness:
       name: Wellness
@@ -88,22 +69,6 @@ hierarchy:
       active: true
       description: "Tracks your money. Income, expenses, budgets."
 
-    legal:
-      name: Legal
-      agent_type: legal
-      channel: console
-      reports_to: Crew-Boss
-      active: true
-      description: "Compliance and risk awareness."
-
-    knowledge:
-      name: Memory
-      agent_type: knowledge
-      channel: console
-      reports_to: Crew-Boss
-      active: true
-      description: "Long-term context and knowledge retention."
-
     communications:
       name: Comms
       agent_type: communications
@@ -112,48 +77,19 @@ hierarchy:
       active: true
       description: "Drafts messages and manages communications."
 
-  departments:
-    - name: Home
-      description: "Personal life management — household, meals, and budgeting"
-      manager:
-        name: Home-Manager
-        agent_type: manager
-        channel: console
-        reports_to: Crew-Boss
-        active: true
-      workers:
-        - name: Budget-Tracker
-          agent_type: worker
-          channel: console
-          active: true
-          description: "Tracks household spending and budget goals"
-        - name: Meal-Planner
-          agent_type: worker
-          channel: console
-          active: true
-          description: "Weekly meal plans, grocery lists, recipe suggestions"
-
-    - name: Work
-      description: "Professional tasks — projects, meetings, and communications"
-      manager:
-        name: Work-Manager
-        agent_type: manager
-        channel: console
-        reports_to: Crew-Boss
-        active: true
-      workers:
-        - name: Task-Tracker
-          agent_type: worker
-          channel: console
-          active: true
-          description: "Logs tasks, tracks deadlines, manages project pipeline"
-        - name: Meeting-Prep
-          agent_type: worker
-          channel: console
-          active: true
-          description: "Prepares agendas, talking points, and follow-up actions"
-        - name: Email-Drafter
-          agent_type: worker
-          channel: console
-          active: true
-          description: "Drafts professional emails and follow-ups"
+  # Teams — add your own below. Example:
+  # departments:
+  #   - name: My Team
+  #     description: "What this team does"
+  #     manager:
+  #       name: Team-Manager
+  #       agent_type: manager
+  #       channel: console
+  #       reports_to: Crew-Boss
+  #       active: true
+  #     workers:
+  #       - name: Worker-One
+  #         agent_type: worker
+  #         channel: console
+  #         active: true
+  #         description: "What this worker does"

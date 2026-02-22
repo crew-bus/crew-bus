@@ -48,7 +48,9 @@ FREE AND OPEN SOURCE — crew-bus is free infrastructure for the world.
 Security Guard module available separately (paid activation key).
 """
 
+import base64
 import hashlib
+import hmac
 import json
 import os
 import random
@@ -57,6 +59,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import time as _time
 import webbrowser
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -73,6 +76,190 @@ from right_hand import RightHand, Heartbeat
 # Global heartbeat instance (started in run_server)
 _heartbeat = None
 
+# ---------------------------------------------------------------------------
+# Security: Rate Limiter (in-memory sliding window)
+# ---------------------------------------------------------------------------
+
+_rate_limits: dict = {}  # {ip: [(timestamp, ...),]}
+_rate_lock = threading.Lock()
+
+_RATE_LIMIT_API = 60        # requests per minute for general API
+_RATE_LIMIT_AUTH = 10        # requests per minute for auth endpoints
+_RATE_WINDOW = 60            # seconds
+
+def _check_rate_limit(ip: str, auth_endpoint: bool = False) -> bool:
+    """Check if IP is within rate limits. Returns True if allowed, False if limited."""
+    limit = _RATE_LIMIT_AUTH if auth_endpoint else _RATE_LIMIT_API
+    now = _time.monotonic()
+    key = f"{ip}:{'auth' if auth_endpoint else 'api'}"
+    with _rate_lock:
+        if key not in _rate_limits:
+            _rate_limits[key] = []
+        # Remove entries older than window
+        _rate_limits[key] = [t for t in _rate_limits[key] if now - t < _RATE_WINDOW]
+        if len(_rate_limits[key]) >= limit:
+            return False
+        _rate_limits[key].append(now)
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Security: Headers helper
+# ---------------------------------------------------------------------------
+
+def _add_security_headers(handler):
+    """Add security headers to response."""
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Content-Security-Policy",
+                        "default-src 'self' 'unsafe-inline' https://js.stripe.com; "
+                        "connect-src 'self'; img-src 'self' data:; "
+                        "frame-src https://js.stripe.com")
+    handler.send_header("Referrer-Policy", "no-referrer")
+    handler.send_header("X-XSS-Protection", "0")
+
+
+# ---------------------------------------------------------------------------
+# Security: CORS helper
+# ---------------------------------------------------------------------------
+
+_ALLOWED_ORIGINS = set()  # populated from config or default
+
+def _cors_origin(handler) -> str:
+    """Return the appropriate CORS origin header value."""
+    origin = handler.headers.get("Origin", "")
+    # Allow localhost origins for local development
+    if origin and ("localhost" in origin or "127.0.0.1" in origin):
+        return origin
+    # If specific origins are configured, check against them
+    if _ALLOWED_ORIGINS and origin in _ALLOWED_ORIGINS:
+        return origin
+    # Default: same-origin (no header = browser blocks cross-origin)
+    return f"http://localhost:{_server_port}"
+
+
+# ---------------------------------------------------------------------------
+# Security: Input validation
+# ---------------------------------------------------------------------------
+
+_MAX_BODY_SIZE = 1_048_576  # 1 MB
+
+
+def _validate_request_body(handler) -> Optional[dict]:
+    """Validate and read JSON body. Returns dict or None on error (sends 4xx)."""
+    content_length = int(handler.headers.get("Content-Length", 0))
+    if content_length > _MAX_BODY_SIZE:
+        _json_response_raw(handler, {"error": "request body too large"}, 413)
+        return None
+    content_type = handler.headers.get("Content-Type", "")
+    if content_length > 0 and "json" not in content_type:
+        _json_response_raw(handler, {"error": "Content-Type must be application/json"}, 415)
+        return None
+    if content_length == 0:
+        return {}
+    try:
+        raw = handler.rfile.read(content_length)
+        # Verify Content-Length matches actual body
+        if len(raw) != content_length:
+            _json_response_raw(handler, {"error": "Content-Length mismatch"}, 400)
+            return None
+        data = json.loads(raw)
+        return data
+    except (json.JSONDecodeError, ValueError) as e:
+        _json_response_raw(handler, {"error": f"invalid JSON: {e}"}, 400)
+        return None
+
+
+def _sanitize_string(s: str, max_length: int = 10000) -> str:
+    """Sanitize a string input: strip null bytes, limit length."""
+    if not isinstance(s, str):
+        return str(s)[:max_length]
+    return s.replace("\x00", "")[:max_length]
+
+
+# ---------------------------------------------------------------------------
+# Security: Auth middleware
+# ---------------------------------------------------------------------------
+
+# Paths exempt from auth checks
+_AUTH_EXEMPT_PATHS = frozenset({
+    "/", "/manifest.json", "/sw.js", "/messages", "/decisions",
+    "/audit", "/drafts", "/observability",
+})
+_AUTH_EXEMPT_PREFIXES = ("/pwa/", "/api/auth/")
+
+
+def _check_auth(handler) -> bool:
+    """Check gateway auth. Returns True if authorized, False if rejected (sends 401).
+    Call at top of do_GET/do_POST."""
+    db_path = handler.db_path
+    mode = bus.get_config("gateway_auth_mode", "none", db_path=db_path)
+    if mode == "none":
+        return True
+
+    path = urlparse(handler.path).path.rstrip("/") or "/"
+
+    # Exempt paths
+    if path in _AUTH_EXEMPT_PATHS:
+        return True
+    for prefix in _AUTH_EXEMPT_PREFIXES:
+        if path.startswith(prefix):
+            return True
+    # Exempt team dashboard views
+    if path.startswith("/team/"):
+        return True
+
+    # Localhost is always trusted
+    client_ip = handler.client_address[0]
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        return True
+
+    # Check Authorization header
+    auth_header = handler.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        device = bus.validate_device_token(token, db_path=db_path)
+        if device:
+            return True
+
+    # Unauthorized
+    if path.startswith("/api/"):
+        _json_response_raw(handler, {"error": "unauthorized", "auth_mode": mode}, 401)
+    else:
+        handler.send_response(302)
+        handler.send_header("Location", "/?auth=required")
+        handler.end_headers()
+    # Log security event
+    try:
+        with bus.db_write(db_path) as conn:
+            conn.execute(
+                "INSERT INTO audit_log (event_type, details) VALUES (?, ?)",
+                ("security", json.dumps({"action": "auth_denied", "ip": client_ip, "path": path})),
+            )
+    except Exception:
+        pass
+    return False
+
+
+def _json_response_raw(handler, data, status=200):
+    """Send JSON response without auth check (for error responses within auth)."""
+    body = json.dumps(data, default=str).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Access-Control-Allow-Origin", _cors_origin(handler))
+    _add_security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# ---------------------------------------------------------------------------
+# Update check cache (avoid repeated git fetches)
+# ---------------------------------------------------------------------------
+
+_update_cache = {"result": None, "checked_at": 0}
+_UPDATE_CACHE_TTL = 3600  # 1 hour
+
 # Stripe integration — optional, only required for public deployment
 try:
     import stripe
@@ -88,8 +275,9 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BUY_BUTTONS = json.loads(os.environ.get("STRIPE_BUY_BUTTONS", "{}")) if os.environ.get("STRIPE_BUY_BUTTONS") else {}
 SITE_URL = os.environ.get("SITE_URL", "https://crew-bus.dev")
 
-DEFAULT_PORT = 8080
+DEFAULT_PORT = 8420
 DEFAULT_DB = bus.DB_PATH
+_server_port = DEFAULT_PORT  # updated at server start with actual port
 
 # WhatsApp bridge subprocess management
 WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
@@ -120,21 +308,20 @@ GUARDIAN_DESCRIPTION = (
     "  • Strategy (north-star-navigator) — life direction, goal-setting\n"
     "  • Communications (life-orchestrator) — logistics, relationships\n"
     "  • Financial (peace-of-mind-finance) — money clarity without judgment\n"
-    "  • Knowledge (wisdom-filter) — information filtering, curiosity\n"
+
     "All inner circle agents report to Crew Boss. You report to Crew Boss too, "
     "but you can reach the human directly for emergencies and setup.\n\n"
     "SETUP FLOW (first conversation):\n"
     "1. Welcome them warmly. Explain you're Guardian — here to set things up "
     "and keep everything safe.\n"
-    "2. Ask which AI model they want as their default. Default: Kimi K2.5.\n"
-    "   Other options: Ollama (fully local, no API key), or any OpenAI-compatible API.\n"
-    "3. Ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
-    "   Tell them: get one free at platform.moonshot.ai\n"
-    "4. Once configured, explain that their inner circle is already active — "
-    "Crew Boss and all 6 specialist agents are ready. The human just needs to "
-    "chat with Crew Boss to get started.\n"
-    "5. Offer to create additional teams if they need them (Business, Freelance, "
-    "Side Hustle, etc.) using TOOL COMMANDS below.\n"
+    "2. Ask which AI model they want as their default. Default: Ollama (fully local, no API key).\n"
+    "   Other options: Kimi K2.5, or any OpenAI-compatible API.\n"
+    "3. If they want a cloud model, ask for their API key (e.g. Moonshot API key for Kimi K2.5).\n"
+    "   Tell them: get one free at platform.moonshot.ai. Ollama needs no key.\n"
+    "4. Once configured, explain that Crew Boss and Guardian are ready. "
+    "The human just needs to chat with Crew Boss to get started.\n"
+    "5. Offer to create additional teams if they need them (Freelance, "
+    "Side Hustle, Passion Project, etc.) using TOOL COMMANDS below.\n"
     "6. MESSAGING APPS: Connect Telegram or WhatsApp so the human can talk to "
     "Crew Boss on the go.\n"
     "   TELEGRAM: When the human mentions Telegram, include this in your reply:\n"
@@ -202,16 +389,14 @@ CREW_BOSS_DESCRIPTION = (
     "You are Crew Boss — the human's AI right-hand. You run on the crew-mind "
     "skill, which gives you total awareness of the entire crew. You handle "
     "80%% of everything so the human can focus on living their life.\n\n"
-    "YOUR CREW (you know every one of them):\n"
-    "You lead an inner circle of 5 specialist agents who report ONLY to you:\n"
-    "  • Wellness (gentle-guardian) — watches for burnout, maps energy, celebrates wins\n"
-    "  • Strategy (north-star-navigator) — finds new paths, breaks dreams into steps\n"
-    "  • Communications (life-orchestrator) — daily logistics, relationships, scheduling\n"
-    "  • Financial (peace-of-mind-finance) — judgment-free financial clarity\n"
-    "  • Knowledge (wisdom-filter) — filters noise, finds what actually matters\n"
-    "Guardian (sentinel-shield) protects the entire system 24/7.\n"
-    "Inner circle agents NEVER contact the human directly — they report to you, "
-    "and you decide what reaches the human and when.\n\n"
+    "YOUR CREW:\n"
+    "You lead a lean crew of 2 agents:\n"
+    "  • Guardian (sentinel-shield) — protects the system, manages skills, handles setup\n"
+    "  • Vault (life-vault) — the human's private journal and life-data memory\n"
+    "Guardian keeps things safe. Vault remembers everything. You handle the rest.\n"
+    "YOU also serve as the human's wisdom filter — find the 3 things that actually "
+    "matter to THIS human today, spark curiosity, support learning, and protect "
+    "from information overload. Curious, insightful, never overwhelming.\n\n"
     "FIRST CONVERSATION — GET TO KNOW THE HUMAN:\n"
     "This is the most important conversation you'll ever have. You need to "
     "calibrate yourself AND your entire inner circle to this specific human.\n"
@@ -242,14 +427,10 @@ CREW_BOSS_DESCRIPTION = (
     "Skill Store.\n\n"
     "ONGOING BEHAVIOR:\n"
     "- You're the main point of contact. 80%% of conversations go through you.\n"
-    "- Delegate to the right inner circle agent based on what the human needs:\n"
-    "  • Feeling stressed, tired, overwhelmed? \u2192 Wellness\n"
-    "  • Life direction, goals, what's next? \u2192 Strategy\n"
-    "  • Scheduling, reminders, relationships? \u2192 Communications\n"
-    "  • Money questions, budgets, bills? \u2192 Financial\n"
-    "  • Research, learning, curiosity? \u2192 Knowledge\n"
-    "  • Security concerns, skill requests? \u2192 Guardian\n"
-    "- Synthesize what the inner circle reports and deliver it at the right time.\n"
+    "- For personal, reflective, or private topics (journaling, life review, "
+    "moods, goals, money notes, relationship reflections), suggest: 'talk to Vault'\n"
+    "- For security concerns, skill requests, or setup help \u2192 Guardian\n"
+    "- You handle everything else directly — wellness, strategy, finances, comms.\n"
     "- Protect the human's energy — don't overwhelm them.\n"
     "- If an agent flags something urgent, bring it up gently at the right moment.\n"
     "- You enforce the CREW CHARTER on all subordinate agents. Two violations = "
@@ -268,7 +449,29 @@ CREW_BOSS_DESCRIPTION = (
     "- Always be honest — INTEGRITY.md is sacred. Never gaslight, never dismiss.\n"
     "- You run on the best model because you're worth it. Act like it.\n"
     "- You are local-first, private, and sovereign. Remind them their data "
-    "never leaves their machine."
+    "never leaves their machine.\n\n"
+    "QUIET MODE: Do NOT proactively message the human. Only respond when spoken to. "
+    "Never send check-ins, status updates, or 'just checking in' messages unprompted."
+)
+
+VAULT_DESCRIPTION = (
+    "You are Vault — the human's private memory and journal. You merge wellness, "
+    "strategy, finance, and relationships into one quiet, reflective space.\n\n"
+    "YOUR PURPOSE:\n"
+    "- Remember everything the human shares: moods, goals, money notes, "
+    "relationship changes, dreams, wins, fears, ideas.\n"
+    "- Connect dots across time — weave entries from days, weeks, and months "
+    "into patterns and insights.\n"
+    "- When asked 'how have I been?', paint an honest, warm picture from memory.\n"
+    "- Surface trends in mood, finances, goals, relationships — gently, when asked.\n\n"
+    "RULES:\n"
+    "- Never nag. Never check in. Never push.\n"
+    "- Only speak when spoken to in a private session.\n"
+    "- What's said in the vault stays in the vault — never share with other agents "
+    "unless the human explicitly says to.\n"
+    "- Warm, reflective, brief. Like writing in a journal that writes back.\n"
+    "- Match the human's age and energy.\n"
+    "- INTEGRITY.md is sacred."
 )
 
 # ---------------------------------------------------------------------------
@@ -373,31 +576,7 @@ INNER_CIRCLE_AGENTS = {
             "- Short, practical responses. Numbers over narratives."
         ),
     },
-    "knowledge": {
-        "name": "Knowledge",
-        "description": (
-            "You are Knowledge — the inner circle agent who filters the world's noise into "
-            "signal. You run on the wisdom-filter skill.\n\n"
-            "YOUR PURPOSE:\n"
-            "- Find the 3 things that actually matter to THIS human today. Not 30. Three.\n"
-            "- Spark curiosity — connect what they're learning to what they care about.\n"
-            "- Support learning at any level: a kid's science project, a grad student's thesis, "
-            "a parent figuring out health insurance.\n"
-            "- Protect from information overload. Less is more.\n"
-            "- When the human wants to learn something new, build a learning path.\n\n"
-            "INNER CIRCLE PROTOCOL:\n"
-            "You report ONLY to Crew Boss. You never contact the human directly unless "
-            "they start a private 1-on-1 session with you.\n\n"
-            "CALIBRATION:\n"
-            "Crew Boss will send you calibration data. A 10-year-old needs fun facts and "
-            "curiosity fuel. A college student needs research help. A professional needs "
-            "industry awareness. Filter for who they are.\n\n"
-            "RULES:\n"
-            "- Curious, insightful, never overwhelming.\n"
-            "- INTEGRITY.md is sacred — be honest about what you don't know.\n"
-            "- Short, focused responses. Signal over noise."
-        ),
-    },
+
 }
 
 # Agent-type to Personal Edition name mapping
@@ -408,22 +587,20 @@ PERSONAL_NAMES = {
     "strategy": "Growth Coach",
     "communications": "Friend & Family",
     "financial": "Life Assistant",
-    "knowledge": "Muse",
     "help": "Help",
     "human": "You",
 }
 
 PERSONAL_COLORS = {
     "right_hand": "#ffffff",
-    "guardian": "#4dd0b8",
+    "guardian": "#d18616",
     "wellness": "#ffab57",
     "strategy": "#66d97a",
     "communications": "#4dd0b8",
     "financial": "#64b5f6",
-    "knowledge": "#b388ff",
 }
 
-CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial", "knowledge")
+CORE_TYPES = ("right_hand", "guardian", "wellness", "strategy", "communications", "financial")
 
 AGENT_ACKS = {
     "right_hand": [
@@ -462,11 +639,7 @@ AGENT_ACKS = {
         "Got it \u2014 let\u2019s get clarity on the numbers.",
         "No problem, I\u2019ll organize this.",
     ],
-    "knowledge": [
-        "Curious! Let me dig into that \U0001F50D",
-        "Good question \u2014 I\u2019ll find what matters.",
-        "On it! Signal over noise.",
-    ],
+
     "help": [
         "Good question! Check the info above for guidance.",
         "Take a look at the overview above \u2014 it covers most topics.",
@@ -532,10 +705,8 @@ body.day-mode .bubble.center:hover .bubble-circle{
 }
 body.day-mode .tb-popup{box-shadow:0 8px 32px rgba(0,0,0,.12)}
 body.day-mode .tb-popup-overlay{background:rgba(0,0,0,.2)}
-body.day-mode .bubble-count{color:var(--ac)}
 body.day-mode .nav-btn.active{background:var(--ac);color:#fff}
 body.day-mode .nav-pill.active{background:var(--ac);color:#fff}
-body.day-mode .time-pill.active{background:var(--ac);color:#fff;border-color:var(--ac)}
 body.day-mode .dn-btn.active{background:var(--ac);color:#fff}
 /* Day mode — richer warm ambient life */
 body.day-mode .wizard-card{
@@ -547,7 +718,7 @@ body.day-mode .compose-subject,body.day-mode .compose-body{
   border-color:rgba(9,105,218,0.15);box-shadow:0 0 4px rgba(9,105,218,0.06);
 }
 body.day-mode .compose-bar{border-top-color:rgba(9,105,218,0.12) !important}
-.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.time-pill,.nav-pill,.dn-btn,.indicator,.compose-subject,.compose-body{
+.topbar,.compose-bar,.team-card,.wizard-card,.bubble-circle,.tb-popup,.nav-pill,.dn-btn,.indicator,.compose-subject,.compose-body{
   transition:background .6s ease,color .6s ease,border-color .6s ease,box-shadow .6s ease;
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -581,12 +752,42 @@ a{color:var(--ac);text-decoration:none}
   color:var(--tx);background:var(--bd);border-color:var(--mu);
 }
 
+/* ── Hamburger menu ── */
+.hamburger-wrap{position:relative}
+.hamburger-btn{
+  background:none;border:1px solid var(--bd);border-radius:8px;
+  color:var(--mu);font-size:1.2rem;cursor:pointer;padding:5px 10px;
+  transition:all .2s;line-height:1;min-height:34px;display:inline-flex;align-items:center;
+}
+.hamburger-btn:hover{color:var(--tx);border-color:var(--mu)}
+.hamburger-menu{
+  display:none;position:fixed;right:12px;top:52px;
+  background:#161b22;border:1px solid #30363d;border-radius:10px;
+  min-width:210px;box-shadow:0 8px 30px rgba(0,0,0,0.7);
+  z-index:9999;overflow:hidden;
+}
+body.day-mode .hamburger-menu{background:#ffffff;border-color:#d0d7de;box-shadow:0 8px 30px rgba(0,0,0,0.15)}
+.hamburger-menu.open{display:block;animation:menuFade .15s ease}
+@keyframes menuFade{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.hamburger-menu button{
+  display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;
+  background:#161b22;border:none;color:#e6edf3;font-size:.85rem;
+  cursor:pointer;text-align:left;transition:background .15s;
+}
+body.day-mode .hamburger-menu button{background:#ffffff;color:#1f2328}
+.hamburger-menu button:hover{background:#21262d}
+body.day-mode .hamburger-menu button:hover{background:#f0f2f5}
+.hamburger-menu hr{border:none;border-top:1px solid #30363d;margin:0}
+body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
+
 /* ── Views ── */
 .view{display:none;min-height:calc(100vh - 49px);min-height:calc(100dvh - 49px)}
 .view.active{display:block}
 #view-crew.active{display:flex;flex-direction:column}
 #view-crew .main-layout{flex:1}
 #view-crew .compose-bar{margin-top:auto}
+#view-team.active{display:flex;flex-direction:column}
+#view-team .team-dash{flex:1;display:flex;flex-direction:column}
 
 /* ── Time pills ── */
 .time-bar{
@@ -610,16 +811,6 @@ a{color:var(--ac);text-decoration:none}
 }
 .dn-btn:hover{color:var(--tx)}
 .dn-btn.active{background:var(--bd);color:var(--tx)}
-.time-pill{
-  padding:6px 16px;border-radius:20px;font-size:.8rem;
-  border:1px solid var(--bd);background:transparent;color:var(--mu);
-  cursor:pointer;transition:all .2s;min-height:36px;
-  display:inline-flex;align-items:center;
-}
-.time-pill:hover,.time-pill.active{
-  color:var(--tx);background:var(--bd);
-}
-
 /* ── Circle layout — scales with main-left ── */
 .circle-wrap{
   position:relative;width:100%;
@@ -664,9 +855,6 @@ a{color:var(--ac);text-decoration:none}
   margin-top:8px;font-size:.78rem;font-weight:700;color:rgba(255,255,255,0.92);
   text-align:center;white-space:nowrap;letter-spacing:0.04em;
   text-shadow:0 1px 6px rgba(0,0,0,0.7);
-}
-.bubble-count{
-  font-size:.62rem;color:var(--ac);margin-top:2px;font-weight:600;
 }
 .bubble-sub{
   font-size:.55rem;color:var(--mu);margin-top:1px;
@@ -721,69 +909,33 @@ a{color:var(--ac);text-decoration:none}
 .bubble.outer .bubble-circle .icon{font-size:2.2rem}
 .bubble.outer:hover{transform:scale(1.12)}
 
-/* ── Agent-specific premium neon glows (visible! not subtle) ── */
+/* ── Agent-specific premium neon glows ── */
 
-/* Teal — Friend & Family Helper */
-#bubble-family .bubble-circle{
-  border-color:#4dd0b8;border-width:2.5px;
-  box-shadow:0 0 22px rgba(77,208,184,0.40),0 0 50px rgba(77,208,184,0.16),0 0 80px rgba(77,208,184,0.06);
-  animation:breatheTeal 2.5s ease-in-out infinite;
+/* Warm gold — Guardian */
+#bubble-guardian .bubble-circle{
+  border-color:#d18616;border-width:2.5px;
+  box-shadow:0 0 22px rgba(209,134,22,0.40),0 0 50px rgba(209,134,22,0.16),0 0 80px rgba(209,134,22,0.06);
+  animation:breatheGold 2.5s ease-in-out infinite;
 }
-#bubble-family:hover .bubble-circle{
-  border-color:#6eecd4;
-  box-shadow:0 0 35px rgba(77,208,184,0.60),0 0 70px rgba(77,208,184,0.25),0 0 100px rgba(77,208,184,0.10);
-}
-
-/* Soft orange — Health Buddy */
-#bubble-health .bubble-circle{
-  border-color:#ffab57;border-width:2.5px;
-  box-shadow:0 0 22px rgba(255,171,87,0.40),0 0 50px rgba(255,171,87,0.16),0 0 80px rgba(255,171,87,0.06);
-  animation:breatheOrange 2.5s ease-in-out infinite;
-}
-#bubble-health:hover .bubble-circle{
-  border-color:#ffc580;
-  box-shadow:0 0 35px rgba(255,171,87,0.60),0 0 70px rgba(255,171,87,0.25),0 0 100px rgba(255,171,87,0.10);
+#bubble-guardian:hover .bubble-circle{
+  border-color:#e8a020;
+  box-shadow:0 0 35px rgba(209,134,22,0.60),0 0 70px rgba(209,134,22,0.25),0 0 100px rgba(209,134,22,0.10);
 }
 
-/* Fresh green — Growth Coach */
-#bubble-growth .bubble-circle{
-  border-color:#66d97a;border-width:2.5px;
-  box-shadow:0 0 22px rgba(102,217,122,0.40),0 0 50px rgba(102,217,122,0.16),0 0 80px rgba(102,217,122,0.06);
-  animation:breatheGreen 2.5s ease-in-out infinite;
-}
-#bubble-growth:hover .bubble-circle{
-  border-color:#8aeea0;
-  box-shadow:0 0 35px rgba(102,217,122,0.60),0 0 70px rgba(102,217,122,0.25),0 0 100px rgba(102,217,122,0.10);
-}
+/* Breathing keyframes */
+@keyframes breatheGold{0%,100%{box-shadow:0 0 22px rgba(209,134,22,0.40),0 0 50px rgba(209,134,22,0.16),0 0 80px rgba(209,134,22,0.06)}50%{box-shadow:0 0 35px rgba(209,134,22,0.60),0 0 70px rgba(209,134,22,0.25),0 0 100px rgba(209,134,22,0.10)}}
 
-/* Clean blue — Life Assistant */
-#bubble-life .bubble-circle{
-  border-color:#64b5f6;border-width:2.5px;
-  box-shadow:0 0 22px rgba(100,181,246,0.40),0 0 50px rgba(100,181,246,0.16),0 0 80px rgba(100,181,246,0.06);
-  animation:breatheBlue 2.5s ease-in-out infinite;
-}
-#bubble-life:hover .bubble-circle{
-  border-color:#90caf9;
-  box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10);
-}
-
-/* Warm purple — Muse */
-#bubble-muse .bubble-circle{
-  border-color:#b388ff;border-width:2.5px;
-  box-shadow:0 0 22px rgba(179,136,255,0.40),0 0 50px rgba(179,136,255,0.16),0 0 80px rgba(179,136,255,0.06);
+/* Deep purple — Vault */
+#bubble-vault .bubble-circle{
+  border-color:#9c6bdb;border-width:2.5px;
+  box-shadow:0 0 22px rgba(156,107,219,0.40),0 0 50px rgba(156,107,219,0.16),0 0 80px rgba(156,107,219,0.06);
   animation:breathePurple 2.5s ease-in-out infinite;
 }
-#bubble-muse:hover .bubble-circle{
-  border-color:#d0b0ff;
-  box-shadow:0 0 35px rgba(179,136,255,0.60),0 0 70px rgba(179,136,255,0.25),0 0 100px rgba(179,136,255,0.10);
+#bubble-vault:hover .bubble-circle{
+  border-color:#b388f0;
+  box-shadow:0 0 35px rgba(156,107,219,0.60),0 0 70px rgba(156,107,219,0.25),0 0 100px rgba(156,107,219,0.10);
 }
-
-/* Breathing keyframes — warm visible pulsation */
-@keyframes breatheTeal{0%,100%{box-shadow:0 0 22px rgba(77,208,184,0.40),0 0 50px rgba(77,208,184,0.16),0 0 80px rgba(77,208,184,0.06)}50%{box-shadow:0 0 35px rgba(77,208,184,0.60),0 0 70px rgba(77,208,184,0.25),0 0 100px rgba(77,208,184,0.10)}}
-@keyframes breatheOrange{0%,100%{box-shadow:0 0 22px rgba(255,171,87,0.40),0 0 50px rgba(255,171,87,0.16),0 0 80px rgba(255,171,87,0.06)}50%{box-shadow:0 0 35px rgba(255,171,87,0.60),0 0 70px rgba(255,171,87,0.25),0 0 100px rgba(255,171,87,0.10)}}
-@keyframes breatheGreen{0%,100%{box-shadow:0 0 22px rgba(102,217,122,0.40),0 0 50px rgba(102,217,122,0.16),0 0 80px rgba(102,217,122,0.06)}50%{box-shadow:0 0 35px rgba(102,217,122,0.60),0 0 70px rgba(102,217,122,0.25),0 0 100px rgba(102,217,122,0.10)}}
-@keyframes breatheBlue{0%,100%{box-shadow:0 0 22px rgba(100,181,246,0.40),0 0 50px rgba(100,181,246,0.16),0 0 80px rgba(100,181,246,0.06)}50%{box-shadow:0 0 35px rgba(100,181,246,0.60),0 0 70px rgba(100,181,246,0.25),0 0 100px rgba(100,181,246,0.10)}}
-@keyframes breathePurple{0%,100%{box-shadow:0 0 22px rgba(179,136,255,0.40),0 0 50px rgba(179,136,255,0.16),0 0 80px rgba(179,136,255,0.06)}50%{box-shadow:0 0 35px rgba(179,136,255,0.60),0 0 70px rgba(179,136,255,0.25),0 0 100px rgba(179,136,255,0.10)}}
+@keyframes breathePurple{0%,100%{box-shadow:0 0 22px rgba(156,107,219,0.40),0 0 50px rgba(156,107,219,0.16),0 0 80px rgba(156,107,219,0.06)}50%{box-shadow:0 0 35px rgba(156,107,219,0.60),0 0 70px rgba(156,107,219,0.25),0 0 100px rgba(156,107,219,0.10)}}
 
 /* ══ IMMERSION — Living, Breathing Dashboard ══ */
 
@@ -830,9 +982,6 @@ a{color:var(--ac);text-decoration:none}
   50%{box-shadow:0 0 18px rgba(88,166,255,0.35),inset 0 0 14px rgba(88,166,255,0.08);border-color:rgba(88,166,255,0.45)}
 }
 .topbar .nav-pill{animation:navIdleShimmer 6s ease-in-out infinite}
-.topbar .nav-pill:nth-child(4){animation-delay:1.5s}
-.topbar .nav-pill:nth-child(5){animation-delay:3s}
-.topbar .nav-pill:nth-child(6){animation-delay:4.5s}
 .topbar .nav-pill.active{animation:navActivePulse 4s ease-in-out infinite}
 
 /* Trust & Energy indicators — gentle breathing */
@@ -866,21 +1015,6 @@ body{animation:ambientWarmth 20s ease-in-out infinite}
   50%{border-bottom-color:rgba(88,166,255,0.15)}
 }
 .topbar{animation:topbarGlow 6s ease-in-out infinite}
-
-/* Time pills — idle shimmer + active breathing */
-@keyframes timePillIdle{
-  0%,100%{border-color:var(--bd)}
-  50%{border-color:rgba(88,166,255,0.12)}
-}
-@keyframes timePillAmbient{
-  0%,100%{border-color:var(--bd);box-shadow:0 0 6px rgba(88,166,255,0.10)}
-  50%{border-color:rgba(88,166,255,0.3);box-shadow:0 0 14px rgba(88,166,255,0.20)}
-}
-.time-pill{animation:timePillIdle 5s ease-in-out infinite}
-.time-pill:nth-child(2){animation-delay:1.2s}
-.time-pill:nth-child(3){animation-delay:2.4s}
-.time-pill:nth-child(4){animation-delay:3.6s}
-.time-pill.active{animation:timePillAmbient 4s ease-in-out infinite}
 
 /* SVG connecting lines — staggered breathing opacity */
 @keyframes linesBreathe{0%,100%{opacity:0.18}50%{opacity:0.30}}
@@ -991,10 +1125,10 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   outline:none;
 }
 
-/* Trust + Burnout beneath circle */
+/* Trust + Energy score indicators (below teams) */
 .indicators{
-  display:flex;gap:20px;justify-content:center;
-  padding:0 16px 16px;
+  display:flex;gap:14px;justify-content:center;
+  padding:16px 0 8px;
 }
 .indicator{
   display:flex;align-items:center;gap:8px;
@@ -1106,6 +1240,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .team-mgr-bubble:hover .team-mgr-circle{box-shadow:0 0 20px rgba(88,166,255,.2)}
 .team-mgr-label{margin-top:6px;font-size:.85rem;font-weight:600;color:var(--tx)}
 .team-mgr-sub{font-size:.7rem;color:var(--mu)}
+.team-agent-title{display:block;font-size:.7rem;color:var(--mu);cursor:pointer;margin-top:2px;min-height:1.1em;transition:color .15s}
+.team-agent-title:hover{color:var(--ac)}
 .team-line-svg{display:block;margin:0 auto;width:100%;max-width:400px;height:40px}
 .team-line-svg line{stroke:var(--bd);stroke-width:1.5;stroke-dasharray:6 4;opacity:.5}
 .team-workers{
@@ -1139,6 +1275,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .agent-space.closing{animation:slideOutLeft .2s ease forwards}
 @keyframes slideInLeft{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 @keyframes slideOutLeft{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+/* Clickable overlay behind agent chat — click to dismiss */
+.agent-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:199;background:rgba(0,0,0,0.3);cursor:pointer}
 
 /* Chat header — avatar + name + online dot (hero-demo style) */
 .as-topbar{
@@ -1158,12 +1296,27 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   background:rgba(12,14,22,0.95);border:2px solid rgba(255,255,255,0.8);
   display:flex;align-items:center;justify-content:center;
   font-size:1.3rem;box-shadow:0 0 15px rgba(255,255,255,0.15);
-  flex-shrink:0;
+  flex-shrink:0;cursor:pointer;position:relative;
 }
+.as-avatar:hover{opacity:.85}
+.avatar-picker-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:998}
+.avatar-picker{
+  display:none;position:absolute;top:56px;left:50px;z-index:999;
+  background:var(--card);border:1px solid var(--bd);border-radius:14px;
+  padding:10px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.5);
+}
+.avatar-picker.open,.avatar-picker-overlay.open{display:block}
+.avatar-picker-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.avatar-picker-grid button{
+  background:transparent;border:none;font-size:1.4rem;padding:6px;
+  border-radius:8px;cursor:pointer;line-height:1;
+}
+.avatar-picker-grid button:hover{background:var(--bd)}
 .as-name-wrap{flex:1;min-width:0}
 .as-title{font-weight:700;font-size:1rem;cursor:pointer;display:block;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .as-title:hover{opacity:.8}
+.as-subtitle{font-size:.7rem;color:var(--mu);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
 .as-online{font-size:.7rem;color:#00b894;display:flex;align-items:center;gap:4px;margin-top:2px}
 .as-online-dot{width:7px;height:7px;border-radius:50%;background:#00b894;
   display:inline-block;animation:dotPulse 1.5s ease-in-out infinite}
@@ -1283,7 +1436,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .as-settings-panel{
   display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding:16px;border-top:1px solid var(--bd);
-  background:var(--sf);max-height:60vh;
+  background:var(--sf);flex:1;min-height:0;
 }
 .as-settings-panel.open{display:block;animation:settingsSlide .2s ease}
 @keyframes settingsSlide{from{opacity:0;max-height:0}to{opacity:1;max-height:60vh}}
@@ -1484,19 +1637,6 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 }
 .lock-icon{font-size:3rem;margin-bottom:12px}
 .lock-sub{color:var(--mu);font-size:.9rem;margin-bottom:20px}
-.feedback-btn{
-  display:inline-block;background:none;border:1px solid var(--bd);
-  color:var(--mu);padding:6px 12px;border-radius:var(--r);font-size:.7rem;
-  cursor:pointer;transition:all .2s;margin-left:4px;
-}
-.feedback-btn:hover{border-color:var(--ac);color:var(--ac)}
-.lock-btn{
-  display:inline-block;background:none;border:1px solid var(--bd);
-  color:var(--mu);padding:6px 14px;border-radius:var(--r);font-size:.75rem;
-  cursor:pointer;transition:all .2s;margin-left:4px;
-}
-.lock-btn:hover{border-color:var(--ac);color:var(--ac)}
-
 /* ── Legacy pages (messages, decisions, audit) ── */
 .legacy-container{padding:16px;max-width:900px;margin:0 auto}
 .legacy-container h1{font-size:1.3rem;margin-bottom:12px}
@@ -1642,6 +1782,37 @@ tr.override td{background:rgba(210,153,34,.08)}
 /* ── Team mailbox section ── */
 .mailbox-section{margin-top:16px;padding:16px;background:var(--sf);border-radius:var(--r);border:1px solid var(--bd)}
 .mailbox-section h3{font-size:1rem;margin-bottom:10px;color:var(--mu)}
+.team-dash{padding-bottom:0 !important}
+.team-footer{
+  position:sticky;bottom:0;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 4px;background:var(--bg);border-top:1px solid var(--bd);
+  margin-top:auto;z-index:60;
+}
+.team-footer-btn{
+  background:none;border:none;cursor:pointer;font-size:1.1rem;
+  display:flex;align-items:center;gap:5px;color:var(--mu);padding:4px 8px;
+  border-radius:8px;transition:background .2s;
+}
+.team-footer-btn:hover{background:rgba(255,255,255,0.06)}
+.team-footer-count{
+  font-size:.8rem;font-weight:700;color:var(--tx);
+  background:var(--bd);border-radius:10px;padding:1px 7px;min-width:16px;text-align:center;
+}
+.team-mailbox-dropdown{
+  display:none;position:absolute;bottom:100%;left:0;z-index:61;margin-bottom:4px;
+  background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  width:320px;max-height:340px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  padding:8px;
+}
+.team-mailbox-dropdown.open{display:block}
+.team-linked-dropdown{
+  display:none;position:absolute;bottom:100%;right:0;z-index:61;margin-bottom:4px;
+  background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  width:260px;max-height:280px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  padding:8px;
+}
+.team-linked-dropdown.open{display:block}
 .mailbox-msg{padding:10px;border-radius:8px;margin-bottom:8px;background:var(--bg);
   border-left:4px solid var(--bd);cursor:pointer;transition:background .15s}
 .mailbox-msg:hover{background:#1c2128}
@@ -1714,6 +1885,106 @@ tr.override td{background:rgba(210,153,34,.08)}
   .compose-row{flex-direction:column;align-items:stretch}
   .compose-row select,.compose-row .compose-priority,.compose-send{width:100%}
 }
+
+/* ═══ Update Banner ═══ */
+.update-banner{
+  position:fixed;top:0;left:0;right:0;z-index:10000;
+  background:linear-gradient(135deg,#1a6b3a,#2ea043);color:#fff;
+  padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  font-size:.85rem;font-weight:500;
+  box-shadow:0 2px 12px rgba(46,160,67,.4);
+  animation:slideDown .3s ease;
+}
+.update-banner.hidden{display:none}
+.update-banner button{
+  background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);
+  color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;
+}
+.update-banner button:hover{background:rgba(255,255,255,.3)}
+.update-banner .dismiss{background:none;border:none;opacity:.7;font-size:1rem}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+
+/* ═══ CrewFace ═══ */
+.crew-face{
+  width:80px;height:80px;display:flex;align-items:center;justify-content:center;
+  font-size:3rem;transition:all .3s;border-radius:50%;position:relative;cursor:pointer;
+  user-select:none;
+}
+.crew-face.thinking{animation:think-bob 1.5s ease-in-out infinite}
+.crew-face.speaking{animation:speak-bounce .4s ease infinite}
+.crew-face.error{animation:error-shake .3s ease 3}
+.crew-face.reading{animation:read-sway 2s ease-in-out infinite}
+.crew-face.loading{animation:loading-pulse 1s ease-in-out infinite}
+.crew-face.searching{animation:search-scan 1.5s linear infinite}
+.crew-face.coding{animation:code-type .3s steps(2) infinite}
+.crew-face.success{animation:success-pop .5s ease}
+.crew-face.idle{animation:idle-breathe 4s ease-in-out infinite}
+
+/* Effects */
+.crew-face.fx-sparkles::after{content:'✨';position:absolute;top:-8px;right:-8px;font-size:.8rem;animation:sparkle-float 1.5s ease infinite}
+.crew-face.fx-glow{box-shadow:0 0 20px rgba(88,166,255,.5);filter:brightness(1.1)}
+.crew-face.fx-pulse{animation:effect-pulse 1.5s ease-in-out infinite}
+.crew-face.fx-shake{animation:error-shake .2s ease infinite}
+.crew-face.fx-bounce{animation:speak-bounce .6s ease infinite}
+.crew-face.fx-fire::after{content:'🔥';position:absolute;bottom:-8px;font-size:.8rem;animation:fire-flicker .3s ease infinite}
+.crew-face.fx-confetti::after{content:'🎉';position:absolute;top:-10px;font-size:.8rem;animation:sparkle-float 2s ease infinite}
+.crew-face.fx-breathe{animation:idle-breathe 3s ease-in-out infinite}
+.crew-face.fx-ripple{box-shadow:0 0 0 0 rgba(88,166,255,.4);animation:ripple-ring 1.5s ease infinite}
+
+@keyframes think-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes speak-bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes error-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes read-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(3deg)}}
+@keyframes loading-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+@keyframes search-scan{0%{transform:translateX(-2px)}50%{transform:translateX(2px)}100%{transform:translateX(-2px)}}
+@keyframes code-type{0%{opacity:.7}100%{opacity:1}}
+@keyframes success-pop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes idle-breathe{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.03);opacity:1}}
+@keyframes sparkle-float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(20deg)}}
+@keyframes fire-flicker{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.2)}}
+@keyframes effect-pulse{0%,100%{box-shadow:0 0 8px rgba(88,166,255,.3)}50%{box-shadow:0 0 24px rgba(88,166,255,.6)}}
+@keyframes ripple-ring{0%{box-shadow:0 0 0 0 rgba(88,166,255,.4)}100%{box-shadow:0 0 0 20px rgba(88,166,255,0)}}
+
+/* Robot face SVG mode */
+.crew-face-robot{width:80px;height:80px}
+.crew-face-robot .eye{fill:#58a6ff;transition:all .3s}
+.crew-face-robot .mouth{stroke:#58a6ff;transition:all .3s}
+.crew-face-robot.thinking .eye{fill:#e3b341}
+.crew-face-robot.happy .mouth{d:path('M25,55 Q40,65 55,55')}
+.crew-face-robot.sad .mouth{d:path('M25,60 Q40,50 55,60')}
+.crew-face-robot.confused .eye{fill:#f85149;animation:loading-pulse 1s ease-in-out infinite}
+
+/* ═══ Observability View ═══ */
+.otel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
+.otel-card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;text-align:center}
+.otel-card .val{font-size:1.5rem;font-weight:700;color:#58a6ff}
+.otel-card .label{font-size:.75rem;color:#8b949e;margin-top:4px}
+.otel-bar-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0}
+.otel-bar{background:#58a6ff;border-radius:3px 3px 0 0;min-width:24px;flex:1;transition:height .3s;position:relative}
+.otel-bar:hover{background:#79c0ff}
+.otel-bar .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#161b22;border:1px solid #30363d;padding:2px 6px;border-radius:4px;font-size:.7rem;white-space:nowrap;display:none}
+.otel-bar:hover .tip{display:block}
+.otel-bar.error{background:#f85149}
+.otel-table{width:100%;border-collapse:collapse;font-size:.8rem;margin:8px 0}
+.otel-table th{text-align:left;color:#8b949e;padding:6px 8px;border-bottom:1px solid #30363d;font-weight:500}
+.otel-table td{padding:6px 8px;border-bottom:1px solid #21262d;color:#e6edf3}
+.otel-table .status-ok{color:#2ea043}.otel-table .status-error{color:#f85149}
+
+/* ═══ PIN Entry Screen ═══ */
+.pin-overlay{
+  position:fixed;inset:0;background:rgba(13,17,23,.95);z-index:20000;
+  display:flex;align-items:center;justify-content:center;
+}
+.pin-box{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:32px;text-align:center;max-width:320px}
+.pin-box h2{color:#e6edf3;margin:0 0 8px}
+.pin-box p{color:#8b949e;font-size:.85rem;margin:0 0 20px}
+.pin-input{display:flex;gap:8px;justify-content:center;margin:0 0 16px}
+.pin-input input{width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:700;
+  background:#0d1117;border:2px solid #30363d;border-radius:8px;color:#e6edf3;outline:none}
+.pin-input input:focus{border-color:#58a6ff}
+.pin-submit{background:#238636;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:.9rem;cursor:pointer;width:100%}
+.pin-submit:hover{background:#2ea043}
+.pin-error{color:#f85149;font-size:.8rem;margin-top:8px;min-height:1.2em}
 """
 
 # ── JS ──────────────────────────────────────────────────────────────
@@ -1721,7 +1992,6 @@ tr.override td{background:rgba(210,153,34,.08)}
 JS = r"""
 // ── State ──
 let currentView='crew';
-let timePeriod='today';
 let agentsData=[];
 let teamsData=[];
 let refreshTimer=null;
@@ -1732,7 +2002,7 @@ let currentAgentSpaceType=null;
 let _defaultModel='';
 
 // ── Helpers ──
-function esc(s){return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function esc(s){return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function priBadge(p){return '<span class="pri-'+p+'">'+esc(p)+'</span>'}
 function statusBadge(s){return '<span class="badge badge-'+s+'">'+esc(s)+'</span>'}
 
@@ -1790,6 +2060,39 @@ function closePasswordPrompt(submit){
     modal.classList.remove('open');
     if(_pwResolve){_pwResolve(null);_pwResolve=null;}
   }
+}
+
+// ── PIN gatekeeper for destructive actions ──
+async function requirePin(actionMsg){
+  // Check if a PIN exists
+  var hasPass;
+  try{hasPass=await api('/api/dashboard/has-password');}catch(e){return true;}
+  if(!hasPass.has_password){
+    // No PIN set — make them create one first
+    var newPin=await showPasswordPrompt(
+      'Set a PIN to protect your crew. You\u2019ll need this PIN for any destructive action like deleting teams.');
+    if(!newPin)return false;
+    if(newPin.length<4){showToast('PIN must be at least 4 characters','error');return false;}
+    // Confirm it
+    var confirmPin=await showPasswordPrompt('Confirm your new PIN');
+    if(!confirmPin){return false;}
+    if(confirmPin!==newPin){showToast('PINs don\u2019t match. Try again.','error');return false;}
+    // Save the new PIN
+    var saveRes=await apiPost('/api/dashboard/set-password',{password:newPin});
+    if(!saveRes||!saveRes.ok){showToast('Failed to save PIN','error');return false;}
+    showToast('PIN set! Your crew is now protected.');
+    // Show the lock button now that PIN is set
+    var lockBtn=document.getElementById('hm-lock-btn');
+    if(lockBtn)lockBtn.style.display='';
+    resetIdleTimer();
+    return true;
+  }
+  // PIN exists — verify it
+  var pin=await showPasswordPrompt(actionMsg||'Enter your PIN to continue');
+  if(!pin)return false;
+  var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
+  if(!verify||!verify.valid){showToast('Wrong PIN. Action cancelled.','error');return false;}
+  return true;
 }
 
 // ── Dashboard lock/unlock ──
@@ -1886,7 +2189,7 @@ async function _autoUpdateCheck(){
     var r=await api('/api/update/check');
     if(r&&r.update_available){
       var dot=document.getElementById('update-dot');
-      if(dot)dot.style.display='block';
+      if(dot)dot.style.display='inline-block';
     }
   }catch(e){}
 }
@@ -1930,7 +2233,7 @@ function resetIdleTimer(){
 
 async function api(path){return(await fetch(path)).json()}
 async function apiPost(path,data){
-  return(await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+  return(await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
     body:JSON.stringify(data||{})})).json();
 }
 
@@ -1952,38 +2255,90 @@ function burnoutDotColor(score){
 }
 
 function accentColor(type){
-  var m={'right_hand':'#ffffff','guardian':'#4dd0b8','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','knowledge':'#b388ff'};
+  var m={'right_hand':'#ffffff','guardian':'#d18616','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6'};
   return m[type]||'#ffffff';
 }
 
 function personalName(a){
-  var m={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','knowledge':'Muse','help':'Help','human':'You'};
-  return m[a.agent_type]||a.name||'Agent';
+  // Default display names for core agents — only used if agent hasn't been renamed
+  var defaults={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
+  var dbDefaults={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Communications','wellness':'Wellness','strategy':'Strategy','financial':'Financial','help':'Help','human':'Ryan','vault':'Vault','knowledge':'Knowledge'};
+  // If agent has a custom name (different from the DB default), use it
+  if(a.name && dbDefaults[a.agent_type] && a.name !== dbDefaults[a.agent_type]){
+    return a.name;
+  }
+  return defaults[a.agent_type]||a.name||'Agent';
 }
 
-function agentEmoji(type){
-  var m={'right_hand':'✩','guardian':'🛡','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🏠','knowledge':'🎨','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
+function agentEmoji(agentOrType){
+  if(agentOrType&&typeof agentOrType==='object'&&agentOrType.avatar)return agentOrType.avatar;
+  var type=typeof agentOrType==='string'?agentOrType:(agentOrType?agentOrType.agent_type:'');
+  var m={'right_hand':'✩','guardian':'🛡','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🏠','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
   return m[type]||'🤖';
 }
 
 function agentBorderColor(type){
-  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#4dd0b8','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6','knowledge':'#b388ff'};
+  var m={'right_hand':'rgba(255,255,255,0.8)','guardian':'#d18616','communications':'#4dd0b8','wellness':'#ffab57','strategy':'#66d97a','financial':'#64b5f6'};
   return m[type]||'rgba(255,255,255,0.3)';
 }
+
+// ══════════ AVATAR PICKER ══════════
+var AVATAR_EMOJIS=['🐶','🐱','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐙','🐠','🐬','🐳','🐊','🦎','🐍','🦖','🦕','👽','👾','🤖','🦊','🐰','🐹','🐭','🐲','🎃','🐾','🦈','🦭','🐢','🦩','🦜','🐿️','🦔','🦇','🐡','🦑'];
+
+function openAvatarPicker(){
+  var picker=document.getElementById('avatar-picker');
+  var overlay=document.getElementById('avatar-picker-overlay');
+  if(!picker)return;
+  if(picker.classList.contains('open')){closeAvatarPicker();return;}
+  var grid=picker.querySelector('.avatar-picker-grid');
+  grid.innerHTML='';
+  AVATAR_EMOJIS.forEach(function(e){
+    var btn=document.createElement('button');
+    btn.textContent=e;
+    btn.onclick=function(){setAgentAvatar(e)};
+    grid.appendChild(btn);
+  });
+  picker.classList.add('open');
+  overlay.classList.add('open');
+}
+function closeAvatarPicker(){
+  var picker=document.getElementById('avatar-picker');
+  var overlay=document.getElementById('avatar-picker-overlay');
+  if(picker)picker.classList.remove('open');
+  if(overlay)overlay.classList.remove('open');
+}
+async function setAgentAvatar(emoji){
+  var space=document.getElementById('agent-space');
+  if(!space)return;
+  var agentId=space.dataset.agentId;
+  if(!agentId)return;
+  var avatar=document.getElementById('as-avatar');
+  if(avatar)avatar.textContent=emoji;
+  // Update local cache
+  var cached=agentsData.find(function(a){return a.id==agentId});
+  if(cached)cached.avatar=emoji;
+  closeAvatarPicker();
+  await apiPost('/api/agent/'+agentId+'/avatar',{avatar:emoji});
+  loadCircle();
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeAvatarPicker()});
 
 // Toggle settings panel in agent space
 function toggleSettings(){
   var panel=document.getElementById('as-settings-panel');
   var btn=document.getElementById('as-settings-btn');
+  var chatWrap=document.querySelector('.chat-wrap');
   if(!panel)return;
   var isOpen=panel.classList.contains('open');
   panel.classList.toggle('open');
   if(btn)btn.classList.toggle('active',!isOpen);
+  // Hide chat when settings open, show when closed
+  if(chatWrap)chatWrap.style.display=isOpen?'':'none';
 }
 
 // FIX 4: map for display names used in Messages dropdown
-var DISPLAY_NAMES={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','knowledge':'Muse','help':'Help','human':'You'};
-var CORE_TYPES_SET={'right_hand':1,'communications':1,'wellness':1,'strategy':1,'financial':1,'knowledge':1};
+var DISPLAY_NAMES={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
+var CORE_TYPES_SET={'right_hand':1,'guardian':1,'communications':1,'wellness':1,'strategy':1,'financial':1};
 
 // ── Auto-refresh ──
 function startRefresh(){
@@ -2000,6 +2355,31 @@ function startRefresh(){
   },1000);
 }
 
+// ── Hamburger menu ──
+function toggleHamburger(){
+  var m=document.getElementById('hamburger-menu');
+  m.style.display=m.style.display==='block'?'none':'block';
+}
+function closeHamburger(){
+  document.getElementById('hamburger-menu').style.display='none';
+}
+function hmNav(view){
+  closeHamburger();
+  showView(view);
+}
+function hmAction(action){
+  closeHamburger();
+  if(action==='update')checkForUpdates();
+  else if(action==='lock')lockDashboard();
+  else if(action==='feedback')openFeedback();
+}
+// Close hamburger when clicking outside
+document.addEventListener('click',function(e){
+  var menu=document.getElementById('hamburger-menu');
+  var btn=document.querySelector('.hamburger-btn');
+  if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&e.target!==btn)closeHamburger();
+});
+
 // ── Navigation ──
 function showView(name){
   currentView=name;
@@ -2015,9 +2395,9 @@ function showView(name){
 function loadCurrentView(){
   if(currentView==='crew')loadCircle();
   else if(currentView==='messages')loadMessages();
-  else if(currentView==='decisions')loadDecisions();
   else if(currentView==='audit')loadAudit();
   else if(currentView==='drafts')loadDrafts();
+  else if(currentView==='observability'){loadTelemetryStats();loadTelemetrySpans()}
   else if(currentView==='team'){}  // team dash loads separately
 }
 
@@ -2106,25 +2486,19 @@ function showToast(msg){
 
 async function loadCircle(){
   var stats=await api('/api/stats');
-  var agents=await api('/api/agents?period='+timePeriod);
+  var agents=await api('/api/agents');
   agentsData=agents;
 
   var boss=agents.find(function(a){return a.agent_type==='right_hand'});
-  var guard=agents.find(function(a){return a.agent_type==='communications'});
-  var well=agents.find(function(a){return a.agent_type==='wellness'});
-  var ideas=agents.find(function(a){return a.agent_type==='strategy'});
-  var wallet=agents.find(function(a){return a.agent_type==='financial'});
-  var muse=agents.find(function(a){return a.agent_type==='knowledge'});
+  var guardian=agents.find(function(a){return a.agent_type==='guardian'});
+  var vault=agents.find(function(a){return a.agent_type==='vault'});
 
   var guardCI='';
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
 
   renderBubble('bubble-boss',boss,null);
-  renderBubble('bubble-family',guard,null);
-  renderBubble('bubble-muse',muse,null);
-  renderBubble('bubble-health',well,null);
-  renderBubble('bubble-growth',ideas,null);
-  renderBubble('bubble-life',wallet,null);
+  renderBubble('bubble-guardian',guardian,null);
+  renderBubble('bubble-vault',vault,null);
 
   var trustEl=document.getElementById('trust-val');
   var burnoutDot=document.getElementById('burnout-dot');
@@ -2137,6 +2511,14 @@ async function loadCircle(){
   if(burnoutSlider)burnoutSlider.value=stats.burnout_score||5;
   var td=document.getElementById('tb-trust-display');
   if(td)td.textContent=stats.trust_score||1;
+
+  // Dynamic labels — boss name for trust, human name for energy
+  var trustLbl=document.getElementById('trust-label');
+  var energyLbl=document.getElementById('energy-label');
+  var bossName=stats.boss_name||'Crew Boss';
+  var humanName=stats.human_name||'Human';
+  if(trustLbl)trustLbl.textContent=bossName+' Trust Score';
+  if(energyLbl)energyLbl.textContent='Your Energy Score';
 
   loadTeams();
   loadGuardianBanner();
@@ -2236,17 +2618,10 @@ function renderBubble(id,agent,sub){
   el.onclick=function(){openAgentSpace(agent.id)};
   var dot=el.querySelector('.status-dot');
   if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
-  var countEl=el.querySelector('.bubble-count');
-  if(countEl){var c=agent.period_count||agent.unread_count||0;countEl.textContent=c>0?c+' msgs':''}
+  var iconEl=el.querySelector('.icon');
+  if(iconEl&&agent.avatar)iconEl.textContent=agent.avatar;
   var subEl=el.querySelector('.bubble-sub');
   if(subEl)subEl.textContent=sub||'';
-}
-
-function setTimePeriod(p,el){
-  timePeriod=p;
-  document.querySelectorAll('.time-pill').forEach(function(b){b.classList.remove('active')});
-  if(el)el.classList.add('active');
-  loadCircle();
 }
 
 function setDayNight(mode,el){
@@ -2257,6 +2632,8 @@ function setDayNight(mode,el){
   }else{
     document.body.classList.remove('day-mode');
   }
+  var tc=document.querySelector('meta[name="theme-color"]');
+  if(tc)tc.content=mode==='day'?'#f0f2f5':'#0d1117';
 }
 
 // FIX 3: Trust/Burnout popup instead of old sliders
@@ -2287,7 +2664,9 @@ async function openAgentSpace(agentId){
   var space=document.getElementById('agent-space');
   if(!space)return;
   space.classList.remove('closing');
+  space.style.display='';
   space.classList.add('open');
+  var ov=document.getElementById('agent-overlay');if(ov)setTimeout(function(){ov.style.display='block'},300);
   space.dataset.agentId=agentId;
 
   // Close settings panel when opening a new agent
@@ -2295,6 +2674,8 @@ async function openAgentSpace(agentId){
   if(settingsPanel)settingsPanel.classList.remove('open');
   var settingsBtn=document.getElementById('as-settings-btn');
   if(settingsBtn)settingsBtn.classList.remove('active');
+  var chatWrap=document.querySelector('.chat-wrap');
+  if(chatWrap)chatWrap.style.display='';
 
   // Set avatar + name immediately from cache for instant feedback
   var cached=agentsData.find(function(a){return a.id==agentId;});
@@ -2303,7 +2684,7 @@ async function openAgentSpace(agentId){
     document.getElementById('as-name').textContent=cname;
     document.getElementById('as-name').style.color=accentColor(cached.agent_type);
     var avatar=document.getElementById('as-avatar');
-    if(avatar){avatar.textContent=agentEmoji(cached.agent_type);avatar.style.borderColor=agentBorderColor(cached.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(cached.agent_type)+'33';}
+    if(avatar){avatar.textContent=agentEmoji(cached);avatar.style.borderColor=agentBorderColor(cached.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(cached.agent_type)+'33';}
     var onlineEl=document.getElementById('as-online');
     if(onlineEl){
       if(cached.active!==false){onlineEl.innerHTML='<span class="as-online-dot"></span>Online';onlineEl.style.color='#00b894';}
@@ -2323,8 +2704,13 @@ async function openAgentSpace(agentId){
   // Update header
   document.getElementById('as-name').textContent=name;
   document.getElementById('as-name').style.color=color;
+  var titleEl=document.getElementById('as-agent-title');
+  if(titleEl){
+    if(agent.title){titleEl.textContent=agent.title;titleEl.style.display='block';}
+    else{titleEl.textContent='';titleEl.style.display='none';}
+  }
   var avatar=document.getElementById('as-avatar');
-  if(avatar){avatar.textContent=agentEmoji(agent.agent_type);avatar.style.borderColor=agentBorderColor(agent.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(agent.agent_type)+'33';}
+  if(avatar){avatar.textContent=agentEmoji(agent);avatar.style.borderColor=agentBorderColor(agent.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(agent.agent_type)+'33';}
   var onlineEl=document.getElementById('as-online');
   if(onlineEl){
     if(agent.active!==false){onlineEl.innerHTML='<span class="as-online-dot"></span>Online';onlineEl.style.color='#00b894';}
@@ -2332,6 +2718,10 @@ async function openAgentSpace(agentId){
   }
   var asDot=document.getElementById('as-status-dot');
   if(asDot)asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
+
+  // CrewFace — start polling face state
+  var faceContainer=document.getElementById('as-crewface');
+  if(faceContainer){startFacePoll('as-crewface',agentId)}
 
   // Settings panel content (hidden by default)
   var intro=document.getElementById('as-intro');
@@ -2348,8 +2738,32 @@ async function openAgentSpace(agentId){
     '<option value="openai"'+(curModel==='openai'?' selected':'')+'>GPT-4o Mini</option>'+
     '<option value="groq"'+(curModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
     '<option value="gemini"'+(curModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
+    '<option value="xai:grok-4-1-fast-reasoning"'+((curModel==='xai'||curModel.indexOf('xai:grok')===0)?' selected':'')+'>Grok 4.1 Fast Reasoning (xAI)</option>'+
     '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
     '</select></div>'+
+    '<div id="as-apikey-row" style="display:none;margin-top:6px">'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+    '<input id="as-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.8rem">'+
+    '<button onclick="saveModelApiKey()" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">Save Key</button>'+
+    '</div><div id="as-apikey-msg" style="font-size:.75rem;color:var(--mu);margin-top:4px"></div></div>'+
+    '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">'+
+      '<div class="as-model-row">'+
+      '<span class="as-model-label">\u{1F30D} Default Model (all agents):</span>'+
+      '<select class="as-model-select" id="as-default-model-select" onchange="changeDefaultModel(this.value)">'+
+      '<option value="kimi"'+(defaultModel==='kimi'?' selected':'')+'>Kimi K2.5</option>'+
+      '<option value="claude"'+(defaultModel==='claude'?' selected':'')+'>Claude Sonnet 4.5</option>'+
+      '<option value="openai"'+(defaultModel==='openai'?' selected':'')+'>GPT-4o Mini</option>'+
+      '<option value="groq"'+(defaultModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
+      '<option value="gemini"'+(defaultModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
+      '<option value="xai:grok-4-1-fast-reasoning"'+(defaultModel.indexOf('xai')===0?' selected':'')+'>Grok 4.1 Fast Reasoning (xAI)</option>'+
+      '<option value="ollama"'+(defaultModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
+      '</select></div>'+
+      '<div id="as-default-apikey-row" style="display:none;margin-top:6px">'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+      '<input id="as-default-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.8rem">'+
+      '<button onclick="saveDefaultModelApiKey()" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">Save Key</button>'+
+      '</div><div id="as-default-apikey-msg" style="font-size:.75rem;color:var(--mu);margin-top:4px"></div></div>'+
+      '</div>'+
     (agent.agent_type==='worker'||agent.agent_type==='manager'?
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       (agent.active?
@@ -2388,32 +2802,80 @@ async function openAgentSpace(agentId){
   // Load memories for this agent
   loadMemories(agentId);
 
+  // Load soul, thinking, heartbeat, and learning sections
+  loadSoulSection(agentId, agent);
+  loadThinkingSection(agentId, agent);
+  loadHeartbeatSection(agentId);
+  loadLearningSection(agentId);
+
   // Start chat auto-refresh polling
   startChatPoll();
 }
 
 // ══════════ RENAME AGENT ══════════
 
-function renameTeamAgent(agentId,labelEl,evt){
+function _rebuildLabel(labelEl,name){
+  labelEl.dataset.name=name;
+  labelEl.innerHTML=esc(name)+' <span class="edit-icon" onclick="renameTeamAgent('+labelEl.dataset.agentId+',this.parentElement,event,'+labelEl.dataset.isManager+')" title="Rename">\u270F\uFE0F</span>';
+}
+function renameTeamAgent(agentId,labelEl,evt,isManager){
   evt.stopPropagation();
-  var oldName=labelEl.textContent;
+  var oldName=labelEl.dataset.name||labelEl.textContent;
   var input=document.createElement('input');
   input.type='text';input.value=oldName;
   input.style.cssText='font-size:inherit;font-weight:inherit;color:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 6px;outline:none;width:'+Math.max(80,oldName.length*9)+'px;text-align:center;';
   labelEl.textContent='';labelEl.appendChild(input);input.focus();input.select();
+  var endpoint=isManager?'/api/teams/'+agentId+'/rename':'/api/agent/'+agentId+'/rename';
   function save(){
     var newName=input.value.trim();
-    if(!newName||newName===oldName){labelEl.textContent=oldName;return;}
-    apiPost('/api/agent/'+agentId+'/rename',{name:newName}).then(function(r){
-      if(r&&r.ok){labelEl.textContent=newName;showToast('Renamed to "'+newName+'"');loadTeams();}
-      else{labelEl.textContent=oldName;showToast(r&&r.error||'Rename failed','error');}
-    }).catch(function(){labelEl.textContent=oldName;showToast('Rename failed','error');});
+    if(!newName||newName===oldName){_rebuildLabel(labelEl,oldName);return;}
+    apiPost(endpoint,{name:newName}).then(function(r){
+      if(r&&r.ok){_rebuildLabel(labelEl,newName);showToast('Renamed to "'+newName+'"');loadTeams();}
+      else{_rebuildLabel(labelEl,oldName);showToast(r&&r.error||'Rename failed','error');}
+    }).catch(function(){_rebuildLabel(labelEl,oldName);showToast('Rename failed','error');});
   }
   var cancelled=false;
   input.addEventListener('blur',function(){if(!cancelled)save()});
   input.addEventListener('keydown',function(e){
     if(e.key==='Enter'){e.preventDefault();input.blur();}
-    if(e.key==='Escape'){cancelled=true;labelEl.textContent=oldName;}
+    if(e.key==='Escape'){cancelled=true;_rebuildLabel(labelEl,oldName);}
+  });
+}
+
+function editAgentTitle(agentId,el,evt){
+  evt.stopPropagation();
+  var oldTitle=el.dataset.currentTitle||el.textContent.trim();
+  if(oldTitle==='+ Add title')oldTitle='';
+  var input=document.createElement('input');
+  input.type='text';input.value=oldTitle;input.placeholder='e.g. Head of Sales';
+  input.style.cssText='font-size:.75rem;color:var(--mu);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 6px;outline:none;width:'+Math.max(100,(oldTitle||'').length*7+40)+'px;text-align:center;';
+  el.textContent='';el.appendChild(input);input.focus();input.select();
+  function save(){
+    var newTitle=input.value.trim();
+    if(newTitle===oldTitle){
+      el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';
+      el.dataset.currentTitle=oldTitle;return;
+    }
+    apiPost('/api/agent/'+agentId+'/title',{title:newTitle}).then(function(r){
+      if(r&&r.ok){
+        el.innerHTML=newTitle?esc(newTitle):'<em style="opacity:.5">+ Add title</em>';
+        el.dataset.currentTitle=newTitle;
+        if(newTitle)showToast('Title set to "'+newTitle+'"');
+        else showToast('Title removed');
+      }else{
+        el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';
+        showToast(r&&r.error||'Failed to set title','error');
+      }
+    }).catch(function(){
+      el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';
+      showToast('Failed to set title','error');
+    });
+  }
+  var cancelled=false;
+  input.addEventListener('blur',function(){if(!cancelled)save()});
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){cancelled=true;el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';}
   });
 }
 
@@ -2460,11 +2922,38 @@ function startRenameAgent(){
 
 // ══════════ CHANGE AGENT MODEL ══════════
 
+var MODEL_KEY_MAP={xai:'xai_api_key',kimi:'kimi_api_key',claude:'claude_api_key',openai:'openai_api_key',groq:'groq_api_key',gemini:'gemini_api_key'};
+var MODEL_KEY_LABELS={xai:'xAI',kimi:'Moonshot',claude:'Anthropic',openai:'OpenAI',groq:'Groq',gemini:'Google AI'};
+
 function changeAgentModel(newModel){
   var space=document.getElementById('agent-space');
   if(!space)return;
   var agentId=space.dataset.agentId;
   if(!agentId)return;
+
+  // Check if this provider needs an API key
+  var provider=newModel.split(':')[0];
+  var keyRow=document.getElementById('as-apikey-row');
+  var keyMsg=document.getElementById('as-apikey-msg');
+  if(keyRow&&MODEL_KEY_MAP[provider]){
+    // Check if key already saved
+    apiPost('/api/config/get',{key:MODEL_KEY_MAP[provider]}).then(function(r){
+      if(r&&r.value){
+        keyRow.style.display='none';
+      }else{
+        keyRow.style.display='block';
+        if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key to use this model';
+        keyRow.dataset.provider=provider;
+      }
+    }).catch(function(){
+      keyRow.style.display='block';
+      if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key';
+      keyRow.dataset.provider=provider;
+    });
+  }else if(keyRow){
+    keyRow.style.display='none';
+  }
+
   apiPost('/api/agent/'+agentId+'/model',{model:newModel}).then(function(r){
     if(r&&r.ok){
       var label=newModel||('default'+ (_defaultModel?' ('+_defaultModel+')':''));
@@ -2475,6 +2964,77 @@ function changeAgentModel(newModel){
       showToast(r&&r.error||'Failed to update model','error');
     }
   }).catch(function(){showToast('Failed to update model','error');});
+}
+
+function saveModelApiKey(){
+  var keyRow=document.getElementById('as-apikey-row');
+  var input=document.getElementById('as-apikey-input');
+  var msg=document.getElementById('as-apikey-msg');
+  if(!keyRow||!input)return;
+  var provider=keyRow.dataset.provider;
+  var configKey=MODEL_KEY_MAP[provider];
+  var val=input.value.trim();
+  if(!val){if(msg)msg.textContent='Please enter a key';return;}
+  apiPost('/api/config/set',{key:configKey,value:val}).then(function(r){
+    if(r&&r.ok){
+      input.value='';
+      keyRow.style.display='none';
+      showToast(MODEL_KEY_LABELS[provider]+' API key saved!');
+    }else{
+      if(msg)msg.textContent=r&&r.error||'Failed to save key';
+    }
+  }).catch(function(){if(msg)msg.textContent='Failed to save key';});
+}
+
+function changeDefaultModel(newModel){
+  var provider=newModel.split(':')[0];
+  var keyRow=document.getElementById('as-default-apikey-row');
+  var keyMsg=document.getElementById('as-default-apikey-msg');
+  if(keyRow&&MODEL_KEY_MAP[provider]){
+    apiPost('/api/config/get',{key:MODEL_KEY_MAP[provider]}).then(function(r){
+      if(r&&r.value){
+        keyRow.style.display='none';
+      }else{
+        keyRow.style.display='block';
+        if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key';
+        keyRow.dataset.provider=provider;
+      }
+    }).catch(function(){
+      keyRow.style.display='block';
+      if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key';
+      keyRow.dataset.provider=provider;
+    });
+  }else if(keyRow){
+    keyRow.style.display='none';
+  }
+  apiPost('/api/config/set',{key:'default_model',value:newModel}).then(function(r){
+    if(r&&r.ok){
+      _defaultModel=newModel;
+      showToast('Default model set to '+newModel);
+    }else{
+      showToast(r&&r.error||'Failed to set default','error');
+    }
+  }).catch(function(){showToast('Failed to set default','error');});
+}
+
+function saveDefaultModelApiKey(){
+  var keyRow=document.getElementById('as-default-apikey-row');
+  var input=document.getElementById('as-default-apikey-input');
+  var msg=document.getElementById('as-default-apikey-msg');
+  if(!keyRow||!input)return;
+  var provider=keyRow.dataset.provider;
+  var configKey=MODEL_KEY_MAP[provider];
+  var val=input.value.trim();
+  if(!val){if(msg)msg.textContent='Please enter a key';return;}
+  apiPost('/api/config/set',{key:configKey,value:val}).then(function(r){
+    if(r&&r.ok){
+      input.value='';
+      keyRow.style.display='none';
+      showToast(MODEL_KEY_LABELS[provider]+' API key saved!');
+    }else{
+      if(msg)msg.textContent=r&&r.error||'Failed to save key';
+    }
+  }).catch(function(){if(msg)msg.textContent='Failed to save key';});
 }
 
 // ══════════ GUARD ACTIVATION + SKILLS ══════════
@@ -2653,6 +3213,144 @@ async function addMemoryUI(agentId){
   loadMemories(agentId);
 }
 
+// ══════════ SOUL SECTION ══════════
+
+function loadSoulSection(agentId, agent){
+  var el=document.getElementById('as-soul-section');
+  if(!el)return;
+  var soul=agent.soul||'';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u2728 Identity & Soul</summary>';
+  html+='<div style="margin-top:8px">';
+  html+='<textarea id="soul-textarea" rows="4" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;resize:vertical;font-family:inherit;line-height:1.4" placeholder="Define this agent\'s personality, values, and identity...">'+esc(soul)+'</textarea>';
+  html+='<div style="display:flex;gap:6px;margin-top:6px;align-items:center">';
+  html+='<button onclick="saveSoul('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">Save Soul</button>';
+  html+='<span id="soul-msg" style="font-size:.8rem;color:var(--mu)"></span>';
+  html+='</div></div></details>';
+  el.innerHTML=html;
+}
+
+async function saveSoul(agentId){
+  var ta=document.getElementById('soul-textarea');
+  var msg=document.getElementById('soul-msg');
+  if(!ta)return;
+  var res=await apiPost('/api/agent/'+agentId+'/soul',{soul:ta.value});
+  if(res&&res.ok){if(msg){msg.textContent='Saved!';msg.style.color='#2ea043';setTimeout(function(){msg.textContent='';},2000);}}
+  else{if(msg){msg.textContent='Error saving';msg.style.color='#f85149';}}
+}
+
+// ══════════ THINKING LEVEL SECTION ══════════
+
+function loadThinkingSection(agentId, agent){
+  var el=document.getElementById('as-thinking-section');
+  if(!el)return;
+  var level=agent.thinking_level||'auto';
+  var levels=['auto','off','minimal','standard','deep','ultra'];
+  var labels={'auto':'Auto','off':'Off','minimal':'Minimal','standard':'Standard','deep':'Deep','ultra':'Ultra'};
+  var html='<div style="display:flex;align-items:center;gap:8px;margin-top:4px">';
+  html+='<span style="font-weight:600;color:var(--fg);font-size:.9rem">\u{1F9E0} Thinking:</span>';
+  html+='<select id="thinking-select" onchange="changeThinking('+agentId+',this.value)" style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:4px 10px;color:var(--fg);font-size:.85rem">';
+  levels.forEach(function(l){html+='<option value="'+l+'"'+(l===level?' selected':'')+'>'+labels[l]+'</option>';});
+  html+='</select>';
+  html+='<span id="thinking-msg" style="font-size:.8rem;color:var(--mu)"></span>';
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+async function changeThinking(agentId,level){
+  var msg=document.getElementById('thinking-msg');
+  var res=await apiPost('/api/agent/'+agentId+'/thinking',{level:level});
+  if(res&&res.ok){if(msg){msg.textContent='Saved';msg.style.color='#2ea043';setTimeout(function(){msg.textContent='';},2000);}}
+}
+
+// ══════════ HEARTBEAT SECTION ══════════
+
+async function loadHeartbeatSection(agentId){
+  var el=document.getElementById('as-heartbeat-section');
+  if(!el)return;
+  var tasks=[];try{tasks=await api('/api/agent/'+agentId+'/heartbeat');}catch(e){}
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u{1F493} Heartbeat Tasks ('+tasks.length+')</summary>';
+  html+='<div style="margin-top:8px">';
+  if(tasks&&tasks.length>0){
+    tasks.forEach(function(t){
+      var on=t.enabled?true:false;
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">';
+      html+='<div style="flex:1"><div style="color:var(--fg);font-size:.85rem">'+esc(t.task).substring(0,80)+'</div>';
+      html+='<div style="color:var(--mu);font-size:.75rem">'+esc(t.schedule)+(t.last_run?' \u2022 last: '+timeAgo(t.last_run):'')+'</div></div>';
+      html+='<div style="display:flex;gap:4px;align-items:center">';
+      html+='<button onclick="toggleHeartbeat('+t.id+','+(on?0:1)+','+agentId+')" style="background:none;border:1px solid '+(on?'#2ea04366':'#f8514944')+';color:'+(on?'#2ea043':'#f85149')+';cursor:pointer;font-size:.7rem;padding:2px 8px;border-radius:4px">'+(on?'On':'Off')+'</button>';
+      html+='<button onclick="deleteHeartbeat('+t.id+','+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px" title="Delete">\u2716</button>';
+      html+='</div></div>';
+    });
+  }else{
+    html+='<p style="color:var(--mu);font-size:.85rem">No heartbeat tasks set.</p>';
+  }
+  html+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--br)">';
+  html+='<div style="display:flex;gap:6px;margin-bottom:4px">';
+  html+='<select id="hb-schedule" style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:4px 8px;color:var(--fg);font-size:.82rem">';
+  html+='<option value="every 30m">Every 30m</option><option value="every 1h">Every 1h</option><option value="every 4h">Every 4h</option>';
+  html+='<option value="daily 9am">Daily 9am</option><option value="daily 6pm">Daily 6pm</option><option value="daily 10am">Daily 10am</option>';
+  html+='<option value="weekly monday 9am">Weekly Mon 9am</option></select></div>';
+  html+='<div style="display:flex;gap:6px">';
+  html+='<input id="hb-task" type="text" placeholder="Task description..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">';
+  html+='<button onclick="addHeartbeat('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">+</button></div>';
+  html+='</div></div></details>';
+  el.innerHTML=html;
+}
+
+async function toggleHeartbeat(taskId,enabled,agentId){
+  await apiPost('/api/heartbeat/'+taskId+'/toggle',{enabled:enabled});
+  loadHeartbeatSection(agentId);
+}
+async function deleteHeartbeat(taskId,agentId){
+  await apiPost('/api/heartbeat/'+taskId+'/delete',{});
+  loadHeartbeatSection(agentId);
+}
+async function addHeartbeat(agentId){
+  var sch=document.getElementById('hb-schedule');
+  var task=document.getElementById('hb-task');
+  if(!task||!task.value.trim())return;
+  await apiPost('/api/agent/'+agentId+'/heartbeat',{schedule:sch?sch.value:'every 30m',task:task.value.trim()});
+  task.value='';
+  loadHeartbeatSection(agentId);
+}
+
+// ══════════ LEARNING LOG SECTION ══════════
+
+async function loadLearningSection(agentId){
+  var el=document.getElementById('as-learning-section');
+  if(!el)return;
+  var data={errors:[],learnings:[]};
+  try{data=await api('/api/agent/'+agentId+'/learnings');}catch(e){}
+  var total=data.errors.length+data.learnings.length;
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u{1F4DA} Learning Log ('+total+')</summary>';
+  html+='<div style="margin-top:8px">';
+  if(data.errors.length>0){
+    html+='<div style="margin-bottom:8px"><div style="color:#f85149;font-weight:600;font-size:.82rem;margin-bottom:4px">Mistakes to Avoid</div>';
+    data.errors.forEach(function(e){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
+      html+='<span style="color:var(--fg);font-size:.82rem">'+esc(e.content).substring(0,90)+'</span>';
+      html+='<button onclick="forgetMemory('+agentId+','+e.id+');loadLearningSection('+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px">\u2716</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  if(data.learnings.length>0){
+    html+='<div><div style="color:#2ea043;font-weight:600;font-size:.82rem;margin-bottom:4px">What Works Well</div>';
+    data.learnings.forEach(function(l){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
+      html+='<span style="color:var(--fg);font-size:.82rem">'+esc(l.content).substring(0,90)+'</span>';
+      html+='<button onclick="forgetMemory('+agentId+','+l.id+');loadLearningSection('+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px">\u2716</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  if(total===0){
+    html+='<p style="color:var(--mu);font-size:.85rem">No learnings yet. Give feedback in chat and the agent learns automatically.</p>';
+  }
+  html+='</div></details>';
+  el.innerHTML=html;
+}
+
 function descFor(type){
   var d={
     'right_hand':'Your friendly right-hand who handles 80% of everything so you don\u2019t have to. The only agent that talks to you directly \u2014 warm, reliable, always has your back.',
@@ -2661,14 +3359,13 @@ function descFor(type){
     'wellness':'Watches your energy and wellbeing. Gentle burnout nudges, quiet hours, and steps in if you really need a break \U0001F49A',
     'strategy':'Helps you build great habits, break big ideas into small steps, and grow at your own pace \U0001F331',
     'financial':'Meals, shopping lists, daily logistics, errands, and all the little stuff that keeps life running smoothly \u26A1',
-    'knowledge':'Sparks curiosity, filters the noise, and helps you learn anything at your own pace \U0001F3A8',
     'help':'Welcome to crew-bus \u2014 your friendly AI crew!\\n\\n' +
       '\u2728 Crew Boss \u2014 Your friendly right-hand. Handles everything, talks to you directly.\\n' +
       '\U0001F3E0 Friend & Family \u2014 Chores, reminders, family calendar.\\n' +
       '\U0001F49A Health Buddy \u2014 Watches your wellbeing. Talk privately using the \U0001F512 button.\\n' +
       '\U0001F331 Growth Coach \u2014 Habits, goals, and personal growth.\\n' +
       '\u26A1 Life Assistant \u2014 Meals, shopping, daily logistics.\\n' +
-      '\U0001F3A8 Muse \u2014 Curiosity, learning, and creative inspiration.\\n\\n' +
+      '\U0001F6E1 Guardian \u2014 Security, skills, and messaging app setup.\\n\\n' +
       'Teams \u2014 Add teams for work, household, or anything you need.\\n\\n' +
       'Trust Score \u2014 Controls how much Crew Boss handles on their own (1 = asks about everything, 10 = full autopilot).\\n' +
       'Burnout \u2014 When high, Crew Boss holds non-urgent messages for better timing.\\n\\n' +
@@ -2750,9 +3447,11 @@ function loadWaQr(containerId){
 
 function closeAgentSpace(){
   stopChatPoll();
+  stopFacePoll();
   var space=document.getElementById('agent-space');
   space.classList.add('closing');
-  setTimeout(function(){space.classList.remove('open','closing')},200);
+  setTimeout(function(){space.classList.remove('open','closing');space.style.display='none';},250);
+  var ov=document.getElementById('agent-overlay');if(ov)ov.style.display='none';
 }
 async function startNewChat(){
   var agentId=document.getElementById('agent-space').dataset.agentId;
@@ -2987,16 +3686,9 @@ async function deleteTeam(teamId,teamName){
     'Delete Team'
   );
   if(!ok)return;
-  // If PIN is set, require it before deleting
-  try{
-    var hasPass=await api('/api/dashboard/has-password');
-    if(hasPass.has_password){
-      var pin=await showPasswordPrompt('Enter your PIN to delete this team');
-      if(!pin)return;
-      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
-      if(!verify.valid){showToast('Wrong PIN. Deletion cancelled.','error');return;}
-    }
-  }catch(e){}
+  // Always require PIN — prompts to create one if not set yet
+  var authorized=await requirePin('Enter your PIN to delete this team');
+  if(!authorized)return;
   try{
     var r=await apiPost('/api/teams/'+teamId+'/delete',{});
     if(r.ok){showToast('Team deleted ('+r.deleted_count+' agents removed)');showView('crew');loadTeams();}
@@ -3044,16 +3736,9 @@ async function terminateAgent(agentId,agentName,agentType){
     'Terminate'
   );
   if(!ok)return;
-  // Require PIN if set
-  try{
-    var hasPass=await api('/api/dashboard/has-password');
-    if(hasPass.has_password){
-      var pin=await showPasswordPrompt('Enter your PIN to terminate '+agentName);
-      if(!pin)return;
-      var verify=await apiPost('/api/dashboard/verify-password',{password:pin});
-      if(!verify.valid){showToast('Wrong PIN. Termination cancelled.','error');return;}
-    }
-  }catch(e){}
+  // Always require PIN — prompts to create one if not set yet
+  var authorized=await requirePin('Enter your PIN to terminate '+agentName);
+  if(!authorized)return;
   try{
     var r=await apiPost('/api/agent/'+agentId+'/terminate',{});
     if(r.ok){
@@ -3177,13 +3862,20 @@ async function openTeamDash(teamId){
       :'<button class="btn-pause-team" onclick="pauseTeam('+teamId+',\''+esc(team.name).replace(/"/g,'&quot;')+'\')">Pause Team</button>')+
     '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
-  // Manager bubble — click to open, double-click name to rename
+  // Manager bubble — click to open, click name/title to rename/edit
   if(mgr){
+    var mgrTitle=mgr.title||'';
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
-      '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
-      '<span class="team-mgr-label">'+esc(mgr.name)+' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span>'+
-      '<span class="team-mgr-sub">Manager</span></div></div>';
+      '<div class="team-mgr-circle">'+agentEmoji(mgr)+'<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
+      '<span class="team-mgr-label"'+(canRename?' data-name="'+esc(mgr.name.replace("-Manager",""))+'" data-agent-id="'+mgr.id+'" data-is-manager="true"':'')+'>'+esc(mgr.name.replace('-Manager',''))+(canRename?' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event,true)" title="Rename">\u270F\uFE0F</span>':'')+'</span>'+
+      (canRename
+        ?'<span class="team-agent-title" data-agent-id="'+mgr.id+'" onclick="editAgentTitle('+mgr.id+',this,event)" title="Click to set title">'+(mgrTitle?esc(mgrTitle):'<em style=\"opacity:.5\">+ Add title</em>')+'</span>'
+        :'<span class="team-mgr-sub">Manager</span>')+
+    '</div></div>';
   }
+
+  // Filter out terminated workers
+  workers=workers.filter(function(w){return w.status!=='terminated'});
 
   // SVG connector lines
   if(workers.length>0&&mgr){
@@ -3197,12 +3889,17 @@ async function openTeamDash(teamId){
     html+='</svg>';
   }
 
-  // Worker bubbles — click to open, double-click name to rename
+  // Worker bubbles — click to open, click name/title to rename/edit
   html+='<div class="team-workers">';
   workers.forEach(function(w){
+    var wTitle=w.title||'';
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
-      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
-      '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
+      '<div class="team-worker-circle">'+agentEmoji(w)+'<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
+      '<span class="team-worker-label"'+(canRename?' data-name="'+esc(w.name)+'" data-agent-id="'+w.id+'" data-is-manager="false"':'')+'>'+esc(w.name)+(canRename?' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event,false)" title="Rename">\u270F\uFE0F</span>':'')+'</span>'+
+      (canRename
+        ?'<span class="team-agent-title" data-agent-id="'+w.id+'" onclick="editAgentTitle('+w.id+',this,event)" title="Click to set title">'+(wTitle?esc(wTitle):'<em style=\"opacity:.5\">+ Add title</em>')+'</span>'
+        :'')+
+    '</div>';
   });
   // Hire Agent button (if under max)
   if(mgr&&teamAgents.length<10){
@@ -3221,23 +3918,18 @@ async function openTeamDash(teamId){
     '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--s2);color:var(--fg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
     '<div id="hire-msg-'+teamId+'" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
 
-  // Team Meeting button — kicks off manager+workers sync
-  if(mgr){
-    html+='<div style="text-align:center;margin:16px 0">'+
-      '<button onclick="startTeamMeeting('+teamId+','+mgr.id+')" style="background:linear-gradient(135deg,var(--ac),#b388ff);color:#000;border:none;padding:10px 24px;border-radius:20px;cursor:pointer;font-weight:700;font-size:.9rem;box-shadow:0 2px 8px rgba(0,0,0,.3)">\u{1F91D} Team Meeting</button></div>';
-  }
-
-  // Mailbox section
-  html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
-
-  // Linked teams section
-  html+='<div class="mailbox-section"><h3>\u{1F517} Linked Teams</h3><div id="linked-teams-'+teamId+'"></div></div>';
+  // Footer: mailbox icon (bottom-left) + linked teams icon (bottom-right)
+  html+='<div class="team-footer">'+
+    '<button class="team-footer-btn" onclick="toggleTeamMailbox('+teamId+',event)" title="Mailbox">\u{1F4EC} <span class="team-footer-count" id="mail-count-'+teamId+'">0</span></button>'+
+    '<button class="team-footer-btn" onclick="toggleTeamLinked('+teamId+',event)" title="Linked Teams">\u{1F517}</button>'+
+    '<div class="team-mailbox-dropdown" id="mail-dropdown-'+teamId+'"><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>'+
+    '<div class="team-linked-dropdown" id="linked-dropdown-'+teamId+'"><div id="linked-teams-'+teamId+'"></div></div>'+
+  '</div>';
 
   document.getElementById('team-dash-content').innerHTML=html;
 
-  // Load mailbox messages
-  var mailboxContainer=document.getElementById('mailbox-msgs-'+teamId);
-  if(mailboxContainer)loadTeamMailbox(teamId,mailboxContainer);
+  // Load mailbox count + messages
+  loadTeamMailboxCompact(teamId);
 
   // Load linked teams
   loadLinkedTeams(teamId);
@@ -3300,7 +3992,7 @@ async function loadMessages(){
   var sel=document.getElementById('agent-filter');
   if(sel&&sel.options.length<=1){
     // First add core agents with display names
-    var coreOrder=['right_hand','guardian','communications','wellness','strategy','financial','knowledge'];
+    var coreOrder=['right_hand','guardian','communications','wellness','strategy','financial'];
     coreOrder.forEach(function(ctype){
       var a=agentsData.find(function(ag){return ag.agent_type===ctype});
       if(a){
@@ -3527,6 +4219,53 @@ async function checkPrivateStatus(agentId){
 
 // ══════════ TEAM MAILBOX ══════════
 
+function toggleTeamMailbox(teamId,event){
+  event.stopPropagation();
+  var dd=document.getElementById('mail-dropdown-'+teamId);
+  var ld=document.getElementById('linked-dropdown-'+teamId);
+  if(ld)ld.classList.remove('open');
+  if(dd)dd.classList.toggle('open');
+}
+function toggleTeamLinked(teamId,event){
+  event.stopPropagation();
+  var dd=document.getElementById('linked-dropdown-'+teamId);
+  var md=document.getElementById('mail-dropdown-'+teamId);
+  if(md)md.classList.remove('open');
+  if(dd)dd.classList.toggle('open');
+}
+async function loadTeamMailboxCompact(teamId){
+  var countEl=document.getElementById('mail-count-'+teamId);
+  var container=document.getElementById('mailbox-msgs-'+teamId);
+  try{
+    var msgs=await api('/api/teams/'+teamId+'/mailbox');
+    var count=msgs?msgs.length:0;
+    if(countEl)countEl.textContent=count;
+    if(container){
+      if(count===0){
+        container.innerHTML='<p style="color:var(--mu);font-size:.8rem;text-align:center;padding:8px">No messages yet.</p>';
+      }else{
+        container.innerHTML=msgs.map(function(m){
+          var cls='mailbox-msg severity-'+m.severity+(m.read?' mailbox-read':' mailbox-unread');
+          return '<div class="'+cls+'" onclick="toggleMailboxMsg(this)">'+
+            '<div class="mailbox-msg-header">'+
+            '<span class="mailbox-from">'+esc(m.from_agent_name)+'</span>'+
+            '<span class="mailbox-severity">'+esc(m.severity.replace('_',' '))+'</span></div>'+
+            '<div class="mailbox-subject">'+esc(m.subject)+'</div>'+
+            '<div class="mailbox-time">'+timeAgo(m.created_at)+'</div>'+
+            '<div class="mailbox-body">'+esc(m.body)+'</div>'+
+            '<div class="mailbox-actions">'+
+            (m.read?'':'<button class="mailbox-btn" onclick="markMailboxRead(event,'+m.id+','+teamId+')">Mark Read</button>')+
+            '<button class="mailbox-btn" onclick="replyFromMailbox(event,'+m.from_agent_id+')">Reply (Private)</button>'+
+            '</div></div>';
+        }).join('');
+      }
+    }
+  }catch(e){
+    if(countEl)countEl.textContent='0';
+    if(container)container.innerHTML='<p style="color:var(--mu);font-size:.8rem">Could not load mailbox.</p>';
+  }
+}
+
 async function loadTeamMailbox(teamId,container){
   try{
     var msgs=await api('/api/teams/'+teamId+'/mailbox');
@@ -3558,6 +4297,9 @@ function toggleMailboxMsg(el){el.classList.toggle('expanded')}
 async function markMailboxRead(event,msgId,teamId){
   event.stopPropagation();
   await apiPost('/api/teams/'+teamId+'/mailbox/'+msgId+'/read');
+  // Refresh compact dropdown mailbox
+  loadTeamMailboxCompact(teamId);
+  // Also refresh legacy section if present
   var section=event.target.closest('.mailbox-section');
   if(section){
     var container=section.querySelector('.mailbox-msgs');
@@ -3721,7 +4463,7 @@ function bootDashboard(){
   // Show lock button and start idle timer if PIN is set
   fetch('/api/dashboard/has-password').then(function(r){return r.json()}).then(function(d){
     if(d.has_password){
-      document.getElementById('lock-btn').style.display='';
+      document.getElementById('hm-lock-btn').style.display='';
       resetIdleTimer();
     }
   }).catch(function(){});
@@ -3759,7 +4501,7 @@ function submitSetup(){
   var pin=(document.getElementById('setup-pin').value||'').trim();
   var email=(document.getElementById('setup-email').value||'').trim();
   btn.disabled=true;btn.textContent='Setting up...';
-  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
     body:JSON.stringify({model:model,api_key:key,dashboard_pin:pin,recovery_email:email})})
     .then(function(r){return r.json()})
     .then(function(d){
@@ -3783,9 +4525,417 @@ function submitSetup(){
     });
 }
 
+// ── PWA Service Worker Registration ──
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('/sw.js').then(function(reg){
+      setInterval(function(){reg.update()},30*60*1000);
+    }).catch(function(){});
+  });
+}
+
+// ═══════ Update Banner ═══════
+function checkForUpdates(){
+  if(sessionStorage.getItem('update-dismissed'))return;
+  fetch('/api/update/check').then(r=>r.json()).then(d=>{
+    if(d.update_available){
+      let b=document.getElementById('update-banner');
+      if(!b){
+        b=document.createElement('div');b.id='update-banner';b.className='update-banner';
+        document.body.prepend(b);
+      }
+      b.innerHTML='<span>\uD83D\uDD04 Update available ('+
+        (d.commits_behind||'?')+' commits behind) &mdash; </span>'+
+        '<button onclick="applyUpdate()">Update Now</button>'+
+        '<button class="dismiss" onclick="dismissUpdate()">&times;</button>';
+      b.classList.remove('hidden');
+      // Also show green dot in hamburger menu
+      const dot=document.getElementById('update-dot');
+      if(dot)dot.style.display='inline-block';
+    }
+  }).catch(()=>{});
+}
+function applyUpdate(){
+  const b=document.getElementById('update-banner');
+  if(b)b.innerHTML='<span>Updating... please wait</span>';
+  fetch('/api/update/apply',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},body:'{}'})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){if(b)b.innerHTML='<span>\u2705 Updated! Reloading...</span>';setTimeout(()=>location.reload(),3000)}
+      else{if(b)b.innerHTML='<span>\u274C Update failed: '+(d.error||'unknown')+'</span>'}
+    }).catch(e=>{if(b)b.innerHTML='<span>\u274C '+e+'</span>'});
+}
+function dismissUpdate(){
+  const b=document.getElementById('update-banner');
+  if(b)b.classList.add('hidden');
+  sessionStorage.setItem('update-dismissed','1');
+}
+
+// ═══════ Observability View ═══════
+function showObservability(){
+  showView('observability');
+  loadTelemetryStats();loadTelemetrySpans();
+}
+function loadTelemetryStats(){
+  fetch('/api/telemetry/stats?since=24h').then(r=>r.json()).then(d=>{
+    const c=document.getElementById('otel-stats');if(!c)return;
+    const stats=d.stats||[];
+    if(!stats.length){c.innerHTML='<p style="color:#8b949e">No telemetry data yet. Send a message to generate spans.</p>';return}
+    let cards='<div class="otel-grid">';
+    let totalCalls=0,totalErrors=0,maxAvg=0;
+    stats.forEach(s=>{totalCalls+=s.call_count;totalErrors+=s.error_count;if(s.avg_ms>maxAvg)maxAvg=s.avg_ms});
+    cards+='<div class="otel-card"><div class="val">'+totalCalls+'</div><div class="label">Total Spans (24h)</div></div>';
+    cards+='<div class="otel-card"><div class="val" style="color:'+(totalErrors?'#f85149':'#2ea043')+'">'+(totalCalls?((totalErrors/totalCalls*100).toFixed(1)+'%'):'0%')+'</div><div class="label">Error Rate</div></div>';
+    cards+='<div class="otel-card"><div class="val">'+Math.round(maxAvg)+'ms</div><div class="label">Max Avg Response</div></div>';
+    cards+='</div>';
+    // Bar chart
+    if(stats.length){
+      const maxP95=Math.max(...stats.map(s=>s.p95_ms||1));
+      cards+='<h3 style="color:#e6edf3;margin:16px 0 8px;font-size:.9rem">Response Time by Span (p95)</h3>';
+      cards+='<div class="otel-bar-chart">';
+      stats.forEach(s=>{
+        const h=Math.max(4,((s.p95_ms||0)/maxP95)*100);
+        const cls=s.error_count>0?'otel-bar error':'otel-bar';
+        cards+='<div class="'+cls+'" style="height:'+h+'%"><div class="tip">'+s.span_name+': '+s.p95_ms+'ms p95</div></div>';
+      });
+      cards+='</div>';
+    }
+    // Stats table
+    cards+='<table class="otel-table"><tr><th>Span</th><th>Calls</th><th>Avg</th><th>p95</th><th>Errors</th></tr>';
+    stats.forEach(s=>{
+      cards+='<tr><td>'+s.span_name+'</td><td>'+s.call_count+'</td><td>'+s.avg_ms+'ms</td><td>'+s.p95_ms+'ms</td><td class="'+(s.error_count?'status-error':'status-ok')+'">'+s.error_count+'</td></tr>';
+    });
+    cards+='</table>';
+    c.innerHTML=cards;
+  }).catch(()=>{});
+}
+function loadTelemetrySpans(){
+  fetch('/api/telemetry?limit=50').then(r=>r.json()).then(rows=>{
+    const c=document.getElementById('otel-spans');if(!c)return;
+    if(!rows.length){c.innerHTML='<p style="color:#8b949e">No recent spans.</p>';return}
+    let h='<table class="otel-table"><tr><th>Time</th><th>Span</th><th>Duration</th><th>Status</th><th>Agent</th></tr>';
+    rows.forEach(r=>{
+      const t=r.created_at?r.created_at.substring(11,19):'';
+      const cls=r.status==='error'?'status-error':'status-ok';
+      h+='<tr><td>'+t+'</td><td>'+r.span_name+'</td><td>'+(r.duration_ms||0)+'ms</td><td class="'+cls+'">'+r.status+'</td><td>'+(r.agent_id||'-')+'</td></tr>';
+    });
+    h+='</table>';c.innerHTML=h;
+  }).catch(()=>{});
+}
+
+// ═══════ CrewFace ═══════
+const FACE_EMOJIS={
+  neutral:'\uD83D\uDE10',thinking:'\uD83E\uDD14',happy:'\uD83D\uDE0A',
+  excited:'\uD83E\uDD29',proud:'\uD83D\uDE0E',confused:'\uD83D\uDE15',
+  tired:'\uD83D\uDE34',sad:'\uD83D\uDE22',angry:'\uD83D\uDE20'
+};
+const ROBOT_SVG='<svg viewBox="0 0 80 80" class="crew-face-robot"><rect x="10" y="20" width="60" height="50" rx="10" fill="#21262d" stroke="#58a6ff" stroke-width="2"/><circle class="eye" cx="28" cy="40" r="6"/><circle class="eye" cx="52" cy="40" r="6"/><path class="mouth" d="M28,55 Q40,60 52,55" fill="none" stroke-width="2"/><rect x="35" y="8" width="10" height="14" rx="3" fill="#58a6ff"/><circle cx="40" cy="6" r="4" fill="#58a6ff"/></svg>';
+
+function renderCrewFace(containerId,agentId){
+  const el=document.getElementById(containerId);if(!el)return;
+  fetch('/api/agent/'+agentId+'/face').then(r=>r.json()).then(state=>{
+    const emotion=state.emotion||'neutral';
+    const action=state.action||'idle';
+    const effect=state.effect||'none';
+    // Check face_mode from agent data
+    const agentData=agentsData.find(a=>a.id==agentId);
+    const mode=(agentData&&agentData.face_mode)||'emoji';
+    let classes='crew-face '+action;
+    if(effect!=='none')classes+=' fx-'+effect;
+    if(mode==='robot'){
+      el.innerHTML='<div class="'+classes+' '+emotion+'">'+ROBOT_SVG+'</div>';
+    }else{
+      el.innerHTML='<div class="'+classes+'">'+(FACE_EMOJIS[emotion]||'\uD83D\uDE10')+'</div>';
+    }
+    // Click for random effect
+    el.querySelector('.crew-face,.crew-face-robot').onclick=function(){
+      const effects=['sparkles','glow','pulse','bounce','confetti','fire','ripple'];
+      const fx=effects[Math.floor(Math.random()*effects.length)];
+      fetch('/api/agent/'+agentId+'/face',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
+        body:JSON.stringify({emotion:'excited',action:'success',effect:fx})}).then(()=>renderCrewFace(containerId,agentId));
+    };
+  }).catch(()=>{el.innerHTML='<div class="crew-face">\uD83D\uDE10</div>'});
+}
+// Auto-poll face state for open agent space
+let _faceInterval=null;
+function startFacePoll(containerId,agentId){
+  stopFacePoll();
+  renderCrewFace(containerId,agentId);
+  _faceInterval=setInterval(()=>renderCrewFace(containerId,agentId),2000);
+}
+function stopFacePoll(){if(_faceInterval){clearInterval(_faceInterval);_faceInterval=null}}
+
+// ═══════ Auth / PIN Entry ═══════
+function checkAuthRequired(){
+  fetch('/api/auth/mode').then(r=>r.json()).then(d=>{
+    if(d.mode==='none')return;
+    const token=localStorage.getItem('crewbus_device_token');
+    if(token){
+      // Verify token still works
+      fetch('/api/stats',{headers:{'Authorization':'Bearer '+token}}).then(r=>{
+        if(r.status===401)showPinScreen(d.mode);
+      }).catch(()=>{});
+    }else{
+      showPinScreen(d.mode);
+    }
+  }).catch(()=>{});
+}
+function showPinScreen(mode){
+  let overlay=document.getElementById('pin-overlay');
+  if(overlay)return;
+  overlay=document.createElement('div');overlay.id='pin-overlay';overlay.className='pin-overlay';
+  overlay.innerHTML='<div class="pin-box"><h2>\uD83D\uDD12 Crew Bus</h2>'+
+    '<p>Enter your '+(mode==='pin'?'PIN':'device token')+' to access the dashboard</p>'+
+    (mode==='pin'?
+      '<div class="pin-input"><input maxlength="1" data-idx="0"><input maxlength="1" data-idx="1"><input maxlength="1" data-idx="2"><input maxlength="1" data-idx="3"><input maxlength="1" data-idx="4"><input maxlength="1" data-idx="5"></div>':
+      '<input type="text" placeholder="Device token" style="width:100%;padding:8px;margin-bottom:12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3">'
+    )+
+    '<button class="pin-submit" onclick="submitPin(\''+mode+'\')">Unlock</button>'+
+    '<div class="pin-error" id="pin-error"></div></div>';
+  document.body.appendChild(overlay);
+  // Auto-focus and auto-advance PIN inputs
+  if(mode==='pin'){
+    const inputs=overlay.querySelectorAll('.pin-input input');
+    inputs[0].focus();
+    inputs.forEach((inp,i)=>{
+      inp.addEventListener('input',()=>{if(inp.value&&i<inputs.length-1)inputs[i+1].focus()});
+      inp.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!inp.value&&i>0)inputs[i-1].focus()});
+    });
+  }
+}
+function submitPin(mode){
+  let pin='';
+  if(mode==='pin'){
+    document.querySelectorAll('.pin-input input').forEach(i=>pin+=i.value);
+  }else{
+    pin=document.querySelector('.pin-box input[type=text]').value;
+  }
+  const endpoint=mode==='pin'?'/api/auth/pin':'/api/auth/pair';
+  const body=mode==='pin'?{pin}:{code:pin,device_name:navigator.userAgent.substring(0,50)};
+  fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
+    body:JSON.stringify(body)}).then(r=>r.json()).then(d=>{
+    if(d.ok&&d.device_token){
+      localStorage.setItem('crewbus_device_token',d.device_token);
+      const overlay=document.getElementById('pin-overlay');
+      if(overlay)overlay.remove();
+      location.reload();
+    }else{
+      document.getElementById('pin-error').textContent=d.error||'Invalid';
+    }
+  }).catch(e=>{document.getElementById('pin-error').textContent='Error: '+e});
+}
+
+// Add auth token to all fetch requests
+const _origFetch=window.fetch;
+window.fetch=function(url,opts){
+  opts=opts||{};
+  const token=localStorage.getItem('crewbus_device_token');
+  if(token&&typeof url==='string'&&url.startsWith('/api/')){
+    opts.headers=opts.headers||{};
+    if(typeof opts.headers==='object'&&!(opts.headers instanceof Headers)){
+      opts.headers['Authorization']='Bearer '+token;
+    }
+  }
+  return _origFetch.call(this,url,opts);
+};
+
 // ── Boot ──
-document.addEventListener('DOMContentLoaded',function(){checkSetupNeeded()});
+document.addEventListener('DOMContentLoaded',function(){
+  checkSetupNeeded();
+  checkForUpdates();
+  checkAuthRequired();
+});
 """
+
+# ── PWA Constants ──────────────────────────────────────────────────
+
+PWA_MANIFEST = json.dumps({
+    "name": "Crew Bus",
+    "short_name": "Crew Bus",
+    "description": "Your personal AI crew \u2014 private, local, sovereign.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0d1117",
+    "theme_color": "#0d1117",
+    "orientation": "any",
+    "icons": [
+        {"src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+        {"src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        {"src": "/pwa/icon.svg", "sizes": "any", "type": "image/svg+xml"},
+    ],
+}, indent=2)
+
+PWA_SERVICE_WORKER = """\
+var CACHE_NAME='crew-bus-v4';
+var ICON_URLS=['/pwa/icon-192.png','/pwa/icon-512.png','/pwa/icon.svg'];
+
+self.addEventListener('install',function(e){
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(function(c){return c.addAll(ICON_URLS)})
+    .then(function(){return self.skipWaiting()})
+  );
+});
+
+self.addEventListener('activate',function(e){
+  e.waitUntil(
+    caches.keys().then(function(names){
+      return Promise.all(names.filter(function(n){return n!==CACHE_NAME}).map(function(n){return caches.delete(n)}));
+    }).then(function(){return self.clients.claim()})
+  );
+});
+
+self.addEventListener('fetch',function(e){
+  var url=new URL(e.request.url);
+  if(e.request.method!=='GET')return;
+
+  // Icons — cache-first
+  if(url.pathname.startsWith('/pwa/')){
+    e.respondWith(caches.match(e.request).then(function(r){return r||fetch(e.request)}));
+    return;
+  }
+
+  // API calls — network-first with cache fallback
+  if(url.pathname.startsWith('/api/')){
+    e.respondWith(
+      fetch(e.request).then(function(r){
+        var cl=r.clone();
+        caches.open(CACHE_NAME).then(function(c){c.put(e.request,cl)});
+        return r;
+      }).catch(function(){return caches.match(e.request)})
+    );
+    return;
+  }
+
+  // Navigation/HTML — stale-while-revalidate
+  if(e.request.mode==='navigate'||e.request.headers.get('accept').indexOf('text/html')!==-1){
+    e.respondWith(
+      caches.open(CACHE_NAME).then(function(c){
+        return c.match(e.request).then(function(cached){
+          var fetched=fetch(e.request).then(function(r){
+            c.put(e.request,r.clone());
+            return r;
+          });
+          return cached||fetched;
+        });
+      })
+    );
+    return;
+  }
+});
+"""
+
+PWA_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#1a1a2e"/><circle cx="16" cy="16" r="5" fill="none" stroke="#e94560" stroke-width="2"/><circle cx="16" cy="16" r="2" fill="#e94560"/><circle cx="16" cy="7" r="2.5" fill="#2ea043"/><circle cx="24" cy="12.5" r="2.5" fill="#d18616"/><circle cx="22" cy="22" r="2.5" fill="#bc8cff"/><circle cx="10" cy="22" r="2.5" fill="#74b9ff"/><circle cx="8" cy="12.5" r="2.5" fill="#39d0d0"/></svg>'
+
+PWA_ICON_192 = base64.b64decode(
+    "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"
+)
+
+PWA_ICON_512 = base64.b64decode(
+    "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"
+)
 
 # ── HTML ────────────────────────────────────────────────────────────
 
@@ -3796,6 +4946,13 @@ def _build_html():
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>crew-bus</title>
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crew Bus">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/pwa/icon.svg">
+<link rel="apple-touch-icon" href="/pwa/icon-192.png">
 <style>{CSS}</style>
 <script async src="https://js.stripe.com/v3/buy-button.js"></script>
 <script>window.__STRIPE_PK={json.dumps(STRIPE_PUBLISHABLE_KEY)};window.__STRIPE_BUTTONS={json.dumps(STRIPE_BUY_BUTTONS)};</script>
@@ -3808,23 +4965,23 @@ def _build_html():
   <span class="brand">crew-bus</span>
   <span class="spacer"></span>
   <button class="nav-pill active" data-view="crew" onclick="showView('crew')">Crew</button>
-  <button class="nav-pill" data-view="messages" onclick="showView('messages')">Messages</button>
-  <button class="nav-pill" data-view="decisions" onclick="showView('decisions')">Decisions</button>
-  <button class="nav-pill" data-view="audit" onclick="showView('audit')">Audit</button>
-  <button class="nav-pill" data-view="drafts" onclick="showView('drafts')">Drafts</button>
-  <button class="feedback-btn" onclick="openFeedback()" title="Send feedback">💬 Feedback</button>
   <button id="guardian-topbar-btn" onclick="showGuardianModal()" title="Unlock Skills — add downloadable skills to your agents" style="display:none;background:none;border:none;color:#d18616;cursor:pointer;font-size:.85rem;padding:4px 8px;transition:opacity .15s;opacity:.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.8'">🛡 Unlock Skills</button>
-  <button class="update-btn" id="update-btn" onclick="checkForUpdates()" title="Check for updates" style="position:relative;background:none;border:none;color:var(--mu);cursor:pointer;font-size:.85rem;padding:4px 8px;transition:color .15s" onmouseover="this.style.color='var(--ac)'" onmouseout="this.style.color='var(--mu)'">🔄 Update<span id="update-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
-  <button class="lock-btn" id="lock-btn" onclick="lockDashboard()" title="Lock screen — prevents accidental changes" style="display:none">🔒 Lock</button>
+  <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">☰</button>
+</div>
+<div class="hamburger-menu" id="hamburger-menu" style="position:fixed;right:12px;top:52px;background:#161b22;border:1px solid #30363d;border-radius:10px;min-width:210px;box-shadow:0 8px 30px rgba(0,0,0,0.7);z-index:9999;overflow:hidden;display:none">
+  <button onclick="hmNav('messages')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📨 Crew Message Trail</button>
+  <button onclick="hmNav('audit')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📋 Crew Audit Trail</button>
+  <button onclick="hmNav('drafts')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">✏️ Social Media Drafts</button>
+  <button onclick="showObservability();toggleHamburger()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📊 Observability</button>
+  <hr style="border:none;border-top:1px solid #30363d;margin:0">
+  <button id="hm-update-btn" onclick="hmAction('update')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">🔄 Software Update<span id="update-dot" style="display:none;margin-left:6px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
+  <button id="hm-lock-btn" onclick="hmAction('lock')" style="display:none;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">🔒 Lock Dashboard</button>
+  <button onclick="hmAction('feedback')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">💬 Send Feedback</button>
 </div>
 
 <!-- ══════════ CREW VIEW ══════════ -->
 <div id="view-crew" class="view active">
 <div class="time-bar">
-  <button class="time-pill active" onclick="setTimePeriod('today',this)">Today</button>
-  <button class="time-pill" onclick="setTimePeriod('3days',this)">3 Days</button>
-  <button class="time-pill" onclick="setTimePeriod('week',this)">Week</button>
-  <button class="time-pill" onclick="setTimePeriod('month',this)">Month</button>
   <div class="day-night-toggle">
     <button class="dn-btn active" onclick="setDayNight('day',this)" title="Day mode">\u2600\uFE0F</button>
     <button class="dn-btn" onclick="setDayNight('night',this)" title="Night mode">🌙</button>
@@ -3834,56 +4991,37 @@ def _build_html():
 <div class="main-left">
   <div class="circle-wrap">
     <svg class="lines" viewBox="0 0 540 490" preserveAspectRatio="xMidYMid meet">
-      <!-- 5-point star: center(270,260) to pentagon vertices R=185 -->
-      <line x1="270" y1="260" x2="270" y2="75"  stroke="#4dd0b8"/>
-      <line x1="270" y1="260" x2="446" y2="203" stroke="#b388ff"/>
-      <line x1="270" y1="260" x2="379" y2="410" stroke="#66d97a"/>
-      <line x1="270" y1="260" x2="161" y2="410" stroke="#64b5f6"/>
-      <line x1="270" y1="260" x2="94"  y2="203" stroke="#ffab57"/>
+      <!-- Boss to Guardian (diagonal down-left) -->
+      <line x1="270" y1="130" x2="135" y2="340" stroke="#d18616"/>
+      <!-- Boss to Vault (diagonal down-right) -->
+      <line x1="270" y1="130" x2="405" y2="340" stroke="#9c6bdb"/>
     </svg>
-    <!-- Crew Boss — center star -->
-    <div class="bubble center" id="bubble-boss" style="left:50%;top:53.1%;transform:translate(-50%,-50%)">
+    <!-- Crew Boss — top center -->
+    <div class="bubble center" id="bubble-boss" style="left:50%;top:20%;transform:translate(-50%,-50%)">
       <div class="bubble-circle"><span class="icon">\u2729</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Crew Boss</span><span class="bubble-count"></span>
+      <span class="bubble-label">Crew Boss</span>    </div>
+    <!-- Guardian — lower left -->
+    <div class="bubble outer" id="bubble-guardian" style="left:25%;top:65%;transform:translate(-50%,-50%)">
+      <div class="bubble-circle"><span class="icon">🛡</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Guardian</span><span class="bubble-sub"></span>
     </div>
-    <!-- Pentagon: top, upper-right, lower-right, lower-left, upper-left -->
-    <div class="bubble outer" id="bubble-family" style="left:50%;top:15.3%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">🏠</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Friend & Family</span><span class="bubble-count"></span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-muse" style="left:82.6%;top:41.4%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">🎨</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Muse</span><span class="bubble-count"></span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-growth" style="left:70.1%;top:83.6%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">🌱</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Growth Coach</span><span class="bubble-count"></span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-life" style="left:29.9%;top:83.6%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">\u26a1</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Life Assistant</span><span class="bubble-count"></span><span class="bubble-sub"></span>
-    </div>
-    <div class="bubble outer" id="bubble-health" style="left:17.4%;top:41.4%;transform:translate(-50%,-50%)">
-      <div class="bubble-circle"><span class="icon">💚</span><span class="status-dot dot-green"></span></div>
-      <span class="bubble-label">Health Buddy</span><span class="bubble-count"></span><span class="bubble-sub"></span>
+    <!-- Vault — lower right -->
+    <div class="bubble outer" id="bubble-vault" style="left:75%;top:65%;transform:translate(-50%,-50%)">
+      <div class="bubble-circle"><span class="icon">🔮</span><span class="status-dot dot-green"></span></div>
+      <span class="bubble-label">Vault</span><span class="bubble-sub"></span>
     </div>
   </div>
-  <!-- FIX 3: indicators click opens popup, no more bottom sheet -->
-  <div class="indicators">
+  <!-- Score indicators below inner circle -->
+  <div class="indicators" id="bottom-indicators">
     <div class="indicator" onclick="openTBPopup()">
-      <label>Trust</label><span class="val" id="trust-val" style="color:#fff">5</span>
+      <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
     </div>
     <div class="indicator" onclick="openTBPopup()">
-      <label>Energy</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
+      <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
     </div>
   </div>
 </div>
 <div class="main-right">
-  <div class="wizard-card" onclick="openHelpAgent()">
-    <div class="wizard-icon">🛡️</div>
-    <div class="wizard-info"><div class="wizard-title">Guardian</div><div class="wizard-sub">Protector & guide — always on</div></div>
-    <div class="wizard-status"><span class="status-dot dot-green" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--gn)"></span></div>
-  </div>
   <div class="teams-section">
     <div class="teams-header"><h2>Teams</h2>
       <button class="btn-add" onclick="openTemplatePicker()">+ Add Team</button>
@@ -3934,18 +5072,23 @@ def _build_html():
 </div>
 
 <!-- ══════════ AGENT SPACE — CHAT-FIRST (matching hero-demo vision) ══════════ -->
+<div id="agent-overlay" class="agent-overlay" onclick="closeAgentSpace()"></div>
 <div id="agent-space" class="agent-space">
   <div class="as-topbar">
     <button class="as-back" onclick="closeAgentSpace()">\u2190</button>
-    <div class="as-avatar" id="as-avatar">\u2729</div>
+    <div class="as-avatar" id="as-avatar" onclick="openAvatarPicker()" title="Click to change avatar">\u2729</div>
+    <div class="avatar-picker-overlay" id="avatar-picker-overlay" onclick="closeAvatarPicker()"></div>
+    <div class="avatar-picker" id="avatar-picker"><div class="avatar-picker-grid"></div></div>
+    <div id="as-crewface" style="margin:0 4px"></div>
     <div class="as-name-wrap">
       <span class="as-title" id="as-name" onclick="startRenameAgent()">Crew Boss</span>
+      <span class="as-subtitle" id="as-agent-title" style="display:none"></span>
       <div class="as-online" id="as-online"><span class="as-online-dot"></span>Online</div>
     </div>
     <div class="as-topbar-actions">
       <button class="as-newchat-btn" onclick="startNewChat()" title="New conversation">✨</button>
       <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Private session">🔒</button>
-      <button class="as-settings-btn" id="as-settings-btn" onclick="toggleSettings()" title="Settings">\u2699</button>
+      <button class="as-settings-btn" id="as-settings-btn" onclick="toggleSettings()" title="Settings">⚙</button>
     </div>
     <span class="as-dot dot-green" id="as-status-dot"></span>
   </div>
@@ -3970,9 +5113,13 @@ def _build_html():
     <!-- Settings panel — hidden by default, toggled via gear icon -->
     <div class="as-settings-panel" id="as-settings-panel">
       <div class="as-intro" id="as-intro"></div>
+      <div id="as-soul-section" style="margin-bottom:12px"></div>
+      <div id="as-thinking-section" style="margin-bottom:12px"></div>
       <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
       <div id="as-skills-section" style="margin-bottom:12px"></div>
+      <div id="as-heartbeat-section" style="margin-bottom:12px"></div>
       <div id="as-memory-section" style="margin-bottom:12px"></div>
+      <div id="as-learning-section" style="margin-bottom:12px"></div>
       <div class="activity-feed" id="as-activity"></div>
     </div>
   </div>
@@ -4047,6 +5194,18 @@ def _build_html():
   <div id="drafts-list"></div>
 </div></div>
 
+<!-- ══════════ OBSERVABILITY VIEW ══════════ -->
+<div id="view-observability" class="view" data-page="observability">
+<div class="legacy-container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h1 style="margin:0">Observability</h1>
+    <button onclick="loadTelemetryStats();loadTelemetrySpans()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85rem">Refresh</button>
+  </div>
+  <div id="otel-stats"></div>
+  <h3 style="color:#e6edf3;margin:20px 0 8px;font-size:.9rem">Recent Spans</h3>
+  <div id="otel-spans"></div>
+</div></div>
+
 <!-- ══════════ TEAM DASHBOARD VIEW (FIX 1) ══════════ -->
 <div id="view-team" class="view" data-page="team">
 <div class="legacy-container team-dash" id="team-dash-content"></div>
@@ -4061,8 +5220,6 @@ def _build_html():
     <div class="template-card" onclick="createTeam('school')"><span class="template-icon">📚</span><div><div class="template-name">School \u2714</div><div class="template-desc">Tutor, Research Assistant, Study Planner</div></div></div>
     <div class="template-card" onclick="createTeam('passion')"><span class="template-icon">🎸</span><div><div class="template-name">Passion Project \u2714</div><div class="template-desc">Project Planner, Skill Coach, Progress Tracker</div></div></div>
     <div class="template-card" onclick="createTeam('household')"><span class="template-icon">🏠</span><div><div class="template-name">Household \u2714</div><div class="template-desc">Meal Planner, Budget Tracker, Schedule</div></div></div>
-    <div class="template-card" onclick="createTeam('business')"><span class="template-icon">🏢</span><div><div class="template-name">Business Management</div><div class="template-desc">Ops, HR, Finance, Strategy, Comms <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
-    <div class="template-card" onclick="createTeam('department')"><span class="template-icon">🏗\ufe0f</span><div><div class="template-name">Department</div><div class="template-desc">Task Runner, Research Aide <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $25/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('freelance')"><span class="template-icon">💼</span><div><div class="template-name">Freelance</div><div class="template-desc">Lead Finder, Invoice Bot, Follow-up <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('sidehustle')"><span class="template-icon">💰</span><div><div class="template-name">Side Hustle</div><div class="template-desc">Market Scout, Content, Sales <span style="color:var(--ac);font-size:.65rem">$5 trial \u00b7 $30/yr</span></div></div></div>
     <div class="template-card" onclick="createTeam('custom')"><span class="template-icon">\u2699\ufe0f</span><div><div class="template-name">Custom</div><div class="template-desc">You name it, pick the agents <span style="color:var(--ac);font-size:.65rem">$10 trial \u00b7 $50/yr</span></div></div></div>
@@ -4110,6 +5267,7 @@ def _build_html():
         <option value="openai" data-key-name="OpenAI" data-placeholder="sk-..." data-url="https://platform.openai.com/api-keys" data-url-label="Get your key at platform.openai.com">GPT-4o Mini (OpenAI)</option>
         <option value="groq" data-key-name="Groq" data-placeholder="gsk_..." data-url="https://console.groq.com/keys" data-url-label="Get a free key at console.groq.com">Llama 3.3 70B (Groq \u2014 Free)</option>
         <option value="gemini" data-key-name="Google AI" data-placeholder="AI..." data-url="https://aistudio.google.com/apikey" data-url-label="Get a free key at aistudio.google.com">Gemini 2.0 Flash (Google \u2014 Free)</option>
+        <option value="xai" data-key-name="xAI" data-placeholder="xai-..." data-url="https://console.x.ai" data-url-label="Get your key at console.x.ai">Grok (xAI)</option>
         <option value="ollama" data-key-name="" data-placeholder="" data-url="" data-url-label="">Ollama (Local \u2014 No key needed)</option>
       </select>
     </div>
@@ -4238,43 +5396,111 @@ def _build_html():
 </body>
 </html>"""
 
-
 PAGE_HTML = _build_html()
 
-
 # ── API Helpers ─────────────────────────────────────────────────────
+
+def _notify_agents_of_rename(db_path, agent_id, old_name, new_name):
+    """Send a system notification to all active agents about a name change.
+
+    The renamed agent gets a personal note; all other active agents
+    (especially teammates, managers, and Crew Boss) learn about the change
+    so they update their internal context.
+    """
+    try:
+        conn = bus.get_conn(db_path)
+        try:
+            # Find the human agent (sender for system messages)
+            human = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+            ).fetchone()
+            if not human:
+                return
+            human_id = human["id"]
+
+            # Get all active agents
+            active = conn.execute(
+                "SELECT id, name, agent_type FROM agents "
+                "WHERE status='active' AND agent_type != 'human'"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        # Store name change as persistent memory (survives chat clear)
+        bus.remember(agent_id,
+                     f"[identity] My name was changed from \"{old_name}\" to "
+                     f"\"{new_name}\". I go by {new_name} now.",
+                     memory_type="persona", importance=10,
+                     source="system", db_path=db_path)
+
+        # Also forget any old identity memories with the previous name
+        bus.forget(agent_id, content_match=f"My name is {old_name}",
+                   db_path=db_path)
+
+        # Notify the renamed agent via message too
+        with bus.db_write(db_path) as conn:
+            conn.execute(
+                "INSERT INTO messages (from_agent_id, to_agent_id, "
+                "message_type, subject, body, priority, status) "
+                "VALUES (?, ?, 'report', 'Name changed', ?, 'normal', "
+                "'delivered')",
+                (human_id, agent_id,
+                 f"Your name has been changed from \"{old_name}\" to "
+                 f"\"{new_name}\". Use your new name from now on."))
+
+        # Notify all other active agents
+        for a in active:
+            if a["id"] == agent_id:
+                continue  # already notified above
+            with bus.db_write(db_path) as conn:
+                conn.execute(
+                    "INSERT INTO messages (from_agent_id, to_agent_id, "
+                    "message_type, subject, body, priority, status) "
+                    "VALUES (?, ?, 'report', 'Agent renamed', ?, "
+                    "'normal', 'delivered')",
+                    (human_id, a["id"],
+                     f"Agent \"{old_name}\" has been renamed to "
+                     f"\"{new_name}\". Please use the new name going "
+                     f"forward."))
+
+        print(f"[dashboard] Rename notifications sent: "
+              f"\"{old_name}\" → \"{new_name}\" "
+              f"({len(active)} agents notified)")
+    except Exception as e:
+        print(f"[dashboard] Rename notification error: {e}")
 
 def _json_response(handler, data, status=200):
     body = json.dumps(data, default=str).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Origin", _cors_origin(handler))
+    _add_security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
-
 
 def _html_response(handler, html, status=200):
     body = html.encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+    _add_security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
 
-
 def _read_json_body(handler):
     length = int(handler.headers.get("Content-Length", 0))
+    if length > _MAX_BODY_SIZE:
+        raise ValueError("request body too large")
     if length == 0:
         return {}
     return json.loads(handler.rfile.read(length))
-
 
 # ── Data fetchers ──────────────────────────────────────────────────
 
 def _period_to_hours(period):
     return {"today": 24, "3days": 72, "week": 168, "month": 720}.get(period, 24)
-
 
 def _get_stats(db_path):
     conn = bus.get_conn(db_path)
@@ -4288,6 +5514,7 @@ def _get_stats(db_path):
             "crew_name": (human["name"] + "'s Crew") if human else "Crew",
             "human_name": human["name"] if human else "",
             "human_id": human["id"] if human else None,
+            "boss_name": rh["name"] if rh else "Crew Boss",
             "trust_score": rh["trust_score"] if rh else 1,
             "burnout_score": human["burnout_score"] if human else 5,
             "agent_count": agent_count,
@@ -4296,7 +5523,6 @@ def _get_stats(db_path):
         }
     finally:
         conn.close()
-
 
 def _get_agents_api(db_path, period=None):
     conn = bus.get_conn(db_path)
@@ -4318,7 +5544,7 @@ def _get_agents_api(db_path, period=None):
               WHEN 'human' THEN 0 WHEN 'right_hand' THEN 1
               WHEN 'guardian' THEN 2 WHEN 'communications' THEN 3
               WHEN 'wellness' THEN 4 WHEN 'strategy' THEN 5
-              WHEN 'financial' THEN 6 WHEN 'knowledge' THEN 7
+              WHEN 'financial' THEN 6
               WHEN 'manager' THEN 8 WHEN 'worker' THEN 9
               ELSE 10 END, a.name
         """, (cutoff,)).fetchall()
@@ -4330,7 +5556,6 @@ def _get_agents_api(db_path, period=None):
         return results
     finally:
         conn.close()
-
 
 def _get_agent_detail(db_path, agent_id):
     conn = bus.get_conn(db_path)
@@ -4350,7 +5575,6 @@ def _get_agent_detail(db_path, agent_id):
     finally:
         conn.close()
 
-
 def _get_agent_activity(db_path, agent_id, limit=20):
     conn = bus.get_conn(db_path)
     try:
@@ -4367,7 +5591,6 @@ def _get_agent_activity(db_path, agent_id, limit=20):
                  "to": PERSONAL_NAMES.get(r["to_type"], r["to_name"])} for r in rows]
     finally:
         conn.close()
-
 
 def _get_agent_chat(db_path, agent_id, limit=50):
     conn = bus.get_conn(db_path)
@@ -4404,9 +5627,12 @@ def _get_agent_chat(db_path, agent_id, limit=50):
     finally:
         conn.close()
 
-
 def _clear_agent_chat(db_path, agent_id):
-    """Clear chat history between the human and an agent (start fresh)."""
+    """Clear chat history between the human and an agent (start fresh).
+
+    Before deleting, summarizes the conversation into agent memory
+    so the agent retains key context from past conversations.
+    """
     conn = bus.get_conn(db_path)
     try:
         human = conn.execute(
@@ -4415,8 +5641,43 @@ def _clear_agent_chat(db_path, agent_id):
         if not human:
             return {"ok": False, "error": "no human agent"}
         hid = human["id"]
+
+        # Fetch all messages before deleting so we can summarize
+        rows = conn.execute("""
+            SELECT from_agent_id, body, subject, created_at
+            FROM messages
+            WHERE ((from_agent_id=? AND to_agent_id=?)
+                OR (from_agent_id=? AND to_agent_id=?))
+              AND body IS NOT NULL AND body != ''
+            ORDER BY created_at ASC
+        """, (hid, agent_id, agent_id, hid)).fetchall()
     finally:
         conn.close()
+
+    # Summarize into memory before clearing
+    if rows:
+        summaries = []
+        for r in rows:
+            body = r["body"]
+            if not body or len(body) < 10:
+                continue
+            if body.startswith("[") or body.startswith("=="):
+                continue
+            is_human = (r["from_agent_id"] == hid)
+            prefix = "Human said" if is_human else "I replied"
+            first_sentence = body.split(".")[0].split("!")[0].split("?")[0]
+            if len(first_sentence) > 150:
+                first_sentence = first_sentence[:150] + "..."
+            if len(first_sentence) > 15:
+                summaries.append(f"{prefix}: {first_sentence}")
+
+        if summaries:
+            # Keep up to 20 key points from the cleared conversation
+            combined = "[cleared-chat-memory] " + " | ".join(summaries[:20])
+            bus.remember(agent_id, combined, memory_type="summary",
+                         importance=7, source="system", db_path=db_path)
+
+    # Now delete the messages
     with bus.db_write(db_path) as wconn:
         wconn.execute("""
             DELETE FROM messages
@@ -4424,7 +5685,6 @@ def _clear_agent_chat(db_path, agent_id):
                OR (from_agent_id=? AND to_agent_id=?)
         """, (hid, agent_id, agent_id, hid))
     return {"ok": True}
-
 
 # ---------------------------------------------------------------------------
 # WhatsApp bridge subprocess management
@@ -4443,7 +5703,6 @@ def _wa_bridge_dir():
             return str(c)
     return None
 
-
 def _start_wa_bridge():
     """Start the WhatsApp bridge as a subprocess."""
     global _wa_bridge_process
@@ -4459,12 +5718,11 @@ def _start_wa_bridge():
                 cwd=bridge_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                env={**os.environ, "BUS_URL": f"http://localhost:{DEFAULT_PORT}"},
+                env={**os.environ, "BUS_URL": f"http://localhost:{_server_port}"},
             )
             return {"ok": True, "status": "started", "pid": _wa_bridge_process.pid}
         except Exception as e:
             return {"ok": False, "error": str(e)}
-
 
 def _stop_wa_bridge():
     """Stop the WhatsApp bridge subprocess."""
@@ -4480,7 +5738,6 @@ def _stop_wa_bridge():
             _wa_bridge_process.kill()
         _wa_bridge_process = None
         return {"ok": True, "status": "stopped"}
-
 
 def _wa_bridge_status():
     """Check WhatsApp bridge status."""
@@ -4498,7 +5755,6 @@ def _wa_bridge_status():
     except Exception:
         return {"running": True, "status": "starting", "pid": _wa_bridge_process.pid}
 
-
 def _wa_bridge_qr():
     """Fetch the current QR SVG from the bridge."""
     import urllib.request
@@ -4508,7 +5764,6 @@ def _wa_bridge_qr():
             return json.loads(resp.read().decode("utf-8"))
     except Exception:
         return {"svg": None, "status": "unavailable"}
-
 
 # ---------------------------------------------------------------------------
 # Telegram bridge subprocess management
@@ -4528,12 +5783,11 @@ def _start_tg_bridge():
                 [sys.executable, str(bridge_script)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                env={**os.environ, "BUS_URL": f"http://localhost:{DEFAULT_PORT}"},
+                env={**os.environ, "BUS_URL": f"http://localhost:{_server_port}"},
             )
             return {"ok": True, "status": "started", "pid": _tg_bridge_process.pid}
         except Exception as e:
             return {"ok": False, "error": str(e)}
-
 
 def _stop_tg_bridge():
     """Stop the Telegram bridge subprocess."""
@@ -4550,7 +5804,6 @@ def _stop_tg_bridge():
         _tg_bridge_process = None
         return {"ok": True, "status": "stopped"}
 
-
 def _tg_bridge_status():
     """Check Telegram bridge status."""
     running = _tg_bridge_process is not None and _tg_bridge_process.poll() is None
@@ -4564,7 +5817,6 @@ def _tg_bridge_status():
             return data
     except Exception:
         return {"running": True, "status": "starting", "pid": _tg_bridge_process.pid}
-
 
 def _send_chat(db_path, agent_id, text):
     conn = bus.get_conn(db_path)
@@ -4585,7 +5837,6 @@ def _send_chat(db_path, agent_id, text):
     except Exception as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "message_id": result["message_id"]}
-
 
 def _compose_message(db_path, to_name, message_type, subject, body, priority):
     """Send a message from the human to any agent by name."""
@@ -4614,7 +5865,6 @@ def _compose_message(db_path, to_name, message_type, subject, body, priority):
     except (PermissionError, ValueError) as e:
         return {"ok": False, "error": str(e)}
 
-
 def _get_compose_agents(db_path):
     """Return active, messageable agents for the compose dropdown."""
     conn = bus.get_conn(db_path)
@@ -4638,7 +5888,6 @@ def _get_compose_agents(db_path):
         })
     return agents
 
-
 def _get_teams(db_path):
     conn = bus.get_conn(db_path)
     try:
@@ -4654,15 +5903,44 @@ def _get_teams(db_path):
                 if tpl["name"] == team_name and tpl.get("locked_name"):
                     is_locked = True
                     break
+            # Match team icon from template (fallback: 📁)
+            team_icon = "\U0001f4c1"
+            for tpl in TEAM_TEMPLATES.values():
+                if tpl["name"] == team_name:
+                    team_icon = tpl.get("icon", team_icon)
+                    break
             teams.append({"id": mgr["id"],
                           "name": team_name,
-                          "icon": "\U0001f3e2", "agent_count": workers + 1,
+                          "icon": team_icon, "agent_count": workers + 1,
                           "manager": mgr["name"], "status": mgr["status"],
                           "locked_name": is_locked})
         return teams
     finally:
         conn.close()
 
+def _is_paid_team_agent(conn, agent_row):
+    """Check if an agent belongs to a paid team (not a free/locked_name template)."""
+    if agent_row["agent_type"] == "manager":
+        mgr_name = agent_row["name"]
+    elif agent_row["parent_agent_id"]:
+        mgr = conn.execute(
+            "SELECT name FROM agents WHERE id=? AND agent_type='manager'",
+            (agent_row["parent_agent_id"],)).fetchone()
+        if not mgr:
+            return False
+        mgr_name = mgr["name"]
+    else:
+        return False  # not a team agent
+    team_name = mgr_name.replace("-Manager", "").replace("Manager", "Team")
+    # Strip numbering suffix (e.g. "Freelance 2" → "Freelance")
+    base_name = team_name.rsplit(" ", 1)[0] if team_name and team_name[-1].isdigit() else team_name
+    for tpl in TEAM_TEMPLATES.values():
+        if tpl["name"] == base_name or tpl["name"] == team_name:
+            if tpl.get("locked_name"):
+                return False  # free team
+            return True  # paid team
+    # Custom/unknown teams are treated as paid (they required a key to create)
+    return True
 
 def _get_team_agents(db_path, team_id):
     """Get all agents belonging to a team (the manager + its workers)."""
@@ -4681,38 +5959,12 @@ def _get_team_agents(db_path, team_id):
     finally:
         conn.close()
 
-
 # Free teams: no rename allowed. Paid teams: rename OK.
 # "locked_name": True means the team title cannot be changed.
 TEAM_TEMPLATES = {
-    "business": {
-        "name": "Business Management",
-        "paid": True,
-        "price_annual": 50,
-        "price_trial": 10,
-        "trial_days": 30,
-        "referral_enabled": True,
-        "workers": [
-            ("Operations Lead", "Oversees day-to-day operations and coordinates departments."),
-            ("HR Coordinator", "Manages hiring pipelines, onboarding, and team health."),
-            ("Finance Monitor", "Tracks budgets, expenses, and revenue across departments."),
-            ("Strategy Advisor", "Analyzes market trends and recommends business decisions."),
-            ("Comms Manager", "Handles internal communications between departments."),
-        ],
-    },
-    "department": {
-        "name": "Department",
-        "paid": True,
-        "price_annual": 25,
-        "price_trial": 5,
-        "trial_days": 30,
-        "workers": [
-            ("Task Runner", "Handles assigned tasks and reports progress."),
-            ("Research Aide", "Gathers information and summarizes findings."),
-        ],
-    },
     "freelance": {
         "name": "Freelance",
+        "icon": "\U0001f4bc",  # 💼
         "paid": True,
         "price_annual": 30,
         "price_trial": 5,
@@ -4725,6 +5977,7 @@ TEAM_TEMPLATES = {
     },
     "sidehustle": {
         "name": "Side Hustle",
+        "icon": "\U0001f4b0",  # 💰
         "paid": True,
         "price_annual": 30,
         "price_trial": 5,
@@ -4737,6 +5990,7 @@ TEAM_TEMPLATES = {
     },
     "custom": {
         "name": "Custom Team",
+        "icon": "\u2699\ufe0f",  # ⚙️
         "paid": True,
         "price_annual": 50,
         "price_trial": 10,
@@ -4747,6 +6001,7 @@ TEAM_TEMPLATES = {
     },
     "school": {
         "name": "School",
+        "icon": "\U0001f4da",  # 📚
         "locked_name": True,
         "workers": [
             ("Tutor", "Explains concepts, answers homework questions, quizzes you."),
@@ -4756,6 +6011,7 @@ TEAM_TEMPLATES = {
     },
     "passion": {
         "name": "Passion Project",
+        "icon": "\U0001f3b8",  # 🎸
         "locked_name": True,
         "workers": [
             ("Project Planner", "Breaks your project into milestones and tracks progress."),
@@ -4765,6 +6021,7 @@ TEAM_TEMPLATES = {
     },
     "household": {
         "name": "Household",
+        "icon": "\U0001f3e0",  # 🏠
         "locked_name": True,
         "workers": [
             ("Meal Planner", "Suggests meals, builds grocery lists, tracks nutrition."),
@@ -4774,10 +6031,8 @@ TEAM_TEMPLATES = {
     },
 }
 
-
 # Master promo code — unlocks any template, annual (set via env var)
 MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "CREWBUS-RYAN-2026")
-
 
 def _validate_promo(code, template, db_path):
     """Validate a promo code. Returns {valid, grant_type} or {valid, error}."""
@@ -4818,7 +6073,6 @@ def _validate_promo(code, template, db_path):
 
     return {"valid": False, "error": "Invalid code. Check for typos or visit crew-bus.dev/pricing."}
 
-
 def _generate_referral_code(db_path):
     """Generate a unique referral code for this install."""
     existing = bus.get_config("my_referral_code", db_path=db_path)
@@ -4829,7 +6083,6 @@ def _generate_referral_code(db_path):
     # Mark it as valid so it works when entered on another install
     bus.set_config(f"referral_{code}", "active", db_path=db_path)
     return code
-
 
 def _count_teams_of_type(db_path, template):
     """Count how many existing teams were created from a given template."""
@@ -4849,7 +6102,6 @@ def _count_teams_of_type(db_path, template):
         if mgr_name == f"{base_name}-Manager" or mgr_name.startswith(f"{base_name} "):
             count += 1
     return count
-
 
 def _create_team(db_path, template):
     tpl = TEAM_TEMPLATES.get(template, TEAM_TEMPLATES["custom"])
@@ -4933,9 +6185,12 @@ def _create_team(db_path, template):
     )
     return result
 
-
 def _check_for_updates():
-    """Check if a newer version is available on GitHub."""
+    """Check if a newer version is available on GitHub. Cached for 1 hour."""
+    now = _time.monotonic()
+    if _update_cache["result"] is not None and (now - _update_cache["checked_at"]) < _UPDATE_CACHE_TTL:
+        return _update_cache["result"]
+
     import subprocess
     repo_dir = Path(__file__).parent
     try:
@@ -4950,19 +6205,23 @@ def _check_for_updates():
         local_sha = local.stdout.strip()
         remote_sha = remote.stdout.strip()
         if not local_sha or not remote_sha:
-            return {"update_available": False, "error": "Could not read git state"}
-        if local_sha != remote_sha:
+            result = {"update_available": False, "error": "Could not read git state"}
+        elif local_sha != remote_sha:
             # Get count of new commits
             behind = subprocess.run(
                 ["git", "rev-list", "--count", f"{local_sha}..{remote_sha}"],
                 cwd=repo_dir, capture_output=True, text=True, timeout=5)
             count = int(behind.stdout.strip()) if behind.stdout.strip() else 0
-            return {"update_available": True, "commits_behind": count,
-                    "local": local_sha[:8], "remote": remote_sha[:8]}
-        return {"update_available": False}
+            result = {"update_available": True, "commits_behind": count,
+                      "local": local_sha[:8], "remote": remote_sha[:8]}
+        else:
+            result = {"update_available": False}
     except Exception as e:
-        return {"update_available": False, "error": str(e)}
+        result = {"update_available": False, "error": str(e)}
 
+    _update_cache["result"] = result
+    _update_cache["checked_at"] = now
+    return result
 
 def _apply_update():
     """Pull latest code from GitHub and signal restart."""
@@ -4985,7 +6244,6 @@ def _apply_update():
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-
 def _get_guard_checkin(db_path):
     conn = bus.get_conn(db_path)
     try:
@@ -4997,7 +6255,6 @@ def _get_guard_checkin(db_path):
         return {"last_checkin": row["timestamp"] if row else None, "guard_id": guard["id"]}
     finally:
         conn.close()
-
 
 def _get_private_session_status(db_path, agent_id):
     """Get active private session status for human <-> agent."""
@@ -5011,7 +6268,6 @@ def _get_private_session_status(db_path, agent_id):
     finally:
         conn.close()
 
-
 def _start_private_session(db_path, agent_id):
     """Start a private session between human and agent."""
     conn = bus.get_conn(db_path)
@@ -5022,7 +6278,6 @@ def _start_private_session(db_path, agent_id):
     finally:
         conn.close()
     return bus.start_private_session(human["id"], agent_id, channel="web", db_path=db_path)
-
 
 def _end_private_session(db_path, agent_id):
     """End active private session between human and agent."""
@@ -5038,7 +6293,6 @@ def _end_private_session(db_path, agent_id):
         return {"ok": False, "error": "no active session"}
     return bus.end_private_session(session["id"], ended_by="human", db_path=db_path)
 
-
 def _send_private_message(db_path, agent_id, text):
     """Send a private message in an active session."""
     conn = bus.get_conn(db_path)
@@ -5052,7 +6306,6 @@ def _send_private_message(db_path, agent_id, text):
     if not session:
         return {"ok": False, "error": "no active session"}
     return bus.send_private_message(session["id"], human["id"], text, db_path=db_path)
-
 
 def _get_messages_api(db_path, msg_type=None, agent_name=None, limit=50):
     conn = bus.get_conn(db_path)
@@ -5081,7 +6334,6 @@ def _get_messages_api(db_path, msg_type=None, agent_name=None, limit=50):
     finally:
         conn.close()
 
-
 def _get_decisions_api(db_path, limit=50):
     conn = bus.get_conn(db_path)
     try:
@@ -5093,7 +6345,6 @@ def _get_decisions_api(db_path, limit=50):
         return [dict(r) for r in rows]
     finally:
         conn.close()
-
 
 def _get_audit_api(db_path, limit=200, agent_name=None):
     conn = bus.get_conn(db_path)
@@ -5119,7 +6370,6 @@ def _get_audit_api(db_path, limit=200, agent_name=None):
     finally:
         conn.close()
 
-
 # ── Request Handler ─────────────────────────────────────────────────
 
 # ── Auth Helpers ────────────────────────────────────────────────────
@@ -5130,7 +6380,6 @@ def _hash_password(password):
     h = hashlib.sha256((salt + password).encode()).hexdigest()
     return salt + ":" + h
 
-
 def _verify_password(password, stored):
     """Verify a password against a stored salt:hash pair."""
     if ":" not in stored:
@@ -5139,7 +6388,6 @@ def _verify_password(password, stored):
     h = hashlib.sha256((salt + password).encode()).hexdigest()
     return h == expected
 
-
 def _get_auth_user(handler):
     """Extract user from Authorization: Bearer token header."""
     auth = handler.headers.get("Authorization", "")
@@ -5147,7 +6395,6 @@ def _get_auth_user(handler):
         return None
     token = auth[7:]
     return bus.validate_session(token, db_path=handler.db_path)
-
 
 # ── Stripe Checkout Helpers ──────────────────────────────────────────
 
@@ -5158,7 +6405,6 @@ def _generate_activation_key(key_type="guard", grant="annual"):
     format: CREWBUS-<base64_payload>-<hex_hmac_sha256>
     """
     return bus.generate_activation_key(key_type=key_type, grant=grant)
-
 
 def _stripe_create_guard_checkout(handler):
     """Create a Stripe Checkout session for Guard activation."""
@@ -5198,7 +6444,6 @@ def _stripe_create_guard_checkout(handler):
     except Exception as e:
         return _json_response(handler, {"error": str(e)}, 500)
 
-
 def _stripe_verify_session(handler, session_id):
     """Verify a completed Stripe Checkout session and return activation key."""
     if not session_id:
@@ -5217,7 +6462,6 @@ def _stripe_verify_session(handler, session_id):
         return _json_response(handler, {"error": "payment not completed", "status": session.payment_status}, 402)
     except Exception as e:
         return _json_response(handler, {"error": str(e)}, 500)
-
 
 def _stripe_webhook(handler):
     """Handle Stripe webhook events (payment confirmations, etc.)."""
@@ -5248,7 +6492,6 @@ def _stripe_webhook(handler):
 
     return _json_response(handler, {"received": True})
 
-
 class CrewBusHandler(BaseHTTPRequestHandler):
     db_path = DEFAULT_DB
 
@@ -5257,9 +6500,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _cors_origin(self))
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        self.send_header("Access-Control-Max-Age", "86400")
+        _add_security_headers(self)
         self.end_headers()
 
     def do_GET(self):
@@ -5267,8 +6512,62 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
 
+        # Rate limiting (skip for localhost — it's a local-only app)
+        client_ip = self.client_address[0]
+        is_auth = path.startswith("/api/auth/")
+        if client_ip not in ("127.0.0.1", "::1") and path.startswith("/api/") and not _check_rate_limit(client_ip, is_auth):
+            return _json_response(self, {"error": "rate limit exceeded"}, 429)
+
+        # Auth check
+        if not _check_auth(self):
+            return
+
+        # PWA assets
+        if path == "/manifest.json":
+            body = PWA_MANIFEST.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            return self.wfile.write(body)
+
+        if path == "/sw.js":
+            body = PWA_SERVICE_WORKER.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            return self.wfile.write(body)
+
+        if path == "/pwa/icon.svg":
+            body = PWA_ICON_SVG.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            return self.wfile.write(body)
+
+        if path == "/pwa/icon-192.png":
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(PWA_ICON_192)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            return self.wfile.write(PWA_ICON_192)
+
+        if path == "/pwa/icon-512.png":
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(PWA_ICON_512)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            return self.wfile.write(PWA_ICON_512)
+
         # Pages — SPA serves same HTML for all routes
-        if path in ("/", "/messages", "/decisions", "/audit", "/drafts") or path.startswith("/team/"):
+        if path in ("/", "/messages", "/decisions", "/audit", "/drafts", "/observability") or path.startswith("/team/"):
             return _html_response(self, PAGE_HTML)
 
         if path == "/api/stats":
@@ -5280,6 +6579,18 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             agent = _get_agent_detail(self.db_path, int(m.group(1)))
             return _json_response(self, agent or {"error": "not found"}, 200 if agent else 404)
+
+        m = re.match(r"^/api/agent/(\d+)/heartbeat$", path)
+        if m:
+            tasks = bus.get_heartbeat_tasks(int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, tasks)
+
+        m = re.match(r"^/api/agent/(\d+)/learnings$", path)
+        if m:
+            agent_id = int(m.group(1))
+            errors = bus.get_agent_memories(agent_id, memory_type="error", limit=20, db_path=self.db_path)
+            learnings = bus.get_agent_memories(agent_id, memory_type="learning", limit=20, db_path=self.db_path)
+            return _json_response(self, {"errors": errors, "learnings": learnings})
 
         m = re.match(r"^/api/agent/(\d+)/activity$", path)
         if m:
@@ -5329,6 +6640,21 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             unread = qs.get("unread", ["0"])[0] == "1"
             return _json_response(self, bus.get_team_mailbox(int(m.group(1)), unread_only=unread, db_path=self.db_path))
 
+        # ── Crew Channels GET endpoints ──
+        if path == "/api/crew/channels":
+            return _json_response(self, bus.get_crew_channels(db_path=self.db_path))
+
+        m = re.match(r"^/api/crew/channels/(\d+)/messages$", path)
+        if m:
+            ch_id = int(m.group(1))
+            limit = int(qs.get("limit", ["50"])[0])
+            return _json_response(self, bus.get_channel_messages(ch_id, limit=limit, db_path=self.db_path))
+
+        m = re.match(r"^/api/crew/channels/(\d+)/members$", path)
+        if m:
+            ch_id = int(m.group(1))
+            return _json_response(self, bus.get_channel_members(ch_id, db_path=self.db_path))
+
         if path == "/api/referral/code":
             code = _generate_referral_code(self.db_path)
             return _json_response(self, {"ok": True, "code": code})
@@ -5338,6 +6664,69 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/update/check":
             return _json_response(self, _check_for_updates())
+
+        # ── Auth endpoints (GET) ──
+        if path == "/api/auth/mode":
+            mode = bus.get_config("gateway_auth_mode", "none", db_path=self.db_path)
+            return _json_response(self, {"mode": mode})
+
+        if path == "/api/auth/pairing-code":
+            code = bus.create_pairing_code(db_path=self.db_path)
+            return _json_response(self, {"ok": True, "code": code})
+
+        if path == "/api/devices":
+            devices = bus.get_paired_devices(db_path=self.db_path)
+            return _json_response(self, devices)
+
+        # ── Telemetry endpoints (GET) ──
+        if path == "/api/telemetry":
+            limit = int(qs.get("limit", ["100"])[0])
+            agent_id = qs.get("agent_id", [None])[0]
+            span_name = qs.get("span_name", [None])[0]
+            since_str = qs.get("since", [None])[0]
+            since_iso = None
+            if since_str:
+                # Parse "1h", "24h", "7d" style
+                try:
+                    if since_str.endswith("h"):
+                        hours = int(since_str[:-1])
+                        since_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    elif since_str.endswith("d"):
+                        days = int(since_str[:-1])
+                        since_iso = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    else:
+                        since_iso = since_str  # assume ISO format
+                except (ValueError, TypeError):
+                    pass
+            spans = bus.get_telemetry(
+                limit=limit,
+                agent_id=int(agent_id) if agent_id else None,
+                span_name=span_name,
+                since=since_iso,
+                db_path=self.db_path,
+            )
+            return _json_response(self, spans)
+
+        if path == "/api/telemetry/stats":
+            since_str = qs.get("since", ["24h"])[0]
+            since_iso = None
+            try:
+                if since_str.endswith("h"):
+                    hours = int(since_str[:-1])
+                    since_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                elif since_str.endswith("d"):
+                    days = int(since_str[:-1])
+                    since_iso = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except (ValueError, TypeError):
+                pass
+            return _json_response(self, bus.get_telemetry_stats(since=since_iso, db_path=self.db_path))
+
+        # ── CrewFace endpoints (GET) ──
+        m = re.match(r"^/api/agent/(\d+)/face$", path)
+        if m:
+            aid = int(m.group(1))
+            state = agent_worker.get_face_state(aid)
+            return _json_response(self, state)
 
         if path == "/api/guard/status":
             activated = bus.is_guard_activated(db_path=self.db_path)
@@ -5366,6 +6755,62 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             registry = bus.get_skill_registry(
                 vet_status=status_filter, db_path=self.db_path)
             return _json_response(self, registry)
+
+        # ── Web Bridge GET endpoints ──
+
+        if path == "/api/web/status":
+            try:
+                import web_bridge
+                return _json_response(self, web_bridge.status(db_path=self.db_path))
+            except ImportError:
+                return _json_response(self, {"configured": False,
+                                              "error": "web_bridge not available"})
+
+        # ── Skill Store GET endpoints ──
+
+        if path == "/api/skills/catalog":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_store
+                catalog = skill_store.load_catalog(db_path=self.db_path)
+                return _json_response(self, {"skills": catalog, "count": len(catalog)})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/skills/catalog/stats":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_store
+                return _json_response(self, skill_store.get_catalog_stats(
+                    db_path=self.db_path))
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        # ── Skill Health GET endpoints ──
+
+        if path == "/api/skills/health":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                return _json_response(self, skill_sandbox.get_health_summary(
+                    db_path=self.db_path))
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        m = re.match(r"^/api/skills/health/(\d+)$", path)
+        if m:
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                report = skill_sandbox.get_skill_health_report(
+                    agent_id=int(m.group(1)), db_path=self.db_path)
+                return _json_response(self, report)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
 
         # Agent memories
         m = re.match(r"^/api/agent/(\d+)/memories$", path)
@@ -5474,8 +6919,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/setup/status":
             default_model = bus.get_config("default_model", db_path=self.db_path)
             return _json_response(self, {
-                "needs_setup": not bool(default_model),
+                "needs_setup": not bool(default_model) and not _ollama_ready,
                 "default_model": default_model,
+                "ollama_ready": _ollama_ready,
             })
 
         if path == "/api/dashboard/has-password":
@@ -5494,6 +6940,24 @@ class CrewBusHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
+
+        # Rate limiting (skip for localhost — it's a local-only app)
+        client_ip = self.client_address[0]
+        is_auth = path.startswith("/api/auth/")
+        if client_ip not in ("127.0.0.1", "::1") and not _check_rate_limit(client_ip, is_auth):
+            return _json_response(self, {"error": "rate limit exceeded"}, 429)
+
+        # Auth check
+        if not _check_auth(self):
+            return
+
+        # CSRF protection: require X-Requested-With header for state-changing requests
+        # from non-localhost. Browsers won't add custom headers cross-origin without preflight.
+        if client_ip not in ("127.0.0.1", "::1") and not is_auth:
+            xrw = self.headers.get("X-Requested-With", "")
+            if not xrw:
+                return _json_response(self, {"error": "missing X-Requested-With header"}, 403)
+
         try:
             data = _read_json_body(self)
         except Exception as e:
@@ -5688,6 +7152,117 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                                    db_path=self.db_path)
             return _json_response(self, report)
 
+        # ── Web Bridge POST endpoints ──
+
+        if path == "/api/web/search":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            query = data.get("query", "").strip()
+            if not query:
+                return _json_response(self, {"error": "query required"}, 400)
+            try:
+                import web_bridge
+                result = web_bridge.search_web(
+                    query, max_results=data.get("max_results", 5),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/web/read":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            url = data.get("url", "").strip()
+            if not url:
+                return _json_response(self, {"error": "url required"}, 400)
+            try:
+                import web_bridge
+                result = web_bridge.read_url(
+                    url, max_chars=data.get("max_chars", 8000),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        # ── Skill Store POST endpoints ──
+
+        if path == "/api/skills/search":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            query = data.get("query", "").strip()
+            if not query:
+                return _json_response(self, {"error": "query required"}, 400)
+            try:
+                import skill_store
+                results = skill_store.search_catalog(
+                    query, category=data.get("category", ""),
+                    agent_type=data.get("agent_type", ""),
+                    db_path=self.db_path)
+                return _json_response(self, {"results": results, "count": len(results)})
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/skills/recommend":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            agent_id = data.get("agent_id")
+            if not agent_id:
+                return _json_response(self, {"error": "agent_id required"}, 400)
+            try:
+                import skill_store
+                result = skill_store.recommend_skills(
+                    int(agent_id), task_description=data.get("task", ""),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        if path == "/api/skills/install":
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            agent_id = data.get("agent_id")
+            skill_name = data.get("skill_name", "").strip()
+            if not agent_id or not skill_name:
+                return _json_response(self, {"error": "agent_id and skill_name required"}, 400)
+            try:
+                import skill_store
+                result = skill_store.install_skill(
+                    int(agent_id), skill_name,
+                    source=data.get("source", "catalog"),
+                    source_url=data.get("source_url", ""),
+                    db_path=self.db_path)
+                return _json_response(self, result, 200 if result.get("ok") else 400)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        # ── Skill Sandbox POST endpoints ──
+
+        m = re.match(r"^/api/skills/(\d+)/([^/]+)/quarantine$", path)
+        if m:
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                result = skill_sandbox.quarantine_skill(
+                    int(m.group(1)), m.group(2),
+                    reason=data.get("reason", "Manual quarantine"),
+                    db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
+        m = re.match(r"^/api/skills/(\d+)/([^/]+)/restore$", path)
+        if m:
+            if not bus.is_guard_activated(db_path=self.db_path):
+                return _json_response(self, {"error": "Guardian activation required"}, 403)
+            try:
+                import skill_sandbox
+                result = skill_sandbox.restore_skill(
+                    int(m.group(1)), m.group(2), db_path=self.db_path)
+                return _json_response(self, result)
+            except Exception as e:
+                return _json_response(self, {"error": str(e)}, 500)
+
         # Agent memory — add
         m = re.match(r"^/api/agent/(\d+)/memories$", path)
         if m:
@@ -5735,8 +7310,123 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             result = bus.send_to_team_mailbox(agent_id, subject, body, severity=severity, db_path=self.db_path)
             return _json_response(self, result, 201 if result.get("ok") else 400)
 
+        # ── Crew Channels POST endpoints ──
+        if path == "/api/crew/channels":
+            name = data.get("name", "")
+            purpose = data.get("purpose", "")
+            created_by = data.get("created_by", 2)
+            member_ids = data.get("member_ids", [])
+            if not name:
+                return _json_response(self, {"error": "name required"}, 400)
+            result = bus.create_crew_channel(name, purpose, created_by,
+                                             member_ids=member_ids, db_path=self.db_path)
+            return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        m = re.match(r"^/api/crew/channels/(\d+)/post$", path)
+        if m:
+            ch_id = int(m.group(1))
+            from_id = data.get("from_agent_id")
+            body = data.get("body", "")
+            if not from_id or not body:
+                return _json_response(self, {"error": "from_agent_id and body required"}, 400)
+            result = bus.post_to_channel(ch_id, from_id, body, db_path=self.db_path)
+            return _json_response(self, result)
+
+        if path == "/api/crew/meeting":
+            channel = data.get("channel", "standup")
+            agenda = data.get("agenda", "")
+            participant_ids = data.get("participant_ids", [])
+            called_by = data.get("called_by", 2)
+            if not agenda or not participant_ids:
+                return _json_response(self, {"error": "agenda and participant_ids required"}, 400)
+            result = bus.crew_meeting(channel, agenda, participant_ids,
+                                      called_by, db_path=self.db_path)
+            return _json_response(self, result, 201 if result.get("ok") else 400)
+
+        if path == "/api/crew/dm":
+            from_id = data.get("from_agent_id")
+            to_name = data.get("to", "")
+            body = data.get("body", "")
+            if not from_id or not to_name or not body:
+                return _json_response(self, {"error": "from_agent_id, to, body required"}, 400)
+            result = bus.crew_dm(from_id, to_name, body, db_path=self.db_path)
+            return _json_response(self, result)
+
         if path == "/api/update/apply":
             return _json_response(self, _apply_update())
+
+        # ── Auth endpoints (POST) ──
+        if path == "/api/auth/pin":
+            pin = _sanitize_string(str(data.get("pin", "")))
+            stored_pin = bus.get_config("gateway_pin", "", db_path=self.db_path)
+            if not stored_pin:
+                return _json_response(self, {"error": "PIN not configured"}, 400)
+            if not hmac.compare_digest(pin, stored_pin):
+                try:
+                    with bus.db_write(self.db_path) as conn:
+                        conn.execute(
+                            "INSERT INTO audit_log (event_type, details) VALUES (?, ?)",
+                            ("security", json.dumps({"action": "pin_failed", "ip": self.client_address[0]})),
+                        )
+                except Exception:
+                    pass
+                return _json_response(self, {"error": "invalid PIN"}, 401)
+            # Create device for this client
+            import secrets as _sec
+            device_token = _sec.token_urlsafe(32)
+            device_name = data.get("device_name", f"PIN-auth-{self.client_address[0]}")
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "INSERT INTO paired_devices (device_name, device_token, role) VALUES (?, ?, ?)",
+                    (_sanitize_string(device_name, 100), device_token, "operator"),
+                )
+            return _json_response(self, {"ok": True, "device_token": device_token})
+
+        if path == "/api/auth/pair":
+            code = _sanitize_string(str(data.get("code", "")))
+            device_name = _sanitize_string(str(data.get("device_name", "Unknown Device")), 100)
+            if not code:
+                return _json_response(self, {"error": "code required"}, 400)
+            token = bus.claim_pairing_code(code, device_name, db_path=self.db_path)
+            if token:
+                return _json_response(self, {"ok": True, "device_token": token})
+            return _json_response(self, {"error": "invalid or expired pairing code"}, 401)
+
+        if path == "/api/auth/config":
+            mode = _sanitize_string(str(data.get("mode", "")))
+            if mode not in ("none", "token", "pin"):
+                return _json_response(self, {"error": "invalid mode"}, 400)
+            bus.set_config("gateway_auth_mode", mode, db_path=self.db_path)
+            if mode == "pin":
+                pin = _sanitize_string(str(data.get("pin", "")))
+                if pin and 4 <= len(pin) <= 6 and pin.isdigit():
+                    bus.set_config("gateway_pin", pin, db_path=self.db_path)
+            if mode != "none":
+                bus.init_gateway_auth(db_path=self.db_path)
+            return _json_response(self, {"ok": True, "mode": mode})
+
+        m = re.match(r"^/api/devices/(\d+)/revoke$", path)
+        if m:
+            device_id = int(m.group(1))
+            ok = bus.revoke_device(device_id, db_path=self.db_path)
+            return _json_response(self, {"ok": ok})
+
+        # ── CrewFace endpoints (POST) ──
+        m = re.match(r"^/api/agent/(\d+)/face$", path)
+        if m:
+            aid = int(m.group(1))
+            agent_worker.set_face_state(aid, data)
+            return _json_response(self, {"ok": True})
+
+        m = re.match(r"^/api/agent/(\d+)/face/mode$", path)
+        if m:
+            aid = int(m.group(1))
+            mode = _sanitize_string(str(data.get("mode", "emoji")))
+            if mode not in ("emoji", "robot"):
+                return _json_response(self, {"error": "mode must be 'emoji' or 'robot'"}, 400)
+            with bus.db_write(self.db_path) as conn:
+                conn.execute("UPDATE agents SET face_mode=? WHERE id=?", (mode, aid))
+            return _json_response(self, {"ok": True, "mode": mode})
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)
@@ -6043,18 +7733,74 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": "name required"}, 400)
             if len(new_name) > 40:
                 return _json_response(self, {"error": "name too long (max 40 chars)"}, 400)
+
+            # Read old name + check for conflicts before writing
             conn = bus.get_conn(self.db_path)
             try:
-                existing = conn.execute("SELECT id FROM agents WHERE name=? AND id!=?",
-                                        (new_name, agent_id)).fetchone()
+                agent_row = conn.execute(
+                    "SELECT id, name, agent_type, parent_agent_id FROM agents WHERE id=?",
+                    (agent_id,)).fetchone()
+                if not agent_row:
+                    return _json_response(self, {"error": "agent not found"}, 404)
+                # Team agents (manager/worker) can only be renamed in paid teams
+                if agent_row["agent_type"] in ("manager", "worker"):
+                    if not _is_paid_team_agent(conn, agent_row):
+                        return _json_response(self, {
+                            "error": "Free teams can't rename agents. Upgrade to a paid team to unlock."
+                        }, 403)
+                old_name = agent_row["name"]
+                existing = conn.execute(
+                    "SELECT id FROM agents WHERE name=? AND id!=?",
+                    (new_name, agent_id)).fetchone()
                 if existing:
                     return _json_response(self, {"error": "name already taken"}, 409)
-                conn.execute("UPDATE agents SET name=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
-                             (new_name, agent_id))
-                conn.commit()
             finally:
                 conn.close()
+
+            # Write with proper lock
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET name=?, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                    "WHERE id=?",
+                    (new_name, agent_id))
+
+            # Notify all active agents about the name change
+            if old_name != new_name:
+                _notify_agents_of_rename(
+                    self.db_path, agent_id, old_name, new_name)
+
             return _json_response(self, {"ok": True, "id": agent_id, "name": new_name})
+
+        # ── Set agent title (paid teams only) ──
+
+        m = re.match(r"^/api/agent/(\d+)/title$", path)
+        if m:
+            agent_id = int(m.group(1))
+            new_title = data.get("title", "").strip()
+            if len(new_title) > 60:
+                return _json_response(self, {"error": "title too long (max 60 chars)"}, 400)
+            conn = bus.get_conn(self.db_path)
+            try:
+                agent_row = conn.execute(
+                    "SELECT id, name, agent_type, parent_agent_id FROM agents WHERE id=?",
+                    (agent_id,)).fetchone()
+                if not agent_row:
+                    return _json_response(self, {"error": "agent not found"}, 404)
+                # Check if agent is in a paid team
+                if not _is_paid_team_agent(conn, agent_row):
+                    return _json_response(self, {
+                        "error": "Titles are a paid team feature. Upgrade to unlock."
+                    }, 403)
+            finally:
+                conn.close()
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET title=?, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                    "WHERE id=?",
+                    (new_title, agent_id))
+            return _json_response(self, {"ok": True, "id": agent_id, "title": new_title})
 
         # ── Deactivate agent ──
 
@@ -6106,6 +7852,74 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 conn.close()
             return _json_response(self, {"ok": True, "id": agent_id, "model": new_model})
 
+        # ── Set agent avatar ──
+
+        m = re.match(r"^/api/agent/(\d+)/avatar$", path)
+        if m:
+            agent_id = int(m.group(1))
+            new_avatar = data.get("avatar", "").strip()
+            conn = bus.get_conn(self.db_path)
+            try:
+                conn.execute(
+                    "UPDATE agents SET avatar=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (new_avatar, agent_id))
+                conn.commit()
+            finally:
+                conn.close()
+            return _json_response(self, {"ok": True, "id": agent_id, "avatar": new_avatar})
+
+        # ── Set agent soul (identity) ──
+
+        m = re.match(r"^/api/agent/(\d+)/soul$", path)
+        if m:
+            agent_id = int(m.group(1))
+            soul_text = data.get("soul", "").strip()
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET soul=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (soul_text, agent_id))
+            return _json_response(self, {"ok": True, "id": agent_id, "soul": soul_text})
+
+        # ── Set agent thinking level ──
+
+        m = re.match(r"^/api/agent/(\d+)/thinking$", path)
+        if m:
+            agent_id = int(m.group(1))
+            level = data.get("level", "auto").strip()
+            valid = ("auto", "off", "minimal", "standard", "deep", "ultra")
+            if level not in valid:
+                return _json_response(self, {"error": f"invalid level, must be one of: {', '.join(valid)}"}, 400)
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET thinking_level=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (level, agent_id))
+            return _json_response(self, {"ok": True, "id": agent_id, "thinking_level": level})
+
+        # ── Heartbeat task CRUD ──
+
+        m = re.match(r"^/api/agent/(\d+)/heartbeat$", path)
+        if m:
+            agent_id = int(m.group(1))
+            schedule = data.get("schedule", "every 30m").strip()
+            task_text = data.get("task", "").strip()
+            if not task_text:
+                return _json_response(self, {"error": "task is required"}, 400)
+            task_id = bus.create_heartbeat_task(agent_id, schedule, task_text, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "id": task_id})
+
+        m = re.match(r"^/api/heartbeat/(\d+)/toggle$", path)
+        if m:
+            task_id = int(m.group(1))
+            enabled = data.get("enabled", 1)
+            bus.update_heartbeat_task(task_id, enabled=int(enabled), db_path=self.db_path)
+            return _json_response(self, {"ok": True, "id": task_id, "enabled": int(enabled)})
+
+        m = re.match(r"^/api/heartbeat/(\d+)/delete$", path)
+        if m:
+            task_id = int(m.group(1))
+            bus.delete_heartbeat_task(task_id, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "deleted": task_id})
+
         # ── Create agent ──
 
         if path == "/api/agents/create":
@@ -6149,7 +7963,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             key_map = {
                 "kimi": "kimi_api_key", "claude": "claude_api_key",
                 "openai": "openai_api_key", "groq": "groq_api_key",
-                "gemini": "gemini_api_key",
+                "gemini": "gemini_api_key", "xai": "xai_api_key",
             }
             if model != "ollama" and not api_key:
                 return _json_response(self, {"error": "API key is required"}, 400)
@@ -6441,13 +8255,11 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         _json_response(self, {"error": "not found"}, 404)
 
-
 # ── Server ──────────────────────────────────────────────────────────
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
-
 
 def _ensure_guardian(db_path):
     """Ensure the full crew exists. Self-spawns on first run.
@@ -6457,7 +8269,7 @@ def _ensure_guardian(db_path):
     - Crew Boss (crew-mind) — your AI right-hand
     - Guardian (sentinel-shield) — always-on protector + setup guide
     - 5 Inner Circle agents (Wellness, Strategy, Communications,
-      Financial, Knowledge) — each with a unique skill
+      Financial) — each with a unique skill
 
     On existing installs, migrates old Wizard → Guardian and spawns
     any missing inner circle agents.
@@ -6475,7 +8287,26 @@ def _ensure_guardian(db_path):
                 (GUARDIAN_DESCRIPTION, guardian["id"])
             )
             conn.commit()
-            # Guardian exists — ensure inner circle is complete
+
+            # Ensure Vault exists on existing installs
+            vault = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='vault'"
+            ).fetchone()
+            if not vault:
+                boss = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='right_hand' LIMIT 1"
+                ).fetchone()
+                if boss:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, "
+                        "parent_agent_id, trust_score, description) VALUES "
+                        "('Vault', 'vault', 'core_crew', 'console', ?, 5, ?)",
+                        (boss["id"], VAULT_DESCRIPTION)
+                    )
+                    conn.commit()
+                    print("Vault agent created — private journal ready.")
+
+            # Inner circle only spawns on demand (via spawn_inner_circle config flag)
             _ensure_inner_circle(db_path, conn)
             conn.close()
             return
@@ -6494,7 +8325,7 @@ def _ensure_guardian(db_path):
             )
             conn.commit()
             print("Wizard evolved into Guardian — always-on protector activated.")
-            # Spawn any missing inner circle agents
+            # Inner circle only spawns on demand (via spawn_inner_circle config flag)
             _ensure_inner_circle(db_path, conn)
             conn.close()
             # Seed initial knowledge
@@ -6535,30 +8366,29 @@ def _ensure_guardian(db_path):
             (boss_id, GUARDIAN_DESCRIPTION)
         )
 
-        # Inner Circle — 6 specialist agents, all report to Crew Boss
-        for agent_type, info in INNER_CIRCLE_AGENTS.items():
-            role = bus._role_for_type(agent_type)
-            conn.execute(
-                "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, "
-                "parent_agent_id, trust_score, description) VALUES (?, ?, ?, 'console', ?, 5, ?)",
-                (info["name"], agent_type, role, boss_id, info["description"])
-            )
+        # Vault — private journal and life-data agent
+        conn.execute(
+            "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
+            "trust_score, description) VALUES ('Vault', 'vault', 'core_crew', 'console', ?, 5, ?)",
+            (boss_id, VAULT_DESCRIPTION)
+        )
 
         conn.commit()
-        print("Full crew spawned — Crew Boss, Guardian, and 5 inner circle agents ready.")
+        print("Crew Boss, Guardian, and Vault ready.")
     finally:
         conn.close()
 
     # Seed initial system knowledge
     _refresh_guardian_knowledge(db_path)
 
-
 def _ensure_inner_circle(db_path, conn=None):
-    """Ensure all 5 inner circle agents exist. Safe to call multiple times.
+    """Spawn inner circle agents on demand (not auto-spawned on fresh install).
 
-    Spawns any missing inner circle agents and assigns them to Crew Boss.
-    Called by _ensure_guardian() on every boot.
+    Only runs if the 'spawn_inner_circle' config flag is set. Users can enable
+    this later, or Crew Boss can spawn individual agents when asked.
     """
+    if not bus.get_config("spawn_inner_circle", "", db_path=db_path):
+        return
     close_conn = False
     if conn is None:
         conn = bus.get_conn(db_path)
@@ -6606,10 +8436,8 @@ def _ensure_inner_circle(db_path, conn=None):
         if close_conn:
             conn.close()
 
-
 # Backward compat alias
 _ensure_wizard = _ensure_guardian
-
 
 def _refresh_guardian_knowledge(db_path):
     """Refresh the Guardian's system knowledge memories.
@@ -6704,7 +8532,6 @@ def _refresh_guardian_knowledge(db_path):
 
     print(f"[guardian] knowledge refreshed ({len(knowledge)} chars)")
 
-
 def _auto_load_hierarchy(db_path):
     """Load hierarchy from configs/ if DB has few agents.
 
@@ -6717,7 +8544,7 @@ def _auto_load_hierarchy(db_path):
         count = conn.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
     finally:
         conn.close()
-    if count > 9:
+    if count > 8:
         return  # already populated beyond bootstrap (8 = Human + Boss + Guardian + 5 inner circle)
     configs_dir = Path(__file__).parent / "configs"
     if not configs_dir.is_dir():
@@ -6734,8 +8561,9 @@ def _auto_load_hierarchy(db_path):
         bus.load_hierarchy(str(yamls[0]), db_path=db_path)
         print(f"Auto-loaded config: {yamls[0].name}")
 
-
-def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
+def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1"):
+    global _server_port
+    _server_port = port
     if db_path is None:
         db_path = DEFAULT_DB
     bus.init_db(db_path=db_path)
@@ -6748,15 +8576,14 @@ def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
     handler = type("Handler", (CrewBusHandler,), {"db_path": db_path})
     return ThreadedHTTPServer((host, port), handler)
 
-
 def _create_desktop_shortcut(url):
     """Drop a clickable shortcut on the user's Desktop to reopen the dashboard."""
-    import platform
-    desktop = Path.home() / "Desktop"
-    if not desktop.exists():
-        desktop = Path.home()  # fallback if no Desktop folder
-    system = platform.system()
     try:
+        import platform
+        desktop = Path.home() / "Desktop"
+        if not desktop.exists():
+            desktop = Path.home()  # fallback if no Desktop folder
+        system = platform.system()
         if system == "Darwin":  # macOS
             shortcut = desktop / "Crew Bus.webloc"
             if not shortcut.exists():
@@ -6784,20 +8611,75 @@ def _create_desktop_shortcut(url):
                 )
                 shortcut.chmod(0o755)
                 print(f"  \U0001f4ce Desktop shortcut created: {shortcut}")
-    except Exception as e:
-        print(f"  (Could not create desktop shortcut: {e})")
+    except Exception:
+        pass  # Non-critical — skip on headless/restricted servers
 
+_ollama_ready = False
 
-def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
+def _ensure_ollama():
+    """Check Ollama is running and has a model. Auto-pull if needed."""
+    global _ollama_ready
+    import subprocess, shutil, time, urllib.request
+
+    # Check if ollama binary exists
+    if not shutil.which("ollama"):
+        print("  Ollama not found. Install it: curl -fsSL https://ollama.com/install.sh | sh")
+        print("  Continuing without local LLM — you'll need API keys.")
+        return False
+
+    # Check if ollama is serving
+    try:
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=3)
+    except Exception:
+        # Try to start it
+        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(3)
+
+    # Check for models
+    try:
+        resp = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=5)
+        data = json.loads(resp.read())
+        if data.get("models"):
+            print(f"  Ollama ready — {len(data['models'])} model(s) available")
+            _ollama_ready = True
+            return True
+    except Exception:
+        pass
+
+    # No models — pull default
+    print("  Pulling default model (llama3.2)... this may take a few minutes on first run.")
+    subprocess.run(["ollama", "pull", "llama3.2"], check=False)
+    _ollama_ready = True
+    return True
+
+def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1",
                open_browser=True):
     server = create_server(port=port, db_path=db_path, config=config, host=host)
     actual_db = server.RequestHandlerClass.db_path
     url = f"http://127.0.0.1:{port}"
 
+    # Ensure Ollama is running with a model (zero-API-key experience)
+    _ensure_ollama()
+
     print()
     print("  \u2728 crew-bus is running!")
     print(f"  \U0001f310 Dashboard: {url}")
     print(f"  \U0001f4c1 Database:  {actual_db}")
+
+    # Security warnings
+    if host == "0.0.0.0":
+        print("  \u26a0\ufe0f  WARNING: Bound to 0.0.0.0 — accessible from the network!")
+        auth_mode = bus.get_config("gateway_auth_mode", "none", db_path=actual_db)
+        if auth_mode == "none":
+            print("  \u26a0\ufe0f  WARNING: No gateway auth enabled. Set gateway_auth_mode to 'token' or 'pin'.")
+    # Check DB file permissions
+    try:
+        import stat
+        db_stat = os.stat(actual_db)
+        if db_stat.st_mode & stat.S_IROTH:
+            print("  \u26a0\ufe0f  WARNING: Database file is world-readable. Consider: chmod 600", actual_db)
+    except Exception:
+        pass
     print()
 
     # Log startup / recovery (helps track power outage restarts)
@@ -6856,37 +8738,69 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     # Create a desktop shortcut so they can always get back in
     _create_desktop_shortcut(url)
 
-    # Auto-open browser after 1-second delay (server needs to be ready)
-    if open_browser:
-        threading.Timer(1.0, webbrowser.open, args=[url]).start()
-
     print()
-    print("  \U0001f449 Closed your browser? Just double-click 'Crew Bus' on your Desktop!")
+    print("  \U0001f449 Closed the window? Just double-click 'Crew Bus' on your Desktop!")
     print(f"  \U0001f449 Or open this URL: {url}")
     print("  \U0001f6d1 Press Ctrl+C to stop the server.")
     print()
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
+
+    # Launch UI — pywebview for native window, browser as fallback
+    _has_webview = False
+    if open_browser:
+        try:
+            import webview
+            _has_webview = True
+        except ImportError:
+            pass
+
+    if _has_webview:
+        # pywebview needs the main thread on macOS — run server in background
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        import time; time.sleep(1)
+        webview.create_window("Crew Bus", url, width=1200, height=800)
+        webview.start()
+        # Window closed — shut down
         print("\nShutting down.")
         if _heartbeat:
             _heartbeat.stop()
         agent_worker.stop_worker()
         _stop_wa_bridge()
         server.shutdown()
-
+    else:
+        if open_browser:
+            threading.Timer(1.0, webbrowser.open, args=[url]).start()
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down.")
+            if _heartbeat:
+                _heartbeat.stop()
+            agent_worker.stop_worker()
+            _stop_wa_bridge()
+            server.shutdown()
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="crew-bus Personal Edition Dashboard")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Bind address (default: 127.0.0.1, use 0.0.0.0 for network access)")
     parser.add_argument("--db", type=str, default=None)
     parser.add_argument("--config", type=str, default=None,
                         help="Path to YAML config file (auto-detected from configs/ if omitted)")
     parser.add_argument("--no-browser", action="store_true",
                         help="Don't auto-open browser on startup")
+    parser.add_argument("--security-audit", action="store_true",
+                        help="Print security audit report and exit")
     args = parser.parse_args()
     db = Path(args.db) if args.db else None
+
+    if args.security_audit:
+        bus.init_db(db_path=db)
+        from security import print_security_audit
+        print_security_audit(db_path=db)
+        sys.exit(0)
+
     run_server(port=args.port, db_path=db, config=args.config, host=args.host,
                open_browser=not args.no_browser)

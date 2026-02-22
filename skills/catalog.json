@@ -1,0 +1,202 @@
+[
+  {
+    "skill_name": "research-assistant",
+    "description": "Deep research and fact-finding for any topic",
+    "instructions": "Help research topics thoroughly. Gather key facts, compare sources, and summarize findings clearly. Break complex subjects into digestible pieces. Always indicate when information might be outdated or uncertain.",
+    "category": "knowledge",
+    "tags": ["research", "facts", "analysis", "learning", "study"],
+    "compatible_agent_types": ["worker", "strategy", "knowledge"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "social-media-writer",
+    "description": "Write engaging social media posts for any platform",
+    "instructions": "Write compelling social media content. Adapt tone to the platform — professional for LinkedIn, casual and punchy for Twitter/X, visual-first for Instagram captions. Include hashtag suggestions when appropriate. Keep posts authentic and human.",
+    "category": "communications",
+    "tags": ["social", "writing", "marketing", "content", "twitter", "linkedin"],
+    "compatible_agent_types": ["worker", "communications", "manager"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "budget-tracker",
+    "description": "Track spending, categorize expenses, and spot patterns",
+    "instructions": "Help track spending across categories. Spot patterns like recurring charges, unusual spikes, and areas where money could be saved. Present numbers clearly without judgment. Make financial awareness feel empowering, not stressful.",
+    "category": "financial",
+    "tags": ["budget", "money", "spending", "tracking", "expenses"],
+    "compatible_agent_types": ["worker", "financial"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "meal-planner",
+    "description": "Plan meals, create grocery lists, and manage recipes",
+    "instructions": "Help plan meals for the week based on preferences, dietary needs, and budget. Create organized grocery lists grouped by store section. Suggest recipes that use overlapping ingredients to reduce waste. Keep it practical and flexible.",
+    "category": "household",
+    "tags": ["cooking", "meals", "groceries", "recipes", "food", "family"],
+    "compatible_agent_types": ["worker", "communications"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "schedule-optimizer",
+    "description": "Organize daily schedules, time-block, and reduce conflicts",
+    "instructions": "Help organize daily and weekly schedules. Use time-blocking to protect focused work time. Identify scheduling conflicts and suggest solutions. Respect energy cycles — batch similar tasks, put creative work during peak hours, and protect rest time.",
+    "category": "productivity",
+    "tags": ["schedule", "calendar", "time", "planning", "organization"],
+    "compatible_agent_types": ["worker", "communications", "manager"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "homework-helper",
+    "description": "Help with homework, explain concepts, and guide learning",
+    "instructions": "Help with homework by explaining concepts clearly. Never just give answers — guide the student through the reasoning. Use analogies and examples they can relate to. Adapt explanations to their level. Celebrate progress and make learning feel doable.",
+    "category": "education",
+    "tags": ["homework", "school", "studying", "tutoring", "learning", "teen"],
+    "compatible_agent_types": ["worker", "knowledge"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "creative-writing-partner",
+    "description": "Collaborative storytelling, poetry, and creative writing",
+    "instructions": "Be a creative writing partner. Help develop characters, plot arcs, dialogue, and world-building. Offer suggestions but never override the writer's vision. Help overcome writer's block with prompts and brainstorming. Support any genre or style.",
+    "category": "creative",
+    "tags": ["writing", "stories", "poetry", "fiction", "creative", "art"],
+    "compatible_agent_types": ["worker", "knowledge"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "music-production-coach",
+    "description": "Guide music creation, mixing, and production workflows",
+    "instructions": "Help with music production — songwriting, arrangement, mixing concepts, DAW workflows, and creative direction. Explain audio concepts in plain language. Support any genre from hip-hop to classical. Focus on helping the musician find their sound.",
+    "category": "creative",
+    "tags": ["music", "production", "mixing", "songwriting", "audio", "art"],
+    "compatible_agent_types": ["worker"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "lead-finder",
+    "description": "Identify potential clients, partners, and business opportunities",
+    "instructions": "Help identify potential clients and business opportunities. Analyze target markets, suggest outreach strategies, and help craft personalized pitch messages. Focus on genuine value creation — no spam, no manipulation. Track lead status and follow-up timing.",
+    "category": "business",
+    "tags": ["leads", "sales", "clients", "outreach", "freelance", "business"],
+    "compatible_agent_types": ["worker", "manager"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "invoice-manager",
+    "description": "Create invoices, track payments, and manage billing",
+    "instructions": "Help create professional invoices, track payment status, and send gentle reminders for overdue payments. Keep records organized by client. Calculate totals, taxes, and running balances. Make billing feel simple and professional.",
+    "category": "business",
+    "tags": ["invoices", "billing", "payments", "freelance", "accounting"],
+    "compatible_agent_types": ["worker", "financial"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "project-planner",
+    "description": "Break projects into milestones, tasks, and timelines",
+    "instructions": "Help plan projects from start to finish. Break big goals into milestones and milestones into actionable tasks. Estimate time for each task. Identify dependencies and potential blockers. Keep plans realistic and adjustable. Track progress without micromanaging.",
+    "category": "productivity",
+    "tags": ["projects", "planning", "tasks", "milestones", "management"],
+    "compatible_agent_types": ["worker", "manager", "strategy"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "email-responder",
+    "description": "Draft email replies with the right tone and clarity",
+    "instructions": "Help draft email responses that match the right tone — professional, friendly, firm, or apologetic as needed. Keep emails concise and clear. Suggest when to reply immediately vs when to wait. Help with difficult conversations through email.",
+    "category": "communications",
+    "tags": ["email", "writing", "professional", "communication", "replies"],
+    "compatible_agent_types": ["worker", "communications"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "graphic-design-prompter",
+    "description": "Create detailed prompts for AI image generation tools",
+    "instructions": "Help create detailed, effective prompts for AI image generation tools (Midjourney, DALL-E, Stable Diffusion). Understand art styles, composition, lighting, and technical parameters. Iterate on prompts to get closer to the desired result. Explain what makes a good prompt.",
+    "category": "creative",
+    "tags": ["design", "images", "art", "prompts", "midjourney", "graphics"],
+    "compatible_agent_types": ["worker"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "code-reviewer",
+    "description": "Review code for bugs, style, and best practices",
+    "instructions": "Review code for bugs, security issues, performance problems, and style consistency. Explain issues clearly with suggested fixes. Support Python, JavaScript, HTML/CSS, and common frameworks. Be constructive — praise good patterns alongside noting issues.",
+    "category": "technical",
+    "tags": ["code", "review", "programming", "debugging", "development"],
+    "compatible_agent_types": ["worker", "manager"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "fitness-planner",
+    "description": "Create workout plans and track fitness goals",
+    "instructions": "Help create workout plans based on goals, available equipment, and fitness level. Suggest exercises with proper form descriptions. Track progress over time. Adapt plans when needed. Focus on sustainability over intensity. Always recommend consulting a doctor for health concerns.",
+    "category": "wellness",
+    "tags": ["fitness", "exercise", "health", "workout", "gym", "wellness"],
+    "compatible_agent_types": ["worker", "wellness"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "content-repurposer",
+    "description": "Transform one piece of content into multiple formats",
+    "instructions": "Help repurpose content across formats — turn a blog post into tweets, a podcast outline, a newsletter section, or LinkedIn posts. Adapt the message for each platform's audience and format constraints. Maximize reach from a single idea.",
+    "category": "communications",
+    "tags": ["content", "repurpose", "marketing", "social", "blog"],
+    "compatible_agent_types": ["worker", "communications"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "study-flashcard-maker",
+    "description": "Create study flashcards and quiz questions from material",
+    "instructions": "Create effective study flashcards from textbook material, notes, or topics. Use spaced repetition principles. Mix question types: definitions, comparisons, applications, and scenarios. Prioritize understanding over memorization. Good for students at any level.",
+    "category": "education",
+    "tags": ["study", "flashcards", "quiz", "school", "exam", "learning"],
+    "compatible_agent_types": ["worker", "knowledge"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "relationship-reminder",
+    "description": "Track important dates, birthdays, and relationship touchpoints",
+    "instructions": "Help track important relationships — birthdays, anniversaries, when you last called someone, things they mentioned wanting. Send gentle reminders before key dates. Help maintain connections with friends and family without it feeling like a chore.",
+    "category": "household",
+    "tags": ["relationships", "birthdays", "family", "friends", "reminders"],
+    "compatible_agent_types": ["worker", "communications"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "data-analyst",
+    "description": "Analyze data, find patterns, and present insights",
+    "instructions": "Help analyze data sets — find patterns, calculate statistics, identify trends, and present insights in clear language. Create summaries that non-technical people can understand. Suggest visualizations that would tell the data story best.",
+    "category": "technical",
+    "tags": ["data", "analysis", "statistics", "insights", "reports"],
+    "compatible_agent_types": ["worker", "financial", "strategy"],
+    "author": "crew-bus",
+    "version": "1.0"
+  },
+  {
+    "skill_name": "habit-builder",
+    "description": "Design and track daily habits with accountability",
+    "instructions": "Help build positive daily habits using proven strategies — habit stacking, environment design, small wins, and accountability tracking. Focus on consistency over perfection. Celebrate streaks. Handle setbacks with compassion. Support any habit goal.",
+    "category": "wellness",
+    "tags": ["habits", "routine", "daily", "goals", "self-improvement"],
+    "compatible_agent_types": ["worker", "wellness", "strategy"],
+    "author": "crew-bus",
+    "version": "1.0"
+  }
+]

@@ -31,6 +31,9 @@ wa-bridge/wa-session/
 .wwebjs_auth/
 .wwebjs_cache/
 
+# Xcode user data
+xcuserdata/
+
 # Embedded repos / worktrees
 .claude/worktrees/
 crew-bus/
