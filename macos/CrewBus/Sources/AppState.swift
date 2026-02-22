@@ -15,6 +15,7 @@ enum NavDestination: Equatable {
     case channelDetail(CrewChannel)
     case deviceManagement
     case claudeExtension
+    case updateSettings
 
     var transitionId: String {
         switch self {
@@ -29,6 +30,7 @@ enum NavDestination: Equatable {
         case .channelDetail(let c): return "channel-\(c.id)"
         case .deviceManagement:    return "device-mgmt"
         case .claudeExtension:     return "claude-extension"
+        case .updateSettings:      return "update-settings"
         }
     }
 }

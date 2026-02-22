@@ -29,6 +29,8 @@ struct MainView: View {
         VStack(spacing: 0) {
             TopBarView(isMenuOpen: $isMenuOpen)
 
+            UpdateBannerView()
+
             ZStack {
                 CrewTheme.bg.ignoresSafeArea()
 
@@ -97,6 +99,12 @@ struct MainView: View {
                         ))
                 case .claudeExtension:
                     ClaudeExtensionView()
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
+                case .updateSettings:
+                    UpdateSettingsView()
                         .transition(.asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity)

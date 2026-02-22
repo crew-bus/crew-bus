@@ -8,6 +8,9 @@ options:
 packages:
   CrewBusKit:
     path: ../CrewBusKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
 
 targets:
   CrewBus:
@@ -19,6 +22,7 @@ targets:
       - CrewBus/Resources
     dependencies:
       - package: CrewBusKit
+      - package: Sparkle
     info:
       path: CrewBus/Resources/Info.plist
       properties:
@@ -28,6 +32,8 @@ targets:
         LSApplicationCategoryType: public.app-category.utilities
         NSHighResolutionCapable: true
         NSApplicationSupportsSecureRestorableState: true
+        SUFeedURL: "https://crew-bus.dev/appcast.xml"
+        SUPublicEDKey: ""
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
     settings:

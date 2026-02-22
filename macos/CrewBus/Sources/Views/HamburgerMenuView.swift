@@ -4,8 +4,6 @@ import CrewBusKit
 struct HamburgerMenuView: View {
     @Binding var isPresented: Bool
     @Environment(AppState.self) private var appState
-    @State private var showUpdateAlert = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             menuItem("Crew Message Trail", icon: "bubble.left.and.bubble.right") {
@@ -41,7 +39,10 @@ struct HamburgerMenuView: View {
 
             menuItem("Software Update", icon: "arrow.down.circle") {
                 isPresented = false
-                showUpdateAlert = true
+                UpdateManager.shared.checkNow()
+            }
+            menuItem("Update Settings", icon: "gearshape") {
+                navigate(to: .updateSettings)
             }
             menuItem("Lock Dashboard", icon: "lock.fill") {
                 isPresented = false
@@ -57,11 +58,6 @@ struct HamburgerMenuView: View {
         .padding(.vertical, 8)
         .frame(width: 220)
         .background(CrewTheme.surface)
-        .alert("Software Update", isPresented: $showUpdateAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("You're running the latest version of Crew Bus.")
-        }
     }
 
     private func navigate(to destination: NavDestination) {
