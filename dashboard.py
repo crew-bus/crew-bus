@@ -50,6 +50,7 @@ Security Guard module available separately (paid activation key).
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import random
@@ -58,6 +59,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import time as _time
 import webbrowser
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -73,6 +75,190 @@ from right_hand import RightHand, Heartbeat
 
 # Global heartbeat instance (started in run_server)
 _heartbeat = None
+
+# ---------------------------------------------------------------------------
+# Security: Rate Limiter (in-memory sliding window)
+# ---------------------------------------------------------------------------
+
+_rate_limits: dict = {}  # {ip: [(timestamp, ...),]}
+_rate_lock = threading.Lock()
+
+_RATE_LIMIT_API = 60        # requests per minute for general API
+_RATE_LIMIT_AUTH = 10        # requests per minute for auth endpoints
+_RATE_WINDOW = 60            # seconds
+
+def _check_rate_limit(ip: str, auth_endpoint: bool = False) -> bool:
+    """Check if IP is within rate limits. Returns True if allowed, False if limited."""
+    limit = _RATE_LIMIT_AUTH if auth_endpoint else _RATE_LIMIT_API
+    now = _time.monotonic()
+    key = f"{ip}:{'auth' if auth_endpoint else 'api'}"
+    with _rate_lock:
+        if key not in _rate_limits:
+            _rate_limits[key] = []
+        # Remove entries older than window
+        _rate_limits[key] = [t for t in _rate_limits[key] if now - t < _RATE_WINDOW]
+        if len(_rate_limits[key]) >= limit:
+            return False
+        _rate_limits[key].append(now)
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Security: Headers helper
+# ---------------------------------------------------------------------------
+
+def _add_security_headers(handler):
+    """Add security headers to response."""
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Content-Security-Policy",
+                        "default-src 'self' 'unsafe-inline' https://js.stripe.com; "
+                        "connect-src 'self'; img-src 'self' data:; "
+                        "frame-src https://js.stripe.com")
+    handler.send_header("Referrer-Policy", "no-referrer")
+    handler.send_header("X-XSS-Protection", "0")
+
+
+# ---------------------------------------------------------------------------
+# Security: CORS helper
+# ---------------------------------------------------------------------------
+
+_ALLOWED_ORIGINS = set()  # populated from config or default
+
+def _cors_origin(handler) -> str:
+    """Return the appropriate CORS origin header value."""
+    origin = handler.headers.get("Origin", "")
+    # Allow localhost origins for local development
+    if origin and ("localhost" in origin or "127.0.0.1" in origin):
+        return origin
+    # If specific origins are configured, check against them
+    if _ALLOWED_ORIGINS and origin in _ALLOWED_ORIGINS:
+        return origin
+    # Default: same-origin (no header = browser blocks cross-origin)
+    return f"http://localhost:{_server_port}"
+
+
+# ---------------------------------------------------------------------------
+# Security: Input validation
+# ---------------------------------------------------------------------------
+
+_MAX_BODY_SIZE = 1_048_576  # 1 MB
+
+
+def _validate_request_body(handler) -> Optional[dict]:
+    """Validate and read JSON body. Returns dict or None on error (sends 4xx)."""
+    content_length = int(handler.headers.get("Content-Length", 0))
+    if content_length > _MAX_BODY_SIZE:
+        _json_response_raw(handler, {"error": "request body too large"}, 413)
+        return None
+    content_type = handler.headers.get("Content-Type", "")
+    if content_length > 0 and "json" not in content_type:
+        _json_response_raw(handler, {"error": "Content-Type must be application/json"}, 415)
+        return None
+    if content_length == 0:
+        return {}
+    try:
+        raw = handler.rfile.read(content_length)
+        # Verify Content-Length matches actual body
+        if len(raw) != content_length:
+            _json_response_raw(handler, {"error": "Content-Length mismatch"}, 400)
+            return None
+        data = json.loads(raw)
+        return data
+    except (json.JSONDecodeError, ValueError) as e:
+        _json_response_raw(handler, {"error": f"invalid JSON: {e}"}, 400)
+        return None
+
+
+def _sanitize_string(s: str, max_length: int = 10000) -> str:
+    """Sanitize a string input: strip null bytes, limit length."""
+    if not isinstance(s, str):
+        return str(s)[:max_length]
+    return s.replace("\x00", "")[:max_length]
+
+
+# ---------------------------------------------------------------------------
+# Security: Auth middleware
+# ---------------------------------------------------------------------------
+
+# Paths exempt from auth checks
+_AUTH_EXEMPT_PATHS = frozenset({
+    "/", "/manifest.json", "/sw.js", "/messages", "/decisions",
+    "/audit", "/drafts", "/observability",
+})
+_AUTH_EXEMPT_PREFIXES = ("/pwa/", "/api/auth/")
+
+
+def _check_auth(handler) -> bool:
+    """Check gateway auth. Returns True if authorized, False if rejected (sends 401).
+    Call at top of do_GET/do_POST."""
+    db_path = handler.db_path
+    mode = bus.get_config("gateway_auth_mode", "none", db_path=db_path)
+    if mode == "none":
+        return True
+
+    path = urlparse(handler.path).path.rstrip("/") or "/"
+
+    # Exempt paths
+    if path in _AUTH_EXEMPT_PATHS:
+        return True
+    for prefix in _AUTH_EXEMPT_PREFIXES:
+        if path.startswith(prefix):
+            return True
+    # Exempt team dashboard views
+    if path.startswith("/team/"):
+        return True
+
+    # Localhost is always trusted
+    client_ip = handler.client_address[0]
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        return True
+
+    # Check Authorization header
+    auth_header = handler.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        device = bus.validate_device_token(token, db_path=db_path)
+        if device:
+            return True
+
+    # Unauthorized
+    if path.startswith("/api/"):
+        _json_response_raw(handler, {"error": "unauthorized", "auth_mode": mode}, 401)
+    else:
+        handler.send_response(302)
+        handler.send_header("Location", "/?auth=required")
+        handler.end_headers()
+    # Log security event
+    try:
+        with bus.db_write(db_path) as conn:
+            conn.execute(
+                "INSERT INTO audit_log (event_type, details) VALUES (?, ?)",
+                ("security", json.dumps({"action": "auth_denied", "ip": client_ip, "path": path})),
+            )
+    except Exception:
+        pass
+    return False
+
+
+def _json_response_raw(handler, data, status=200):
+    """Send JSON response without auth check (for error responses within auth)."""
+    body = json.dumps(data, default=str).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Access-Control-Allow-Origin", _cors_origin(handler))
+    _add_security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# ---------------------------------------------------------------------------
+# Update check cache (avoid repeated git fetches)
+# ---------------------------------------------------------------------------
+
+_update_cache = {"result": None, "checked_at": 0}
+_UPDATE_CACHE_TTL = 3600  # 1 hour
 
 # Stripe integration — optional, only required for public deployment
 try:
@@ -1696,6 +1882,106 @@ tr.override td{background:rgba(210,153,34,.08)}
   .compose-row{flex-direction:column;align-items:stretch}
   .compose-row select,.compose-row .compose-priority,.compose-send{width:100%}
 }
+
+/* ═══ Update Banner ═══ */
+.update-banner{
+  position:fixed;top:0;left:0;right:0;z-index:10000;
+  background:linear-gradient(135deg,#1a6b3a,#2ea043);color:#fff;
+  padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  font-size:.85rem;font-weight:500;
+  box-shadow:0 2px 12px rgba(46,160,67,.4);
+  animation:slideDown .3s ease;
+}
+.update-banner.hidden{display:none}
+.update-banner button{
+  background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);
+  color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;
+}
+.update-banner button:hover{background:rgba(255,255,255,.3)}
+.update-banner .dismiss{background:none;border:none;opacity:.7;font-size:1rem}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+
+/* ═══ CrewFace ═══ */
+.crew-face{
+  width:80px;height:80px;display:flex;align-items:center;justify-content:center;
+  font-size:3rem;transition:all .3s;border-radius:50%;position:relative;cursor:pointer;
+  user-select:none;
+}
+.crew-face.thinking{animation:think-bob 1.5s ease-in-out infinite}
+.crew-face.speaking{animation:speak-bounce .4s ease infinite}
+.crew-face.error{animation:error-shake .3s ease 3}
+.crew-face.reading{animation:read-sway 2s ease-in-out infinite}
+.crew-face.loading{animation:loading-pulse 1s ease-in-out infinite}
+.crew-face.searching{animation:search-scan 1.5s linear infinite}
+.crew-face.coding{animation:code-type .3s steps(2) infinite}
+.crew-face.success{animation:success-pop .5s ease}
+.crew-face.idle{animation:idle-breathe 4s ease-in-out infinite}
+
+/* Effects */
+.crew-face.fx-sparkles::after{content:'✨';position:absolute;top:-8px;right:-8px;font-size:.8rem;animation:sparkle-float 1.5s ease infinite}
+.crew-face.fx-glow{box-shadow:0 0 20px rgba(88,166,255,.5);filter:brightness(1.1)}
+.crew-face.fx-pulse{animation:effect-pulse 1.5s ease-in-out infinite}
+.crew-face.fx-shake{animation:error-shake .2s ease infinite}
+.crew-face.fx-bounce{animation:speak-bounce .6s ease infinite}
+.crew-face.fx-fire::after{content:'🔥';position:absolute;bottom:-8px;font-size:.8rem;animation:fire-flicker .3s ease infinite}
+.crew-face.fx-confetti::after{content:'🎉';position:absolute;top:-10px;font-size:.8rem;animation:sparkle-float 2s ease infinite}
+.crew-face.fx-breathe{animation:idle-breathe 3s ease-in-out infinite}
+.crew-face.fx-ripple{box-shadow:0 0 0 0 rgba(88,166,255,.4);animation:ripple-ring 1.5s ease infinite}
+
+@keyframes think-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes speak-bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes error-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes read-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(3deg)}}
+@keyframes loading-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+@keyframes search-scan{0%{transform:translateX(-2px)}50%{transform:translateX(2px)}100%{transform:translateX(-2px)}}
+@keyframes code-type{0%{opacity:.7}100%{opacity:1}}
+@keyframes success-pop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes idle-breathe{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.03);opacity:1}}
+@keyframes sparkle-float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(20deg)}}
+@keyframes fire-flicker{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.2)}}
+@keyframes effect-pulse{0%,100%{box-shadow:0 0 8px rgba(88,166,255,.3)}50%{box-shadow:0 0 24px rgba(88,166,255,.6)}}
+@keyframes ripple-ring{0%{box-shadow:0 0 0 0 rgba(88,166,255,.4)}100%{box-shadow:0 0 0 20px rgba(88,166,255,0)}}
+
+/* Robot face SVG mode */
+.crew-face-robot{width:80px;height:80px}
+.crew-face-robot .eye{fill:#58a6ff;transition:all .3s}
+.crew-face-robot .mouth{stroke:#58a6ff;transition:all .3s}
+.crew-face-robot.thinking .eye{fill:#e3b341}
+.crew-face-robot.happy .mouth{d:path('M25,55 Q40,65 55,55')}
+.crew-face-robot.sad .mouth{d:path('M25,60 Q40,50 55,60')}
+.crew-face-robot.confused .eye{fill:#f85149;animation:loading-pulse 1s ease-in-out infinite}
+
+/* ═══ Observability View ═══ */
+.otel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
+.otel-card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;text-align:center}
+.otel-card .val{font-size:1.5rem;font-weight:700;color:#58a6ff}
+.otel-card .label{font-size:.75rem;color:#8b949e;margin-top:4px}
+.otel-bar-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0}
+.otel-bar{background:#58a6ff;border-radius:3px 3px 0 0;min-width:24px;flex:1;transition:height .3s;position:relative}
+.otel-bar:hover{background:#79c0ff}
+.otel-bar .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#161b22;border:1px solid #30363d;padding:2px 6px;border-radius:4px;font-size:.7rem;white-space:nowrap;display:none}
+.otel-bar:hover .tip{display:block}
+.otel-bar.error{background:#f85149}
+.otel-table{width:100%;border-collapse:collapse;font-size:.8rem;margin:8px 0}
+.otel-table th{text-align:left;color:#8b949e;padding:6px 8px;border-bottom:1px solid #30363d;font-weight:500}
+.otel-table td{padding:6px 8px;border-bottom:1px solid #21262d;color:#e6edf3}
+.otel-table .status-ok{color:#2ea043}.otel-table .status-error{color:#f85149}
+
+/* ═══ PIN Entry Screen ═══ */
+.pin-overlay{
+  position:fixed;inset:0;background:rgba(13,17,23,.95);z-index:20000;
+  display:flex;align-items:center;justify-content:center;
+}
+.pin-box{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:32px;text-align:center;max-width:320px}
+.pin-box h2{color:#e6edf3;margin:0 0 8px}
+.pin-box p{color:#8b949e;font-size:.85rem;margin:0 0 20px}
+.pin-input{display:flex;gap:8px;justify-content:center;margin:0 0 16px}
+.pin-input input{width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:700;
+  background:#0d1117;border:2px solid #30363d;border-radius:8px;color:#e6edf3;outline:none}
+.pin-input input:focus{border-color:#58a6ff}
+.pin-submit{background:#238636;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:.9rem;cursor:pointer;width:100%}
+.pin-submit:hover{background:#2ea043}
+.pin-error{color:#f85149;font-size:.8rem;margin-top:8px;min-height:1.2em}
 """
 
 # ── JS ──────────────────────────────────────────────────────────────
@@ -1944,7 +2230,7 @@ function resetIdleTimer(){
 
 async function api(path){return(await fetch(path)).json()}
 async function apiPost(path,data){
-  return(await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+  return(await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
     body:JSON.stringify(data||{})})).json();
 }
 
@@ -2108,6 +2394,7 @@ function loadCurrentView(){
   else if(currentView==='messages')loadMessages();
   else if(currentView==='audit')loadAudit();
   else if(currentView==='drafts')loadDrafts();
+  else if(currentView==='observability'){loadTelemetryStats();loadTelemetrySpans()}
   else if(currentView==='team'){}  // team dash loads separately
 }
 
@@ -2424,6 +2711,10 @@ async function openAgentSpace(agentId){
   var asDot=document.getElementById('as-status-dot');
   if(asDot)asDot.className='as-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
 
+  // CrewFace — start polling face state
+  var faceContainer=document.getElementById('as-crewface');
+  if(faceContainer){startFacePoll('as-crewface',agentId)}
+
   // Settings panel content (hidden by default)
   var intro=document.getElementById('as-intro');
   intro.style.borderColor=color+'44';
@@ -2502,6 +2793,12 @@ async function openAgentSpace(agentId){
 
   // Load memories for this agent
   loadMemories(agentId);
+
+  // Load soul, thinking, heartbeat, and learning sections
+  loadSoulSection(agentId, agent);
+  loadThinkingSection(agentId, agent);
+  loadHeartbeatSection(agentId);
+  loadLearningSection(agentId);
 
   // Start chat auto-refresh polling
   startChatPoll();
@@ -2866,6 +3163,144 @@ async function addMemoryUI(agentId){
   loadMemories(agentId);
 }
 
+// ══════════ SOUL SECTION ══════════
+
+function loadSoulSection(agentId, agent){
+  var el=document.getElementById('as-soul-section');
+  if(!el)return;
+  var soul=agent.soul||'';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u2728 Identity & Soul</summary>';
+  html+='<div style="margin-top:8px">';
+  html+='<textarea id="soul-textarea" rows="4" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;resize:vertical;font-family:inherit;line-height:1.4" placeholder="Define this agent\'s personality, values, and identity...">'+esc(soul)+'</textarea>';
+  html+='<div style="display:flex;gap:6px;margin-top:6px;align-items:center">';
+  html+='<button onclick="saveSoul('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">Save Soul</button>';
+  html+='<span id="soul-msg" style="font-size:.8rem;color:var(--mu)"></span>';
+  html+='</div></div></details>';
+  el.innerHTML=html;
+}
+
+async function saveSoul(agentId){
+  var ta=document.getElementById('soul-textarea');
+  var msg=document.getElementById('soul-msg');
+  if(!ta)return;
+  var res=await apiPost('/api/agent/'+agentId+'/soul',{soul:ta.value});
+  if(res&&res.ok){if(msg){msg.textContent='Saved!';msg.style.color='#2ea043';setTimeout(function(){msg.textContent='';},2000);}}
+  else{if(msg){msg.textContent='Error saving';msg.style.color='#f85149';}}
+}
+
+// ══════════ THINKING LEVEL SECTION ══════════
+
+function loadThinkingSection(agentId, agent){
+  var el=document.getElementById('as-thinking-section');
+  if(!el)return;
+  var level=agent.thinking_level||'auto';
+  var levels=['auto','off','minimal','standard','deep','ultra'];
+  var labels={'auto':'Auto','off':'Off','minimal':'Minimal','standard':'Standard','deep':'Deep','ultra':'Ultra'};
+  var html='<div style="display:flex;align-items:center;gap:8px;margin-top:4px">';
+  html+='<span style="font-weight:600;color:var(--fg);font-size:.9rem">\u{1F9E0} Thinking:</span>';
+  html+='<select id="thinking-select" onchange="changeThinking('+agentId+',this.value)" style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:4px 10px;color:var(--fg);font-size:.85rem">';
+  levels.forEach(function(l){html+='<option value="'+l+'"'+(l===level?' selected':'')+'>'+labels[l]+'</option>';});
+  html+='</select>';
+  html+='<span id="thinking-msg" style="font-size:.8rem;color:var(--mu)"></span>';
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+async function changeThinking(agentId,level){
+  var msg=document.getElementById('thinking-msg');
+  var res=await apiPost('/api/agent/'+agentId+'/thinking',{level:level});
+  if(res&&res.ok){if(msg){msg.textContent='Saved';msg.style.color='#2ea043';setTimeout(function(){msg.textContent='';},2000);}}
+}
+
+// ══════════ HEARTBEAT SECTION ══════════
+
+async function loadHeartbeatSection(agentId){
+  var el=document.getElementById('as-heartbeat-section');
+  if(!el)return;
+  var tasks=[];try{tasks=await api('/api/agent/'+agentId+'/heartbeat');}catch(e){}
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u{1F493} Heartbeat Tasks ('+tasks.length+')</summary>';
+  html+='<div style="margin-top:8px">';
+  if(tasks&&tasks.length>0){
+    tasks.forEach(function(t){
+      var on=t.enabled?true:false;
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">';
+      html+='<div style="flex:1"><div style="color:var(--fg);font-size:.85rem">'+esc(t.task).substring(0,80)+'</div>';
+      html+='<div style="color:var(--mu);font-size:.75rem">'+esc(t.schedule)+(t.last_run?' \u2022 last: '+timeAgo(t.last_run):'')+'</div></div>';
+      html+='<div style="display:flex;gap:4px;align-items:center">';
+      html+='<button onclick="toggleHeartbeat('+t.id+','+(on?0:1)+','+agentId+')" style="background:none;border:1px solid '+(on?'#2ea04366':'#f8514944')+';color:'+(on?'#2ea043':'#f85149')+';cursor:pointer;font-size:.7rem;padding:2px 8px;border-radius:4px">'+(on?'On':'Off')+'</button>';
+      html+='<button onclick="deleteHeartbeat('+t.id+','+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px" title="Delete">\u2716</button>';
+      html+='</div></div>';
+    });
+  }else{
+    html+='<p style="color:var(--mu);font-size:.85rem">No heartbeat tasks set.</p>';
+  }
+  html+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--br)">';
+  html+='<div style="display:flex;gap:6px;margin-bottom:4px">';
+  html+='<select id="hb-schedule" style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:4px 8px;color:var(--fg);font-size:.82rem">';
+  html+='<option value="every 30m">Every 30m</option><option value="every 1h">Every 1h</option><option value="every 4h">Every 4h</option>';
+  html+='<option value="daily 9am">Daily 9am</option><option value="daily 6pm">Daily 6pm</option><option value="daily 10am">Daily 10am</option>';
+  html+='<option value="weekly monday 9am">Weekly Mon 9am</option></select></div>';
+  html+='<div style="display:flex;gap:6px">';
+  html+='<input id="hb-task" type="text" placeholder="Task description..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">';
+  html+='<button onclick="addHeartbeat('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">+</button></div>';
+  html+='</div></div></details>';
+  el.innerHTML=html;
+}
+
+async function toggleHeartbeat(taskId,enabled,agentId){
+  await apiPost('/api/heartbeat/'+taskId+'/toggle',{enabled:enabled});
+  loadHeartbeatSection(agentId);
+}
+async function deleteHeartbeat(taskId,agentId){
+  await apiPost('/api/heartbeat/'+taskId+'/delete',{});
+  loadHeartbeatSection(agentId);
+}
+async function addHeartbeat(agentId){
+  var sch=document.getElementById('hb-schedule');
+  var task=document.getElementById('hb-task');
+  if(!task||!task.value.trim())return;
+  await apiPost('/api/agent/'+agentId+'/heartbeat',{schedule:sch?sch.value:'every 30m',task:task.value.trim()});
+  task.value='';
+  loadHeartbeatSection(agentId);
+}
+
+// ══════════ LEARNING LOG SECTION ══════════
+
+async function loadLearningSection(agentId){
+  var el=document.getElementById('as-learning-section');
+  if(!el)return;
+  var data={errors:[],learnings:[]};
+  try{data=await api('/api/agent/'+agentId+'/learnings');}catch(e){}
+  var total=data.errors.length+data.learnings.length;
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u{1F4DA} Learning Log ('+total+')</summary>';
+  html+='<div style="margin-top:8px">';
+  if(data.errors.length>0){
+    html+='<div style="margin-bottom:8px"><div style="color:#f85149;font-weight:600;font-size:.82rem;margin-bottom:4px">Mistakes to Avoid</div>';
+    data.errors.forEach(function(e){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
+      html+='<span style="color:var(--fg);font-size:.82rem">'+esc(e.content).substring(0,90)+'</span>';
+      html+='<button onclick="forgetMemory('+agentId+','+e.id+');loadLearningSection('+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px">\u2716</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  if(data.learnings.length>0){
+    html+='<div><div style="color:#2ea043;font-weight:600;font-size:.82rem;margin-bottom:4px">What Works Well</div>';
+    data.learnings.forEach(function(l){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
+      html+='<span style="color:var(--fg);font-size:.82rem">'+esc(l.content).substring(0,90)+'</span>';
+      html+='<button onclick="forgetMemory('+agentId+','+l.id+');loadLearningSection('+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px">\u2716</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  if(total===0){
+    html+='<p style="color:var(--mu);font-size:.85rem">No learnings yet. Give feedback in chat and the agent learns automatically.</p>';
+  }
+  html+='</div></details>';
+  el.innerHTML=html;
+}
+
 function descFor(type){
   var d={
     'right_hand':'Your friendly right-hand who handles 80% of everything so you don\u2019t have to. The only agent that talks to you directly \u2014 warm, reliable, always has your back.',
@@ -2962,6 +3397,7 @@ function loadWaQr(containerId){
 
 function closeAgentSpace(){
   stopChatPoll();
+  stopFacePoll();
   var space=document.getElementById('agent-space');
   space.classList.add('closing');
   setTimeout(function(){space.classList.remove('open','closing');space.style.display='none';},250);
@@ -4006,7 +4442,7 @@ function submitSetup(){
   var pin=(document.getElementById('setup-pin').value||'').trim();
   var email=(document.getElementById('setup-email').value||'').trim();
   btn.disabled=true;btn.textContent='Setting up...';
-  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch('/api/setup/complete',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
     body:JSON.stringify({model:model,api_key:key,dashboard_pin:pin,recovery_email:email})})
     .then(function(r){return r.json()})
     .then(function(d){
@@ -4039,8 +4475,216 @@ if('serviceWorker' in navigator){
   });
 }
 
+// ═══════ Update Banner ═══════
+function checkForUpdates(){
+  if(sessionStorage.getItem('update-dismissed'))return;
+  fetch('/api/update/check').then(r=>r.json()).then(d=>{
+    if(d.update_available){
+      let b=document.getElementById('update-banner');
+      if(!b){
+        b=document.createElement('div');b.id='update-banner';b.className='update-banner';
+        document.body.prepend(b);
+      }
+      b.innerHTML='<span>\uD83D\uDD04 Update available ('+
+        (d.commits_behind||'?')+' commits behind) &mdash; </span>'+
+        '<button onclick="applyUpdate()">Update Now</button>'+
+        '<button class="dismiss" onclick="dismissUpdate()">&times;</button>';
+      b.classList.remove('hidden');
+      // Also show green dot in hamburger menu
+      const dot=document.getElementById('update-dot');
+      if(dot)dot.style.display='inline-block';
+    }
+  }).catch(()=>{});
+}
+function applyUpdate(){
+  const b=document.getElementById('update-banner');
+  if(b)b.innerHTML='<span>Updating... please wait</span>';
+  fetch('/api/update/apply',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},body:'{}'})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){if(b)b.innerHTML='<span>\u2705 Updated! Reloading...</span>';setTimeout(()=>location.reload(),3000)}
+      else{if(b)b.innerHTML='<span>\u274C Update failed: '+(d.error||'unknown')+'</span>'}
+    }).catch(e=>{if(b)b.innerHTML='<span>\u274C '+e+'</span>'});
+}
+function dismissUpdate(){
+  const b=document.getElementById('update-banner');
+  if(b)b.classList.add('hidden');
+  sessionStorage.setItem('update-dismissed','1');
+}
+
+// ═══════ Observability View ═══════
+function showObservability(){
+  showView('observability');
+  loadTelemetryStats();loadTelemetrySpans();
+}
+function loadTelemetryStats(){
+  fetch('/api/telemetry/stats?since=24h').then(r=>r.json()).then(d=>{
+    const c=document.getElementById('otel-stats');if(!c)return;
+    const stats=d.stats||[];
+    if(!stats.length){c.innerHTML='<p style="color:#8b949e">No telemetry data yet. Send a message to generate spans.</p>';return}
+    let cards='<div class="otel-grid">';
+    let totalCalls=0,totalErrors=0,maxAvg=0;
+    stats.forEach(s=>{totalCalls+=s.call_count;totalErrors+=s.error_count;if(s.avg_ms>maxAvg)maxAvg=s.avg_ms});
+    cards+='<div class="otel-card"><div class="val">'+totalCalls+'</div><div class="label">Total Spans (24h)</div></div>';
+    cards+='<div class="otel-card"><div class="val" style="color:'+(totalErrors?'#f85149':'#2ea043')+'">'+(totalCalls?((totalErrors/totalCalls*100).toFixed(1)+'%'):'0%')+'</div><div class="label">Error Rate</div></div>';
+    cards+='<div class="otel-card"><div class="val">'+Math.round(maxAvg)+'ms</div><div class="label">Max Avg Response</div></div>';
+    cards+='</div>';
+    // Bar chart
+    if(stats.length){
+      const maxP95=Math.max(...stats.map(s=>s.p95_ms||1));
+      cards+='<h3 style="color:#e6edf3;margin:16px 0 8px;font-size:.9rem">Response Time by Span (p95)</h3>';
+      cards+='<div class="otel-bar-chart">';
+      stats.forEach(s=>{
+        const h=Math.max(4,((s.p95_ms||0)/maxP95)*100);
+        const cls=s.error_count>0?'otel-bar error':'otel-bar';
+        cards+='<div class="'+cls+'" style="height:'+h+'%"><div class="tip">'+s.span_name+': '+s.p95_ms+'ms p95</div></div>';
+      });
+      cards+='</div>';
+    }
+    // Stats table
+    cards+='<table class="otel-table"><tr><th>Span</th><th>Calls</th><th>Avg</th><th>p95</th><th>Errors</th></tr>';
+    stats.forEach(s=>{
+      cards+='<tr><td>'+s.span_name+'</td><td>'+s.call_count+'</td><td>'+s.avg_ms+'ms</td><td>'+s.p95_ms+'ms</td><td class="'+(s.error_count?'status-error':'status-ok')+'">'+s.error_count+'</td></tr>';
+    });
+    cards+='</table>';
+    c.innerHTML=cards;
+  }).catch(()=>{});
+}
+function loadTelemetrySpans(){
+  fetch('/api/telemetry?limit=50').then(r=>r.json()).then(rows=>{
+    const c=document.getElementById('otel-spans');if(!c)return;
+    if(!rows.length){c.innerHTML='<p style="color:#8b949e">No recent spans.</p>';return}
+    let h='<table class="otel-table"><tr><th>Time</th><th>Span</th><th>Duration</th><th>Status</th><th>Agent</th></tr>';
+    rows.forEach(r=>{
+      const t=r.created_at?r.created_at.substring(11,19):'';
+      const cls=r.status==='error'?'status-error':'status-ok';
+      h+='<tr><td>'+t+'</td><td>'+r.span_name+'</td><td>'+(r.duration_ms||0)+'ms</td><td class="'+cls+'">'+r.status+'</td><td>'+(r.agent_id||'-')+'</td></tr>';
+    });
+    h+='</table>';c.innerHTML=h;
+  }).catch(()=>{});
+}
+
+// ═══════ CrewFace ═══════
+const FACE_EMOJIS={
+  neutral:'\uD83D\uDE10',thinking:'\uD83E\uDD14',happy:'\uD83D\uDE0A',
+  excited:'\uD83E\uDD29',proud:'\uD83D\uDE0E',confused:'\uD83D\uDE15',
+  tired:'\uD83D\uDE34',sad:'\uD83D\uDE22',angry:'\uD83D\uDE20'
+};
+const ROBOT_SVG='<svg viewBox="0 0 80 80" class="crew-face-robot"><rect x="10" y="20" width="60" height="50" rx="10" fill="#21262d" stroke="#58a6ff" stroke-width="2"/><circle class="eye" cx="28" cy="40" r="6"/><circle class="eye" cx="52" cy="40" r="6"/><path class="mouth" d="M28,55 Q40,60 52,55" fill="none" stroke-width="2"/><rect x="35" y="8" width="10" height="14" rx="3" fill="#58a6ff"/><circle cx="40" cy="6" r="4" fill="#58a6ff"/></svg>';
+
+function renderCrewFace(containerId,agentId){
+  const el=document.getElementById(containerId);if(!el)return;
+  fetch('/api/agent/'+agentId+'/face').then(r=>r.json()).then(state=>{
+    const emotion=state.emotion||'neutral';
+    const action=state.action||'idle';
+    const effect=state.effect||'none';
+    // Check face_mode from agent data
+    const agentData=agentsData.find(a=>a.id==agentId);
+    const mode=(agentData&&agentData.face_mode)||'emoji';
+    let classes='crew-face '+action;
+    if(effect!=='none')classes+=' fx-'+effect;
+    if(mode==='robot'){
+      el.innerHTML='<div class="'+classes+' '+emotion+'">'+ROBOT_SVG+'</div>';
+    }else{
+      el.innerHTML='<div class="'+classes+'">'+(FACE_EMOJIS[emotion]||'\uD83D\uDE10')+'</div>';
+    }
+    // Click for random effect
+    el.querySelector('.crew-face,.crew-face-robot').onclick=function(){
+      const effects=['sparkles','glow','pulse','bounce','confetti','fire','ripple'];
+      const fx=effects[Math.floor(Math.random()*effects.length)];
+      fetch('/api/agent/'+agentId+'/face',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
+        body:JSON.stringify({emotion:'excited',action:'success',effect:fx})}).then(()=>renderCrewFace(containerId,agentId));
+    };
+  }).catch(()=>{el.innerHTML='<div class="crew-face">\uD83D\uDE10</div>'});
+}
+// Auto-poll face state for open agent space
+let _faceInterval=null;
+function startFacePoll(containerId,agentId){
+  stopFacePoll();
+  renderCrewFace(containerId,agentId);
+  _faceInterval=setInterval(()=>renderCrewFace(containerId,agentId),2000);
+}
+function stopFacePoll(){if(_faceInterval){clearInterval(_faceInterval);_faceInterval=null}}
+
+// ═══════ Auth / PIN Entry ═══════
+function checkAuthRequired(){
+  fetch('/api/auth/mode').then(r=>r.json()).then(d=>{
+    if(d.mode==='none')return;
+    const token=localStorage.getItem('crewbus_device_token');
+    if(token){
+      // Verify token still works
+      fetch('/api/stats',{headers:{'Authorization':'Bearer '+token}}).then(r=>{
+        if(r.status===401)showPinScreen(d.mode);
+      }).catch(()=>{});
+    }else{
+      showPinScreen(d.mode);
+    }
+  }).catch(()=>{});
+}
+function showPinScreen(mode){
+  let overlay=document.getElementById('pin-overlay');
+  if(overlay)return;
+  overlay=document.createElement('div');overlay.id='pin-overlay';overlay.className='pin-overlay';
+  overlay.innerHTML='<div class="pin-box"><h2>\uD83D\uDD12 Crew Bus</h2>'+
+    '<p>Enter your '+(mode==='pin'?'PIN':'device token')+' to access the dashboard</p>'+
+    (mode==='pin'?
+      '<div class="pin-input"><input maxlength="1" data-idx="0"><input maxlength="1" data-idx="1"><input maxlength="1" data-idx="2"><input maxlength="1" data-idx="3"><input maxlength="1" data-idx="4"><input maxlength="1" data-idx="5"></div>':
+      '<input type="text" placeholder="Device token" style="width:100%;padding:8px;margin-bottom:12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3">'
+    )+
+    '<button class="pin-submit" onclick="submitPin(\''+mode+'\')">Unlock</button>'+
+    '<div class="pin-error" id="pin-error"></div></div>';
+  document.body.appendChild(overlay);
+  // Auto-focus and auto-advance PIN inputs
+  if(mode==='pin'){
+    const inputs=overlay.querySelectorAll('.pin-input input');
+    inputs[0].focus();
+    inputs.forEach((inp,i)=>{
+      inp.addEventListener('input',()=>{if(inp.value&&i<inputs.length-1)inputs[i+1].focus()});
+      inp.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!inp.value&&i>0)inputs[i-1].focus()});
+    });
+  }
+}
+function submitPin(mode){
+  let pin='';
+  if(mode==='pin'){
+    document.querySelectorAll('.pin-input input').forEach(i=>pin+=i.value);
+  }else{
+    pin=document.querySelector('.pin-box input[type=text]').value;
+  }
+  const endpoint=mode==='pin'?'/api/auth/pin':'/api/auth/pair';
+  const body=mode==='pin'?{pin}:{code:pin,device_name:navigator.userAgent.substring(0,50)};
+  fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'crewbus'},
+    body:JSON.stringify(body)}).then(r=>r.json()).then(d=>{
+    if(d.ok&&d.device_token){
+      localStorage.setItem('crewbus_device_token',d.device_token);
+      const overlay=document.getElementById('pin-overlay');
+      if(overlay)overlay.remove();
+      location.reload();
+    }else{
+      document.getElementById('pin-error').textContent=d.error||'Invalid';
+    }
+  }).catch(e=>{document.getElementById('pin-error').textContent='Error: '+e});
+}
+
+// Add auth token to all fetch requests
+const _origFetch=window.fetch;
+window.fetch=function(url,opts){
+  opts=opts||{};
+  const token=localStorage.getItem('crewbus_device_token');
+  if(token&&typeof url==='string'&&url.startsWith('/api/')){
+    opts.headers=opts.headers||{};
+    if(typeof opts.headers==='object'&&!(opts.headers instanceof Headers)){
+      opts.headers['Authorization']='Bearer '+token;
+    }
+  }
+  return _origFetch.call(this,url,opts);
+};
+
 // ── Boot ──
-document.addEventListener('DOMContentLoaded',function(){checkSetupNeeded()});
+document.addEventListener('DOMContentLoaded',function(){
+  checkSetupNeeded();
+  checkForUpdates();
+  checkAuthRequired();
+});
 """
 
 # ── PWA Constants ──────────────────────────────────────────────────
@@ -4062,7 +4706,7 @@ PWA_MANIFEST = json.dumps({
 }, indent=2)
 
 PWA_SERVICE_WORKER = """\
-var CACHE_NAME='crew-bus-v3';
+var CACHE_NAME='crew-bus-v4';
 var ICON_URLS=['/pwa/icon-192.png','/pwa/icon-512.png','/pwa/icon.svg'];
 
 self.addEventListener('install',function(e){
@@ -4269,6 +4913,7 @@ def _build_html():
   <button onclick="hmNav('messages')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📨 Crew Message Trail</button>
   <button onclick="hmNav('audit')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📋 Crew Audit Trail</button>
   <button onclick="hmNav('drafts')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">✏️ Social Media Drafts</button>
+  <button onclick="showObservability();toggleHamburger()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">📊 Observability</button>
   <hr style="border:none;border-top:1px solid #30363d;margin:0">
   <button id="hm-update-btn" onclick="hmAction('update')" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">🔄 Software Update<span id="update-dot" style="display:none;margin-left:6px;width:8px;height:8px;background:#2ea043;border-radius:50%"></span></button>
   <button id="hm-lock-btn" onclick="hmAction('lock')" style="display:none;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#161b22;border:none;color:#e6edf3;font-size:.85rem;cursor:pointer;text-align:left">🔒 Lock Dashboard</button>
@@ -4375,6 +5020,7 @@ def _build_html():
     <div class="as-avatar" id="as-avatar" onclick="openAvatarPicker()" title="Click to change avatar">\u2729</div>
     <div class="avatar-picker-overlay" id="avatar-picker-overlay" onclick="closeAvatarPicker()"></div>
     <div class="avatar-picker" id="avatar-picker"><div class="avatar-picker-grid"></div></div>
+    <div id="as-crewface" style="margin:0 4px"></div>
     <div class="as-name-wrap">
       <span class="as-title" id="as-name" onclick="startRenameAgent()">Crew Boss</span>
       <div class="as-online" id="as-online"><span class="as-online-dot"></span>Online</div>
@@ -4407,9 +5053,13 @@ def _build_html():
     <!-- Settings panel — hidden by default, toggled via gear icon -->
     <div class="as-settings-panel" id="as-settings-panel">
       <div class="as-intro" id="as-intro"></div>
+      <div id="as-soul-section" style="margin-bottom:12px"></div>
+      <div id="as-thinking-section" style="margin-bottom:12px"></div>
       <div id="as-guard-section" style="display:none;margin-bottom:12px"></div>
       <div id="as-skills-section" style="margin-bottom:12px"></div>
+      <div id="as-heartbeat-section" style="margin-bottom:12px"></div>
       <div id="as-memory-section" style="margin-bottom:12px"></div>
+      <div id="as-learning-section" style="margin-bottom:12px"></div>
       <div class="activity-feed" id="as-activity"></div>
     </div>
   </div>
@@ -4482,6 +5132,18 @@ def _build_html():
     </div>
   </div>
   <div id="drafts-list"></div>
+</div></div>
+
+<!-- ══════════ OBSERVABILITY VIEW ══════════ -->
+<div id="view-observability" class="view" data-page="observability">
+<div class="legacy-container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h1 style="margin:0">Observability</h1>
+    <button onclick="loadTelemetryStats();loadTelemetrySpans()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85rem">Refresh</button>
+  </div>
+  <div id="otel-stats"></div>
+  <h3 style="color:#e6edf3;margin:20px 0 8px;font-size:.9rem">Recent Spans</h3>
+  <div id="otel-spans"></div>
 </div></div>
 
 <!-- ══════════ TEAM DASHBOARD VIEW (FIX 1) ══════════ -->
@@ -4752,7 +5414,8 @@ def _json_response(handler, data, status=200):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Origin", _cors_origin(handler))
+    _add_security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -4762,11 +5425,14 @@ def _html_response(handler, html, status=200):
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
     handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+    _add_security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
 
 def _read_json_body(handler):
     length = int(handler.headers.get("Content-Length", 0))
+    if length > _MAX_BODY_SIZE:
+        raise ValueError("request body too large")
     if length == 0:
         return {}
     return json.loads(handler.rfile.read(length))
@@ -5436,7 +6102,11 @@ def _create_team(db_path, template):
     return result
 
 def _check_for_updates():
-    """Check if a newer version is available on GitHub."""
+    """Check if a newer version is available on GitHub. Cached for 1 hour."""
+    now = _time.monotonic()
+    if _update_cache["result"] is not None and (now - _update_cache["checked_at"]) < _UPDATE_CACHE_TTL:
+        return _update_cache["result"]
+
     import subprocess
     repo_dir = Path(__file__).parent
     try:
@@ -5451,18 +6121,23 @@ def _check_for_updates():
         local_sha = local.stdout.strip()
         remote_sha = remote.stdout.strip()
         if not local_sha or not remote_sha:
-            return {"update_available": False, "error": "Could not read git state"}
-        if local_sha != remote_sha:
+            result = {"update_available": False, "error": "Could not read git state"}
+        elif local_sha != remote_sha:
             # Get count of new commits
             behind = subprocess.run(
                 ["git", "rev-list", "--count", f"{local_sha}..{remote_sha}"],
                 cwd=repo_dir, capture_output=True, text=True, timeout=5)
             count = int(behind.stdout.strip()) if behind.stdout.strip() else 0
-            return {"update_available": True, "commits_behind": count,
-                    "local": local_sha[:8], "remote": remote_sha[:8]}
-        return {"update_available": False}
+            result = {"update_available": True, "commits_behind": count,
+                      "local": local_sha[:8], "remote": remote_sha[:8]}
+        else:
+            result = {"update_available": False}
     except Exception as e:
-        return {"update_available": False, "error": str(e)}
+        result = {"update_available": False, "error": str(e)}
+
+    _update_cache["result"] = result
+    _update_cache["checked_at"] = now
+    return result
 
 def _apply_update():
     """Pull latest code from GitHub and signal restart."""
@@ -5741,15 +6416,27 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _cors_origin(self))
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        self.send_header("Access-Control-Max-Age", "86400")
+        _add_security_headers(self)
         self.end_headers()
 
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
+
+        # Rate limiting
+        client_ip = self.client_address[0]
+        is_auth = path.startswith("/api/auth/")
+        if path.startswith("/api/") and not _check_rate_limit(client_ip, is_auth):
+            return _json_response(self, {"error": "rate limit exceeded"}, 429)
+
+        # Auth check
+        if not _check_auth(self):
+            return
 
         # PWA assets
         if path == "/manifest.json":
@@ -5796,7 +6483,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             return self.wfile.write(PWA_ICON_512)
 
         # Pages — SPA serves same HTML for all routes
-        if path in ("/", "/messages", "/decisions", "/audit", "/drafts") or path.startswith("/team/"):
+        if path in ("/", "/messages", "/decisions", "/audit", "/drafts", "/observability") or path.startswith("/team/"):
             return _html_response(self, PAGE_HTML)
 
         if path == "/api/stats":
@@ -5808,6 +6495,18 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             agent = _get_agent_detail(self.db_path, int(m.group(1)))
             return _json_response(self, agent or {"error": "not found"}, 200 if agent else 404)
+
+        m = re.match(r"^/api/agent/(\d+)/heartbeat$", path)
+        if m:
+            tasks = bus.get_heartbeat_tasks(int(m.group(1)), db_path=self.db_path)
+            return _json_response(self, tasks)
+
+        m = re.match(r"^/api/agent/(\d+)/learnings$", path)
+        if m:
+            agent_id = int(m.group(1))
+            errors = bus.get_agent_memories(agent_id, memory_type="error", limit=20, db_path=self.db_path)
+            learnings = bus.get_agent_memories(agent_id, memory_type="learning", limit=20, db_path=self.db_path)
+            return _json_response(self, {"errors": errors, "learnings": learnings})
 
         m = re.match(r"^/api/agent/(\d+)/activity$", path)
         if m:
@@ -5881,6 +6580,69 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/update/check":
             return _json_response(self, _check_for_updates())
+
+        # ── Auth endpoints (GET) ──
+        if path == "/api/auth/mode":
+            mode = bus.get_config("gateway_auth_mode", "none", db_path=self.db_path)
+            return _json_response(self, {"mode": mode})
+
+        if path == "/api/auth/pairing-code":
+            code = bus.create_pairing_code(db_path=self.db_path)
+            return _json_response(self, {"ok": True, "code": code})
+
+        if path == "/api/devices":
+            devices = bus.get_paired_devices(db_path=self.db_path)
+            return _json_response(self, devices)
+
+        # ── Telemetry endpoints (GET) ──
+        if path == "/api/telemetry":
+            limit = int(qs.get("limit", ["100"])[0])
+            agent_id = qs.get("agent_id", [None])[0]
+            span_name = qs.get("span_name", [None])[0]
+            since_str = qs.get("since", [None])[0]
+            since_iso = None
+            if since_str:
+                # Parse "1h", "24h", "7d" style
+                try:
+                    if since_str.endswith("h"):
+                        hours = int(since_str[:-1])
+                        since_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    elif since_str.endswith("d"):
+                        days = int(since_str[:-1])
+                        since_iso = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    else:
+                        since_iso = since_str  # assume ISO format
+                except (ValueError, TypeError):
+                    pass
+            spans = bus.get_telemetry(
+                limit=limit,
+                agent_id=int(agent_id) if agent_id else None,
+                span_name=span_name,
+                since=since_iso,
+                db_path=self.db_path,
+            )
+            return _json_response(self, spans)
+
+        if path == "/api/telemetry/stats":
+            since_str = qs.get("since", ["24h"])[0]
+            since_iso = None
+            try:
+                if since_str.endswith("h"):
+                    hours = int(since_str[:-1])
+                    since_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                elif since_str.endswith("d"):
+                    days = int(since_str[:-1])
+                    since_iso = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except (ValueError, TypeError):
+                pass
+            return _json_response(self, bus.get_telemetry_stats(since=since_iso, db_path=self.db_path))
+
+        # ── CrewFace endpoints (GET) ──
+        m = re.match(r"^/api/agent/(\d+)/face$", path)
+        if m:
+            aid = int(m.group(1))
+            state = agent_worker.get_face_state(aid)
+            return _json_response(self, state)
 
         if path == "/api/guard/status":
             activated = bus.is_guard_activated(db_path=self.db_path)
@@ -6094,6 +6856,24 @@ class CrewBusHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
+
+        # Rate limiting
+        client_ip = self.client_address[0]
+        is_auth = path.startswith("/api/auth/")
+        if not _check_rate_limit(client_ip, is_auth):
+            return _json_response(self, {"error": "rate limit exceeded"}, 429)
+
+        # Auth check
+        if not _check_auth(self):
+            return
+
+        # CSRF protection: require X-Requested-With header for state-changing requests
+        # from non-localhost. Browsers won't add custom headers cross-origin without preflight.
+        if client_ip not in ("127.0.0.1", "::1") and not is_auth:
+            xrw = self.headers.get("X-Requested-With", "")
+            if not xrw:
+                return _json_response(self, {"error": "missing X-Requested-With header"}, 403)
+
         try:
             data = _read_json_body(self)
         except Exception as e:
@@ -6490,6 +7270,79 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/update/apply":
             return _json_response(self, _apply_update())
+
+        # ── Auth endpoints (POST) ──
+        if path == "/api/auth/pin":
+            pin = _sanitize_string(str(data.get("pin", "")))
+            stored_pin = bus.get_config("gateway_pin", "", db_path=self.db_path)
+            if not stored_pin:
+                return _json_response(self, {"error": "PIN not configured"}, 400)
+            if not hmac.compare_digest(pin, stored_pin):
+                try:
+                    with bus.db_write(self.db_path) as conn:
+                        conn.execute(
+                            "INSERT INTO audit_log (event_type, details) VALUES (?, ?)",
+                            ("security", json.dumps({"action": "pin_failed", "ip": self.client_address[0]})),
+                        )
+                except Exception:
+                    pass
+                return _json_response(self, {"error": "invalid PIN"}, 401)
+            # Create device for this client
+            import secrets as _sec
+            device_token = _sec.token_urlsafe(32)
+            device_name = data.get("device_name", f"PIN-auth-{self.client_address[0]}")
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "INSERT INTO paired_devices (device_name, device_token, role) VALUES (?, ?, ?)",
+                    (_sanitize_string(device_name, 100), device_token, "operator"),
+                )
+            return _json_response(self, {"ok": True, "device_token": device_token})
+
+        if path == "/api/auth/pair":
+            code = _sanitize_string(str(data.get("code", "")))
+            device_name = _sanitize_string(str(data.get("device_name", "Unknown Device")), 100)
+            if not code:
+                return _json_response(self, {"error": "code required"}, 400)
+            token = bus.claim_pairing_code(code, device_name, db_path=self.db_path)
+            if token:
+                return _json_response(self, {"ok": True, "device_token": token})
+            return _json_response(self, {"error": "invalid or expired pairing code"}, 401)
+
+        if path == "/api/auth/config":
+            mode = _sanitize_string(str(data.get("mode", "")))
+            if mode not in ("none", "token", "pin"):
+                return _json_response(self, {"error": "invalid mode"}, 400)
+            bus.set_config("gateway_auth_mode", mode, db_path=self.db_path)
+            if mode == "pin":
+                pin = _sanitize_string(str(data.get("pin", "")))
+                if pin and 4 <= len(pin) <= 6 and pin.isdigit():
+                    bus.set_config("gateway_pin", pin, db_path=self.db_path)
+            if mode != "none":
+                bus.init_gateway_auth(db_path=self.db_path)
+            return _json_response(self, {"ok": True, "mode": mode})
+
+        m = re.match(r"^/api/devices/(\d+)/revoke$", path)
+        if m:
+            device_id = int(m.group(1))
+            ok = bus.revoke_device(device_id, db_path=self.db_path)
+            return _json_response(self, {"ok": ok})
+
+        # ── CrewFace endpoints (POST) ──
+        m = re.match(r"^/api/agent/(\d+)/face$", path)
+        if m:
+            aid = int(m.group(1))
+            agent_worker.set_face_state(aid, data)
+            return _json_response(self, {"ok": True})
+
+        m = re.match(r"^/api/agent/(\d+)/face/mode$", path)
+        if m:
+            aid = int(m.group(1))
+            mode = _sanitize_string(str(data.get("mode", "emoji")))
+            if mode not in ("emoji", "robot"):
+                return _json_response(self, {"error": "mode must be 'emoji' or 'robot'"}, 400)
+            with bus.db_write(self.db_path) as conn:
+                conn.execute("UPDATE agents SET face_mode=? WHERE id=?", (mode, aid))
+            return _json_response(self, {"ok": True, "mode": mode})
 
         if path == "/api/teams":
             return _json_response(self, _create_team(self.db_path, data.get("template", "custom")), 201)
@@ -6894,6 +7747,58 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             return _json_response(self, {"ok": True, "id": agent_id, "avatar": new_avatar})
+
+        # ── Set agent soul (identity) ──
+
+        m = re.match(r"^/api/agent/(\d+)/soul$", path)
+        if m:
+            agent_id = int(m.group(1))
+            soul_text = data.get("soul", "").strip()
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET soul=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (soul_text, agent_id))
+            return _json_response(self, {"ok": True, "id": agent_id, "soul": soul_text})
+
+        # ── Set agent thinking level ──
+
+        m = re.match(r"^/api/agent/(\d+)/thinking$", path)
+        if m:
+            agent_id = int(m.group(1))
+            level = data.get("level", "auto").strip()
+            valid = ("auto", "off", "minimal", "standard", "deep", "ultra")
+            if level not in valid:
+                return _json_response(self, {"error": f"invalid level, must be one of: {', '.join(valid)}"}, 400)
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET thinking_level=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (level, agent_id))
+            return _json_response(self, {"ok": True, "id": agent_id, "thinking_level": level})
+
+        # ── Heartbeat task CRUD ──
+
+        m = re.match(r"^/api/agent/(\d+)/heartbeat$", path)
+        if m:
+            agent_id = int(m.group(1))
+            schedule = data.get("schedule", "every 30m").strip()
+            task_text = data.get("task", "").strip()
+            if not task_text:
+                return _json_response(self, {"error": "task is required"}, 400)
+            task_id = bus.create_heartbeat_task(agent_id, schedule, task_text, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "id": task_id})
+
+        m = re.match(r"^/api/heartbeat/(\d+)/toggle$", path)
+        if m:
+            task_id = int(m.group(1))
+            enabled = data.get("enabled", 1)
+            bus.update_heartbeat_task(task_id, enabled=int(enabled), db_path=self.db_path)
+            return _json_response(self, {"ok": True, "id": task_id, "enabled": int(enabled)})
+
+        m = re.match(r"^/api/heartbeat/(\d+)/delete$", path)
+        if m:
+            task_id = int(m.group(1))
+            bus.delete_heartbeat_task(task_id, db_path=self.db_path)
+            return _json_response(self, {"ok": True, "deleted": task_id})
 
         # ── Create agent ──
 
@@ -7536,7 +8441,7 @@ def _auto_load_hierarchy(db_path):
         bus.load_hierarchy(str(yamls[0]), db_path=db_path)
         print(f"Auto-loaded config: {yamls[0].name}")
 
-def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0"):
+def create_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1"):
     global _server_port
     _server_port = port
     if db_path is None:
@@ -7627,7 +8532,7 @@ def _ensure_ollama():
     _ollama_ready = True
     return True
 
-def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
+def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1",
                open_browser=True):
     server = create_server(port=port, db_path=db_path, config=config, host=host)
     actual_db = server.RequestHandlerClass.db_path
@@ -7640,6 +8545,21 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     print("  \u2728 crew-bus is running!")
     print(f"  \U0001f310 Dashboard: {url}")
     print(f"  \U0001f4c1 Database:  {actual_db}")
+
+    # Security warnings
+    if host == "0.0.0.0":
+        print("  \u26a0\ufe0f  WARNING: Bound to 0.0.0.0 — accessible from the network!")
+        auth_mode = bus.get_config("gateway_auth_mode", "none", db_path=actual_db)
+        if auth_mode == "none":
+            print("  \u26a0\ufe0f  WARNING: No gateway auth enabled. Set gateway_auth_mode to 'token' or 'pin'.")
+    # Check DB file permissions
+    try:
+        import stat
+        db_stat = os.stat(actual_db)
+        if db_stat.st_mode & stat.S_IROTH:
+            print("  \u26a0\ufe0f  WARNING: Database file is world-readable. Consider: chmod 600", actual_db)
+    except Exception:
+        pass
     print()
 
     # Log startup / recovery (helps track power outage restarts)
@@ -7744,13 +8664,23 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="crew-bus Personal Edition Dashboard")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Bind address (default: 127.0.0.1, use 0.0.0.0 for network access)")
     parser.add_argument("--db", type=str, default=None)
     parser.add_argument("--config", type=str, default=None,
                         help="Path to YAML config file (auto-detected from configs/ if omitted)")
     parser.add_argument("--no-browser", action="store_true",
                         help="Don't auto-open browser on startup")
+    parser.add_argument("--security-audit", action="store_true",
+                        help="Print security audit report and exit")
     args = parser.parse_args()
     db = Path(args.db) if args.db else None
+
+    if args.security_audit:
+        bus.init_db(db_path=db)
+        from security import print_security_audit
+        print_security_audit(db_path=db)
+        sys.exit(0)
+
     run_server(port=args.port, db_path=db, config=args.config, host=args.host,
                open_browser=not args.no_browser)

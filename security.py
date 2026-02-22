@@ -1120,3 +1120,121 @@ def compute_skill_hash(skill_config: str) -> str:
         # If it's not valid JSON, hash the raw string
         normalized = str(skill_config)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Security Audit Command
+# ---------------------------------------------------------------------------
+
+def run_security_audit(db_path: Optional[Path] = None) -> list:
+    """Run a security audit and return a checklist of issues.
+
+    Returns list of dicts with: {check, status, severity, detail}
+    status is "pass", "warn", or "fail"
+    """
+    import os
+    import stat
+
+    results = []
+    db = db_path or bus.DB_PATH
+
+    # 1. Check bind address
+    results.append({
+        "check": "Localhost binding",
+        "status": "info",
+        "severity": "critical",
+        "detail": "Verify server binds to 127.0.0.1 (default). Use --host 0.0.0.0 only when needed.",
+    })
+
+    # 2. Check gateway auth mode
+    mode = bus.get_config("gateway_auth_mode", "none", db_path=db)
+    if mode == "none":
+        results.append({
+            "check": "Gateway auth",
+            "status": "warn",
+            "severity": "high",
+            "detail": "Auth mode is 'none'. Enable 'token' or 'pin' for network access.",
+        })
+    else:
+        results.append({
+            "check": "Gateway auth",
+            "status": "pass",
+            "severity": "high",
+            "detail": f"Auth mode: {mode}",
+        })
+
+    # 3. Check DB file permissions
+    try:
+        db_stat = os.stat(db)
+        if db_stat.st_mode & stat.S_IROTH:
+            results.append({
+                "check": "Database permissions",
+                "status": "fail",
+                "severity": "medium",
+                "detail": f"Database is world-readable: {db}. Run: chmod 600 {db}",
+            })
+        else:
+            results.append({
+                "check": "Database permissions",
+                "status": "pass",
+                "severity": "medium",
+                "detail": "Database has restrictive permissions.",
+            })
+    except Exception:
+        results.append({
+            "check": "Database permissions",
+            "status": "warn",
+            "severity": "medium",
+            "detail": "Could not check database permissions.",
+        })
+
+    # 4. Check for plaintext API keys
+    sensitive_keys = ["kimi_api_key", "claude_api_key", "openai_api_key",
+                      "groq_api_key", "gemini_api_key", "xai_api_key"]
+    plaintext_found = []
+    for key in sensitive_keys:
+        val = bus.get_config(key, "", db_path=db)
+        if val and not val.startswith("ENC:"):
+            plaintext_found.append(key)
+    if plaintext_found:
+        results.append({
+            "check": "API key encryption",
+            "status": "warn",
+            "severity": "medium",
+            "detail": f"Plaintext API keys found: {', '.join(plaintext_found)}. "
+                       "Use set_config_secure() to encrypt at rest.",
+        })
+    else:
+        results.append({
+            "check": "API key encryption",
+            "status": "pass",
+            "severity": "medium",
+            "detail": "No plaintext API keys detected.",
+        })
+
+    # 5. Check paired devices
+    devices = bus.get_paired_devices(db_path=db)
+    results.append({
+        "check": "Paired devices",
+        "status": "info",
+        "severity": "low",
+        "detail": f"{len(devices)} active paired device(s).",
+    })
+
+    return results
+
+
+def print_security_audit(db_path: Optional[Path] = None):
+    """Print a formatted security audit to stdout."""
+    results = run_security_audit(db_path)
+    print("\n  Security Audit Report")
+    print("  " + "=" * 50)
+    for r in results:
+        icon = {"pass": "\u2705", "warn": "\u26a0\ufe0f ", "fail": "\u274c", "info": "\u2139\ufe0f "}.get(r["status"], "?")
+        print(f"  {icon} [{r['severity'].upper():>8}] {r['check']}")
+        print(f"     {r['detail']}")
+    print("  " + "=" * 50)
+    fails = sum(1 for r in results if r["status"] == "fail")
+    warns = sum(1 for r in results if r["status"] == "warn")
+    print(f"  Summary: {fails} fail(s), {warns} warning(s)")
+    print()

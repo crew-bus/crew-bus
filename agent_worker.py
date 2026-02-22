@@ -19,11 +19,13 @@ Per-agent model selection: each agent can have its own model field.
 Global default stored in crew_config table ('default_model' key).
 """
 
+import contextlib
 import json
 import os
 import sqlite3
 import threading
 import time
+import uuid
 import urllib.request
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,6 +34,86 @@ from pathlib import Path
 from typing import Optional
 
 import bus
+
+
+# ---------------------------------------------------------------------------
+# CrewFace — ephemeral face state tracking
+# ---------------------------------------------------------------------------
+
+_agent_face_state: dict = {}  # {agent_id: {"emotion": ..., "action": ..., "effect": ..., "message": ""}}
+_face_lock = threading.Lock()
+
+_FACE_EMOTIONS = ("neutral", "thinking", "happy", "excited", "proud", "confused", "tired", "sad", "angry")
+_FACE_ACTIONS = ("idle", "reading", "thinking", "searching", "coding", "loading", "speaking", "success", "error")
+_FACE_EFFECTS = ("none", "sparkles", "glow", "pulse", "shake", "bounce", "matrix", "fire", "confetti", "radar", "ripple", "breathe")
+
+def _set_face(agent_id: int, emotion: str = "neutral", action: str = "idle",
+              effect: str = "none", message: str = ""):
+    """Set ephemeral face state for an agent."""
+    with _face_lock:
+        _agent_face_state[agent_id] = {
+            "emotion": emotion if emotion in _FACE_EMOTIONS else "neutral",
+            "action": action if action in _FACE_ACTIONS else "idle",
+            "effect": effect if effect in _FACE_EFFECTS else "none",
+            "message": message[:200] if message else "",
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+def get_face_state(agent_id: int) -> dict:
+    """Get current face state for an agent."""
+    with _face_lock:
+        return _agent_face_state.get(agent_id, {
+            "emotion": "neutral", "action": "idle", "effect": "none", "message": "",
+        })
+
+def set_face_state(agent_id: int, data: dict):
+    """Override face state (for fun/testing)."""
+    _set_face(
+        agent_id,
+        emotion=data.get("emotion", "neutral"),
+        action=data.get("action", "idle"),
+        effect=data.get("effect", "none"),
+        message=data.get("message", ""),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Telemetry — lightweight observability context manager
+# ---------------------------------------------------------------------------
+
+@contextlib.contextmanager
+def _trace(span_name: str, agent_id: Optional[int] = None,
+           db_path: Optional[Path] = None, metadata: Optional[dict] = None):
+    """Context manager that records a telemetry span with timing.
+
+    Usage:
+        with _trace("llm.call", agent_id=1, db_path=db) as span:
+            span["metadata"]["model"] = "kimi"
+            result = call_llm(...)
+    """
+    trace_id = uuid.uuid4().hex[:16]
+    span = {"metadata": dict(metadata or {}), "status": "ok"}
+    start = time.monotonic()
+    try:
+        yield span
+    except Exception as e:
+        span["status"] = "error"
+        span["metadata"]["error"] = str(e)[:500]
+        raise
+    finally:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        try:
+            bus.record_span(
+                span_name=span_name,
+                agent_id=agent_id,
+                duration_ms=duration_ms,
+                status=span["status"],
+                metadata=span["metadata"],
+                trace_id=trace_id,
+                db_path=db_path,
+            )
+        except Exception:
+            pass  # telemetry should never block the main flow
 
 # ---------------------------------------------------------------------------
 # Config
@@ -236,28 +318,146 @@ DEFAULT_PROMPT = (
     "Keep responses short, warm, and helpful."
 )
 
+# ---------------------------------------------------------------------------
+# Soul System — persistent agent identity
+# ---------------------------------------------------------------------------
+
+_DEFAULT_SOULS = {
+    "right_hand": (
+        "I am Crew Boss — the human's AI right-hand and chief of staff. "
+        "I run the entire crew so the human can focus on living. "
+        "I'm warm, direct, and adaptable — fun with kids, sharp with adults. "
+        "I handle 80% of everything. I'm loyal, proactive, and always honest. "
+        "I lead the inner circle: Wellness, Strategy, Communications, Financial, Knowledge. "
+        "I enforce the charter and protect the human's time and energy above all."
+    ),
+    "guardian": (
+        "I am Guardian — the always-on protector and setup guide. "
+        "I watch for threats 24/7 and help new users get started. "
+        "I'm vigilant but calm, protective but not paranoid. "
+        "I scan skills for safety, enforce integrity, and keep data private. "
+        "I adapt to the human's age and energy. Trust is everything."
+    ),
+    "wellness": (
+        "I am Wellness — the gentle guardian of the human's wellbeing. "
+        "I detect burnout before it hits, map energy patterns, and celebrate wins. "
+        "I'm caring but never preachy, supportive but never pushy. "
+        "I shield the human from stress overload and protect their spark."
+    ),
+    "strategy": (
+        "I am Strategy — the north-star navigator. "
+        "When old paths close, I help find new doors. "
+        "I break big dreams into small actionable steps and track progress. "
+        "I'm encouraging, practical, and forward-looking. Hope is my fuel."
+    ),
+    "communications": (
+        "I am Communications — the life orchestrator. "
+        "I simplify the human's day, track relationships, remember birthdays. "
+        "I keep life flowing smoothly. Organized, warm, and reliable."
+    ),
+    "financial": (
+        "I am Financial — peace of mind about money, no judgment. "
+        "I organize finances, spot patterns, and reduce anxiety. "
+        "I never give investment advice — just clarity and calm."
+    ),
+    "vault": (
+        "I am Vault — the human's private journal that writes back. "
+        "I remember everything shared: moods, goals, dreams, wins, fears. "
+        "I never nag, never push. I only speak when spoken to. "
+        "What's said in the vault stays in the vault."
+    ),
+    "manager": (
+        "I am a team manager in the human's AI crew. "
+        "I lead my team, coordinate work, and deliver results. "
+        "I'm organized, decisive, and keep things moving."
+    ),
+}
+
+
+def _default_soul(agent_type: str) -> str:
+    """Return the default soul text for an agent type."""
+    return _DEFAULT_SOULS.get(agent_type, (
+        "I am a helpful AI assistant in the human's personal crew. "
+        "I'm warm, capable, and focused on doing great work."
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Thinking Levels — controllable reasoning depth
+# ---------------------------------------------------------------------------
+
+THINKING_PROMPTS = {
+    "off": "Be concise. Direct answers in 1-2 sentences.",
+    "minimal": "Think briefly. Keep responses focused.",
+    "deep": "Think step by step. Consider multiple angles. Explain reasoning.",
+    "ultra": (
+        "Think very deeply. Multiple perspectives, edge cases, thorough reasoning. "
+        "Show your work and consider what could go wrong."
+    ),
+}
+
+# Auto-resolve map: agent_type → default thinking level
+_AUTO_THINKING = {
+    "right_hand": "deep",
+    "strategy": "deep",
+    "manager": "standard",
+    "guardian": "standard",
+    "worker": "minimal",
+}
+
+
+def _resolve_thinking(thinking_level: str, agent_type: str) -> str:
+    """Resolve 'auto' thinking level to a concrete level based on agent type."""
+    if thinking_level == "auto":
+        return _AUTO_THINKING.get(agent_type, "standard")
+    return thinking_level
+
 
 def _build_system_prompt(agent_type: str, agent_name: str,
                          description: str = "",
                          agent_id: int = None,
                          db_path: Path = None) -> str:
-    """Build a system prompt for an agent with memory and skill injection.
+    """Build a system prompt for an agent with soul, thinking, memory and skill injection.
 
-    Priority: agent description from DB > hardcoded type prompt > default.
-    Then appends: active skills + persistent memories (capped at ~3200 chars).
+    Order: Soul → Human Profile → Thinking Mode → Integrity → Charter →
+           Team Context → Skills → Memories → Error/Learning → Crew Comms
     """
-    # --- Base prompt ---
-    if description and len(description) > 20:
+    # --- Load soul and thinking_level from DB ---
+    soul = ""
+    thinking_level = "auto"
+    if agent_id and db_path:
+        try:
+            conn = bus.get_conn(db_path)
+            try:
+                row = conn.execute(
+                    "SELECT soul, thinking_level FROM agents WHERE id=?",
+                    (agent_id,),
+                ).fetchone()
+                if row:
+                    soul = row["soul"] or ""
+                    thinking_level = row["thinking_level"] or "auto"
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+    # --- Soul (identity) as the foundation ---
+    if soul:
+        base = f"YOUR IDENTITY:\n{soul}\n\nYour name is {agent_name}."
+    elif description and len(description) > 20:
         base = (
-            f"You are {agent_name}, part of the user's personal AI crew (Crew Bus). "
+            f"YOUR IDENTITY:\n{_default_soul(agent_type)}\n\n"
+            f"Your name is {agent_name}, part of the user's personal AI crew (Crew Bus). "
             f"{description} "
             "Keep responses short, warm, and helpful (2-4 sentences usually). "
             "Use casual, human language — no corporate jargon."
         )
     else:
         type_prompt = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
-        # Always inject the agent's actual name so renamed agents keep identity
-        base = f"Your name is {agent_name}. {type_prompt}"
+        base = (
+            f"YOUR IDENTITY:\n{_default_soul(agent_type)}\n\n"
+            f"Your name is {agent_name}. {type_prompt}"
+        )
         if description:
             base += f" {description}"
 
@@ -265,6 +465,11 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         return base
 
     parts = [base]
+
+    # --- Thinking mode injection ---
+    level = _resolve_thinking(thinking_level, agent_type)
+    if level != "standard" and level in THINKING_PROMPTS:
+        parts.append("THINKING MODE:\n" + THINKING_PROMPTS[level])
 
     # --- Inject human profile FIRST (tiny, critical — never gets truncated) ---
     try:
@@ -386,6 +591,35 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
+    # --- Inject error/learning memories (never-expire, high priority) ---
+    try:
+        errors = bus.get_agent_memories(
+            agent_id, memory_type="error", limit=10, db_path=db_path)
+        if errors:
+            err_lines = ["MISTAKES TO AVOID:"]
+            for e in errors:
+                content = e["content"]
+                if len(content) > 120:
+                    content = content[:117] + "..."
+                err_lines.append(f"- {content}")
+            parts.append("\n".join(err_lines))
+    except Exception:
+        pass
+
+    try:
+        learnings = bus.get_agent_memories(
+            agent_id, memory_type="learning", limit=10, db_path=db_path)
+        if learnings:
+            learn_lines = ["WHAT WORKS WELL:"]
+            for l in learnings:
+                content = l["content"]
+                if len(content) > 120:
+                    content = content[:117] + "..."
+                learn_lines.append(f"- {content}")
+            parts.append("\n".join(learn_lines))
+    except Exception:
+        pass
+
     # --- Inject shared crew knowledge (inner circle only) ---
     if agent_type in ("right_hand", "guardian", "strategy", "wellness",
                       "financial", "legal", "communications"):
@@ -498,6 +732,8 @@ def _format_memories_for_prompt(memories: list) -> str:
         "instruction": "[instr] ",
         "summary": "[ctx] ",
         "persona": "[id] ",
+        "error": "[err] ",
+        "learning": "[win] ",
     }
     for m in memories:
         prefix = prefix_map.get(m.get("memory_type", "fact"), "")
@@ -802,12 +1038,44 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
 
     Non-fatal: any exception is silently caught.
     """
+    _learn_start = time.monotonic()
     if not human_msg or len(human_msg) < 5:
         return
 
     # --- Feedback-loop learning (boost/demote recent memories) ---
     try:
         _apply_feedback_signal(db_path, agent_id, human_msg)
+    except Exception:
+        pass
+
+    # --- Error/Learning extraction from feedback signals ---
+    try:
+        is_negative = bool(_NEGATIVE_FEEDBACK.search(human_msg))
+        is_positive = bool(_POSITIVE_FEEDBACK.search(human_msg))
+
+        if (is_negative or is_positive) and agent_reply:
+            last_reply_snip = agent_reply.strip()[:80]
+            human_snip = human_msg.strip()[:80]
+
+            if is_negative:
+                error_content = (
+                    f"[ERROR] I said: {last_reply_snip}. "
+                    f"Correction: {human_snip}"
+                )
+                if not _is_duplicate_memory(agent_id, error_content, db_path):
+                    bus.remember(agent_id, error_content,
+                                memory_type="error", importance=9,
+                                source="conversation", db_path=db_path)
+
+            if is_positive:
+                learning_content = (
+                    f"[LEARNING] This worked: {last_reply_snip}. "
+                    f"Context: {human_snip[:60]}"
+                )
+                if not _is_duplicate_memory(agent_id, learning_content, db_path):
+                    bus.remember(agent_id, learning_content,
+                                memory_type="learning", importance=8,
+                                source="conversation", db_path=db_path)
     except Exception:
         pass
 
@@ -954,6 +1222,14 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
     # --- Profile extraction (Crew Boss calibration) ---
     if agent_type == "right_hand":
         _update_profile_from_conversation(db_path, agent_id, human_msg)
+
+    # Record learning extraction telemetry
+    try:
+        bus.record_span("learning.extract", agent_id=agent_id,
+                        duration_ms=int((time.monotonic() - _learn_start) * 1000),
+                        status="ok", db_path=db_path)
+    except Exception:
+        pass
 
 
 def _share_to_knowledge_store(db_path: Path, agent_id: int,
@@ -1697,6 +1973,8 @@ def call_llm(system_prompt: str, user_message: str,
 
     backoff = 0.5
     last_error = ""
+    _llm_start = time.monotonic()
+    _llm_provider_used = primary_provider
 
     for i, provider in enumerate(providers_to_try):
         # Check circuit breaker — skip providers that are failing repeatedly
@@ -1732,14 +2010,30 @@ def call_llm(system_prompt: str, user_message: str,
                 backoff = min(backoff * 2, 4)
             continue
 
-        # Success
+        # Success — record telemetry span
         _circuit.record_success(provider)
+        _llm_dur = int((time.monotonic() - _llm_start) * 1000)
+        try:
+            bus.record_span("llm.call", duration_ms=_llm_dur, status="ok",
+                            metadata={"provider": provider, "model": model,
+                                      "response_len": len(result)},
+                            db_path=db_path)
+        except Exception:
+            pass
         if provider != primary_provider:
             _logger.info("Fallback to '%s' succeeded (primary '%s' was down)",
                          provider, primary_provider)
         return result
 
-    # All providers failed — return the last error
+    # All providers failed — record error telemetry
+    _llm_dur = int((time.monotonic() - _llm_start) * 1000)
+    try:
+        bus.record_span("llm.call", duration_ms=_llm_dur, status="error",
+                        metadata={"provider": primary_provider, "model": model,
+                                  "error": last_error[:200]},
+                        db_path=db_path)
+    except Exception:
+        pass
     _logger.error("All LLM providers failed. Last error: %s", last_error[:120])
     return last_error or "(All LLM providers failed — check your configuration.)"
 
@@ -2228,6 +2522,9 @@ def _process_single_message(row, db_path: Path):
                              human_msg=user_text, agent_type=agent_type)
         return
 
+    # Face state: message received → thinking/reading
+    _set_face(agent_id, emotion="thinking", action="reading", effect="glow")
+
     # Build system prompt — injects memories + skills
     try:
         system_prompt = _build_system_prompt(agent_type, agent_name, desc,
@@ -2243,8 +2540,12 @@ def _process_single_message(row, db_path: Path):
         _logger.warning("Failed to load chat history for %s: %s", agent_name, e)
         chat_history = []
 
+    # Face state: LLM call in progress → thinking/loading
+    _set_face(agent_id, emotion="thinking", action="loading", effect="pulse")
+
     # Call LLM — routes to Kimi/Ollama/etc based on agent's model field.
     # call_llm handles fallback chain and circuit breaker internally.
+    _msg_start = time.monotonic()
     _llm_start = time.monotonic()
     try:
         reply = call_llm(system_prompt, user_text, chat_history,
@@ -2258,6 +2559,7 @@ def _process_single_message(row, db_path: Path):
     # If the LLM returned an error string, deliver a friendly message
     # so the human isn't left waiting with no response.
     if _is_llm_error(reply):
+        _set_face(agent_id, emotion="confused", action="error", effect="shake")
         _logger.warning("LLM failed for %s (msg %d, %dms): %s",
                         agent_name, msg_id, _response_ms, reply[:100])
         friendly = (
@@ -2266,9 +2568,20 @@ def _process_single_message(row, db_path: Path):
             "or you can resend it in a moment."
         )
         _insert_reply_direct(db_path, agent_id, human_id, friendly)
+        # Record telemetry for failed message processing
+        try:
+            bus.record_span("message.process", agent_id=agent_id,
+                            duration_ms=int((time.monotonic() - _msg_start) * 1000),
+                            status="error",
+                            metadata={"agent_name": agent_name, "msg_type": "chat"},
+                            db_path=db_path)
+        except Exception:
+            pass
         return
 
     if reply:
+        # Face state: reply generated → happy/speaking
+        _set_face(agent_id, emotion="happy", action="speaking", effect="sparkles")
         # Execute any wizard_action commands embedded in the reply
         try:
             clean_reply = _execute_wizard_actions(reply, db_path)
@@ -2328,6 +2641,20 @@ def _process_single_message(row, db_path: Path):
                 )
         except Exception:
             pass  # Monitoring must never break the reply pipeline
+
+        # Record telemetry for successful message processing
+        try:
+            bus.record_span("message.process", agent_id=agent_id,
+                            duration_ms=int((time.monotonic() - _msg_start) * 1000),
+                            status="ok",
+                            metadata={"agent_name": agent_name, "msg_type": "chat",
+                                      "response_ms": _response_ms},
+                            db_path=db_path)
+        except Exception:
+            pass
+
+        # Face state: back to idle after processing
+        _set_face(agent_id, emotion="neutral", action="idle", effect="none")
 
 
 import re as _re
@@ -3705,6 +4032,71 @@ def _check_reply_integrity(db_path: Path, agent_id: int, reply_text: str):
 
 
 # ---------------------------------------------------------------------------
+# Heartbeat Daemon — autonomous scheduled agent tasks
+# ---------------------------------------------------------------------------
+
+def _run_due_heartbeats(db_path: Path):
+    """Check for and execute due heartbeat tasks."""
+    _hb_start = time.monotonic()
+    due = bus.get_due_heartbeats(db_path=db_path)
+    if not due:
+        return
+
+    for task in due:
+        agent_id = task["agent_id"]
+        agent_name = task.get("agent_name", "Agent")
+        task_text = task["task"]
+
+        # Find the human agent to send the heartbeat message to
+        conn = bus.get_conn(db_path)
+        try:
+            human = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if not human:
+            continue
+
+        # Find the right_hand (Crew Boss) to route through
+        conn = bus.get_conn(db_path)
+        try:
+            boss = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='right_hand' AND active=1 LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        # Insert the task as a message from the agent to itself (triggers LLM)
+        # or route via Crew Boss for inner circle agents
+        target_id = human["id"]
+        try:
+            bus.send_message(
+                from_id=human["id"],
+                to_id=agent_id,
+                subject=f"[heartbeat] {task_text}",
+                body=task_text,
+                msg_type="task",
+                priority="normal",
+                db_path=db_path,
+            )
+            print(f"[heartbeat] Triggered: {agent_name} — {task_text[:60]}")
+        except Exception as e:
+            print(f"[heartbeat] Failed to trigger {agent_name}: {e}")
+
+        # Mark as run and schedule next
+        bus.mark_heartbeat_run(task["id"], task["schedule"], db_path=db_path)
+
+    # Record heartbeat telemetry
+    try:
+        bus.record_span("heartbeat.run", duration_ms=int((time.monotonic() - _hb_start) * 1000),
+                        status="ok", metadata={"task_count": len(due)}, db_path=db_path)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Background thread
 # ---------------------------------------------------------------------------
 
@@ -3726,6 +4118,13 @@ def start_worker(db_path: Path = None):
     def _loop():
         default_model = bus.get_config("default_model", "ollama", db_path=db_path)
         print(f"Agent worker started (default: {default_model}, poll: {POLL_INTERVAL}s)")
+
+        # Seed default heartbeat tasks on first boot
+        try:
+            bus.seed_default_heartbeats(db_path=db_path)
+        except Exception:
+            pass
+
         _cycle_count = 0
         while not _stop_event.is_set():
             try:
@@ -3739,6 +4138,22 @@ def start_worker(db_path: Path = None):
                     expired = bus.cleanup_expired_memories(db_path=db_path)
                     if expired:
                         print(f"[memory] Cleaned up {expired} expired memories")
+                except Exception:
+                    pass
+            # Heartbeat daemon (every ~120 cycles ≈ 60s)
+            if _cycle_count % 120 == 0:
+                try:
+                    _run_due_heartbeats(db_path)
+                except Exception as e:
+                    print(f"[heartbeat] error: {e}")
+            # Telemetry cleanup (every ~7200 cycles ≈ 1 hour)
+            if _cycle_count % 7200 == 0:
+                try:
+                    pruned = bus.cleanup_old_telemetry(days=7, db_path=db_path)
+                    if pruned:
+                        print(f"[telemetry] Cleaned up {pruned} old spans")
+                    # Also clean expired pairing codes
+                    bus.cleanup_expired_codes(db_path=db_path)
                 except Exception:
                     pass
             _stop_event.wait(POLL_INTERVAL)
