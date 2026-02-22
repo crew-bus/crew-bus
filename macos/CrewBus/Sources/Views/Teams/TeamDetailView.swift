@@ -52,30 +52,15 @@ struct TeamDetailView: View {
             // Header bar
             teamHeader
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Hierarchy
-                    hierarchySection
-
-                    // Team Meeting button
-                    Button { startTeamMeeting() } label: {
-                        Label("Team Meeting", systemImage: "person.2.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 12)
-                            .background(CrewTheme.accent)
-                            .clipShape(Capsule())
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Hierarchy (includes mailbox + linked teams at bottom)
+                        hierarchySection
                     }
-                    .buttonStyle(.plain)
-
-                    // Mailbox
-                    mailboxSection
-
-                    // Linked Teams
-                    linkedTeamsSection
+                    .padding(24)
+                    .frame(minHeight: geo.size.height)
                 }
-                .padding(24)
             }
         }
         .background(CrewTheme.bg)
@@ -154,6 +139,22 @@ struct TeamDetailView: View {
 
             Spacer()
 
+            // Hire Agent
+            Button { showHireSheet = true } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Hire Agent")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(CrewTheme.green)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
             // Pause Team
             Button { showPauseConfirm = true } label: {
                 if isPausing {
@@ -202,6 +203,8 @@ struct TeamDetailView: View {
 
     private var hierarchySection: some View {
         VStack(spacing: 0) {
+            Spacer().frame(height: 20)
+
             // Manager node
             if let mgr = managerAgent {
                 Button {
@@ -249,27 +252,70 @@ struct TeamDetailView: View {
                     }
                 }
 
-                // Hire Agent button
-                Button { showHireSheet = true } label: {
-                    VStack(spacing: 8) {
-                        Circle()
-                            .stroke(CrewTheme.border, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Image(systemName: "plus")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(CrewTheme.muted)
-                            )
-                        Text("Hire Agent")
-                            .font(.system(size: 11))
-                            .foregroundStyle(CrewTheme.muted)
+            }
+
+            Spacer(minLength: 16)
+
+            // Bottom bar: mailbox icon left, link icon right
+            HStack {
+                // Mailbox icon
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mailboxExpanded.toggle()
+                        if mailboxExpanded { linkedTeamsExpanded = false }
                     }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("📬")
+                            .font(.system(size: 16))
+                        Text("\(mailboxMessages.count)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(mailboxMessages.isEmpty ? CrewTheme.muted : .white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(mailboxMessages.isEmpty ? CrewTheme.muted.opacity(0.3) : CrewTheme.accent)
+                            .clipShape(Capsule())
+                    }
+                    .padding(8)
+                    .background(mailboxExpanded ? CrewTheme.accent.opacity(0.15) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
+                .help("Mailbox")
+
+                Spacer()
+
+                // Linked Teams icon
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        linkedTeamsExpanded.toggle()
+                        if linkedTeamsExpanded { mailboxExpanded = false }
+                    }
+                } label: {
+                    Text("🔗")
+                        .font(.system(size: 16))
+                        .padding(8)
+                        .background(linkedTeamsExpanded ? CrewTheme.accent.opacity(0.15) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .help("Linked Teams")
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 4)
+
+            // Expanded content area
+            if mailboxExpanded {
+                Divider().background(CrewTheme.border)
+                mailboxContent
+            }
+
+            if linkedTeamsExpanded {
+                Divider().background(CrewTheme.border)
+                linkedTeamsContent
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(CrewTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(CrewTheme.border, lineWidth: 1))
@@ -333,23 +379,18 @@ struct TeamDetailView: View {
 
     // MARK: - Mailbox
 
-    private var mailboxSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text("📬")
-                Text("Mailbox")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(CrewTheme.text)
-            }
+    @State private var mailboxExpanded = false
 
+    private var mailboxContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
             if isLoadingMailbox {
                 ProgressView()
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             } else if mailboxMessages.isEmpty {
-                Text("No messages yet. Your agents will post updates here as they work.")
-                    .font(.system(size: 13))
+                Text("No messages yet. Agents will post updates here.")
+                    .font(.system(size: 12))
                     .foregroundStyle(CrewTheme.muted)
             } else {
                 ForEach(mailboxMessages) { msg in
@@ -377,7 +418,7 @@ struct TeamDetailView: View {
                                 .lineLimit(3)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
 
                     if msg.id != mailboxMessages.last?.id {
                         Divider().background(CrewTheme.border)
@@ -385,30 +426,21 @@ struct TeamDetailView: View {
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(CrewTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(CrewTheme.border, lineWidth: 1))
+        .padding(12)
     }
 
     // MARK: - Linked Teams
 
-    private var linkedTeamsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text("🔗")
-                Text("Linked Teams")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(CrewTheme.text)
-            }
+    @State private var linkedTeamsExpanded = false
+
+    private var linkedTeamsContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text("No linked teams yet.")
-                .font(.system(size: 13))
+                .font(.system(size: 12))
                 .foregroundStyle(CrewTheme.muted)
 
             if !appState.teams.isEmpty {
                 HStack(spacing: 8) {
-                    // Team picker
                     Menu {
                         ForEach(appState.teams.filter { $0.id != team.id }) { t in
                             Button(t.name) {}
@@ -416,15 +448,15 @@ struct TeamDetailView: View {
                     } label: {
                         HStack {
                             Text("Select team...")
-                                .font(.system(size: 13))
+                                .font(.system(size: 12))
                                 .foregroundStyle(CrewTheme.text)
                             Spacer()
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 11))
+                                .font(.system(size: 10))
                                 .foregroundStyle(CrewTheme.muted)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                         .background(CrewTheme.bg)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(CrewTheme.border, lineWidth: 1))
@@ -432,10 +464,10 @@ struct TeamDetailView: View {
 
                     Button {} label: {
                         Label("Link", systemImage: "link")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                             .background(CrewTheme.accent)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
@@ -443,11 +475,7 @@ struct TeamDetailView: View {
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(CrewTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(CrewTheme.border, lineWidth: 1))
+        .padding(12)
     }
 }
 
