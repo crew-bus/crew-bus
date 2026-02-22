@@ -1321,7 +1321,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .as-online-dot{width:7px;height:7px;border-radius:50%;background:#00b894;
   display:inline-block;animation:dotPulse 1.5s ease-in-out infinite}
 @keyframes dotPulse{0%,100%{opacity:1}50%{opacity:.4}}
-.edit-icon{display:none}
+.edit-icon{display:none;cursor:pointer}
+.team-mgr-label:hover .edit-icon,.team-worker-label:hover .edit-icon,.team-dash-title:hover .edit-icon{display:inline}
 .as-dot{display:none}
 .as-topbar-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
 .as-settings-btn{
