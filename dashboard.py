@@ -2002,7 +2002,7 @@ let currentAgentSpaceType=null;
 let _defaultModel='';
 
 // ── Helpers ──
-function esc(s){return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function esc(s){return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function priBadge(p){return '<span class="pri-'+p+'">'+esc(p)+'</span>'}
 function statusBadge(s){return '<span class="badge badge-'+s+'">'+esc(s)+'</span>'}
 
@@ -6512,10 +6512,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
 
-        # Rate limiting
+        # Rate limiting (skip for localhost — it's a local-only app)
         client_ip = self.client_address[0]
         is_auth = path.startswith("/api/auth/")
-        if path.startswith("/api/") and not _check_rate_limit(client_ip, is_auth):
+        if client_ip not in ("127.0.0.1", "::1") and path.startswith("/api/") and not _check_rate_limit(client_ip, is_auth):
             return _json_response(self, {"error": "rate limit exceeded"}, 429)
 
         # Auth check
@@ -6941,10 +6941,10 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
 
-        # Rate limiting
+        # Rate limiting (skip for localhost — it's a local-only app)
         client_ip = self.client_address[0]
         is_auth = path.startswith("/api/auth/")
-        if not _check_rate_limit(client_ip, is_auth):
+        if client_ip not in ("127.0.0.1", "::1") and not _check_rate_limit(client_ip, is_auth):
             return _json_response(self, {"error": "rate limit exceeded"}, 429)
 
         # Auth check
