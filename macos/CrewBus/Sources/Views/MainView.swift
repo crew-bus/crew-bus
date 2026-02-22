@@ -24,6 +24,8 @@ struct MainView: View {
             ZStack {
                 CrewTheme.bg.ignoresSafeArea()
 
+                ParticlesView()
+
                 switch appState.navDestination {
                 case .dashboard:
                     DashboardView()

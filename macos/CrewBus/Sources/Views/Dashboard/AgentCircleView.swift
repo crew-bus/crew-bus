@@ -18,14 +18,8 @@ struct AgentCircleView: View {
             onTap?()
         } label: {
             VStack(spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    // Outer glow ring (breathing)
-                    Circle()
-                        .stroke(glowColor.opacity(breathe ? 0.6 : 0.25), lineWidth: 2.5)
-                        .frame(width: size + 16, height: size + 16)
-                        .shadow(color: glowColor.opacity(breathe ? 0.5 : 0.2), radius: breathe ? 16 : 8)
-
-                    // Main circle
+                ZStack {
+                    // Main circle with breathing glow
                     Circle()
                         .fill(CrewTheme.surface)
                         .frame(width: size, height: size)
@@ -37,13 +31,14 @@ struct AgentCircleView: View {
                                 .font(.system(size: size * 0.32))
                                 .foregroundStyle(glowColor)
                         )
+                        .shadow(color: glowColor.opacity(breathe ? 0.6 : 0.15), radius: breathe ? 20 : 8)
 
-                    // Green status dot
+                    // Green status dot — top trailing
                     Circle()
                         .fill(agent.status == "active" ? CrewTheme.green : CrewTheme.muted)
                         .frame(width: 12, height: 12)
                         .overlay(Circle().stroke(CrewTheme.bg, lineWidth: 2))
-                        .offset(x: 2, y: -2)
+                        .offset(x: (size + 16) / 2 - 6, y: -(size + 16) / 2 + 6)
                 }
                 .frame(width: size + 16, height: size + 16)
 

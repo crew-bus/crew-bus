@@ -1,16 +1,17 @@
 import SwiftUI
+import AppKit
 
 enum CrewTheme {
     // Backgrounds
-    static let bg      = Color(hex: "#0d1117")
-    static let surface = Color(hex: "#161b22")
-    static let border  = Color(hex: "#30363d")
+    static let bg      = Color.adaptive(light: "#f6f8fa", dark: "#0d1117")
+    static let surface = Color.adaptive(light: "#ffffff", dark: "#161b22")
+    static let border  = Color.adaptive(light: "#d0d7de", dark: "#30363d")
 
     // Text
-    static let text    = Color(hex: "#e6edf3")
-    static let muted   = Color(hex: "#8b949e")
+    static let text    = Color.adaptive(light: "#1f2328", dark: "#e6edf3")
+    static let muted   = Color.adaptive(light: "#656d76", dark: "#8b949e")
 
-    // Accents
+    // Accents (same in both modes)
     static let accent    = Color(hex: "#58a6ff")
     static let highlight = Color(hex: "#e94560")
     static let green     = Color(hex: "#3fb950")
@@ -27,5 +28,13 @@ extension Color {
         let g = Double((int >> 8)  & 0xFF) / 255.0
         let b = Double( int        & 0xFF) / 255.0
         self.init(red: r, green: g, blue: b)
+    }
+
+    /// Creates a color that adapts to light/dark appearance.
+    static func adaptive(light: String, dark: String) -> Color {
+        Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return isDark ? NSColor(Color(hex: dark)) : NSColor(Color(hex: light))
+        }))
     }
 }

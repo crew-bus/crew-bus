@@ -74,6 +74,9 @@ struct TeamDetailView: View {
             }
             .buttonStyle(.plain)
 
+            Text(teamEmoji(for: team.name))
+                .font(.title2)
+
             Text(team.name)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(CrewTheme.text)

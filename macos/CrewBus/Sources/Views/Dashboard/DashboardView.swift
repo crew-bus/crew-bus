@@ -44,6 +44,6 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(CrewTheme.bg)
+        .background(Color.clear)
     }
 }

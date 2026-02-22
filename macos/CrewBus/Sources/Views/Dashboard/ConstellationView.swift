@@ -37,7 +37,7 @@ struct ConstellationView: View {
 
                 // Boss — top center, largest
                 if let boss = boss {
-                    AgentCircleView(agent: boss, size: 130, glowColor: .white) {
+                    AgentCircleView(agent: boss, size: 130, glowColor: CrewTheme.text) {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             appState.navDestination = .agentChat(boss)
                         }

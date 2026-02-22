@@ -6,6 +6,7 @@ struct TeamsPanelView: View {
     let teams: [Team]
     @State private var showAddTeam = false
     @State private var selectedTeamId: Int?
+    @State private var glowingIndex: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,14 +49,18 @@ struct TeamsPanelView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(teams) { team in
-                            TeamRowCard(team: team, isSelected: selectedTeamId == team.id)
-                                .onTapGesture {
-                                    selectedTeamId = team.id
-                                    withAnimation(.easeInOut(duration: 0.25)) {
-                                        appState.navDestination = .teamDetail(team)
-                                    }
+                        ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
+                            TeamRowCard(
+                                team: team,
+                                isSelected: selectedTeamId == team.id,
+                                isGlowing: index == glowingIndex
+                            )
+                            .onTapGesture {
+                                selectedTeamId = team.id
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    appState.navDestination = .teamDetail(team)
                                 }
+                            }
                         }
                     }
                     .padding(.horizontal, 12)
@@ -64,11 +69,43 @@ struct TeamsPanelView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .background(CrewTheme.bg)
+        .background(Color.clear)
         .sheet(isPresented: $showAddTeam) {
             AddTeamSheet()
         }
+        .onAppear { startSequentialGlow() }
+        .onChange(of: teams.count) { startSequentialGlow() }
     }
+
+    private func startSequentialGlow() {
+        guard !teams.isEmpty else { return }
+        glowingIndex = 0
+        Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2.0))
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.8)) {
+                        glowingIndex = (glowingIndex + 1) % teams.count
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Team Emoji Lookup
+
+/// Maps team names to the emojis shown in AddTeamSheet.
+/// The server returns a generic 🏢 for all teams, so we resolve client-side.
+func teamEmoji(for name: String) -> String {
+    let key = name.lowercased()
+    if key.contains("school")          { return "🎓" }
+    if key.contains("passion")         { return "🎨" }
+    if key.contains("household")       { return "🏠" }
+    if key.contains("freelance")       { return "💼" }
+    if key.contains("side hustle")     { return "⚡" }
+    if key.contains("custom")          { return "🧩" }
+    return "📋"
 }
 
 // MARK: - Team Row Card
@@ -76,15 +113,13 @@ struct TeamsPanelView: View {
 private struct TeamRowCard: View {
     let team: Team
     let isSelected: Bool
+    let isGlowing: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "building.2.fill")
-                .font(.system(size: 16))
-                .foregroundStyle(CrewTheme.muted)
+            Text(teamEmoji(for: team.name))
+                .font(.system(size: 20))
                 .frame(width: 32, height: 32)
-                .background(CrewTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(team.name)
@@ -108,5 +143,10 @@ private struct TeamRowCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isSelected ? CrewTheme.accent : CrewTheme.border, lineWidth: 1)
         )
+        .shadow(
+            color: CrewTheme.accent.opacity(isGlowing ? 0.5 : 0),
+            radius: isGlowing ? 12 : 0
+        )
+        .animation(.easeInOut(duration: 0.8), value: isGlowing)
     }
 }
