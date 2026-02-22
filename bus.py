@@ -795,6 +795,8 @@ def init_db(db_path: Optional[Path] = None) -> None:
     cols = [r[1] for r in cur.execute("PRAGMA table_info(agents)").fetchall()]
     if "model" not in cols:
         cur.execute("ALTER TABLE agents ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+    if "avatar" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
 
     # Migrate: add extended_profile column to human_profile for self-learning
     hp_cols = [r[1] for r in cur.execute("PRAGMA table_info(human_profile)").fetchall()]
@@ -1438,35 +1440,46 @@ def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
 
         # Clean up all FK references for every agent being removed
         for aid in all_ids:
-            # messages: from_agent_id / to_agent_id are NOT NULL — must delete rows
+            # messages
             conn.execute(
                 "DELETE FROM messages WHERE from_agent_id=? OR to_agent_id=?",
                 (aid, aid),
             )
-            # audit_log: agent_id is nullable — null it out
+            # audit_log: nullable — null it out
             conn.execute(
                 "UPDATE audit_log SET agent_id=NULL WHERE agent_id=?",
                 (aid,),
             )
-            # timing_rules: agent_id NOT NULL — delete rows
             conn.execute("DELETE FROM timing_rules WHERE agent_id=?", (aid,))
-            # agent_skills: agent_id NOT NULL — delete rows
             conn.execute("DELETE FROM agent_skills WHERE agent_id=?", (aid,))
-            # team_mailbox: from_agent_id NOT NULL — delete rows
             conn.execute(
                 "DELETE FROM team_mailbox WHERE from_agent_id=? OR team_id=?",
                 (aid, aid),
             )
-            # private_sessions: human_id / agent_id NOT NULL — delete rows
             conn.execute(
                 "DELETE FROM private_sessions WHERE human_id=? OR agent_id=?",
                 (aid, aid),
             )
-            # agents: parent_agent_id nullable — null out any orphaned children
+            # knowledge_store, agent_memory, social_drafts, skill_health
+            conn.execute("DELETE FROM knowledge_store WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM agent_memory WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM social_drafts WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM skill_health WHERE agent_id=?", (aid,))
+            # crew_channels
+            conn.execute("DELETE FROM crew_channel_messages WHERE from_agent_id=?", (aid,))
+            conn.execute("DELETE FROM crew_channel_members WHERE agent_id=?", (aid,))
+            conn.execute("DELETE FROM crew_channels WHERE created_by=?", (aid,))
+            # agents: parent_agent_id nullable — null out orphaned children
             conn.execute(
                 "UPDATE agents SET parent_agent_id=NULL WHERE parent_agent_id=?",
                 (aid,),
             )
+
+        # Clean up team_links referencing this team (manager_id)
+        conn.execute(
+            "DELETE FROM team_links WHERE team_a_id=? OR team_b_id=?",
+            (manager_id, manager_id),
+        )
 
         # Now safe to delete the agent rows themselves
         for aid in all_ids:

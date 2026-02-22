@@ -52,6 +52,7 @@ PROVIDERS = {
     "openai":  ("https://api.openai.com/v1/chat/completions",    "gpt-4o-mini",          "openai_api_key"),
     "groq":    ("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", "groq_api_key"),
     "gemini":  ("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.0-flash", "gemini_api_key"),
+    "xai":     ("https://api.x.ai/v1/chat/completions",            "grok-4-1-fast-reasoning", "xai_api_key"),
     "ollama":  (OLLAMA_URL,                                       OLLAMA_MODEL,           ""),
 }
 
@@ -254,7 +255,11 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             "Use casual, human language — no corporate jargon."
         )
     else:
-        base = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
+        type_prompt = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
+        # Always inject the agent's actual name so renamed agents keep identity
+        base = f"Your name is {agent_name}. {type_prompt}"
+        if description:
+            base += f" {description}"
 
     if not agent_id or not db_path:
         return base
@@ -1441,7 +1446,11 @@ _circuit = _CircuitBreaker(failure_threshold=3, cooldown_seconds=60)
 
 
 def _get_fallback_order(db_path=None):
-    """Return provider fallback order. Ollama first if no API keys configured."""
+    """Return provider fallback order. Configurable via 'fallback_order' config key."""
+    if db_path:
+        custom = bus.get_config("fallback_order", "", db_path=db_path)
+        if custom:
+            return tuple(p.strip() for p in custom.split(",") if p.strip())
     has_keys = False
     if db_path:
         for provider, (_, _, config_key) in PROVIDERS.items():
@@ -1451,7 +1460,7 @@ def _get_fallback_order(db_path=None):
                     has_keys = True
                     break
     if has_keys:
-        return ("kimi", "groq", "openai", "gemini", "claude", "ollama")
+        return ("kimi", "groq", "openai", "gemini", "claude", "xai", "ollama")
     else:
         return ("ollama",)  # No API keys = Ollama only, no wasted timeouts
 

@@ -600,6 +600,8 @@ body.day-mode .hamburger-menu hr{border-top-color:#d0d7de}
 #view-crew.active{display:flex;flex-direction:column}
 #view-crew .main-layout{flex:1}
 #view-crew .compose-bar{margin-top:auto}
+#view-team.active{display:flex;flex-direction:column}
+#view-team .team-dash{flex:1;display:flex;flex-direction:column}
 
 /* ── Time pills ── */
 .time-bar{
@@ -1106,8 +1108,22 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   background:rgba(12,14,22,0.95);border:2px solid rgba(255,255,255,0.8);
   display:flex;align-items:center;justify-content:center;
   font-size:1.3rem;box-shadow:0 0 15px rgba(255,255,255,0.15);
-  flex-shrink:0;
+  flex-shrink:0;cursor:pointer;position:relative;
 }
+.as-avatar:hover{opacity:.85}
+.avatar-picker-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:998}
+.avatar-picker{
+  display:none;position:absolute;top:56px;left:50px;z-index:999;
+  background:var(--card);border:1px solid var(--bd);border-radius:14px;
+  padding:10px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.5);
+}
+.avatar-picker.open,.avatar-picker-overlay.open{display:block}
+.avatar-picker-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.avatar-picker-grid button{
+  background:transparent;border:none;font-size:1.4rem;padding:6px;
+  border-radius:8px;cursor:pointer;line-height:1;
+}
+.avatar-picker-grid button:hover{background:var(--bd)}
 .as-name-wrap{flex:1;min-width:0}
 .as-title{font-weight:700;font-size:1rem;cursor:pointer;display:block;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1231,7 +1247,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .as-settings-panel{
   display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding:16px;border-top:1px solid var(--bd);
-  background:var(--sf);max-height:60vh;
+  background:var(--sf);flex:1;min-height:0;
 }
 .as-settings-panel.open{display:block;animation:settingsSlide .2s ease}
 @keyframes settingsSlide{from{opacity:0;max-height:0}to{opacity:1;max-height:60vh}}
@@ -1577,6 +1593,37 @@ tr.override td{background:rgba(210,153,34,.08)}
 /* ── Team mailbox section ── */
 .mailbox-section{margin-top:16px;padding:16px;background:var(--sf);border-radius:var(--r);border:1px solid var(--bd)}
 .mailbox-section h3{font-size:1rem;margin-bottom:10px;color:var(--mu)}
+.team-dash{padding-bottom:0 !important}
+.team-footer{
+  position:sticky;bottom:0;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 4px;background:var(--bg);border-top:1px solid var(--bd);
+  margin-top:auto;z-index:60;
+}
+.team-footer-btn{
+  background:none;border:none;cursor:pointer;font-size:1.1rem;
+  display:flex;align-items:center;gap:5px;color:var(--mu);padding:4px 8px;
+  border-radius:8px;transition:background .2s;
+}
+.team-footer-btn:hover{background:rgba(255,255,255,0.06)}
+.team-footer-count{
+  font-size:.8rem;font-weight:700;color:var(--tx);
+  background:var(--bd);border-radius:10px;padding:1px 7px;min-width:16px;text-align:center;
+}
+.team-mailbox-dropdown{
+  display:none;position:absolute;bottom:100%;left:0;z-index:61;margin-bottom:4px;
+  background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  width:320px;max-height:340px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  padding:8px;
+}
+.team-mailbox-dropdown.open{display:block}
+.team-linked-dropdown{
+  display:none;position:absolute;bottom:100%;right:0;z-index:61;margin-bottom:4px;
+  background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  width:260px;max-height:280px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  padding:8px;
+}
+.team-linked-dropdown.open{display:block}
 .mailbox-msg{padding:10px;border-radius:8px;margin-bottom:8px;background:var(--bg);
   border-left:4px solid var(--bd);cursor:pointer;transition:background .15s}
 .mailbox-msg:hover{background:#1c2128}
@@ -1924,11 +1971,19 @@ function accentColor(type){
 }
 
 function personalName(a){
-  var m={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
-  return m[a.agent_type]||a.name||'Agent';
+  // Default display names for core agents — only used if agent hasn't been renamed
+  var defaults={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Friend & Family','wellness':'Health Buddy','strategy':'Growth Coach','financial':'Life Assistant','help':'Help','human':'You'};
+  var dbDefaults={'right_hand':'Crew Boss','guardian':'Guardian','communications':'Communications','wellness':'Wellness','strategy':'Strategy','financial':'Financial','help':'Help','human':'Ryan','vault':'Vault','knowledge':'Knowledge'};
+  // If agent has a custom name (different from the DB default), use it
+  if(a.name && dbDefaults[a.agent_type] && a.name !== dbDefaults[a.agent_type]){
+    return a.name;
+  }
+  return defaults[a.agent_type]||a.name||'Agent';
 }
 
-function agentEmoji(type){
+function agentEmoji(agentOrType){
+  if(agentOrType&&typeof agentOrType==='object'&&agentOrType.avatar)return agentOrType.avatar;
+  var type=typeof agentOrType==='string'?agentOrType:(agentOrType?agentOrType.agent_type:'');
   var m={'right_hand':'✩','guardian':'🛡','wellness':'💚','strategy':'🌱','financial':'⚡','communications':'🏠','help':'🤝','human':'👤','manager':'📋','worker':'⚙'};
   return m[type]||'🤖';
 }
@@ -1938,14 +1993,58 @@ function agentBorderColor(type){
   return m[type]||'rgba(255,255,255,0.3)';
 }
 
+// ══════════ AVATAR PICKER ══════════
+var AVATAR_EMOJIS=['🐶','🐱','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐙','🐠','🐬','🐳','🐊','🦎','🐍','🦖','🦕','👽','👾','🤖','🦊','🐰','🐹','🐭','🐲','🎃','🐾','🦈','🦭','🐢','🦩','🦜','🐿️','🦔','🦇','🐡','🦑'];
+
+function openAvatarPicker(){
+  var picker=document.getElementById('avatar-picker');
+  var overlay=document.getElementById('avatar-picker-overlay');
+  if(!picker)return;
+  if(picker.classList.contains('open')){closeAvatarPicker();return;}
+  var grid=picker.querySelector('.avatar-picker-grid');
+  grid.innerHTML='';
+  AVATAR_EMOJIS.forEach(function(e){
+    var btn=document.createElement('button');
+    btn.textContent=e;
+    btn.onclick=function(){setAgentAvatar(e)};
+    grid.appendChild(btn);
+  });
+  picker.classList.add('open');
+  overlay.classList.add('open');
+}
+function closeAvatarPicker(){
+  var picker=document.getElementById('avatar-picker');
+  var overlay=document.getElementById('avatar-picker-overlay');
+  if(picker)picker.classList.remove('open');
+  if(overlay)overlay.classList.remove('open');
+}
+async function setAgentAvatar(emoji){
+  var space=document.getElementById('agent-space');
+  if(!space)return;
+  var agentId=space.dataset.agentId;
+  if(!agentId)return;
+  var avatar=document.getElementById('as-avatar');
+  if(avatar)avatar.textContent=emoji;
+  // Update local cache
+  var cached=agentsData.find(function(a){return a.id==agentId});
+  if(cached)cached.avatar=emoji;
+  closeAvatarPicker();
+  await apiPost('/api/agent/'+agentId+'/avatar',{avatar:emoji});
+  loadCircle();
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeAvatarPicker()});
+
 // Toggle settings panel in agent space
 function toggleSettings(){
   var panel=document.getElementById('as-settings-panel');
   var btn=document.getElementById('as-settings-btn');
+  var chatWrap=document.querySelector('.chat-wrap');
   if(!panel)return;
   var isOpen=panel.classList.contains('open');
   panel.classList.toggle('open');
   if(btn)btn.classList.toggle('active',!isOpen);
+  // Hide chat when settings open, show when closed
+  if(chatWrap)chatWrap.style.display=isOpen?'':'none';
 }
 
 // FIX 4: map for display names used in Messages dropdown
@@ -2108,7 +2207,7 @@ async function loadCircle(){
   try{var cid=await api('/api/guard/checkin');guardCI=cid.last_checkin||''}catch(e){}
 
   renderBubble('bubble-boss',boss,null);
-  renderBubble('bubble-guardian',guardian,guardCI);
+  renderBubble('bubble-guardian',guardian,null);
   renderBubble('bubble-vault',vault,null);
 
   var trustEl=document.getElementById('trust-val');
@@ -2229,6 +2328,8 @@ function renderBubble(id,agent,sub){
   el.onclick=function(){openAgentSpace(agent.id)};
   var dot=el.querySelector('.status-dot');
   if(dot)dot.className='status-dot '+dotClass(agent.status,agent.agent_type,null,agent.active);
+  var iconEl=el.querySelector('.icon');
+  if(iconEl&&agent.avatar)iconEl.textContent=agent.avatar;
   var subEl=el.querySelector('.bubble-sub');
   if(subEl)subEl.textContent=sub||'';
 }
@@ -2283,6 +2384,8 @@ async function openAgentSpace(agentId){
   if(settingsPanel)settingsPanel.classList.remove('open');
   var settingsBtn=document.getElementById('as-settings-btn');
   if(settingsBtn)settingsBtn.classList.remove('active');
+  var chatWrap=document.querySelector('.chat-wrap');
+  if(chatWrap)chatWrap.style.display='';
 
   // Set avatar + name immediately from cache for instant feedback
   var cached=agentsData.find(function(a){return a.id==agentId;});
@@ -2291,7 +2394,7 @@ async function openAgentSpace(agentId){
     document.getElementById('as-name').textContent=cname;
     document.getElementById('as-name').style.color=accentColor(cached.agent_type);
     var avatar=document.getElementById('as-avatar');
-    if(avatar){avatar.textContent=agentEmoji(cached.agent_type);avatar.style.borderColor=agentBorderColor(cached.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(cached.agent_type)+'33';}
+    if(avatar){avatar.textContent=agentEmoji(cached);avatar.style.borderColor=agentBorderColor(cached.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(cached.agent_type)+'33';}
     var onlineEl=document.getElementById('as-online');
     if(onlineEl){
       if(cached.active!==false){onlineEl.innerHTML='<span class="as-online-dot"></span>Online';onlineEl.style.color='#00b894';}
@@ -2312,7 +2415,7 @@ async function openAgentSpace(agentId){
   document.getElementById('as-name').textContent=name;
   document.getElementById('as-name').style.color=color;
   var avatar=document.getElementById('as-avatar');
-  if(avatar){avatar.textContent=agentEmoji(agent.agent_type);avatar.style.borderColor=agentBorderColor(agent.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(agent.agent_type)+'33';}
+  if(avatar){avatar.textContent=agentEmoji(agent);avatar.style.borderColor=agentBorderColor(agent.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(agent.agent_type)+'33';}
   var onlineEl=document.getElementById('as-online');
   if(onlineEl){
     if(agent.active!==false){onlineEl.innerHTML='<span class="as-online-dot"></span>Online';onlineEl.style.color='#00b894';}
@@ -2336,8 +2439,32 @@ async function openAgentSpace(agentId){
     '<option value="openai"'+(curModel==='openai'?' selected':'')+'>GPT-4o Mini</option>'+
     '<option value="groq"'+(curModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
     '<option value="gemini"'+(curModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
+    '<option value="xai:grok-4-1-fast-reasoning"'+((curModel==='xai'||curModel.indexOf('xai:grok')===0)?' selected':'')+'>Grok 4.1 Fast Reasoning (xAI)</option>'+
     '<option value="ollama"'+(curModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
     '</select></div>'+
+    '<div id="as-apikey-row" style="display:none;margin-top:6px">'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+    '<input id="as-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.8rem">'+
+    '<button onclick="saveModelApiKey()" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">Save Key</button>'+
+    '</div><div id="as-apikey-msg" style="font-size:.75rem;color:var(--mu);margin-top:4px"></div></div>'+
+    '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">'+
+      '<div class="as-model-row">'+
+      '<span class="as-model-label">\u{1F30D} Default Model (all agents):</span>'+
+      '<select class="as-model-select" id="as-default-model-select" onchange="changeDefaultModel(this.value)">'+
+      '<option value="kimi"'+(defaultModel==='kimi'?' selected':'')+'>Kimi K2.5</option>'+
+      '<option value="claude"'+(defaultModel==='claude'?' selected':'')+'>Claude Sonnet 4.5</option>'+
+      '<option value="openai"'+(defaultModel==='openai'?' selected':'')+'>GPT-4o Mini</option>'+
+      '<option value="groq"'+(defaultModel==='groq'?' selected':'')+'>Llama 3.3 70B (Groq)</option>'+
+      '<option value="gemini"'+(defaultModel==='gemini'?' selected':'')+'>Gemini 2.0 Flash</option>'+
+      '<option value="xai:grok-4-1-fast-reasoning"'+(defaultModel.indexOf('xai')===0?' selected':'')+'>Grok 4.1 Fast Reasoning (xAI)</option>'+
+      '<option value="ollama"'+(defaultModel==='ollama'?' selected':'')+'>Ollama (Local)</option>'+
+      '</select></div>'+
+      '<div id="as-default-apikey-row" style="display:none;margin-top:6px">'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+      '<input id="as-default-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.8rem">'+
+      '<button onclick="saveDefaultModelApiKey()" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">Save Key</button>'+
+      '</div><div id="as-default-apikey-msg" style="font-size:.75rem;color:var(--mu);margin-top:4px"></div></div>'+
+      '</div>'+
     (agent.agent_type==='worker'||agent.agent_type==='manager'?
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       (agent.active?
@@ -2448,11 +2575,38 @@ function startRenameAgent(){
 
 // ══════════ CHANGE AGENT MODEL ══════════
 
+var MODEL_KEY_MAP={xai:'xai_api_key',kimi:'kimi_api_key',claude:'claude_api_key',openai:'openai_api_key',groq:'groq_api_key',gemini:'gemini_api_key'};
+var MODEL_KEY_LABELS={xai:'xAI',kimi:'Moonshot',claude:'Anthropic',openai:'OpenAI',groq:'Groq',gemini:'Google AI'};
+
 function changeAgentModel(newModel){
   var space=document.getElementById('agent-space');
   if(!space)return;
   var agentId=space.dataset.agentId;
   if(!agentId)return;
+
+  // Check if this provider needs an API key
+  var provider=newModel.split(':')[0];
+  var keyRow=document.getElementById('as-apikey-row');
+  var keyMsg=document.getElementById('as-apikey-msg');
+  if(keyRow&&MODEL_KEY_MAP[provider]){
+    // Check if key already saved
+    apiPost('/api/config/get',{key:MODEL_KEY_MAP[provider]}).then(function(r){
+      if(r&&r.value){
+        keyRow.style.display='none';
+      }else{
+        keyRow.style.display='block';
+        if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key to use this model';
+        keyRow.dataset.provider=provider;
+      }
+    }).catch(function(){
+      keyRow.style.display='block';
+      if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key';
+      keyRow.dataset.provider=provider;
+    });
+  }else if(keyRow){
+    keyRow.style.display='none';
+  }
+
   apiPost('/api/agent/'+agentId+'/model',{model:newModel}).then(function(r){
     if(r&&r.ok){
       var label=newModel||('default'+ (_defaultModel?' ('+_defaultModel+')':''));
@@ -2463,6 +2617,77 @@ function changeAgentModel(newModel){
       showToast(r&&r.error||'Failed to update model','error');
     }
   }).catch(function(){showToast('Failed to update model','error');});
+}
+
+function saveModelApiKey(){
+  var keyRow=document.getElementById('as-apikey-row');
+  var input=document.getElementById('as-apikey-input');
+  var msg=document.getElementById('as-apikey-msg');
+  if(!keyRow||!input)return;
+  var provider=keyRow.dataset.provider;
+  var configKey=MODEL_KEY_MAP[provider];
+  var val=input.value.trim();
+  if(!val){if(msg)msg.textContent='Please enter a key';return;}
+  apiPost('/api/config/set',{key:configKey,value:val}).then(function(r){
+    if(r&&r.ok){
+      input.value='';
+      keyRow.style.display='none';
+      showToast(MODEL_KEY_LABELS[provider]+' API key saved!');
+    }else{
+      if(msg)msg.textContent=r&&r.error||'Failed to save key';
+    }
+  }).catch(function(){if(msg)msg.textContent='Failed to save key';});
+}
+
+function changeDefaultModel(newModel){
+  var provider=newModel.split(':')[0];
+  var keyRow=document.getElementById('as-default-apikey-row');
+  var keyMsg=document.getElementById('as-default-apikey-msg');
+  if(keyRow&&MODEL_KEY_MAP[provider]){
+    apiPost('/api/config/get',{key:MODEL_KEY_MAP[provider]}).then(function(r){
+      if(r&&r.value){
+        keyRow.style.display='none';
+      }else{
+        keyRow.style.display='block';
+        if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key';
+        keyRow.dataset.provider=provider;
+      }
+    }).catch(function(){
+      keyRow.style.display='block';
+      if(keyMsg)keyMsg.textContent='Enter your '+MODEL_KEY_LABELS[provider]+' API key';
+      keyRow.dataset.provider=provider;
+    });
+  }else if(keyRow){
+    keyRow.style.display='none';
+  }
+  apiPost('/api/config/set',{key:'default_model',value:newModel}).then(function(r){
+    if(r&&r.ok){
+      _defaultModel=newModel;
+      showToast('Default model set to '+newModel);
+    }else{
+      showToast(r&&r.error||'Failed to set default','error');
+    }
+  }).catch(function(){showToast('Failed to set default','error');});
+}
+
+function saveDefaultModelApiKey(){
+  var keyRow=document.getElementById('as-default-apikey-row');
+  var input=document.getElementById('as-default-apikey-input');
+  var msg=document.getElementById('as-default-apikey-msg');
+  if(!keyRow||!input)return;
+  var provider=keyRow.dataset.provider;
+  var configKey=MODEL_KEY_MAP[provider];
+  var val=input.value.trim();
+  if(!val){if(msg)msg.textContent='Please enter a key';return;}
+  apiPost('/api/config/set',{key:configKey,value:val}).then(function(r){
+    if(r&&r.ok){
+      input.value='';
+      keyRow.style.display='none';
+      showToast(MODEL_KEY_LABELS[provider]+' API key saved!');
+    }else{
+      if(msg)msg.textContent=r&&r.error||'Failed to save key';
+    }
+  }).catch(function(){if(msg)msg.textContent='Failed to save key';});
 }
 
 // ══════════ GUARD ACTIVATION + SKILLS ══════════
@@ -3154,7 +3379,7 @@ async function openTeamDash(teamId){
   // Manager bubble — click to open, double-click name to rename
   if(mgr){
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
-      '<div class="team-mgr-circle">\u{1F464}<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
+      '<div class="team-mgr-circle">'+agentEmoji(mgr)+'<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
       '<span class="team-mgr-label">'+esc(mgr.name)+' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span>'+
       '<span class="team-mgr-sub">Manager</span></div></div>';
   }
@@ -3178,7 +3403,7 @@ async function openTeamDash(teamId){
   html+='<div class="team-workers">';
   workers.forEach(function(w){
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
-      '<div class="team-worker-circle">\u{1F6E0}\uFE0F<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
+      '<div class="team-worker-circle">'+agentEmoji(w)+'<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
       '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
   });
   // Hire Agent button (if under max)
@@ -3198,23 +3423,18 @@ async function openTeamDash(teamId){
     '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--s2);color:var(--fg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
     '<div id="hire-msg-'+teamId+'" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
 
-  // Team Meeting button — kicks off manager+workers sync
-  if(mgr){
-    html+='<div style="text-align:center;margin:16px 0">'+
-      '<button onclick="startTeamMeeting('+teamId+','+mgr.id+')" style="background:linear-gradient(135deg,var(--ac),#b388ff);color:#000;border:none;padding:10px 24px;border-radius:20px;cursor:pointer;font-weight:700;font-size:.9rem;box-shadow:0 2px 8px rgba(0,0,0,.3)">\u{1F91D} Team Meeting</button></div>';
-  }
-
-  // Mailbox section
-  html+='<div class="mailbox-section"><h3>\u{1F4EC} Mailbox</h3><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>';
-
-  // Linked teams section
-  html+='<div class="mailbox-section"><h3>\u{1F517} Linked Teams</h3><div id="linked-teams-'+teamId+'"></div></div>';
+  // Footer: mailbox icon (bottom-left) + linked teams icon (bottom-right)
+  html+='<div class="team-footer">'+
+    '<button class="team-footer-btn" onclick="toggleTeamMailbox('+teamId+',event)" title="Mailbox">\u{1F4EC} <span class="team-footer-count" id="mail-count-'+teamId+'">0</span></button>'+
+    '<button class="team-footer-btn" onclick="toggleTeamLinked('+teamId+',event)" title="Linked Teams">\u{1F517}</button>'+
+    '<div class="team-mailbox-dropdown" id="mail-dropdown-'+teamId+'"><div class="mailbox-msgs" id="mailbox-msgs-'+teamId+'"></div></div>'+
+    '<div class="team-linked-dropdown" id="linked-dropdown-'+teamId+'"><div id="linked-teams-'+teamId+'"></div></div>'+
+  '</div>';
 
   document.getElementById('team-dash-content').innerHTML=html;
 
-  // Load mailbox messages
-  var mailboxContainer=document.getElementById('mailbox-msgs-'+teamId);
-  if(mailboxContainer)loadTeamMailbox(teamId,mailboxContainer);
+  // Load mailbox count + messages
+  loadTeamMailboxCompact(teamId);
 
   // Load linked teams
   loadLinkedTeams(teamId);
@@ -3504,6 +3724,53 @@ async function checkPrivateStatus(agentId){
 
 // ══════════ TEAM MAILBOX ══════════
 
+function toggleTeamMailbox(teamId,event){
+  event.stopPropagation();
+  var dd=document.getElementById('mail-dropdown-'+teamId);
+  var ld=document.getElementById('linked-dropdown-'+teamId);
+  if(ld)ld.classList.remove('open');
+  if(dd)dd.classList.toggle('open');
+}
+function toggleTeamLinked(teamId,event){
+  event.stopPropagation();
+  var dd=document.getElementById('linked-dropdown-'+teamId);
+  var md=document.getElementById('mail-dropdown-'+teamId);
+  if(md)md.classList.remove('open');
+  if(dd)dd.classList.toggle('open');
+}
+async function loadTeamMailboxCompact(teamId){
+  var countEl=document.getElementById('mail-count-'+teamId);
+  var container=document.getElementById('mailbox-msgs-'+teamId);
+  try{
+    var msgs=await api('/api/teams/'+teamId+'/mailbox');
+    var count=msgs?msgs.length:0;
+    if(countEl)countEl.textContent=count;
+    if(container){
+      if(count===0){
+        container.innerHTML='<p style="color:var(--mu);font-size:.8rem;text-align:center;padding:8px">No messages yet.</p>';
+      }else{
+        container.innerHTML=msgs.map(function(m){
+          var cls='mailbox-msg severity-'+m.severity+(m.read?' mailbox-read':' mailbox-unread');
+          return '<div class="'+cls+'" onclick="toggleMailboxMsg(this)">'+
+            '<div class="mailbox-msg-header">'+
+            '<span class="mailbox-from">'+esc(m.from_agent_name)+'</span>'+
+            '<span class="mailbox-severity">'+esc(m.severity.replace('_',' '))+'</span></div>'+
+            '<div class="mailbox-subject">'+esc(m.subject)+'</div>'+
+            '<div class="mailbox-time">'+timeAgo(m.created_at)+'</div>'+
+            '<div class="mailbox-body">'+esc(m.body)+'</div>'+
+            '<div class="mailbox-actions">'+
+            (m.read?'':'<button class="mailbox-btn" onclick="markMailboxRead(event,'+m.id+','+teamId+')">Mark Read</button>')+
+            '<button class="mailbox-btn" onclick="replyFromMailbox(event,'+m.from_agent_id+')">Reply (Private)</button>'+
+            '</div></div>';
+        }).join('');
+      }
+    }
+  }catch(e){
+    if(countEl)countEl.textContent='0';
+    if(container)container.innerHTML='<p style="color:var(--mu);font-size:.8rem">Could not load mailbox.</p>';
+  }
+}
+
 async function loadTeamMailbox(teamId,container){
   try{
     var msgs=await api('/api/teams/'+teamId+'/mailbox');
@@ -3535,6 +3802,9 @@ function toggleMailboxMsg(el){el.classList.toggle('expanded')}
 async function markMailboxRead(event,msgId,teamId){
   event.stopPropagation();
   await apiPost('/api/teams/'+teamId+'/mailbox/'+msgId+'/read');
+  // Refresh compact dropdown mailbox
+  loadTeamMailboxCompact(teamId);
+  // Also refresh legacy section if present
   var section=event.target.closest('.mailbox-section');
   if(section){
     var container=section.querySelector('.mailbox-msgs');
@@ -3792,7 +4062,7 @@ PWA_MANIFEST = json.dumps({
 }, indent=2)
 
 PWA_SERVICE_WORKER = """\
-var CACHE_NAME='crew-bus-v1';
+var CACHE_NAME='crew-bus-v3';
 var ICON_URLS=['/pwa/icon-192.png','/pwa/icon-512.png','/pwa/icon.svg'];
 
 self.addEventListener('install',function(e){
@@ -4102,7 +4372,9 @@ def _build_html():
 <div id="agent-space" class="agent-space">
   <div class="as-topbar">
     <button class="as-back" onclick="closeAgentSpace()">\u2190</button>
-    <div class="as-avatar" id="as-avatar">\u2729</div>
+    <div class="as-avatar" id="as-avatar" onclick="openAvatarPicker()" title="Click to change avatar">\u2729</div>
+    <div class="avatar-picker-overlay" id="avatar-picker-overlay" onclick="closeAvatarPicker()"></div>
+    <div class="avatar-picker" id="avatar-picker"><div class="avatar-picker-grid"></div></div>
     <div class="as-name-wrap">
       <span class="as-title" id="as-name" onclick="startRenameAgent()">Crew Boss</span>
       <div class="as-online" id="as-online"><span class="as-online-dot"></span>Online</div>
@@ -4110,7 +4382,7 @@ def _build_html():
     <div class="as-topbar-actions">
       <button class="as-newchat-btn" onclick="startNewChat()" title="New conversation">✨</button>
       <button class="private-toggle" id="private-toggle-btn" onclick="togglePrivateSession()" title="Private session">🔒</button>
-      <button class="as-settings-btn" id="as-settings-btn" onclick="toggleSettings()" title="Settings">\u2699</button>
+      <button class="as-settings-btn" id="as-settings-btn" onclick="toggleSettings()" title="Settings">⚙</button>
     </div>
     <span class="as-dot dot-green" id="as-status-dot"></span>
   </div>
@@ -4273,6 +4545,7 @@ def _build_html():
         <option value="openai" data-key-name="OpenAI" data-placeholder="sk-..." data-url="https://platform.openai.com/api-keys" data-url-label="Get your key at platform.openai.com">GPT-4o Mini (OpenAI)</option>
         <option value="groq" data-key-name="Groq" data-placeholder="gsk_..." data-url="https://console.groq.com/keys" data-url-label="Get a free key at console.groq.com">Llama 3.3 70B (Groq \u2014 Free)</option>
         <option value="gemini" data-key-name="Google AI" data-placeholder="AI..." data-url="https://aistudio.google.com/apikey" data-url-label="Get a free key at aistudio.google.com">Gemini 2.0 Flash (Google \u2014 Free)</option>
+        <option value="xai" data-key-name="xAI" data-placeholder="xai-..." data-url="https://console.x.ai" data-url-label="Get your key at console.x.ai">Grok (xAI)</option>
         <option value="ollama" data-key-name="" data-placeholder="" data-url="" data-url-label="">Ollama (Local \u2014 No key needed)</option>
       </select>
     </div>
@@ -4431,7 +4704,18 @@ def _notify_agents_of_rename(db_path, agent_id, old_name, new_name):
         finally:
             conn.close()
 
-        # Notify the renamed agent
+        # Store name change as persistent memory (survives chat clear)
+        bus.remember(agent_id,
+                     f"[identity] My name was changed from \"{old_name}\" to "
+                     f"\"{new_name}\". I go by {new_name} now.",
+                     memory_type="persona", importance=10,
+                     source="system", db_path=db_path)
+
+        # Also forget any old identity memories with the previous name
+        bus.forget(agent_id, content_match=f"My name is {old_name}",
+                   db_path=db_path)
+
+        # Notify the renamed agent via message too
         with bus.db_write(db_path) as conn:
             conn.execute(
                 "INSERT INTO messages (from_agent_id, to_agent_id, "
@@ -4893,9 +5177,15 @@ def _get_teams(db_path):
                 if tpl["name"] == team_name and tpl.get("locked_name"):
                     is_locked = True
                     break
+            # Match team icon from template (fallback: 📁)
+            team_icon = "\U0001f4c1"
+            for tpl in TEAM_TEMPLATES.values():
+                if tpl["name"] == team_name:
+                    team_icon = tpl.get("icon", team_icon)
+                    break
             teams.append({"id": mgr["id"],
                           "name": team_name,
-                          "icon": "\U0001f3e2", "agent_count": workers + 1,
+                          "icon": team_icon, "agent_count": workers + 1,
                           "manager": mgr["name"], "status": mgr["status"],
                           "locked_name": is_locked})
         return teams
@@ -4924,6 +5214,7 @@ def _get_team_agents(db_path, team_id):
 TEAM_TEMPLATES = {
     "freelance": {
         "name": "Freelance",
+        "icon": "\U0001f4bc",  # 💼
         "paid": True,
         "price_annual": 30,
         "price_trial": 5,
@@ -4936,6 +5227,7 @@ TEAM_TEMPLATES = {
     },
     "sidehustle": {
         "name": "Side Hustle",
+        "icon": "\U0001f4b0",  # 💰
         "paid": True,
         "price_annual": 30,
         "price_trial": 5,
@@ -4948,6 +5240,7 @@ TEAM_TEMPLATES = {
     },
     "custom": {
         "name": "Custom Team",
+        "icon": "\u2699\ufe0f",  # ⚙️
         "paid": True,
         "price_annual": 50,
         "price_trial": 10,
@@ -4958,6 +5251,7 @@ TEAM_TEMPLATES = {
     },
     "school": {
         "name": "School",
+        "icon": "\U0001f4da",  # 📚
         "locked_name": True,
         "workers": [
             ("Tutor", "Explains concepts, answers homework questions, quizzes you."),
@@ -4967,6 +5261,7 @@ TEAM_TEMPLATES = {
     },
     "passion": {
         "name": "Passion Project",
+        "icon": "\U0001f3b8",  # 🎸
         "locked_name": True,
         "workers": [
             ("Project Planner", "Breaks your project into milestones and tracks progress."),
@@ -4976,6 +5271,7 @@ TEAM_TEMPLATES = {
     },
     "household": {
         "name": "Household",
+        "icon": "\U0001f3e0",  # 🏠
         "locked_name": True,
         "workers": [
             ("Meal Planner", "Suggests meals, builds grocery lists, tracks nutrition."),
@@ -6583,6 +6879,22 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 conn.close()
             return _json_response(self, {"ok": True, "id": agent_id, "model": new_model})
 
+        # ── Set agent avatar ──
+
+        m = re.match(r"^/api/agent/(\d+)/avatar$", path)
+        if m:
+            agent_id = int(m.group(1))
+            new_avatar = data.get("avatar", "").strip()
+            conn = bus.get_conn(self.db_path)
+            try:
+                conn.execute(
+                    "UPDATE agents SET avatar=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+                    (new_avatar, agent_id))
+                conn.commit()
+            finally:
+                conn.close()
+            return _json_response(self, {"ok": True, "id": agent_id, "avatar": new_avatar})
+
         # ── Create agent ──
 
         if path == "/api/agents/create":
@@ -6626,7 +6938,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             key_map = {
                 "kimi": "kimi_api_key", "claude": "claude_api_key",
                 "openai": "openai_api_key", "groq": "groq_api_key",
-                "gemini": "gemini_api_key",
+                "gemini": "gemini_api_key", "xai": "xai_api_key",
             }
             if model != "ollama" and not api_key:
                 return _json_response(self, {"error": "API key is required"}, 400)
