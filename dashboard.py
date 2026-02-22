@@ -7347,24 +7347,47 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="0.0.0.0",
     # Create a desktop shortcut so they can always get back in
     _create_desktop_shortcut(url)
 
-    # Auto-open browser after 1-second delay (server needs to be ready)
-    if open_browser:
-        threading.Timer(1.0, webbrowser.open, args=[url]).start()
-
     print()
-    print("  \U0001f449 Closed your browser? Just double-click 'Crew Bus' on your Desktop!")
+    print("  \U0001f449 Closed the window? Just double-click 'Crew Bus' on your Desktop!")
     print(f"  \U0001f449 Or open this URL: {url}")
     print("  \U0001f6d1 Press Ctrl+C to stop the server.")
     print()
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
+
+    # Launch UI — pywebview for native window, browser as fallback
+    _has_webview = False
+    if open_browser:
+        try:
+            import webview
+            _has_webview = True
+        except ImportError:
+            pass
+
+    if _has_webview:
+        # pywebview needs the main thread on macOS — run server in background
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        import time; time.sleep(1)
+        webview.create_window("Crew Bus", url, width=1200, height=800)
+        webview.start()
+        # Window closed — shut down
         print("\nShutting down.")
         if _heartbeat:
             _heartbeat.stop()
         agent_worker.stop_worker()
         _stop_wa_bridge()
         server.shutdown()
+    else:
+        if open_browser:
+            threading.Timer(1.0, webbrowser.open, args=[url]).start()
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down.")
+            if _heartbeat:
+                _heartbeat.stop()
+            agent_worker.stop_worker()
+            _stop_wa_bridge()
+            server.shutdown()
 
 if __name__ == "__main__":
     import argparse
