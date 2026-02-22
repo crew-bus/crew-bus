@@ -368,13 +368,33 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
-    # --- Inject memories ---
+    # --- Inject memories (tiered by agent importance) ---
+    _memory_limits = {
+        "right_hand": 35, "guardian": 25,
+        "manager": 20, "worker": 20,
+    }
+    mem_limit = _memory_limits.get(agent_type, 15)
     try:
-        memories = bus.get_agent_memories(agent_id, limit=15, db_path=db_path)
+        memories = bus.get_agent_memories(agent_id, limit=mem_limit, db_path=db_path)
         if memories:
             parts.append(_format_memories_for_prompt(memories))
     except Exception:
         pass
+
+    # --- Inject shared crew knowledge (inner circle only) ---
+    if agent_type in ("right_hand", "guardian", "strategy", "wellness",
+                      "financial", "legal", "communications"):
+        try:
+            shared = bus.get_shared_knowledge(limit=10, db_path=db_path)
+            if shared:
+                lines = ["SHARED CREW KNOWLEDGE:"]
+                for entry in shared:
+                    subj = entry.get("subject", "")[:60]
+                    cat = entry.get("category", "")
+                    lines.append(f"- [{cat}] {subj}")
+                parts.append("\n".join(lines))
+        except Exception:
+            pass
 
     # --- Inject crew communication capabilities ---
     # Every agent can DM other agents and call meetings
@@ -401,20 +421,20 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         pass
 
     # Token budget guard — tiered by agent importance:
-    # Crew Boss: 9000 chars (highest IQ, runs on best model, needs full crew awareness)
-    # Guardian:  7000 chars (system knowledge + integrity + sentinel duties)
-    # Workers:   5500 chars (description + crew comms + memories)
-    # Everyone:  4500 chars (integrity rules + charter + skill + memories + comms)
+    # Crew Boss: 10000 chars (highest IQ, runs on best model, needs full crew awareness)
+    # Guardian:  8000 chars (system knowledge + integrity + sentinel duties)
+    # Workers:   6500 chars (description + crew comms + memories)
+    # Everyone:  5500 chars (integrity rules + charter + skill + memories + comms)
     if agent_type == "right_hand":
-        max_chars = 9000
+        max_chars = 10000
     elif agent_type == "guardian":
-        max_chars = 7000
+        max_chars = 8000
     elif agent_type == "manager":
-        max_chars = 5500
+        max_chars = 6500
     elif agent_type == "worker":
-        max_chars = 5500  # workers need room for crew comms
+        max_chars = 6500  # workers need room for crew comms
     else:
-        max_chars = 4500
+        max_chars = 5500
     combined = "\n\n".join(parts)
     if len(combined) > max_chars:
         combined = combined[:max_chars] + "\n[memory truncated]"
@@ -465,18 +485,21 @@ def _format_skills_for_prompt(skills: list) -> str:
 
 
 def _format_memories_for_prompt(memories: list) -> str:
-    """Format agent memories into a system prompt section."""
+    """Format agent memories into a compact system prompt section."""
     lines = ["THINGS YOU REMEMBER ABOUT THIS PERSON:"]
     prefix_map = {
         "fact": "",
         "preference": "[pref] ",
-        "instruction": "[instruction] ",
-        "summary": "[context] ",
-        "persona": "[identity] ",
+        "instruction": "[instr] ",
+        "summary": "[ctx] ",
+        "persona": "[id] ",
     }
     for m in memories:
         prefix = prefix_map.get(m.get("memory_type", "fact"), "")
-        lines.append(f"- {prefix}{m['content']}")
+        content = m["content"]
+        if len(content) > 100:
+            content = content[:97] + "..."
+        lines.append(f"- {prefix}{content}")
     return "\n".join(lines)
 
 
@@ -631,6 +654,137 @@ _AGENT_PATTERNS = {
 }
 
 
+# --- Feedback signal patterns (boost/demote recent memories) ---
+_POSITIVE_FEEDBACK = _learn_re.compile(
+    r"\b(?:great answer|that(?:'?s| is) (?:exactly|perfectly) right|perfect|nailed it|"
+    r"thank(?:s| you)|love it|you(?:'re| are) right|well done|exactly what i (?:wanted|needed)|"
+    r"spot on|brilliant|awesome)\b",
+    _learn_re.IGNORECASE,
+)
+
+_NEGATIVE_FEEDBACK = _learn_re.compile(
+    r"\b(?:that(?:'?s| is) (?:wrong|not right|incorrect)|no that(?:'?s| is) not|"
+    r"stop doing that|i didn(?:'t| not) ask for that|completely wrong|"
+    r"please fix that|that(?:'?s| is) not what i (?:meant|wanted|asked)|wrong answer)\b",
+    _learn_re.IGNORECASE,
+)
+
+
+def _apply_feedback_signal(db_path: Path, agent_id: int, human_msg: str):
+    """Detect positive/negative feedback and adjust recent memory importance.
+
+    Positive → boost last 3 memories by +1 (cap 10)
+    Negative → demote last 3 memories by -2 (floor 1), store correction
+    """
+    is_positive = bool(_POSITIVE_FEEDBACK.search(human_msg))
+    is_negative = bool(_NEGATIVE_FEEDBACK.search(human_msg))
+
+    if not is_positive and not is_negative:
+        return
+
+    # Get 3 most recent active memories for this agent
+    conn = bus.get_conn(db_path)
+    try:
+        recent = conn.execute(
+            "SELECT id, importance FROM agent_memory "
+            "WHERE agent_id=? AND active=1 "
+            "ORDER BY created_at DESC LIMIT 3",
+            (agent_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not recent:
+        return
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    with bus.db_write(db_path) as conn:
+        for mem in recent:
+            if is_positive:
+                new_imp = min(10, mem["importance"] + 1)
+            else:
+                new_imp = max(1, mem["importance"] - 2)
+            conn.execute(
+                "UPDATE agent_memory SET importance=?, updated_at=? WHERE id=?",
+                (new_imp, now, mem["id"]),
+            )
+
+    # Negative feedback → store correction as instruction
+    if is_negative:
+        correction = human_msg.strip()
+        if len(correction) > 150:
+            correction = correction[:147] + "..."
+        bus.remember(agent_id, f"[feedback] {correction}",
+                     memory_type="instruction", importance=8,
+                     source="conversation", db_path=db_path)
+
+
+def _normalize_for_dedup(text: str) -> str:
+    """Normalize text for deduplication comparison.
+
+    Strips leading tags ([task], [done], etc.), common prefixes,
+    punctuation, and lowercases.
+    """
+    # Strip leading tags like [task], [done], [pref], [emotion], etc.
+    normalized = _learn_re.sub(r"^\[[\w-]+\]\s*", "", text)
+    # Strip common prefixes
+    for prefix in ("Human said:", "I replied:", "Human asked:",
+                   "Sent task to", "feeling "):
+        if normalized.lower().startswith(prefix.lower()):
+            normalized = normalized[len(prefix):]
+    # Remove punctuation, lowercase
+    normalized = _learn_re.sub(r"[^\w\s]", "", normalized).lower().strip()
+    return normalized
+
+
+def _is_duplicate_memory(agent_id: int, content: str,
+                         db_path: Path) -> bool:
+    """Multi-signal dedup check. Returns True if memory is a duplicate.
+
+    Three signals (any = duplicate):
+    1. Substring match on normalized text
+    2. Keyword overlap: 60%+ of significant words (>3 chars) overlap
+    3. Multi-fragment search: first 30 chars AND top keywords
+    """
+    normalized_new = _normalize_for_dedup(content)
+    if not normalized_new:
+        return True  # empty after normalization
+
+    # Signal 1+3: search by first 30 chars of original content
+    existing = bus.search_agent_memory(agent_id, content[:30], limit=5,
+                                       db_path=db_path)
+
+    # Also search by top 3 significant keywords for broader matches
+    new_words = [w for w in normalized_new.split() if len(w) > 3]
+    top_keywords = new_words[:3]
+    for kw in top_keywords:
+        kw_results = bus.search_agent_memory(agent_id, kw, limit=3,
+                                              db_path=db_path)
+        for r in kw_results:
+            if r["id"] not in {e["id"] for e in existing}:
+                existing.append(r)
+
+    for e in existing:
+        normalized_existing = _normalize_for_dedup(e["content"])
+
+        # Signal 1: substring match
+        if (normalized_new in normalized_existing
+                or normalized_existing in normalized_new):
+            return True
+
+        # Signal 2: keyword overlap (60%+)
+        if new_words:
+            existing_words = set(
+                w for w in normalized_existing.split() if len(w) > 3
+            )
+            overlap = sum(1 for w in new_words if w in existing_words)
+            if overlap / len(new_words) >= 0.6:
+                return True
+
+    return False
+
+
 def _extract_conversation_learnings(db_path: Path, agent_id: int,
                                      agent_type: str, human_msg: str,
                                      agent_reply: str):
@@ -645,6 +799,12 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
     """
     if not human_msg or len(human_msg) < 5:
         return
+
+    # --- Feedback-loop learning (boost/demote recent memories) ---
+    try:
+        _apply_feedback_signal(db_path, agent_id, human_msg)
+    except Exception:
+        pass
 
     extracted = []
 
@@ -766,20 +926,235 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
 
     # --- Dedup and store ---
     for content, mem_type, importance, _prefix in extracted:
-        # Skip if substantially similar memory already exists
-        existing = bus.search_agent_memory(agent_id, content[:30], limit=3,
-                                           db_path=db_path)
-        if any(content.lower() in e["content"].lower()
-               or e["content"].lower() in content.lower()
-               for e in existing):
+        if _is_duplicate_memory(agent_id, content, db_path):
             continue
-        bus.remember(agent_id, content, memory_type=mem_type,
-                     importance=importance, source="conversation",
-                     db_path=db_path)
+        mem_id = bus.remember(agent_id, content, memory_type=mem_type,
+                              importance=importance, source="conversation",
+                              db_path=db_path)
+        # Cross-agent sharing: high-importance facts/prefs/instructions
+        # go to the knowledge store so other agents can see them
+        if importance >= 7 and mem_type in ("fact", "preference", "instruction"):
+            try:
+                _share_to_knowledge_store(db_path, agent_id, content, mem_type)
+            except Exception:
+                pass
+
+    # --- Temporal pattern learning (Crew Boss only) ---
+    if agent_type == "right_hand":
+        try:
+            _update_temporal_patterns(db_path, agent_id, human_msg)
+        except Exception:
+            pass
 
     # --- Profile extraction (Crew Boss calibration) ---
     if agent_type == "right_hand":
         _update_profile_from_conversation(db_path, agent_id, human_msg)
+
+
+def _share_to_knowledge_store(db_path: Path, agent_id: int,
+                              content: str, mem_type: str):
+    """Share high-importance memory to the knowledge store for cross-agent access.
+
+    Deduplicates against existing knowledge entries by subject similarity.
+    """
+    category = "preference" if mem_type == "preference" else "lesson"
+    subject = content[:80]
+
+    # Check for existing similar entry
+    existing = bus.search_knowledge(content[:30], category_filter=category,
+                                    limit=3, db_path=db_path)
+    for e in existing:
+        if (content.lower() in e.get("subject", "").lower()
+                or e.get("subject", "").lower() in content.lower()):
+            return  # already shared
+
+    bus.store_knowledge(agent_id, category, subject,
+                        {"memory": content, "source": "cross_agent_share"},
+                        tags="shared,auto", db_path=db_path)
+
+
+def _longest_contiguous_hours(hours: set) -> tuple:
+    """Find longest contiguous block of hours, wrapping around midnight.
+
+    Returns (start_hour, end_hour) of the longest block, or (None, None).
+    """
+    if not hours:
+        return (None, None)
+    sorted_hours = sorted(hours)
+    best_start = sorted_hours[0]
+    best_len = 1
+    cur_start = sorted_hours[0]
+    cur_len = 1
+    for i in range(1, len(sorted_hours)):
+        if sorted_hours[i] == sorted_hours[i - 1] + 1:
+            cur_len += 1
+        else:
+            if cur_len > best_len:
+                best_start = cur_start
+                best_len = cur_len
+            cur_start = sorted_hours[i]
+            cur_len = 1
+    if cur_len > best_len:
+        best_start = cur_start
+        best_len = cur_len
+
+    # Check wrap-around (e.g., {22,23,0,1,2})
+    if sorted_hours[0] == 0 and sorted_hours[-1] == 23:
+        wrap_len = 1
+        # Count from end going backward
+        for i in range(len(sorted_hours) - 1, 0, -1):
+            if sorted_hours[i] == sorted_hours[i - 1] + 1:
+                wrap_len += 1
+            else:
+                break
+        # Count from start going forward
+        front_len = 1
+        for i in range(1, len(sorted_hours)):
+            if sorted_hours[i] == sorted_hours[i - 1] + 1:
+                front_len += 1
+            else:
+                break
+        total_wrap = wrap_len + front_len
+        if total_wrap > best_len:
+            best_start = sorted_hours[-wrap_len]
+            best_len = total_wrap
+
+    end_hour = (best_start + best_len) % 24
+    return (best_start, end_hour)
+
+
+def _update_temporal_patterns(db_path: Path, agent_id: int, human_msg: str):
+    """Detect temporal patterns from conversation (Crew Boss only).
+
+    Tracks message hour distribution, seasonal patterns, and known triggers.
+    Updates the human's extended_profile accordingly.
+    """
+    now = datetime.now(timezone.utc)
+    current_hour = now.hour
+    current_month = now.month
+
+    # --- Track message hour distribution ---
+    hour_key = "msg_hour_distribution"
+    conn = bus.get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT value FROM crew_config WHERE key=?", (hour_key,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row:
+        try:
+            dist = json.loads(row["value"])
+        except (json.JSONDecodeError, TypeError):
+            dist = {}
+    else:
+        dist = {}
+
+    hour_str = str(current_hour)
+    dist[hour_str] = dist.get(hour_str, 0) + 1
+    total_msgs = sum(dist.values())
+    bus.set_config(hour_key, json.dumps(dist), db_path=db_path)
+
+    # After 50+ messages, infer quiet hours
+    if total_msgs >= 50:
+        quiet_hours = set()
+        for h in range(24):
+            count = dist.get(str(h), 0)
+            if count / total_msgs < 0.02:  # less than 2% of messages
+                quiet_hours.add(h)
+        if len(quiet_hours) >= 3:  # at least 3 contiguous quiet hours
+            start, end = _longest_contiguous_hours(quiet_hours)
+            if start is not None:
+                # Find the human agent
+                conn = bus.get_conn(db_path)
+                try:
+                    human_row = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if human_row:
+                    bus.update_extended_profile(human_row["id"], {
+                        "quiet_hours_start": f"{start:02d}:00",
+                        "quiet_hours_end": f"{end:02d}:00",
+                    }, db_path=db_path)
+
+    # --- Seasonal patterns ---
+    _seasonal_patterns = [
+        (_learn_re.compile(r"\b(?:holiday|christmas|thanksgiving|hannukah|new year)\b.*"
+                           r"(?:stress|busy|crazy|overwhelm)", _learn_re.IGNORECASE),
+         "holiday_stress"),
+        (_learn_re.compile(r"\b(?:summer|vacation|trip|travel)\b.*"
+                           r"(?:plan|book|going|taking)", _learn_re.IGNORECASE),
+         "summer_plans"),
+        (_learn_re.compile(r"\b(?:back.to.school|school start|new semester|"
+                           r"fall semester|school year)\b", _learn_re.IGNORECASE),
+         "back_to_school"),
+        (_learn_re.compile(r"\b(?:tax|taxes|filing|1099|W-?2|CPA|deduction)\b.*"
+                           r"(?:season|time|deadline|due)", _learn_re.IGNORECASE),
+         "tax_season"),
+        (_learn_re.compile(r"\b(?:year.end|annual review|year in review|"
+                           r"wrap.up the year|end of year)\b", _learn_re.IGNORECASE),
+         "year_end_review"),
+    ]
+
+    for pattern, label in _seasonal_patterns:
+        if pattern.search(human_msg):
+            sp_key = "seasonal_patterns"
+            conn = bus.get_conn(db_path)
+            try:
+                sp_row = conn.execute(
+                    "SELECT value FROM crew_config WHERE key=?", (sp_key,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if sp_row:
+                try:
+                    sp_data = json.loads(sp_row["value"])
+                except (json.JSONDecodeError, TypeError):
+                    sp_data = {}
+            else:
+                sp_data = {}
+            sp_data[str(current_month)] = label
+            bus.set_config(sp_key, json.dumps(sp_data), db_path=db_path)
+
+            # Write to extended_profile
+            conn = bus.get_conn(db_path)
+            try:
+                human_row = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+            if human_row:
+                bus.update_extended_profile(human_row["id"], {
+                    "seasonal_patterns": {str(current_month): label},
+                }, db_path=db_path)
+
+    # --- Known triggers ---
+    _trigger_patterns = [
+        _learn_re.compile(
+            r"\b(?:triggers me|makes me (?:angry|upset|anxious)|"
+            r"can'?t deal with|never mention|don'?t (?:ever )?(?:bring up|talk about))\s+"
+            r"(.{5,60}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _trigger_patterns:
+        match = pat.search(human_msg)
+        if match:
+            trigger = match.group(1).strip().rstrip(".,!?")
+            if trigger:
+                conn = bus.get_conn(db_path)
+                try:
+                    human_row = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if human_row:
+                    bus.update_extended_profile(human_row["id"], {
+                        "known_triggers": [trigger],
+                    }, db_path=db_path)
 
 
 def _update_profile_from_conversation(db_path: Path, agent_id: int,
@@ -1289,7 +1664,7 @@ def call_llm(system_prompt: str, user_message: str,
     """
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        for msg in chat_history[-100:]:
+        for msg in chat_history[-500:]:
             messages.append(msg)
     messages.append({"role": "user", "content": user_message})
 
@@ -1367,7 +1742,7 @@ def call_ollama(system_prompt: str, user_message: str,
     """Legacy wrapper — routes through call_llm."""
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        for msg in chat_history[-100:]:
+        for msg in chat_history[-500:]:
             messages.append(msg)
     messages.append({"role": "user", "content": user_message})
     return _call_ollama(messages, model=model)
@@ -1378,7 +1753,7 @@ def call_ollama(system_prompt: str, user_message: str,
 # ---------------------------------------------------------------------------
 
 def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
-                     limit: int = 100) -> list:
+                     limit: int = 500) -> list:
     """Fetch recent chat context for an agent.
 
     Pulls messages between sender↔agent. For managers, also includes
@@ -1408,7 +1783,7 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
               AND body IS NOT NULL AND body != ''
         """, (sender_id, agent_id, agent_id, sender_id)).fetchone()["c"]
 
-        if total_count > 120:
+        if total_count > 600:
             _auto_summarize_old_chat(db_path, sender_id, agent_id, limit)
 
         # For managers and right_hand: pull recent DMs from other agents
@@ -1461,6 +1836,63 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
     return history
 
 
+def _extract_message_essence(body: str, is_human: bool) -> list:
+    """Multi-signal extraction of key points from a single message.
+
+    Returns up to 3 points per message (vs old approach of 1 truncated sentence).
+    Detects decisions, key facts, completed actions, and reasons.
+    """
+    points = []
+    prefix = "Human" if is_human else "Agent"
+
+    # 1. Decisions: "decided to", "going with", "chose"
+    dec_match = _learn_re.search(
+        r"\b(?:decided? to|going with|chose|choosing|picked|will go with)\s+(.{5,80}?)(?:[.!?\n]|$)",
+        body, _learn_re.IGNORECASE)
+    if dec_match:
+        points.append(f"Decided: {dec_match.group(1).strip().rstrip('.,!?')}")
+
+    # 2. Key facts: URLs, costs, deadlines, budgets
+    url_match = _learn_re.search(r"https?://\S{5,80}", body)
+    if url_match:
+        points.append(f"Info: URL {url_match.group(0)[:60]}")
+    cost_match = _learn_re.search(
+        r"\$[\d,.]+(?:\s*(?:per|/)\s*\w+)?", body)
+    if cost_match:
+        points.append(f"Info: {cost_match.group(0)}")
+    deadline_match = _learn_re.search(
+        r"\b(?:due|deadline|by)\s+(.{5,40}?)(?:[.!?\n]|$)", body, _learn_re.IGNORECASE)
+    if deadline_match:
+        points.append(f"Info: deadline {deadline_match.group(1).strip()}")
+
+    # 3. Actions completed: "I've sent", "deployed", "fixed"
+    if not is_human:
+        action_match = _learn_re.search(
+            r"\b(?:I'?ve|I have|I just|sent|deployed|fixed|created|updated|posted|published)\s+"
+            r"(.{5,80}?)(?:[.!?\n]|$)", body, _learn_re.IGNORECASE)
+        if action_match:
+            points.append(f"Done: {action_match.group(0).strip().rstrip('.,!?')[:80]}")
+
+    # 4. Reasons: "because", "due to", "that's why"
+    reason_match = _learn_re.search(
+        r"\b(?:because|due to|that'?s why|since|reason (?:is|being))\s+(.{5,80}?)(?:[.!?\n]|$)",
+        body, _learn_re.IGNORECASE)
+    if reason_match:
+        points.append(f"Reason: {reason_match.group(1).strip().rstrip('.,!?')}")
+
+    # 5. Fallback: first 2 sentences, 100 char limit each
+    if not points:
+        sentences = _learn_re.split(r"[.!?]+\s+", body)
+        for sent in sentences[:2]:
+            sent = sent.strip()
+            if len(sent) > 15:
+                if len(sent) > 100:
+                    sent = sent[:97] + "..."
+                points.append(f"{prefix}: {sent}")
+
+    return points[:3]
+
+
 def _auto_summarize_old_chat(db_path: Path, sender_id: int, agent_id: int,
                               recent_limit: int = 20):
     """Compress old messages beyond the chat window into agent memories.
@@ -1496,8 +1928,8 @@ def _auto_summarize_old_chat(db_path: Path, sender_id: int, agent_id: int,
         if not old_msgs:
             return
 
-        # Extract key points from old messages
-        summaries = []
+        # Extract key points from old messages using multi-signal extraction
+        all_points = []
         msg_ids_to_delete = []
         for msg in old_msgs:
             body = msg["body"]
@@ -1505,31 +1937,28 @@ def _auto_summarize_old_chat(db_path: Path, sender_id: int, agent_id: int,
             if not body or len(body) < 10:
                 continue
 
-            # Extract the essence — first 120 chars of each meaningful message
-            is_human = (msg["from_agent_id"] == sender_id)
-            prefix = "Human said" if is_human else "I replied"
-
             # Skip system/internal messages
             if body.startswith("[") or body.startswith("=="):
                 continue
 
-            # Compress: take first sentence or first 120 chars
-            first_sentence = body.split(".")[0].split("!")[0].split("?")[0]
-            if len(first_sentence) > 120:
-                first_sentence = first_sentence[:120] + "..."
-            if len(first_sentence) > 15:
-                summaries.append(f"{prefix}: {first_sentence}")
+            is_human = (msg["from_agent_id"] == sender_id)
+            points = _extract_message_essence(body, is_human)
+            all_points.extend(points)
 
-        if summaries:
-            # Combine into one memory (max 5 key points)
-            combined = "[conversation-history] " + " | ".join(summaries[:8])
-            # Only store if we don't have a very similar summary already
+        if all_points:
+            # Group into chunks of 10 points per summary memory
             existing = bus.search_agent_memory(agent_id, "[conversation-history]",
-                                               limit=5, db_path=db_path)
-            # Cap at 3 conversation history memories max
-            if len(existing) < 3:
+                                               limit=10, db_path=db_path)
+            # Cap at 5 conversation history memories max
+            slots_left = max(0, 5 - len(existing))
+            for i in range(0, len(all_points), 10):
+                if slots_left <= 0:
+                    break
+                chunk = all_points[i:i + 10]
+                combined = "[conversation-history] " + " | ".join(chunk)
                 bus.remember(agent_id, combined, memory_type="summary",
                              importance=6, source="auto_summary", db_path=db_path)
+                slots_left -= 1
 
         # Delete the old messages we just summarized
         if msg_ids_to_delete:
@@ -3288,11 +3717,21 @@ def start_worker(db_path: Path = None):
     def _loop():
         default_model = bus.get_config("default_model", "ollama", db_path=db_path)
         print(f"Agent worker started (default: {default_model}, poll: {POLL_INTERVAL}s)")
+        _cycle_count = 0
         while not _stop_event.is_set():
             try:
                 _process_queued_messages(db_path)
             except Exception as e:
                 print(f"[agent_worker] error: {e}")
+            _cycle_count += 1
+            # Periodic memory expiry cleanup (every ~100 cycles ≈ 50s)
+            if _cycle_count % 100 == 0:
+                try:
+                    expired = bus.cleanup_expired_memories(db_path=db_path)
+                    if expired:
+                        print(f"[memory] Cleaned up {expired} expired memories")
+                except Exception:
+                    pass
             _stop_event.wait(POLL_INTERVAL)
         print("Agent worker stopped.")
 

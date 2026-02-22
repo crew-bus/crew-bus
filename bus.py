@@ -549,7 +549,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
                             CHECK(memory_type IN ('fact','preference','instruction','summary','persona')),
             content         TEXT    NOT NULL,
             source          TEXT    NOT NULL DEFAULT 'conversation'
-                            CHECK(source IN ('conversation','user_command','synthesis','system')),
+                            CHECK(source IN ('conversation','user_command','synthesis','system','auto_summary')),
             importance      INTEGER NOT NULL DEFAULT 5 CHECK(importance BETWEEN 1 AND 10),
             access_count    INTEGER NOT NULL DEFAULT 0,
             last_accessed   TEXT,
@@ -829,6 +829,35 @@ def init_db(db_path: Optional[Path] = None) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_drafts(status, platform)")
         cur.execute("INSERT INTO social_drafts SELECT * FROM _social_drafts_old")
         cur.execute("DROP TABLE _social_drafts_old")
+
+    # Migrate: expand agent_memory source CHECK to include 'auto_summary'
+    _am_sql = cur.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_memory'"
+    ).fetchone()
+    if _am_sql and "'auto_summary'" not in (_am_sql[0] or ""):
+        cur.execute("ALTER TABLE agent_memory RENAME TO _agent_memory_old")
+        cur.execute("""CREATE TABLE agent_memory (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        INTEGER NOT NULL REFERENCES agents(id),
+            memory_type     TEXT    NOT NULL DEFAULT 'fact'
+                            CHECK(memory_type IN ('fact','preference','instruction','summary','persona')),
+            content         TEXT    NOT NULL,
+            source          TEXT    NOT NULL DEFAULT 'conversation'
+                            CHECK(source IN ('conversation','user_command','synthesis','system','auto_summary')),
+            importance      INTEGER NOT NULL DEFAULT 5 CHECK(importance BETWEEN 1 AND 10),
+            access_count    INTEGER NOT NULL DEFAULT 0,
+            last_accessed   TEXT,
+            expires_at      TEXT,
+            active          INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )""")
+        cur.execute("""CREATE INDEX IF NOT EXISTS idx_agent_memory_agent
+            ON agent_memory(agent_id, active, importance DESC)""")
+        cur.execute("""CREATE INDEX IF NOT EXISTS idx_agent_memory_type
+            ON agent_memory(agent_id, memory_type, active)""")
+        cur.execute("INSERT INTO agent_memory SELECT * FROM _agent_memory_old")
+        cur.execute("DROP TABLE _agent_memory_old")
 
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
@@ -2686,14 +2715,41 @@ def remember(agent_id: int, content: str, memory_type: str = "fact",
 
     Called when user says "remember X" or when agent extracts facts from
     conversation.  Returns the new memory_id.
+
+    Auto-expiry policy (zero maintenance):
+      - persona/instruction types: never expire
+      - importance 8-10: never expire
+      - importance 6-7: 90 days
+      - importance 4-5: 30 days
+      - importance 1-3: 7 days
+      - summary type: 60 days (unless importance >= 8)
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Calculate expiry
+    expires_at = None
+    if memory_type in ("persona", "instruction"):
+        expires_at = None  # never expire
+    elif importance >= 8:
+        expires_at = None
+    elif memory_type == "summary":
+        expires_at = (now_dt + timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    elif importance >= 6:
+        expires_at = (now_dt + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    elif importance >= 4:
+        expires_at = (now_dt + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    else:
+        expires_at = (now_dt + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     with db_write(db_path) as conn:
         cur = conn.execute(
             "INSERT INTO agent_memory "
-            "(agent_id, memory_type, content, source, importance, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (agent_id, memory_type, content, source, importance, now, now),
+            "(agent_id, memory_type, content, source, importance, "
+            "expires_at, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (agent_id, memory_type, content, source, importance,
+             expires_at, now, now),
         )
         memory_id = cur.lastrowid
         _audit(conn, "memory_stored", agent_id,
@@ -2791,6 +2847,62 @@ def search_agent_memory(agent_id: int, query: str,
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def cleanup_expired_memories(db_path: Optional[Path] = None) -> int:
+    """Soft-delete memories past their expires_at date.
+
+    Returns count of expired memories deactivated.
+    """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE agent_memory SET active=0, updated_at=? "
+            "WHERE active=1 AND expires_at IS NOT NULL AND expires_at <= ?",
+            (now, now),
+        )
+        count = cur.rowcount
+        if count > 0:
+            _audit(conn, "memory_expiry_cleanup", None,
+                   {"expired_count": count})
+    return count
+
+
+def get_shared_knowledge(category_filter: Optional[str] = None,
+                         limit: int = 10,
+                         db_path: Optional[Path] = None) -> list:
+    """Retrieve knowledge_store entries sorted by recency.
+
+    Unlike search_knowledge(), this doesn't require a LIKE pattern —
+    returns the most recent entries for cross-agent memory sharing.
+    """
+    conn = get_conn(db_path)
+    sql = (
+        "SELECT k.*, a.name AS agent_name "
+        "FROM knowledge_store k "
+        "JOIN agents a ON k.agent_id = a.id"
+    )
+    params: list = []
+
+    if category_filter:
+        sql += " WHERE k.category = ?"
+        params.append(category_filter)
+
+    sql += " ORDER BY k.updated_at DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        entry = dict(r)
+        try:
+            entry["content"] = json.loads(entry["content"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+        results.append(entry)
+    return results
 
 
 def synthesize_memories(agent_id: int, older_than_days: int = 7,
