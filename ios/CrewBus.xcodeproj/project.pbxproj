@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -15,14 +15,16 @@
 /* Begin PBXFileReference section */
 		316273E5F3BCEC5CD475F6FB /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		3FF2390844E7F84886751AF5 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
-		4DD639FF261CF61B860C9270 /* CrewBus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CrewBus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4DD639FF261CF61B860C9270 /* CrewBus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CrewBus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewBusApp.swift; sourceTree = "<group>"; };
+		EE97BF092F4A825E0099A431 /* CrewBus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = CrewBus.entitlements; path = CrewBus/CrewBus.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		3864487F334DF916C6CB98BC = {
 			isa = PBXGroup;
 			children = (
+				EE97BF092F4A825E0099A431 /* CrewBus.entitlements */,
 				727B72DC6A0C7E9AEB5E7411 /* Sources */,
 				993C797DF80F3567E176835E /* Products */,
 			);
@@ -32,6 +34,7 @@
 			isa = PBXGroup;
 			children = (
 				E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */,
+				4DD639FF261CF61B860C9270 /* CrewBus.app */,
 				316273E5F3BCEC5CD475F6FB /* DashboardView.swift */,
 				3FF2390844E7F84886751AF5 /* WebView.swift */,
 			);
@@ -42,7 +45,6 @@
 		993C797DF80F3567E176835E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4DD639FF261CF61B860C9270 /* CrewBus.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -75,11 +77,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1500;
-				TargetAttributes = {
-					B589BDC7FC8E164554439CFA = {
-						DevelopmentTeam = "";
-					};
-				};
 			};
 			buildConfigurationList = 25FF21C0B9E6E00A939FF348 /* Build configuration list for PBXProject "CrewBus" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -91,7 +88,6 @@
 			);
 			mainGroup = 3864487F334DF916C6CB98BC;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -118,9 +114,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CrewBus/CrewBus.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = KGG7W48LZG;
 				INFOPLIST_FILE = CrewBus/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -194,9 +191,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CrewBus/CrewBus.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = KGG7W48LZG;
 				INFOPLIST_FILE = CrewBus/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
