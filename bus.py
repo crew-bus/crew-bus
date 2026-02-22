@@ -954,6 +954,10 @@ def init_db(db_path: Optional[Path] = None) -> None:
     if "face_config" not in cols:
         cur.execute("ALTER TABLE agents ADD COLUMN face_config TEXT NOT NULL DEFAULT '{}'")
 
+    # Migrate: add title column to agents (paid team feature)
+    if "title" not in cols:
+        cur.execute("ALTER TABLE agents ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
     if existing == 0:
@@ -2416,9 +2420,14 @@ def get_agent_status(agent_id: int, db_path: Optional[Path] = None) -> dict:
 
 
 def get_agent_by_name(name: str, db_path: Optional[Path] = None) -> Optional[dict]:
-    """Look up an agent by name. Returns dict or None."""
+    """Look up an agent by name or title. Returns dict or None."""
     conn = get_conn(db_path)
     row = conn.execute("SELECT * FROM agents WHERE name = ?", (name,)).fetchone()
+    if not row:
+        # Fall back to title lookup (case-insensitive)
+        row = conn.execute(
+            "SELECT * FROM agents WHERE title = ? COLLATE NOCASE",
+            (name,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -4848,18 +4857,30 @@ def get_channel_members(channel_id: int,
 
 def crew_dm(from_id: int, to_name: str, body: str,
             db_path: Optional[Path] = None) -> dict:
-    """Send a direct message from one agent to another by name. Zero friction."""
+    """Send a direct message from one agent to another by name or title. Zero friction."""
     conn = get_conn(db_path)
     try:
-        # Exact match first — prevents "Boss" matching "Crew-Boss"
+        # Exact name match first — prevents "Boss" matching "Crew-Boss"
         row = conn.execute(
             "SELECT id, name FROM agents WHERE LOWER(name) = LOWER(?) AND active=1",
             (to_name,),
         ).fetchone()
         if not row:
-            # Partial match, but never match self (prevents Crew-Boss DMing itself)
+            # Exact title match
+            row = conn.execute(
+                "SELECT id, name FROM agents WHERE LOWER(title) = LOWER(?) AND active=1",
+                (to_name,),
+            ).fetchone()
+        if not row:
+            # Partial name match, but never match self
             row = conn.execute(
                 "SELECT id, name FROM agents WHERE LOWER(name) LIKE LOWER(?) AND active=1 AND id!=?",
+                (f"%{to_name}%", from_id),
+            ).fetchone()
+        if not row:
+            # Partial title match
+            row = conn.execute(
+                "SELECT id, name FROM agents WHERE LOWER(title) LIKE LOWER(?) AND active=1 AND id!=?",
                 (f"%{to_name}%", from_id),
             ).fetchone()
         if not row:

@@ -1240,6 +1240,8 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .team-mgr-bubble:hover .team-mgr-circle{box-shadow:0 0 20px rgba(88,166,255,.2)}
 .team-mgr-label{margin-top:6px;font-size:.85rem;font-weight:600;color:var(--tx)}
 .team-mgr-sub{font-size:.7rem;color:var(--mu)}
+.team-agent-title{display:block;font-size:.7rem;color:var(--mu);cursor:pointer;margin-top:2px;min-height:1.1em;transition:color .15s}
+.team-agent-title:hover{color:var(--ac)}
 .team-line-svg{display:block;margin:0 auto;width:100%;max-width:400px;height:40px}
 .team-line-svg line{stroke:var(--bd);stroke-width:1.5;stroke-dasharray:6 4;opacity:.5}
 .team-workers{
@@ -1314,6 +1316,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .as-title{font-weight:700;font-size:1rem;cursor:pointer;display:block;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .as-title:hover{opacity:.8}
+.as-subtitle{font-size:.7rem;color:var(--mu);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
 .as-online{font-size:.7rem;color:#00b894;display:flex;align-items:center;gap:4px;margin-top:2px}
 .as-online-dot{width:7px;height:7px;border-radius:50%;background:#00b894;
   display:inline-block;animation:dotPulse 1.5s ease-in-out infinite}
@@ -2701,6 +2704,11 @@ async function openAgentSpace(agentId){
   // Update header
   document.getElementById('as-name').textContent=name;
   document.getElementById('as-name').style.color=color;
+  var titleEl=document.getElementById('as-agent-title');
+  if(titleEl){
+    if(agent.title){titleEl.textContent=agent.title;titleEl.style.display='block';}
+    else{titleEl.textContent='';titleEl.style.display='none';}
+  }
   var avatar=document.getElementById('as-avatar');
   if(avatar){avatar.textContent=agentEmoji(agent);avatar.style.borderColor=agentBorderColor(agent.agent_type);avatar.style.boxShadow='0 0 15px '+agentBorderColor(agent.agent_type)+'33';}
   var onlineEl=document.getElementById('as-online');
@@ -2806,26 +2814,68 @@ async function openAgentSpace(agentId){
 
 // ══════════ RENAME AGENT ══════════
 
-function renameTeamAgent(agentId,labelEl,evt){
+function _rebuildLabel(labelEl,name){
+  labelEl.dataset.name=name;
+  labelEl.innerHTML=esc(name)+' <span class="edit-icon" onclick="renameTeamAgent('+labelEl.dataset.agentId+',this.parentElement,event,'+labelEl.dataset.isManager+')" title="Rename">\u270F\uFE0F</span>';
+}
+function renameTeamAgent(agentId,labelEl,evt,isManager){
   evt.stopPropagation();
-  var oldName=labelEl.textContent;
+  var oldName=labelEl.dataset.name||labelEl.textContent;
   var input=document.createElement('input');
   input.type='text';input.value=oldName;
   input.style.cssText='font-size:inherit;font-weight:inherit;color:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 6px;outline:none;width:'+Math.max(80,oldName.length*9)+'px;text-align:center;';
   labelEl.textContent='';labelEl.appendChild(input);input.focus();input.select();
+  var endpoint=isManager?'/api/teams/'+agentId+'/rename':'/api/agent/'+agentId+'/rename';
   function save(){
     var newName=input.value.trim();
-    if(!newName||newName===oldName){labelEl.textContent=oldName;return;}
-    apiPost('/api/agent/'+agentId+'/rename',{name:newName}).then(function(r){
-      if(r&&r.ok){labelEl.textContent=newName;showToast('Renamed to "'+newName+'"');loadTeams();}
-      else{labelEl.textContent=oldName;showToast(r&&r.error||'Rename failed','error');}
-    }).catch(function(){labelEl.textContent=oldName;showToast('Rename failed','error');});
+    if(!newName||newName===oldName){_rebuildLabel(labelEl,oldName);return;}
+    apiPost(endpoint,{name:newName}).then(function(r){
+      if(r&&r.ok){_rebuildLabel(labelEl,newName);showToast('Renamed to "'+newName+'"');loadTeams();}
+      else{_rebuildLabel(labelEl,oldName);showToast(r&&r.error||'Rename failed','error');}
+    }).catch(function(){_rebuildLabel(labelEl,oldName);showToast('Rename failed','error');});
   }
   var cancelled=false;
   input.addEventListener('blur',function(){if(!cancelled)save()});
   input.addEventListener('keydown',function(e){
     if(e.key==='Enter'){e.preventDefault();input.blur();}
-    if(e.key==='Escape'){cancelled=true;labelEl.textContent=oldName;}
+    if(e.key==='Escape'){cancelled=true;_rebuildLabel(labelEl,oldName);}
+  });
+}
+
+function editAgentTitle(agentId,el,evt){
+  evt.stopPropagation();
+  var oldTitle=el.dataset.currentTitle||el.textContent.trim();
+  if(oldTitle==='+ Add title')oldTitle='';
+  var input=document.createElement('input');
+  input.type='text';input.value=oldTitle;input.placeholder='e.g. Head of Sales';
+  input.style.cssText='font-size:.75rem;color:var(--mu);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 6px;outline:none;width:'+Math.max(100,(oldTitle||'').length*7+40)+'px;text-align:center;';
+  el.textContent='';el.appendChild(input);input.focus();input.select();
+  function save(){
+    var newTitle=input.value.trim();
+    if(newTitle===oldTitle){
+      el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';
+      el.dataset.currentTitle=oldTitle;return;
+    }
+    apiPost('/api/agent/'+agentId+'/title',{title:newTitle}).then(function(r){
+      if(r&&r.ok){
+        el.innerHTML=newTitle?esc(newTitle):'<em style="opacity:.5">+ Add title</em>';
+        el.dataset.currentTitle=newTitle;
+        if(newTitle)showToast('Title set to "'+newTitle+'"');
+        else showToast('Title removed');
+      }else{
+        el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';
+        showToast(r&&r.error||'Failed to set title','error');
+      }
+    }).catch(function(){
+      el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';
+      showToast('Failed to set title','error');
+    });
+  }
+  var cancelled=false;
+  input.addEventListener('blur',function(){if(!cancelled)save()});
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){cancelled=true;el.innerHTML=oldTitle?esc(oldTitle):'<em style="opacity:.5">+ Add title</em>';}
   });
 }
 
@@ -3812,12 +3862,16 @@ async function openTeamDash(teamId){
       :'<button class="btn-pause-team" onclick="pauseTeam('+teamId+',\''+esc(team.name).replace(/"/g,'&quot;')+'\')">Pause Team</button>')+
     '<button class="btn-delete-team" data-team-id="'+teamId+'" data-team-name="'+esc(team.name).replace(/"/g,'&quot;')+'" onclick="deleteTeam(+this.dataset.teamId,this.dataset.teamName)">Delete Team</button></div>';
 
-  // Manager bubble — click to open, double-click name to rename
+  // Manager bubble — click to open, click name/title to rename/edit
   if(mgr){
+    var mgrTitle=mgr.title||'';
     html+='<div class="team-mgr-wrap"><div class="team-mgr-bubble" onclick="openAgentSpace('+mgr.id+')">'+
       '<div class="team-mgr-circle">'+agentEmoji(mgr)+'<span class="status-dot '+dotClass(mgr.status,mgr.agent_type,null,mgr.active)+'" style="position:absolute;top:3px;right:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--sf)"></span></div>'+
-      '<span class="team-mgr-label">'+esc(mgr.name)+' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span>'+
-      '<span class="team-mgr-sub">Manager</span></div></div>';
+      '<span class="team-mgr-label"'+(canRename?' data-name="'+esc(mgr.name.replace("-Manager",""))+'" data-agent-id="'+mgr.id+'" data-is-manager="true"':'')+'>'+esc(mgr.name.replace('-Manager',''))+(canRename?' <span class="edit-icon" onclick="renameTeamAgent('+mgr.id+',this.parentElement,event,true)" title="Rename">\u270F\uFE0F</span>':'')+'</span>'+
+      (canRename
+        ?'<span class="team-agent-title" data-agent-id="'+mgr.id+'" onclick="editAgentTitle('+mgr.id+',this,event)" title="Click to set title">'+(mgrTitle?esc(mgrTitle):'<em style=\"opacity:.5\">+ Add title</em>')+'</span>'
+        :'<span class="team-mgr-sub">Manager</span>')+
+    '</div></div>';
   }
 
   // Filter out terminated workers
@@ -3835,12 +3889,17 @@ async function openTeamDash(teamId){
     html+='</svg>';
   }
 
-  // Worker bubbles — click to open, double-click name to rename
+  // Worker bubbles — click to open, click name/title to rename/edit
   html+='<div class="team-workers">';
   workers.forEach(function(w){
+    var wTitle=w.title||'';
     html+='<div class="team-worker-bubble" onclick="openAgentSpace('+w.id+')">'+
       '<div class="team-worker-circle">'+agentEmoji(w)+'<span class="team-worker-dot '+dotClass(w.status,w.agent_type,null,w.active)+'"></span></div>'+
-      '<span class="team-worker-label">'+esc(w.name)+' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event)" title="Rename">\u270F\uFE0F</span></span></div>';
+      '<span class="team-worker-label"'+(canRename?' data-name="'+esc(w.name)+'" data-agent-id="'+w.id+'" data-is-manager="false"':'')+'>'+esc(w.name)+(canRename?' <span class="edit-icon" onclick="renameTeamAgent('+w.id+',this.parentElement,event,false)" title="Rename">\u270F\uFE0F</span>':'')+'</span>'+
+      (canRename
+        ?'<span class="team-agent-title" data-agent-id="'+w.id+'" onclick="editAgentTitle('+w.id+',this,event)" title="Click to set title">'+(wTitle?esc(wTitle):'<em style=\"opacity:.5\">+ Add title</em>')+'</span>'
+        :'')+
+    '</div>';
   });
   // Hire Agent button (if under max)
   if(mgr&&teamAgents.length<10){
@@ -5023,6 +5082,7 @@ def _build_html():
     <div id="as-crewface" style="margin:0 4px"></div>
     <div class="as-name-wrap">
       <span class="as-title" id="as-name" onclick="startRenameAgent()">Crew Boss</span>
+      <span class="as-subtitle" id="as-agent-title" style="display:none"></span>
       <div class="as-online" id="as-online"><span class="as-online-dot"></span>Online</div>
     </div>
     <div class="as-topbar-actions">
@@ -5857,6 +5917,30 @@ def _get_teams(db_path):
         return teams
     finally:
         conn.close()
+
+def _is_paid_team_agent(conn, agent_row):
+    """Check if an agent belongs to a paid team (not a free/locked_name template)."""
+    if agent_row["agent_type"] == "manager":
+        mgr_name = agent_row["name"]
+    elif agent_row["parent_agent_id"]:
+        mgr = conn.execute(
+            "SELECT name FROM agents WHERE id=? AND agent_type='manager'",
+            (agent_row["parent_agent_id"],)).fetchone()
+        if not mgr:
+            return False
+        mgr_name = mgr["name"]
+    else:
+        return False  # not a team agent
+    team_name = mgr_name.replace("-Manager", "").replace("Manager", "Team")
+    # Strip numbering suffix (e.g. "Freelance 2" → "Freelance")
+    base_name = team_name.rsplit(" ", 1)[0] if team_name and team_name[-1].isdigit() else team_name
+    for tpl in TEAM_TEMPLATES.values():
+        if tpl["name"] == base_name or tpl["name"] == team_name:
+            if tpl.get("locked_name"):
+                return False  # free team
+            return True  # paid team
+    # Custom/unknown teams are treated as paid (they required a key to create)
+    return True
 
 def _get_team_agents(db_path, team_id):
     """Get all agents belonging to a team (the manager + its workers)."""
@@ -7654,10 +7738,16 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             conn = bus.get_conn(self.db_path)
             try:
                 agent_row = conn.execute(
-                    "SELECT id, name, agent_type FROM agents WHERE id=?",
+                    "SELECT id, name, agent_type, parent_agent_id FROM agents WHERE id=?",
                     (agent_id,)).fetchone()
                 if not agent_row:
                     return _json_response(self, {"error": "agent not found"}, 404)
+                # Team agents (manager/worker) can only be renamed in paid teams
+                if agent_row["agent_type"] in ("manager", "worker"):
+                    if not _is_paid_team_agent(conn, agent_row):
+                        return _json_response(self, {
+                            "error": "Free teams can't rename agents. Upgrade to a paid team to unlock."
+                        }, 403)
                 old_name = agent_row["name"]
                 existing = conn.execute(
                     "SELECT id FROM agents WHERE name=? AND id!=?",
@@ -7681,6 +7771,36 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                     self.db_path, agent_id, old_name, new_name)
 
             return _json_response(self, {"ok": True, "id": agent_id, "name": new_name})
+
+        # ── Set agent title (paid teams only) ──
+
+        m = re.match(r"^/api/agent/(\d+)/title$", path)
+        if m:
+            agent_id = int(m.group(1))
+            new_title = data.get("title", "").strip()
+            if len(new_title) > 60:
+                return _json_response(self, {"error": "title too long (max 60 chars)"}, 400)
+            conn = bus.get_conn(self.db_path)
+            try:
+                agent_row = conn.execute(
+                    "SELECT id, name, agent_type, parent_agent_id FROM agents WHERE id=?",
+                    (agent_id,)).fetchone()
+                if not agent_row:
+                    return _json_response(self, {"error": "agent not found"}, 404)
+                # Check if agent is in a paid team
+                if not _is_paid_team_agent(conn, agent_row):
+                    return _json_response(self, {
+                        "error": "Titles are a paid team feature. Upgrade to unlock."
+                    }, 403)
+            finally:
+                conn.close()
+            with bus.db_write(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE agents SET title=?, "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                    "WHERE id=?",
+                    (new_title, agent_id))
+            return _json_response(self, {"ok": True, "id": agent_id, "title": new_title})
 
         # ── Deactivate agent ──
 
