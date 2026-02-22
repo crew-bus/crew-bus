@@ -41,7 +41,7 @@ targets:
       MARKETING_VERSION: "1.0.0"
       CURRENT_PROJECT_VERSION: "1"
       SWIFT_VERSION: "5.9"
-      DEVELOPMENT_TEAM: ""
+      DEVELOPMENT_TEAM: "KGG7W48LZG"
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     entitlements:
       path: CrewBus/Resources/CrewBus.entitlements
