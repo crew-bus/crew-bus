@@ -2,8 +2,8 @@ import Foundation
 
 @Observable
 public final class ChatService {
-    public private(set) var messages: [ChatMessage] = []
-    public private(set) var isLoading = false
+    public var messages: [ChatMessage] = []
+    public var isLoading = false
 
     private let client: APIClient
     private var pollingTask: Task<Void, Never>?
@@ -43,6 +43,13 @@ public final class ChatService {
         } catch {
             print("Send failed: \(error)")
         }
+    }
+
+    public func forceRefresh(agentId: Int) async {
+        // Clear chat history on the server
+        await clearChat(agentId: agentId)
+        // Restart polling for fresh state
+        startPolling(agentId: agentId)
     }
 
     public func clearChat(agentId: Int) async {

@@ -23,6 +23,15 @@ public enum APIEndpoints {
         "/api/agent/\(id)/chat/clear"
     }
 
+    public static func agentRename(_ id: Int) -> String {
+        "/api/agent/\(id)/rename"
+    }
+
+    public static func agentTerminate(_ id: Int) -> String {
+        "/api/agent/\(id)/terminate"
+    }
+
+    public static let createAgent = "/api/agents/create"
     public static let trust = "/api/trust"
     public static let burnout = "/api/burnout"
 

@@ -4,11 +4,19 @@ import CrewBusKit
 struct ChatView: View {
     let agent: Agent
     @Environment(AppState.self) private var appState
+    @State private var refreshTrigger = 0
+
+    /// Always use the latest version of this agent from appState.
+    private var liveAgent: Agent {
+        appState.agents.first { $0.id == agent.id } ?? agent
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header with back button + agent info
-            ChatHeaderView(agent: agent)
+            ChatHeaderView(agent: liveAgent, onRefresh: {
+                refreshTrigger += 1
+            })
 
             // Messages area
             ScrollViewReader { proxy in
@@ -18,7 +26,7 @@ struct ChatView: View {
                             emptyChatState
                         } else {
                             ForEach(appState.chatService.messages) { msg in
-                                ChatBubbleView(message: msg, agentName: agent.resolvedDisplayName)
+                                ChatBubbleView(message: msg, agentName: liveAgent.resolvedDisplayName)
                                     .id(msg.id)
                             }
 
@@ -42,7 +50,7 @@ struct ChatView: View {
             }
 
             // Input
-            ChatInputView(agentId: agent.id, agentName: agent.resolvedDisplayName)
+            ChatInputView(agentId: liveAgent.id, agentName: liveAgent.resolvedDisplayName)
         }
         .background(CrewTheme.bg)
         .onAppear {
@@ -54,12 +62,18 @@ struct ChatView: View {
         .onChange(of: agent.id) { _, newId in
             appState.chatService.startPolling(agentId: newId)
         }
+        .onChange(of: refreshTrigger) {
+            let agentId = agent.id
+            Task {
+                await appState.chatService.forceRefresh(agentId: agentId)
+            }
+        }
     }
 
     private var emptyChatState: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 80)
-            Text("Say hi to \(agent.resolvedDisplayName)!")
+            Text("Say hi to \(liveAgent.resolvedDisplayName)!")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(CrewTheme.text)
             Text("Just type a message below.")

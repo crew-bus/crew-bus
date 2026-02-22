@@ -4618,7 +4618,11 @@ def _get_agent_chat(db_path, agent_id, limit=50):
         conn.close()
 
 def _clear_agent_chat(db_path, agent_id):
-    """Clear chat history between the human and an agent (start fresh)."""
+    """Clear chat history between the human and an agent (start fresh).
+
+    Before deleting, summarizes the conversation into agent memory
+    so the agent retains key context from past conversations.
+    """
     conn = bus.get_conn(db_path)
     try:
         human = conn.execute(
@@ -4627,8 +4631,43 @@ def _clear_agent_chat(db_path, agent_id):
         if not human:
             return {"ok": False, "error": "no human agent"}
         hid = human["id"]
+
+        # Fetch all messages before deleting so we can summarize
+        rows = conn.execute("""
+            SELECT from_agent_id, body, subject, created_at
+            FROM messages
+            WHERE ((from_agent_id=? AND to_agent_id=?)
+                OR (from_agent_id=? AND to_agent_id=?))
+              AND body IS NOT NULL AND body != ''
+            ORDER BY created_at ASC
+        """, (hid, agent_id, agent_id, hid)).fetchall()
     finally:
         conn.close()
+
+    # Summarize into memory before clearing
+    if rows:
+        summaries = []
+        for r in rows:
+            body = r["body"]
+            if not body or len(body) < 10:
+                continue
+            if body.startswith("[") or body.startswith("=="):
+                continue
+            is_human = (r["from_agent_id"] == hid)
+            prefix = "Human said" if is_human else "I replied"
+            first_sentence = body.split(".")[0].split("!")[0].split("?")[0]
+            if len(first_sentence) > 150:
+                first_sentence = first_sentence[:150] + "..."
+            if len(first_sentence) > 15:
+                summaries.append(f"{prefix}: {first_sentence}")
+
+        if summaries:
+            # Keep up to 20 key points from the cleared conversation
+            combined = "[cleared-chat-memory] " + " | ".join(summaries[:20])
+            bus.remember(agent_id, combined, memory_type="summary",
+                         importance=7, source="system", db_path=db_path)
+
+    # Now delete the messages
     with bus.db_write(db_path) as wconn:
         wconn.execute("""
             DELETE FROM messages

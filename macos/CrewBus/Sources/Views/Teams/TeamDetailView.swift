@@ -4,6 +4,8 @@ import CrewBusKit
 struct TeamDetailView: View {
     let team: Team
     @Environment(AppState.self) private var appState
+    @State private var showHireSheet = false
+    @State private var agentToTerminate: Agent?
 
     // Derive manager/workers from team agents
     private var managerAgent: Agent? {
@@ -18,6 +20,17 @@ struct TeamDetailView: View {
         return appState.teamAgents.filter {
             $0.agentType == "worker" && $0.parentAgentId == mgr.id
         }
+    }
+
+    private func terminateAgent(_ agent: Agent) {
+        Task {
+            try? await appState.client.post(
+                APIEndpoints.agentTerminate(agent.id),
+                body: [:]
+            )
+            await appState.loadInitialData()
+        }
+        agentToTerminate = nil
     }
 
     var body: some View {
@@ -52,6 +65,27 @@ struct TeamDetailView: View {
             }
         }
         .background(CrewTheme.bg)
+        .sheet(isPresented: $showHireSheet) {
+            HireAgentSheet(managerName: managerAgent?.name ?? team.manager)
+        }
+        .alert(
+            "Terminate Agent",
+            isPresented: Binding(
+                get: { agentToTerminate != nil },
+                set: { if !$0 { agentToTerminate = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { agentToTerminate = nil }
+            Button("Terminate", role: .destructive) {
+                if let agent = agentToTerminate {
+                    terminateAgent(agent)
+                }
+            }
+        } message: {
+            if let agent = agentToTerminate {
+                Text("Terminate \"\(agent.resolvedDisplayName)\"? This retires the agent permanently and archives all messages.")
+            }
+        }
     }
 
     // MARK: - Header
@@ -128,7 +162,14 @@ struct TeamDetailView: View {
         VStack(spacing: 0) {
             // Manager node
             if let mgr = managerAgent {
-                agentNode(agent: mgr, size: 80, ringColor: CrewTheme.accent, subtitle: "Manager")
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        appState.navDestination = .agentChat(mgr)
+                    }
+                } label: {
+                    agentNode(agent: mgr, size: 80, ringColor: CrewTheme.accent, subtitle: "Manager")
+                }
+                .buttonStyle(.plain)
             } else {
                 placeholderNode(size: 80, label: team.manager.isEmpty ? "Manager" : team.manager, subtitle: "Manager")
             }
@@ -141,23 +182,48 @@ struct TeamDetailView: View {
             // Worker nodes + Hire Agent
             HStack(spacing: 24) {
                 ForEach(workerAgents) { worker in
-                    agentNode(agent: worker, size: 60, ringColor: CrewTheme.border, subtitle: "Worker")
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            appState.navDestination = .agentChat(worker)
+                        }
+                    } label: {
+                        agentNode(agent: worker, size: 60, ringColor: CrewTheme.border, subtitle: "Worker")
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                appState.navDestination = .agentChat(worker)
+                            }
+                        } label: {
+                            Label("Chat", systemImage: "message")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            agentToTerminate = worker
+                        } label: {
+                            Label("Terminate", systemImage: "trash")
+                        }
+                    }
                 }
 
-                // Hire Agent placeholder
-                VStack(spacing: 8) {
-                    Circle()
-                        .stroke(CrewTheme.border, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Image(systemName: "plus")
-                                .font(.system(size: 20))
-                                .foregroundStyle(CrewTheme.muted)
-                        )
-                    Text("Hire Agent")
-                        .font(.system(size: 11))
-                        .foregroundStyle(CrewTheme.muted)
+                // Hire Agent button
+                Button { showHireSheet = true } label: {
+                    VStack(spacing: 8) {
+                        Circle()
+                            .stroke(CrewTheme.border, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                Image(systemName: "plus")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(CrewTheme.muted)
+                            )
+                        Text("Hire Agent")
+                            .font(.system(size: 11))
+                            .foregroundStyle(CrewTheme.muted)
+                    }
                 }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
@@ -300,6 +366,124 @@ struct TeamDetailView: View {
         .background(CrewTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(CrewTheme.border, lineWidth: 1))
+    }
+}
+
+// MARK: - Hire Agent Sheet
+
+struct HireAgentSheet: View {
+    let managerName: String
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
+    @State private var agentName = ""
+    @State private var agentDescription = ""
+    @State private var errorMessage = ""
+    @State private var isHiring = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 6) {
+                Text("Hire a New Agent")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(CrewTheme.text)
+                Text("Reports to \(managerName)")
+                    .font(.caption)
+                    .foregroundStyle(CrewTheme.muted)
+            }
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+
+            Divider().background(CrewTheme.border)
+
+            VStack(spacing: 12) {
+                TextField("Agent name", text: $agentName)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .padding(10)
+                    .background(CrewTheme.bg)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.border, lineWidth: 1))
+
+                TextField("What does this agent do? (optional)", text: $agentDescription)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .padding(10)
+                    .background(CrewTheme.bg)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.border, lineWidth: 1))
+
+                if !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(CrewTheme.highlight)
+                }
+            }
+            .padding(20)
+
+            Divider().background(CrewTheme.border)
+
+            HStack(spacing: 12) {
+                Button("Cancel") { dismiss() }
+                    .font(.system(size: 14))
+                    .foregroundStyle(CrewTheme.muted)
+                    .buttonStyle(.plain)
+
+                Button {
+                    hire()
+                } label: {
+                    if isHiring {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 60)
+                    } else {
+                        Text("Hire")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(agentName.trimmingCharacters(in: .whitespaces).isEmpty ? CrewTheme.muted : CrewTheme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .buttonStyle(.plain)
+                .disabled(agentName.trimmingCharacters(in: .whitespaces).isEmpty || isHiring)
+            }
+            .padding(.vertical, 14)
+        }
+        .frame(width: 360)
+        .background(CrewTheme.surface)
+    }
+
+    private func hire() {
+        let name = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            errorMessage = "Name is required."
+            return
+        }
+        isHiring = true
+        errorMessage = ""
+        Task {
+            do {
+                var body: [String: Any] = [
+                    "name": name,
+                    "agent_type": "worker",
+                    "parent": managerName
+                ]
+                let desc = agentDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !desc.isEmpty { body["description"] = desc }
+
+                try await appState.client.post(APIEndpoints.createAgent, body: body)
+                await appState.loadInitialData()
+                await MainActor.run { dismiss() }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to hire agent."
+                    isHiring = false
+                }
+            }
+        }
     }
 }
 
