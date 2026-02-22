@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Team: Codable, Identifiable {
+public struct Team: Codable, Identifiable, Equatable, Hashable {
     public let id: Int
     public let name: String
     public let icon: String

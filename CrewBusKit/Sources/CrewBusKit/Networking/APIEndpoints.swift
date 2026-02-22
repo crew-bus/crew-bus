@@ -22,4 +22,11 @@ public enum APIEndpoints {
     public static func agentChatClear(_ id: Int) -> String {
         "/api/agent/\(id)/chat/clear"
     }
+
+    public static let trust = "/api/trust"
+    public static let burnout = "/api/burnout"
+
+    public static func team(_ id: Int) -> String {
+        "/api/teams/\(id)"
+    }
 }

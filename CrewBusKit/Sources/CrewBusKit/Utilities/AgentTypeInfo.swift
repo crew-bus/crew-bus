@@ -25,6 +25,8 @@ public struct AgentTypeInfo {
             return AgentTypeInfo(displayName: "Team Manager", symbolName: "person.3.fill", color: .indigo)
         case "worker":
             return AgentTypeInfo(displayName: "Worker", symbolName: "wrench.fill", color: .gray)
+        case "vault":
+            return AgentTypeInfo(displayName: "Vault", symbolName: "lock.shield.fill", color: Color(red: 0.74, green: 0.55, blue: 1.0))
         default:
             return AgentTypeInfo(displayName: agentType.capitalized, symbolName: "cpu", color: .secondary)
         }

@@ -1,11 +1,35 @@
 import Foundation
 import CrewBusKit
 
+// MARK: - Navigation
+
+enum NavDestination: Equatable {
+    case dashboard
+    case agentChat(Agent)
+    case teamDetail(Team)
+
+    var transitionId: String {
+        switch self {
+        case .dashboard:        return "dashboard"
+        case .agentChat(let a): return "chat-\(a.id)"
+        case .teamDetail(let t): return "team-\(t.id)"
+        }
+    }
+}
+
+enum ColorSchemePreference {
+    case light, dark
+}
+
+// MARK: - App State
+
 @Observable
 final class AppState {
     var agents: [Agent] = []
     var stats: CrewStats?
-    var selectedAgent: Agent?
+    var teams: [Team] = []
+    var navDestination: NavDestination = .dashboard
+    var colorScheme: ColorSchemePreference = .dark
     var isServerReady = false
     var isLoading = false
     var serverError: String?
@@ -35,7 +59,6 @@ final class AppState {
 
     func startMonitoring() {
         Task {
-            // Wait for server to become ready
             while !serverManager.isReady && serverManager.error == nil {
                 try? await Task.sleep(for: .milliseconds(200))
             }
@@ -60,14 +83,34 @@ final class AppState {
         do {
             let fetchedStats: CrewStats = try await client.get(APIEndpoints.stats)
             let fetchedAgents: [Agent] = try await client.get(APIEndpoints.agents)
+            let fetchedTeams: [Team] = try await client.get(APIEndpoints.teams)
             await MainActor.run {
                 self.stats = fetchedStats
                 self.agents = fetchedAgents
+                self.teams = fetchedTeams
                 self.isLoading = false
             }
         } catch {
             print("Failed to load data: \(error)")
             await MainActor.run { self.isLoading = false }
+        }
+    }
+
+    func updateTrustScore(_ score: Int) async {
+        do {
+            try await client.post(APIEndpoints.trust, body: ["score": score])
+            await loadInitialData()
+        } catch {
+            print("Failed to update trust score: \(error)")
+        }
+    }
+
+    func updateBurnoutScore(_ score: Int) async {
+        do {
+            try await client.post(APIEndpoints.burnout, body: ["score": score])
+            await loadInitialData()
+        } catch {
+            print("Failed to update burnout score: \(error)")
         }
     }
 
@@ -92,12 +135,14 @@ final class AppState {
         do {
             let fetchedStats: CrewStats = try await client.get(APIEndpoints.stats)
             let fetchedAgents: [Agent] = try await client.get(APIEndpoints.agents)
+            let fetchedTeams: [Team] = try await client.get(APIEndpoints.teams)
             await MainActor.run {
                 self.stats = fetchedStats
                 self.agents = fetchedAgents
+                self.teams = fetchedTeams
             }
         } catch {
-            // Silent refresh failure — don't disrupt the UI
+            // Silent refresh failure
         }
     }
 }

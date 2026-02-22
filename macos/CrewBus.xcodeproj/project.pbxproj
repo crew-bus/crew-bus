@@ -8,40 +8,62 @@
 
 /* Begin PBXBuildFile section */
 		36C28E7CD597024421D19A97 /* TeamsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69215AAFBE73E8539AD98B4 /* TeamsListView.swift */; };
+		37B4DD535540AB79ADBDA6AB /* AgentCircleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E3512DF9E80BDDBF96AE95 /* AgentCircleView.swift */; };
 		3868B6EB7F391B000669F1F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F491B6A7AEF64F3EDA281E48 /* AppDelegate.swift */; };
+		3F66163D09E4DEA3453AAF8A /* ConnectionLinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18B547946D8D3B693EF2F53C /* ConnectionLinesView.swift */; };
 		431E120B95675A375EC8FB29 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00EADCE776DFD8136570AC3 /* MainView.swift */; };
+		504991FED8D356396E7F2488 /* CrewTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FC84BF2472292212AA5546 /* CrewTheme.swift */; };
+		58BE4ED4491CCE0782A01405 /* HamburgerMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */; };
 		6432771414C237C6A7115DBD /* CrewBusKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2A3D76AC94280AA0F1171339 /* CrewBusKit */; };
+		6ABAD886DAF41502C1C6A0E6 /* ConstellationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A2F804B0F1FC9783E53D6F /* ConstellationView.swift */; };
 		6F56DA297336898A6CC0D0C8 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41262803DABA11ABFC4A96C8 /* DashboardView.swift */; };
 		6FED2D19ECD473FA765F2BED /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1CC97AAE72A5F8B62802001 /* AppState.swift */; };
-		73F952097829ACD761D37BA3 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2016906219E70F6028CF1D2D /* SidebarView.swift */; };
 		7522DBC21A2D78D4940C07A0 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A641160E812C6B713CC054 /* ChatView.swift */; };
+		860B1D65E272FDD93939C329 /* AddTeamSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799142024EB373FF7B662127 /* AddTeamSheet.swift */; };
 		89BE762810FE56792350CC4A /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A979613C70183C5AD78F607F /* SetupView.swift */; };
+		903F3FAAB7B78D1187A993EE /* SunMoonToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C6CEDB510DF4597481B50D /* SunMoonToggleView.swift */; };
+		953B4FE94F37433BF732AB9B /* TrustEnergyPillsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DDF0E73FA94516815C1FE3 /* TrustEnergyPillsView.swift */; };
 		9AC68154C41464EEAFBC8310 /* ChatBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0CCCD4F566325270667F568 /* ChatBubbleView.swift */; };
 		9B1080F3C0FBE947954FC8EC /* StatsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7564036E5861AFC600BD9AA /* StatsCardView.swift */; };
+		A0E7F71DE2D6A589BFBAC9CF /* TopBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6177D5823DA899CCE92DA5A /* TopBarView.swift */; };
 		AA815DD85854F66332C1EE7D /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3497324F6468615DEFFE93 /* AgentDetailView.swift */; };
+		BA99BCB7A854527EC7A4D097 /* TeamsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF2D639DA36B53CD81572350 /* TeamsPanelView.swift */; };
 		BAA373537C6EA2B5AE495890 /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B770D509ADCD35EBF44EAD94 /* ChatInputView.swift */; };
+		C4E8CC0036ED061E86F4DDF8 /* AdjustSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2475BF29C20FA52CDA350524 /* AdjustSettingsSheet.swift */; };
 		C5D459DE8F5B59162AC0E757 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2999E8FD9F11268D74B1E12 /* ServerManager.swift */; };
+		D1035F19679A4FD0AF77393B /* TeamDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36817F57D49A30D568A55C3E /* TeamDetailView.swift */; };
 		D5149E85FAC71E538584308C /* CrewBusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */; };
+		E12E524EF45C1DF5C5BF0C03 /* ChatHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4188DAC9CCF4660FA2FD2A61 /* ChatHeaderView.swift */; };
 		ECC48B89108F5A6CA0E7A279 /* DecisionLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E1FF4DB74CF4AFC6F601366 /* DecisionLogView.swift */; };
-		F2F188800BE6274EC0456AA8 /* AgentRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071FA1001527853DCC58BCB6 /* AgentRow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		071FA1001527853DCC58BCB6 /* AgentRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRow.swift; sourceTree = "<group>"; };
-		2016906219E70F6028CF1D2D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		15DDF0E73FA94516815C1FE3 /* TrustEnergyPillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustEnergyPillsView.swift; sourceTree = "<group>"; };
+		18B547946D8D3B693EF2F53C /* ConnectionLinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionLinesView.swift; sourceTree = "<group>"; };
+		19A2F804B0F1FC9783E53D6F /* ConstellationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstellationView.swift; sourceTree = "<group>"; };
+		19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HamburgerMenuView.swift; sourceTree = "<group>"; };
+		2475BF29C20FA52CDA350524 /* AdjustSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustSettingsSheet.swift; sourceTree = "<group>"; };
 		2B3497324F6468615DEFFE93 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
+		36817F57D49A30D568A55C3E /* TeamDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamDetailView.swift; sourceTree = "<group>"; };
 		41262803DABA11ABFC4A96C8 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		4188DAC9CCF4660FA2FD2A61 /* ChatHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHeaderView.swift; sourceTree = "<group>"; };
 		4DD639FF261CF61B860C9270 /* CrewBus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CrewBus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E1FF4DB74CF4AFC6F601366 /* DecisionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecisionLogView.swift; sourceTree = "<group>"; };
+		70C6CEDB510DF4597481B50D /* SunMoonToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunMoonToggleView.swift; sourceTree = "<group>"; };
 		72A641160E812C6B713CC054 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		799142024EB373FF7B662127 /* AddTeamSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTeamSheet.swift; sourceTree = "<group>"; };
 		A2999E8FD9F11268D74B1E12 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
 		A979613C70183C5AD78F607F /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		B6177D5823DA899CCE92DA5A /* TopBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBarView.swift; sourceTree = "<group>"; };
 		B770D509ADCD35EBF44EAD94 /* ChatInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
+		B9FC84BF2472292212AA5546 /* CrewTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewTheme.swift; sourceTree = "<group>"; };
 		C0CCCD4F566325270667F568 /* ChatBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBubbleView.swift; sourceTree = "<group>"; };
+		C2E3512DF9E80BDDBF96AE95 /* AgentCircleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCircleView.swift; sourceTree = "<group>"; };
 		D7564036E5861AFC600BD9AA /* StatsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsCardView.swift; sourceTree = "<group>"; };
 		DB8BC222B5C256BB435235D5 /* CrewBusKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CrewBusKit; path = ../CrewBusKit; sourceTree = SOURCE_ROOT; };
 		E00EADCE776DFD8136570AC3 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewBusApp.swift; sourceTree = "<group>"; };
+		EF2D639DA36B53CD81572350 /* TeamsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamsPanelView.swift; sourceTree = "<group>"; };
 		F1CC97AAE72A5F8B62802001 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		F491B6A7AEF64F3EDA281E48 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F69215AAFBE73E8539AD98B4 /* TeamsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamsListView.swift; sourceTree = "<group>"; };
@@ -62,7 +84,10 @@
 		21FC0F6DFB4C942C2A02C786 /* Teams */ = {
 			isa = PBXGroup;
 			children = (
+				799142024EB373FF7B662127 /* AddTeamSheet.swift */,
+				36817F57D49A30D568A55C3E /* TeamDetailView.swift */,
 				F69215AAFBE73E8539AD98B4 /* TeamsListView.swift */,
+				EF2D639DA36B53CD81572350 /* TeamsPanelView.swift */,
 			);
 			path = Teams;
 			sourceTree = "<group>";
@@ -90,20 +115,12 @@
 				F491B6A7AEF64F3EDA281E48 /* AppDelegate.swift */,
 				F1CC97AAE72A5F8B62802001 /* AppState.swift */,
 				E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */,
+				B9FC84BF2472292212AA5546 /* CrewTheme.swift */,
 				A2999E8FD9F11268D74B1E12 /* ServerManager.swift */,
 				DBAB6FA772C17B45DDB56FD4 /* Views */,
 			);
 			name = Sources;
 			path = CrewBus/Sources;
-			sourceTree = "<group>";
-		};
-		765BB82738A4BC798C7AF751 /* Sidebar */ = {
-			isa = PBXGroup;
-			children = (
-				071FA1001527853DCC58BCB6 /* AgentRow.swift */,
-				2016906219E70F6028CF1D2D /* SidebarView.swift */,
-			);
-			path = Sidebar;
 			sourceTree = "<group>";
 		};
 		993C797DF80F3567E176835E /* Products */ = {
@@ -118,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				C0CCCD4F566325270667F568 /* ChatBubbleView.swift */,
+				4188DAC9CCF4660FA2FD2A61 /* ChatHeaderView.swift */,
 				B770D509ADCD35EBF44EAD94 /* ChatInputView.swift */,
 				72A641160E812C6B713CC054 /* ChatView.swift */,
 			);
@@ -127,13 +145,14 @@
 		DBAB6FA772C17B45DDB56FD4 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */,
 				E00EADCE776DFD8136570AC3 /* MainView.swift */,
+				B6177D5823DA899CCE92DA5A /* TopBarView.swift */,
 				FA0D8681FD51A3C9D95E54BB /* Agents */,
 				CABCE59C3DEC83F702B11B5D /* Chat */,
 				F792B7254D5BB848C9EE1CE0 /* Dashboard */,
 				27E6EC80BBF6324E80E96C35 /* Decisions */,
 				E6F2BC2A05B8331E32B70692 /* Setup */,
-				765BB82738A4BC798C7AF751 /* Sidebar */,
 				21FC0F6DFB4C942C2A02C786 /* Teams */,
 			);
 			path = Views;
@@ -150,8 +169,14 @@
 		F792B7254D5BB848C9EE1CE0 /* Dashboard */ = {
 			isa = PBXGroup;
 			children = (
+				2475BF29C20FA52CDA350524 /* AdjustSettingsSheet.swift */,
+				C2E3512DF9E80BDDBF96AE95 /* AgentCircleView.swift */,
+				18B547946D8D3B693EF2F53C /* ConnectionLinesView.swift */,
+				19A2F804B0F1FC9783E53D6F /* ConstellationView.swift */,
 				41262803DABA11ABFC4A96C8 /* DashboardView.swift */,
 				D7564036E5861AFC600BD9AA /* StatsCardView.swift */,
+				70C6CEDB510DF4597481B50D /* SunMoonToggleView.swift */,
+				15DDF0E73FA94516815C1FE3 /* TrustEnergyPillsView.swift */,
 			);
 			path = Dashboard;
 			sourceTree = "<group>";
@@ -235,22 +260,33 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				860B1D65E272FDD93939C329 /* AddTeamSheet.swift in Sources */,
+				C4E8CC0036ED061E86F4DDF8 /* AdjustSettingsSheet.swift in Sources */,
+				37B4DD535540AB79ADBDA6AB /* AgentCircleView.swift in Sources */,
 				AA815DD85854F66332C1EE7D /* AgentDetailView.swift in Sources */,
-				F2F188800BE6274EC0456AA8 /* AgentRow.swift in Sources */,
 				3868B6EB7F391B000669F1F8 /* AppDelegate.swift in Sources */,
 				6FED2D19ECD473FA765F2BED /* AppState.swift in Sources */,
 				9AC68154C41464EEAFBC8310 /* ChatBubbleView.swift in Sources */,
+				E12E524EF45C1DF5C5BF0C03 /* ChatHeaderView.swift in Sources */,
 				BAA373537C6EA2B5AE495890 /* ChatInputView.swift in Sources */,
 				7522DBC21A2D78D4940C07A0 /* ChatView.swift in Sources */,
+				3F66163D09E4DEA3453AAF8A /* ConnectionLinesView.swift in Sources */,
+				6ABAD886DAF41502C1C6A0E6 /* ConstellationView.swift in Sources */,
 				D5149E85FAC71E538584308C /* CrewBusApp.swift in Sources */,
+				504991FED8D356396E7F2488 /* CrewTheme.swift in Sources */,
 				6F56DA297336898A6CC0D0C8 /* DashboardView.swift in Sources */,
 				ECC48B89108F5A6CA0E7A279 /* DecisionLogView.swift in Sources */,
+				58BE4ED4491CCE0782A01405 /* HamburgerMenuView.swift in Sources */,
 				431E120B95675A375EC8FB29 /* MainView.swift in Sources */,
 				C5D459DE8F5B59162AC0E757 /* ServerManager.swift in Sources */,
 				89BE762810FE56792350CC4A /* SetupView.swift in Sources */,
-				73F952097829ACD761D37BA3 /* SidebarView.swift in Sources */,
 				9B1080F3C0FBE947954FC8EC /* StatsCardView.swift in Sources */,
+				903F3FAAB7B78D1187A993EE /* SunMoonToggleView.swift in Sources */,
+				D1035F19679A4FD0AF77393B /* TeamDetailView.swift in Sources */,
 				36C28E7CD597024421D19A97 /* TeamsListView.swift in Sources */,
+				BA99BCB7A854527EC7A4D097 /* TeamsPanelView.swift in Sources */,
+				A0E7F71DE2D6A589BFBAC9CF /* TopBarView.swift in Sources */,
+				953B4FE94F37433BF732AB9B /* TrustEnergyPillsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
