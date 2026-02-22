@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07C69DCDBAB4BABC77A163EB /* AvatarPickerSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139876E1ED1AF70E00C8F2F9 /* AvatarPickerSection.swift */; };
+		098B66A0CDF59B8004A2E04A /* ClaudeExtensionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */; };
 		25F190E461FAFFF477F03E06 /* SkillsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED8D0E61CBE76BCA05389A7 /* SkillsSection.swift */; };
 		2D6F6B64B2AAE8F06335F7E5 /* DeviceManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F84A207935AAC33FFF1D4A11 /* DeviceManagementView.swift */; };
 		36C28E7CD597024421D19A97 /* TeamsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69215AAFBE73E8539AD98B4 /* TeamsListView.swift */; };
@@ -78,6 +79,7 @@
 		72A641160E812C6B713CC054 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		799142024EB373FF7B662127 /* AddTeamSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTeamSheet.swift; sourceTree = "<group>"; };
 		822FE8EC1115088542E04188 /* ThinkingLevelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelSection.swift; sourceTree = "<group>"; };
+		857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeExtensionView.swift; sourceTree = "<group>"; };
 		8F0661EB2A8874C95DFC6E09 /* AgentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSettingsView.swift; sourceTree = "<group>"; };
 		923A657AB5F4951ECB429DC2 /* ChannelListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelListView.swift; sourceTree = "<group>"; };
 		9BD71D73370934F8411A84A5 /* SoulEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoulEditorSection.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 			isa = PBXGroup;
 			children = (
 				1F46844ADE6818BED4204515 /* AuditLogView.swift */,
+				857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */,
 				19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */,
 				E00EADCE776DFD8136570AC3 /* MainView.swift */,
 				E5D17DF2A403E3B7B7670D9D /* MessageFeedView.swift */,
@@ -366,6 +369,7 @@
 				E12E524EF45C1DF5C5BF0C03 /* ChatHeaderView.swift in Sources */,
 				BAA373537C6EA2B5AE495890 /* ChatInputView.swift in Sources */,
 				7522DBC21A2D78D4940C07A0 /* ChatView.swift in Sources */,
+				098B66A0CDF59B8004A2E04A /* ClaudeExtensionView.swift in Sources */,
 				3F66163D09E4DEA3453AAF8A /* ConnectionLinesView.swift in Sources */,
 				6ABAD886DAF41502C1C6A0E6 /* ConstellationView.swift in Sources */,
 				D5149E85FAC71E538584308C /* CrewBusApp.swift in Sources */,

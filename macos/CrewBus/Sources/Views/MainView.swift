@@ -95,6 +95,12 @@ struct MainView: View {
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity)
                         ))
+                case .claudeExtension:
+                    ClaudeExtensionView()
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: appState.navDestination)
