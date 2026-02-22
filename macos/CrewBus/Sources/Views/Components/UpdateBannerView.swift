@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct UpdateBannerView: View {
-    private var manager = UpdateManager.shared
+    @State private var manager = UpdateManager.shared
 
     private var shouldShow: Bool {
         manager.updateAvailable && !manager.isDismissedForSession

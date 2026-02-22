@@ -2,7 +2,7 @@ import SwiftUI
 
 struct UpdateSettingsView: View {
     @Environment(AppState.self) private var appState
-    private var manager = UpdateManager.shared
+    @State private var manager = UpdateManager.shared
 
     var body: some View {
         VStack(spacing: 0) {

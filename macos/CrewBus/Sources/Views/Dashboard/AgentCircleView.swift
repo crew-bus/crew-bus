@@ -54,13 +54,6 @@ struct AgentCircleView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(CrewTheme.text)
 
-                // Optional timestamp
-                if let ts = agent.lastMessageTime, !ts.isEmpty {
-                    Text(ts)
-                        .font(.system(size: 10))
-                        .foregroundStyle(CrewTheme.muted)
-                        .lineLimit(1)
-                }
             }
         }
         .buttonStyle(.plain)
