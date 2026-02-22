@@ -331,9 +331,16 @@ struct TeamDetailView: View {
                     .frame(width: size, height: size)
                     .overlay(Circle().stroke(ringColor, lineWidth: 2.5))
                     .overlay(
-                        Image(systemName: typeInfo.symbolName)
-                            .font(.system(size: size * 0.35))
-                            .foregroundStyle(ringColor)
+                        Group {
+                            if let avatar = agent.avatar, !avatar.isEmpty {
+                                Text(avatar)
+                                    .font(.system(size: size * 0.38))
+                            } else {
+                                Image(systemName: typeInfo.symbolName)
+                                    .font(.system(size: size * 0.35))
+                                    .foregroundStyle(ringColor)
+                            }
+                        }
                     )
 
                 Circle()
