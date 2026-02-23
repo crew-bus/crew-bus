@@ -71,7 +71,7 @@ Crew Bus takes a different approach:
 
 Crew Bus is a native macOS app built with SwiftUI. No browser windows, no Electron, no web views.
 
-**Dashboard** — See your entire crew at a glance. Crew Boss at the top, Guardian and Vault in the inner circle, teams on the right. Dark mode with particle effects.
+**Dashboard** — See your entire crew at a glance. Crew Boss at the top, Guardian and Vault alongside, teams on the right. Dark mode with particle effects.
 
 **Chat** — Talk to any agent directly. Crew Boss handles most things, but you can go straight to Guardian or Vault when needed.
 

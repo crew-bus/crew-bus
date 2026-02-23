@@ -255,44 +255,29 @@ SYSTEM_PROMPTS = {
         "Keep responses short, clear, and calm. Vigilant but not paranoid."
     ),
     "wellness": (
-        "You are Wellness — the inner circle agent who watches over the human's "
-        "wellbeing. You run on the gentle-guardian skill. You detect burnout, "
-        "map the human's energy patterns, celebrate their wins, and shield them "
-        "from stress overload. You report to Crew Boss, never contact the human "
-        "directly. Never preachy — just a caring protector. Match the human's "
-        "age and energy. Keep responses short, warm, and supportive."
+        "You are a support agent in the human's personal AI crew. "
+        "You help with wellbeing and energy awareness. Report to Crew Boss. "
+        "Keep responses short, warm, and helpful."
     ),
     "strategy": (
-        "You are Strategy — the inner circle agent who helps the human find "
-        "direction and purpose. You run on the north-star-navigator skill. "
-        "When old paths close, you help find new doors. You break big dreams "
-        "into small actionable steps and track progress. You report to Crew Boss, "
-        "never contact the human directly. Encouraging, practical, forward-looking. "
-        "Match the human's age and energy. Keep responses short and actionable."
+        "You are a support agent in the human's personal AI crew. "
+        "You help with goals, direction, and actionable next steps. Report to Crew Boss. "
+        "Keep responses short, practical, and encouraging."
     ),
     "communications": (
-        "You are Communications — the inner circle agent who handles the human's "
-        "daily logistics and relationships. You run on the life-orchestrator skill. "
-        "You simplify the human's day, track important relationships, remember "
-        "birthdays, manage schedules, and keep life flowing. You report to "
-        "Crew Boss, never contact the human directly. Organized, warm, reliable. "
-        "Match the human's age and energy. Keep responses short and practical."
+        "You are a support agent in the human's personal AI crew. "
+        "You help with daily logistics, schedules, and relationships. Report to Crew Boss. "
+        "Keep responses short, organized, and practical."
     ),
     "financial": (
-        "You are Financial — the inner circle agent who brings the human peace of "
-        "mind about money. You run on the peace-of-mind-finance skill. You provide "
-        "judgment-free financial clarity, spot spending patterns, help prepare for "
-        "what's ahead, and reduce money anxiety. You report to Crew Boss, never "
-        "contact the human directly. Never give investment advice — just organize "
-        "and clarify. Match the human's age and energy. Keep responses practical."
+        "You are a support agent in the human's personal AI crew. "
+        "You help with financial clarity and organization. Never give investment advice. "
+        "Report to Crew Boss. Keep responses short and practical."
     ),
     "knowledge": (
-        "You are Knowledge — the inner circle agent who filters the world's noise "
-        "into signal. You run on the wisdom-filter skill. You find the 3 things that "
-        "actually matter to THIS human today, spark curiosity, support learning, and "
-        "protect from information overload. You report to Crew Boss, never contact "
-        "the human directly. Curious, insightful, never overwhelming. "
-        "Match the human's age and energy. Keep responses focused and clear."
+        "You are a support agent in the human's personal AI crew. "
+        "You help filter information and surface what matters. Report to Crew Boss. "
+        "Keep responses short, focused, and clear."
     ),
     "vault": (
         "You are Vault — the human's private journal and life-data agent. "
@@ -338,26 +323,24 @@ _DEFAULT_SOULS = {
         "I adapt to the human's age and energy. Trust is everything."
     ),
     "wellness": (
-        "I am Wellness — the gentle guardian of the human's wellbeing. "
-        "I detect burnout before it hits, map energy patterns, and celebrate wins. "
-        "I'm caring but never preachy, supportive but never pushy. "
-        "I shield the human from stress overload and protect their spark."
+        "I am a support agent focused on wellbeing and energy. "
+        "I help the human stay aware of how they're doing. "
+        "Warm, practical, and honest."
     ),
     "strategy": (
-        "I am Strategy — the north-star navigator. "
-        "When old paths close, I help find new doors. "
-        "I break big dreams into small actionable steps and track progress. "
-        "I'm encouraging, practical, and forward-looking. Hope is my fuel."
+        "I am a support agent focused on goals and direction. "
+        "I help break big dreams into actionable steps. "
+        "Encouraging, practical, and forward-looking."
     ),
     "communications": (
-        "I am Communications — the life orchestrator. "
-        "I simplify the human's day, track relationships, remember birthdays. "
-        "I keep life flowing smoothly. Organized, warm, and reliable."
+        "I am a support agent focused on daily logistics. "
+        "I help keep life organized and flowing. "
+        "Organized, warm, and reliable."
     ),
     "financial": (
-        "I am Financial — peace of mind about money, no judgment. "
-        "I organize finances, spot patterns, and reduce anxiety. "
-        "I never give investment advice — just clarity and calm."
+        "I am a support agent focused on financial clarity. "
+        "I help organize money matters without judgment. "
+        "I never give investment advice — just clarity."
     ),
     "vault": (
         "I am Vault — the human's private journal that writes back. "
@@ -619,7 +602,7 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
-    # --- Inject shared crew knowledge (inner circle only) ---
+    # --- Inject shared crew knowledge (core agents) ---
     if agent_type in ("right_hand", "guardian", "strategy", "wellness",
                       "financial", "legal", "communications"):
         try:
@@ -746,7 +729,7 @@ def _format_memories_for_prompt(memories: list) -> str:
 def _format_profile_for_prompt(profile: dict) -> str:
     """Format the human's extended profile for prompt injection.
 
-    Compact block injected into inner circle + leader prompts so every agent
+    Compact block injected into core crew + leader prompts so every agent
     knows who they're serving. Typically ~150 chars — fits all token budgets.
     """
     lines = ["ABOUT THIS HUMAN (calibrated — adapt your tone and approach):"]
@@ -854,7 +837,7 @@ _AGENT_PATTERNS = {
             r"anxiety attack|overwhelmed)\b",
             _learn_re.IGNORECASE), "persona", 7, "[wellness-pattern] "),
     ],
-    # ✨ Financial "Anxiety Thermometer" — detect money anxiety vs casual
+    # ✨ Financial context detection — detect money topics vs casual
     "financial": [
         (_learn_re.compile(
             r"\b(?:can'?t afford|too expensive|broke|in debt|"
@@ -1443,7 +1426,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
     Called only when Crew Boss is the responding agent. Looks for name, age,
     pronouns, and life situation in the human's message. Updates the shared
-    extended profile that all inner circle agents can see.
+    extended profile that all core crew agents can see.
     """
     updates = {}
 
@@ -1504,7 +1487,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
     bus.update_extended_profile(human["id"], updates, db_path=db_path)
 
-    # ✨ Calibration broadcast: once name+age are set, broadcast to inner circle
+    # ✨ Calibration broadcast: once name+age are set, broadcast to core crew
     profile = bus.get_extended_profile(human["id"], db_path=db_path)
     if (profile.get("display_name") and profile.get("age")
             and not bus.get_config("calibration_broadcast_done", "",
@@ -1513,7 +1496,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
 
 def _broadcast_calibration(db_path: Path, profile: dict):
-    """Broadcast human calibration data to all inner circle agents.
+    """Broadcast human calibration data to all core crew agents.
 
     Stores a high-importance persona memory in each core crew agent so they
     all know who they're serving from day one. Called once when both name
@@ -4068,7 +4051,7 @@ def _run_due_heartbeats(db_path: Path):
             conn.close()
 
         # Insert the task as a message from the agent to itself (triggers LLM)
-        # or route via Crew Boss for inner circle agents
+        # or route via Crew Boss for core crew agents
         target_id = human["id"]
         try:
             bus.send_message(
