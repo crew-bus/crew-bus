@@ -151,6 +151,6 @@ def test_insert_reply_direct():
 
 def test_system_prompts_exist():
     """Crew Boss, Guardian, Vault should have system prompts."""
-    for agent_type in ("right_hand", "guardian", "security", "vault", "manager"):
+    for agent_type in ("right_hand", "guardian", "vault", "manager"):
         assert agent_type in agent_worker.SYSTEM_PROMPTS
         assert len(agent_worker.SYSTEM_PROMPTS[agent_type]) > 20

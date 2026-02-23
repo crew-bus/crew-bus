@@ -8,7 +8,7 @@ Crew Bus is open-source software that runs on your Mac and lets your AI agents w
 
 [![GitHub release](https://img.shields.io/github/v/release/crew-bus/crew-bus)](https://github.com/crew-bus/crew-bus/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)](#)
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](#download)
 
 ---

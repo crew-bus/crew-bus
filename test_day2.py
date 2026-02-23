@@ -4,21 +4,21 @@ test_day2.py - Full Day 2 integration test for crew-bus.
 Simulates a complete day of operations for Ryan Johnson:
   Step 1:  Load ryan_stack.yaml, initialize all agents
   Step 2:  Set energy level to low (long day yesterday)
-  Step 3:  Quant sends alert to Chief
-  Step 4:  V4 submits business idea to Chief
-  Step 5:  Chief filters: energy is low, idea not urgent, queue for tomorrow
+  Step 3:  Guardian sends alert to Chief
+  Step 4:  RJC-Manager submits business idea to Chief
+  Step 5:  Chief filters: energy low, idea not urgent, queue for tomorrow
   Step 6:  RJC-Manager escalates: client emergency (pressure tank leaking)
   Step 7:  Chief assesses: urgent + client emergency = deliver NOW
   Step 8:  Lead-Tracker tries to message Ryan directly
   Step 9:  Bus BLOCKS: must route through Crew Boss
-  Step 10: CFO sends GST alert to Chief
+  Step 10: Invoice-Bot sends GST alert to Chief
   Step 11: Chief assesses: important but not urgent, queue for morning brief
-  Step 12: Legal sends insurance renewal alert to Chief
+  Step 12: Guardian sends insurance renewal alert to Chief
   Step 13: Chief assesses: 14 days out, queue for morning brief
   Step 14: Compile and print MORNING BRIEFING as formatted email
   Step 15: Compile and print EVENING BRIEFING as formatted email
   Step 16: Show all decisions made by Chief with accuracy stats
-  Step 17: Human feedback: approve V4 queue, override GST queue
+  Step 17: Human feedback: approve idea queue, override GST queue
   Step 18: Record feedback, show updated accuracy
 
 Run:  pytest test_day2.py  (or: python test_day2.py)
@@ -82,8 +82,8 @@ bus.init_db(TEST_DB)
 result = bus.load_hierarchy(str(CONFIG), TEST_DB)
 agents_loaded = result.get("agents_loaded", [])
 
-check("1.1", len(agents_loaded) == 17,
-      f"Expected 17 agents, got {len(agents_loaded)}: {agents_loaded}")
+check("1.1", len(agents_loaded) == 12,
+      f"Expected 12 agents, got {len(agents_loaded)}: {agents_loaded}")
 
 # Get agent references
 def get_agent(name):
@@ -91,14 +91,11 @@ def get_agent(name):
 
 ryan = get_agent("Ryan") or get_agent("Human") or get_agent("Human")
 chief = get_agent("Crew-Boss")
-quant = get_agent("Quant") or get_agent("Wallet")
-v4 = get_agent("V4") or get_agent("Ideas")
-cfo = get_agent("CFO") or get_agent("Wallet")
-legal = get_agent("Legal")
-memory = get_agent("Memory")
-comms = get_agent("Comms")
+guardian = get_agent("Guardian")
+vault = get_agent("Vault")
 rjc_mgr = get_agent("RJC-Manager") or get_agent("Home-Manager")
 lead_tracker = get_agent("Lead-Tracker") or get_agent("Budget-Tracker")
+invoice_bot = get_agent("Invoice-Bot")
 
 check("1.2", ryan is not None and ryan["agent_type"] == "human",
       f"Ryan: {ryan['agent_type'] if ryan else 'NOT FOUND'}")
@@ -129,14 +126,14 @@ results["step_2"] = f"{passed - s2_start}/1"
 
 
 # ============================================================
-# Step 3: Quant sends alert to Chief
+# Step 3: Guardian sends alert to Chief
 # ============================================================
 
-section("Step 3: Quant alert -> Chief")
+section("Step 3: Guardian alert -> Chief")
 s3_start = passed
 
 msg = bus.send_message(
-    quant["id"], chief["id"],
+    guardian["id"], chief["id"],
     message_type="alert",
     subject="Low energy detected, recommend light schedule",
     body="Multiple signals: sleep quality declining, screen time up 35%, calendar overbooked 3 days running.",
@@ -144,20 +141,20 @@ msg = bus.send_message(
     db_path=TEST_DB,
 )
 check("3.1", msg["message_id"] > 0,
-      f"Wellness alert sent: msg_id={msg['message_id']}")
+      f"Alert sent: msg_id={msg['message_id']}")
 
 results["step_3"] = f"{passed - s3_start}/1"
 
 
 # ============================================================
-# Step 4: V4 submits business idea to Chief
+# Step 4: RJC-Manager submits business idea to Chief
 # ============================================================
 
-section("Step 4: V4 idea -> Chief")
+section("Step 4: RJC-Manager idea -> Chief")
 s4_start = passed
 
 idea_msg = bus.send_message(
-    v4["id"], chief["id"],
+    rjc_mgr["id"], chief["id"],
     message_type="idea",
     subject="Fire-Ready Property Certification - new revenue stream",
     body="BC wildfire season creates opportunity for certified fire-readiness assessments on rural properties. RJC could offer this as a premium service.",
@@ -174,7 +171,7 @@ results["step_4"] = f"{passed - s4_start}/1"
 # Step 5: Chief filters idea (energy low, not urgent, queue)
 # ============================================================
 
-section("Step 5: Chief filters V4 idea -> queue for tomorrow")
+section("Step 5: Chief filters idea -> queue for tomorrow")
 s5_start = passed
 
 rh = RightHand(chief["id"], ryan["id"], db_path=TEST_DB)
@@ -186,7 +183,7 @@ check("5.2", "energy" in filter_result["reason"].lower(),
       f"Reason mentions energy: {filter_result['reason'][:80]}")
 
 # Log the decision
-d1 = rh._log("filter", {"subject": "Fire-Ready Property Certification", "from": "V4"}, "queue")
+d1 = rh._log("filter", {"subject": "Fire-Ready Property Certification", "from": "RJC-Manager"}, "queue")
 check("5.3", d1 > 0, f"Decision logged: #{d1}")
 
 results["step_5"] = f"{passed - s5_start}/3"
@@ -288,14 +285,14 @@ results["step_9"] = f"{passed - s9_start}/2"
 
 
 # ============================================================
-# Step 10: CFO sends GST filing alert to Chief
+# Step 10: Invoice-Bot sends GST filing alert to Chief
 # ============================================================
 
-section("Step 10: CFO GST alert -> Chief")
+section("Step 10: Invoice-Bot GST alert -> Chief")
 s10_start = passed
 
 gst_msg = bus.send_message(
-    cfo["id"], chief["id"],
+    invoice_bot["id"], chief["id"],
     message_type="alert",
     subject="GST filing due in 5 days - $2,340 owing",
     body="Quarterly GST filing deadline approaching. Amount owing: $2,340.00. Payment and filing must be submitted by Feb 19.",
@@ -320,29 +317,29 @@ check("11.1", delivery["deliver"] is False,
       f"GST not delivered (low energy): deliver={delivery['deliver']}")
 
 # Log the queue decision
-d2 = rh._log("queue", {"subject": "GST filing due in 5 days", "from": "CFO"}, "queue")
+d2 = rh._log("queue", {"subject": "GST filing due in 5 days", "from": "Invoice-Bot"}, "queue")
 check("11.2", d2 > 0, f"Queue decision logged: #{d2}")
 
 results["step_11"] = f"{passed - s11_start}/2"
 
 
 # ============================================================
-# Step 12: Legal sends insurance renewal alert
+# Step 12: Guardian sends insurance renewal alert
 # ============================================================
 
-section("Step 12: Legal insurance renewal alert -> Chief")
+section("Step 12: Guardian insurance renewal alert -> Chief")
 s12_start = passed
 
-legal_msg = bus.send_message(
-    legal["id"], chief["id"],
+guardian_msg = bus.send_message(
+    guardian["id"], chief["id"],
     message_type="alert",
     subject="Business insurance renewal due Feb 28",
     body="Annual business insurance renewal for RJC. Current policy expires Feb 28. Need to review coverage levels and compare quotes.",
     priority="normal",
     db_path=TEST_DB,
 )
-check("12.1", legal_msg["message_id"] > 0,
-      f"Insurance alert sent: msg_id={legal_msg['message_id']}")
+check("12.1", guardian_msg["message_id"] > 0,
+      f"Insurance alert sent: msg_id={guardian_msg['message_id']}")
 
 results["step_12"] = f"{passed - s12_start}/1"
 
@@ -355,7 +352,7 @@ section("Step 13: Chief queues insurance for morning briefing")
 s13_start = passed
 
 # Log the queue decision
-d3 = rh._log("queue", {"subject": "Insurance renewal Feb 28", "from": "Legal"}, "queue")
+d3 = rh._log("queue", {"subject": "Insurance renewal Feb 28", "from": "Guardian"}, "queue")
 check("13.1", d3 > 0, f"Queue decision logged: #{d3}")
 
 results["step_13"] = f"{passed - s13_start}/1"
@@ -435,16 +432,16 @@ results["step_16"] = f"{passed - s16_start}/3"
 
 
 # ============================================================
-# Step 17: Human feedback - approve V4 queue, override GST queue
+# Step 17: Human feedback - approve idea queue, override GST queue
 # ============================================================
 
 section("Step 17: Human feedback on decisions")
 s17_start = passed
 
-# Ryan approves the V4 idea queue (Chief was right to hold it)
+# Ryan approves the idea queue (Chief was right to hold it)
 bus.record_human_feedback(d1, override=False, human_action=None,
                           note="Good call, I was too tired for this", db_path=TEST_DB)
-check("17.1", True, "V4 queue decision APPROVED")
+check("17.1", True, "Idea queue decision APPROVED")
 
 # Ryan overrides the GST queue (wants to deal with it today)
 bus.record_human_feedback(d2, override=True,
@@ -480,7 +477,7 @@ check("18.2", accuracy > 0,
 # Learn from feedback
 learn_result = rh.learn_from_feedback(d2, human_approved=False,
                                        human_action="Deal with GST today",
-                                       note="Human wants financial items delivered same-day")
+                                       note="Human wants billing items delivered same-day")
 check("18.3", learn_result is not None,
       f"Feedback recorded: {learn_result.get('feedback', '')[:60]}")
 

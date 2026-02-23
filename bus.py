@@ -1085,8 +1085,10 @@ def _load_v2_hierarchy(config: dict, config_path: str,
             "timezone": human_def["timezone"],
         })
 
-    # 2. Register Crew Boss
-    rh_def = hier["right_hand"]
+    # 2. Register Crew Boss (accept both "crew_boss" and "right_hand" keys)
+    rh_def = hier.get("right_hand") or hier.get("crew_boss")
+    if not rh_def:
+        raise ValueError("Config hierarchy must contain 'crew_boss' or 'right_hand' key")
     rh_id = _upsert_agent(conn, {
         "name": rh_def["name"],
         "agent_type": "right_hand",
@@ -1100,12 +1102,13 @@ def _load_v2_hierarchy(config: dict, config_path: str,
     created.append(rh_def["name"])
 
     # 2b. Register Security Agent (Guardian)
+    # Accept guardian at top level or nested under crew.security
     crew = hier.get("crew", {})
-    sec_def = crew.get("security")
+    sec_def = hier.get("guardian") or crew.get("security")
     if isinstance(sec_def, dict):
         _upsert_agent(conn, {
             "name": sec_def["name"],
-            "agent_type": "security",
+            "agent_type": sec_def.get("agent_type", "security"),
             "channel": sec_def.get("channel", "console"),
             "channel_address": sec_def.get("channel_address"),
             "parent": rh_def["name"],
@@ -1208,6 +1211,20 @@ def _load_v2_hierarchy(config: dict, config_path: str,
             )
 
     conn.commit()
+
+    # 2c-extra. Register Vault if defined at top level
+    vault_def = hier.get("vault")
+    if isinstance(vault_def, dict):
+        _upsert_agent(conn, {
+            "name": vault_def["name"],
+            "agent_type": vault_def.get("agent_type", "vault"),
+            "channel": vault_def.get("channel", "console"),
+            "channel_address": vault_def.get("channel_address"),
+            "parent": rh_def["name"],
+            "active": vault_def.get("active", True),
+            "description": vault_def.get("description", "Private memory vault"),
+        })
+        created.append(vault_def["name"])
 
     # 3. Register crew agents (excluding security, already handled above)
     for crew_type, crew_def in crew.items():
@@ -2130,10 +2147,10 @@ def _check_routing(conn: sqlite3.Connection,
                    sender: sqlite3.Row, recipient: sqlite3.Row) -> dict:
     """Validate whether sender is allowed to message recipient.
 
-    V4 routing — open internal comms:
+    Routing — open internal comms:
     - Human can message anyone
     - Any active agent can message any other active agent
-    - Only Crew Boss, Security, and Wellness can message the human directly
+    - Only Crew Boss and Guardian can message the human directly
       (all other agents communicate within the crew)
     - Paused/quarantined/deactivated agents can't send or receive
 
@@ -2659,7 +2676,7 @@ def get_autonomy_level(right_hand_id: int,
             "respond_on_behalf": False,
             "filter_ideas": False,
             "handle_escalations": False,
-            "send_communications": False,
+            "send_external": False,
             "manage_budget": False,
         }
         description = "New relationship. Delivers everything to human. Cannot make decisions."
@@ -2671,7 +2688,7 @@ def get_autonomy_level(right_hand_id: int,
             "respond_on_behalf": False,
             "filter_ideas": True,
             "handle_escalations": True,
-            "send_communications": False,
+            "send_external": False,
             "manage_budget": False,
         }
         description = "Building trust. Handles routine, escalates novel situations."
@@ -2683,10 +2700,10 @@ def get_autonomy_level(right_hand_id: int,
             "respond_on_behalf": True,
             "filter_ideas": True,
             "handle_escalations": True,
-            "send_communications": True,
+            "send_external": True,
             "manage_budget": True,
         }
-        description = "Trusted operator. Makes operational decisions, drafts communications."
+        description = "Trusted operator. Makes operational decisions, drafts external messages."
     else:
         level = "chief_of_staff"
         abilities = {
@@ -2695,7 +2712,7 @@ def get_autonomy_level(right_hand_id: int,
             "respond_on_behalf": True,
             "filter_ideas": True,
             "handle_escalations": True,
-            "send_communications": True,
+            "send_external": True,
             "manage_budget": True,
         }
         description = "Full autonomy. Human gets briefings only. Handles everything."

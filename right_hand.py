@@ -96,7 +96,7 @@ class RightHand:
             self._log("deliver", message, f"Immediate: {decision['reason']}")
             return decision
 
-        # Strategy ideas get filtered first
+        # Ideas get filtered first
         if msg_type == "idea":
             filter_result = self.filter_idea(message.get("id"))
             if filter_result["action"] == "filter":
@@ -140,6 +140,42 @@ class RightHand:
         }
         self._log("deliver", message, "Delivered")
         return decision
+
+    # ------------------------------------------------------------------
+    # Idea filtering
+    # ------------------------------------------------------------------
+
+    def filter_idea(self, message_id: int) -> dict:
+        """Decide whether an idea should be delivered, queued, or filtered.
+
+        Checks energy level to decide if the human should see this idea now
+        or later.
+
+        Args:
+            message_id: The database ID of the idea message.
+
+        Returns:
+            {action: "deliver"|"queue"|"filter", reason: str,
+             delay_until: str|None}
+        """
+        self._refresh()
+        state = bus.get_human_state(self.human_id, self.db_path)
+        energy = (state or {}).get("energy_level", "normal")
+
+        # Low energy -> queue non-urgent ideas for later
+        if energy == "low":
+            return {
+                "action": "queue",
+                "reason": "Energy is low — queuing idea for when you have bandwidth",
+                "delay_until": None,
+            }
+
+        # Normal/high energy -> deliver
+        return {
+            "action": "deliver",
+            "reason": "Energy OK — delivering idea",
+            "delay_until": None,
+        }
 
     # ------------------------------------------------------------------
     # Escalation handling
@@ -1304,7 +1340,7 @@ class Heartbeat:
 
         # Find agents that can create social content.
         # Teams are built from agent hierarchy (parent_agent_id), not a teams table.
-        # Look for: managers whose workers handle content, or the Communications agent.
+        # Look for: managers whose workers handle content.
         conn = bus.get_conn(self.db_path)
         try:
             # First try: workers under a manager (real team structure)

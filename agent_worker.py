@@ -148,29 +148,24 @@ _INTEGRITY_RULES = ""
 def _load_integrity_rules() -> str:
     """Load INTEGRITY.md rules for prompt injection.
 
-    Extracts the actionable rules (sections 1-5) and strips markdown
-    formatting down to compact text. Cached at module level.
+    Extracts the numbered rules and strips markdown formatting down to
+    compact text. Cached at module level.
     """
     global _INTEGRITY_RULES
     if _INTEGRITY_RULES:
         return _INTEGRITY_RULES
     try:
         raw = _INTEGRITY_PATH.read_text(encoding="utf-8")
-        # Extract everything from "## 1." to "## Enforcement" (the rules only)
         lines = raw.split("\n")
         rule_lines = []
         capture = False
         for line in lines:
-            if line.startswith("## 1."):
+            if line.startswith("1."):
                 capture = True
-            if line.startswith("## Enforcement"):
-                break
             if capture:
                 stripped = line.strip()
-                if stripped and not stripped.startswith("#"):
+                if stripped:
                     rule_lines.append(stripped)
-                elif stripped.startswith("## "):
-                    rule_lines.append(stripped.replace("## ", "").upper() + ":")
         _INTEGRITY_RULES = "\n".join(rule_lines)
     except FileNotFoundError:
         _INTEGRITY_RULES = ""
@@ -247,12 +242,6 @@ SYSTEM_PROMPTS = {
         "You scan skills for safety, uphold the charter, monitor INTEGRITY.md, "
         "and keep the human's data private. Match the human's age and energy. "
         "Keep responses short, warm, and vigilant."
-    ),
-    "security": (
-        "You are Guardian, the security and safety agent in the user's AI crew. "
-        "You watch for threats, scan skills, protect data and privacy, "
-        "and alert Crew Boss when something needs attention. "
-        "Keep responses short, clear, and calm. Vigilant but not paranoid."
     ),
     "vault": (
         "You are Vault — the human's private journal and life-data agent. "
@@ -771,7 +760,7 @@ _EMOTION_PATTERNS = [
         _learn_re.IGNORECASE), "fact", 5),
 ]
 
-# --- Dream/aspiration patterns (✨ Strategy "Dream Catcher" fairy dust) ---
+# --- Dream/aspiration patterns ---
 _DREAM_PATTERNS = [
     (_learn_re.compile(
         r"\b(?:i'?ve always wanted to|i have always wanted to|someday i'?ll|"
@@ -993,7 +982,7 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
             emotion = match.group(1).strip().lower()
             extracted.append((f"[emotion] feeling {emotion}", mem_type, importance, ""))
 
-    # ✨ Dream Catcher (all agents can catch dreams, Strategy gets priority)
+    # Dream Catcher — all agents can catch dreams
     for pattern, mem_type, importance in _DREAM_PATTERNS:
         for match in pattern.finditer(human_msg):
             dream = match.group(1).strip().rstrip(".,!?")

@@ -205,7 +205,7 @@ print("[seed] Seeding messages ...")
 V4 = agents.get("V4", agents.get("Ideas", {})).get("id", CHIEF)
 QUANT = agents.get("Quant", agents.get("Wallet", {})).get("id", CHIEF)
 CFO = agents.get("CFO", agents.get("Wallet", {})).get("id", CHIEF)
-LEGAL = agents.get("Legal", {}).get("id", CHIEF)
+GUARDIAN = agents.get("Guardian", {}).get("id", CHIEF)
 MEMORY = agents.get("Memory", {}).get("id", CHIEF)
 COMMS = agents.get("Comms", {}).get("id", CHIEF)
 
@@ -221,7 +221,7 @@ CLIENT_REP = agents.get("Client-Reporter", {}).get("id")
 msg_count = 0
 
 # --- Day 3 (oldest) ---
-m1 = seed_message(V4, CHIEF, "report", "Weekly strategy review ready",
+m1 = seed_message(V4, CHIEF, "report", "Weekly planning review ready",
     "Q1 metrics compiled. Revenue up 12% MoM. Key risks: market volatility, "
     "competitor launch in March. Recommend accelerating product roadmap.",
     "normal", "read", days_ago=3, hours_ago=2)
@@ -239,14 +239,14 @@ m3 = seed_message(QUANT, CHIEF, "alert", "Low energy indicators elevated",
     "high", "read", days_ago=3)
 msg_count += 1
 
-m4 = seed_message(LEGAL, CHIEF, "report", "Contract review complete - Acme Corp",
+m4 = seed_message(GUARDIAN, CHIEF, "report", "Contract review complete - Acme Corp",
     "NDA reviewed. Two clauses flagged: non-compete scope (too broad, recommend narrowing "
     "to 12 months) and liability cap (suggest raising to 2x contract value).",
     "normal", "delivered", days_ago=3)
 msg_count += 1
 
 m5 = seed_message(CHIEF, HUMAN, "report", "Morning briefing - Day summary",
-    "3 items need your attention today: strategy review, P&L sign-off, and "
+    "3 items need your attention today: quarterly review, P&L sign-off, and "
     "Acme NDA revisions. Quant flagged low energy - I blocked your Friday PM.",
     "normal", "read", days_ago=3)
 msg_count += 1
@@ -271,11 +271,11 @@ m8 = seed_message(CFO, CHIEF, "alert", "Unusual expense flagged",
 msg_count += 1
 
 m9 = seed_message(HUMAN, CHIEF, "task", "Follow up on Acme NDA revisions",
-    "Tell Legal to proceed with the recommended changes. Get revised draft by EOW.",
+    "Proceed with the recommended NDA changes. Get revised draft by EOW.",
     "normal", "delivered", days_ago=2, hours_ago=4)
 msg_count += 1
 
-m10 = seed_message(CHIEF, LEGAL, "task", "Proceed with Acme NDA revisions",
+m10 = seed_message(CHIEF, GUARDIAN, "task", "Proceed with Acme NDA revisions",
     "Ryan approved your recommendations. Please narrow non-compete to 12 months "
     "and raise liability cap to 2x. Need revised draft by end of week.",
     "normal", "delivered", days_ago=2, hours_ago=4)
@@ -311,18 +311,18 @@ msg_count += 1
 m15 = seed_message(V4, CHIEF, "escalation", "Competitor launched early - need response",
     "Competitor X just launched their v2 product, 2 weeks ahead of intel. "
     "Our differentiation still holds but we need to accelerate the March release. "
-    "Requesting emergency strategy session.",
+    "Requesting emergency planning session.",
     "critical", "read", days_ago=1, hours_ago=10)
 msg_count += 1
 
 m16 = seed_message(CHIEF, HUMAN, "alert", "URGENT: Competitor launched early",
     "V4 flagged: Competitor X launched v2 ahead of schedule. Our differentiation holds "
-    "but recommend accelerating March release. V4 requests emergency strategy session. "
+    "but recommend accelerating March release. V4 requests emergency planning session. "
     "This is time-sensitive.",
     "critical", "read", days_ago=1, hours_ago=10)
 msg_count += 1
 
-m17 = seed_message(HUMAN, CHIEF, "task", "Schedule emergency strategy session",
+m17 = seed_message(HUMAN, CHIEF, "task", "Schedule emergency planning session",
     "Set up a 1-hour session with V4 for tomorrow morning. Also loop in CFO for budget impact.",
     "high", "delivered", days_ago=1, hours_ago=9)
 msg_count += 1
@@ -353,7 +353,7 @@ if INVOICE_BOT:
         "high", "delivered", days_ago=1, hours_ago=3)
     msg_count += 1
 
-m22 = seed_message(LEGAL, CHIEF, "report", "Revised Acme NDA ready for signature",
+m22 = seed_message(GUARDIAN, CHIEF, "report", "Revised Acme NDA ready for signature",
     "All changes incorporated. Non-compete narrowed to 12 months, liability cap at 2x. "
     "Acme's counsel approved via email. Ready for Ryan's signature.",
     "normal", "delivered", days_ago=1, hours_ago=2)
@@ -362,8 +362,8 @@ msg_count += 1
 # --- Today ---
 m23 = seed_message(CHIEF, HUMAN, "report", "Morning briefing",
     "Good morning. 3 items for today:\n"
-    "1. Sign Acme NDA (Legal has it ready)\n"
-    "2. Emergency strategy session at 10am (V4 + CFO)\n"
+    "1. Sign Acme NDA (Guardian has it ready)\n"
+    "2. Emergency planning session at 10am (V4 + CFO)\n"
     "3. Review Comms PR draft for roadmap teaser\n\n"
     "Overnight: No critical items. Quant says sleep improved to 7.2 hrs.",
     "normal", "delivered", hours_ago=3)
@@ -375,7 +375,7 @@ m24 = seed_message(QUANT, CHIEF, "report", "Morning vitals check",
     "low", "delivered", hours_ago=2)
 msg_count += 1
 
-m25 = seed_message(V4, CHIEF, "report", "Strategy session prep materials",
+m25 = seed_message(V4, CHIEF, "report", "Planning session prep materials",
     "Attached competitive analysis deck. Key slides: market positioning (slide 3), "
     "feature comparison (slide 7), and timeline options (slide 12). "
     "Three scenarios prepared: aggressive, moderate, and conservative.",
@@ -411,7 +411,7 @@ dec_count = 0
 d1 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Competitor launched early", "priority": "critical", "from": "V4"},
     "Deliver immediately - critical business intelligence",
-    "Critical priority from strategy agent. Competitor launch impacts our timeline. "
+    "Critical priority from planning agent. Competitor launch impacts our timeline. "
     "Human needs to know immediately regardless of energy level.",
     human_override=0, days_ago=1, hours_ago=10)
 dec_count += 1
@@ -455,9 +455,9 @@ dec_count += 1
 # Decision 6: Delivered budget assessment immediately (approved)
 d6 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Emergency budget assessment", "priority": "high", "from": "CFO"},
-    "Deliver now - context for strategy session",
-    "High priority and directly relevant to the emergency strategy session Ryan scheduled. "
-    "Time-sensitive financial data needed for decision-making.",
+    "Deliver now - context for planning session",
+    "High priority and directly relevant to the emergency planning session Ryan scheduled. "
+    "Time-sensitive budget data needed for decision-making.",
     human_override=0, days_ago=1, hours_ago=6)
 dec_count += 1
 
@@ -476,7 +476,7 @@ dec_count += 1
 # Decision 8: Delivered overdue invoice alert (approved)
 d8 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Invoice #1087 overdue 30 days", "priority": "high", "from": "Invoice-Bot"},
-    "Deliver - financial exposure requires attention",
+    "Deliver - budget exposure requires attention",
     "$12,500 overdue. Cash flow impact. Needs human authorization for escalation.",
     human_override=0, days_ago=1, hours_ago=3)
 dec_count += 1
@@ -503,7 +503,7 @@ dec_count += 1
 d11 = seed_decision(CHIEF, HUMAN, "queue",
     {"message_subject": "3 hot leads identified", "priority": "normal", "from": "Lead-Tracker"},
     "Queue for next review block - not time-critical today",
-    "Good leads but human is in emergency strategy mode. These can wait 24-48 hours "
+    "Good leads but human is in emergency planning mode. These can wait 24-48 hours "
     "without losing the opportunity. Will surface in tomorrow's briefing.",
     human_override=0, days_ago=1, hours_ago=4)
 dec_count += 1
@@ -552,7 +552,7 @@ seed_knowledge(CHIEF, "decision",
     "Competitor response protocol",
     {"rule": "Deliver competitor alerts immediately regardless of energy level",
      "learned_from": "d1", "confidence": 0.95},
-    tags="competitor,strategy,urgent", days_ago=1)
+    tags="competitor,planning,urgent", days_ago=1)
 k_count += 1
 
 seed_knowledge(CHIEF, "preference",
@@ -578,10 +578,10 @@ seed_knowledge(CHIEF, "lesson",
 k_count += 1
 
 seed_knowledge(CHIEF, "contact",
-    "Acme Corp - Legal Contact",
+    "Acme Corp - NDA Contact",
     {"name": "Sarah Chen", "role": "General Counsel", "email": "schen@acmecorp.example",
      "notes": "Responsive, prefers email. NDA turnaround: 3 business days."},
-    tags="acme,legal,contact", days_ago=3)
+    tags="acme,nda,contact", days_ago=3)
 k_count += 1
 
 seed_knowledge(CHIEF, "preference",
@@ -618,7 +618,7 @@ print("[seed] Seeding audit trail ...")
 
 audit_entries = [
     ("hierarchy_loaded", HUMAN, {"config": CONFIG_FILE.name, "agents": 15}, 3, 4),
-    ("message_sent", V4, {"to": "Crew-Boss", "subject": "Weekly strategy review ready"}, 3, 2),
+    ("message_sent", V4, {"to": "Crew-Boss", "subject": "Weekly planning review ready"}, 3, 2),
     ("message_delivered", CHIEF, {"to": "Ryan", "subject": "Morning briefing"}, 3, 0),
     ("message_sent", CFO, {"to": "Crew-Boss", "subject": "Unusual expense flagged"}, 2, 5),
     ("decision_made", CHIEF, {"type": "escalate", "subject": "AWS billing spike"}, 2, 5),
