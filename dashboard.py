@@ -6567,8 +6567,9 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         # ── First-time setup status ──
         if path == "/api/setup/status":
             default_model = bus.get_config("default_model", db_path=self.db_path)
+            setup_done = bus.get_config("setup_done", db_path=self.db_path)
             return _json_response(self, {
-                "needs_setup": not bool(default_model) and not _ollama_ready,
+                "needs_setup": not bool(setup_done),
                 "default_model": default_model,
                 "ollama_ready": _ollama_ready,
             })
@@ -7640,6 +7641,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             recovery_email = data.get("recovery_email", "").strip()
             if recovery_email:
                 bus.set_config("recovery_email", recovery_email, db_path=self.db_path)
+            bus.set_config("setup_done", "true", db_path=self.db_path)
             return _json_response(self, {"ok": True, "wizard_id": guardian_id})
 
         # ── Dashboard password management ──
