@@ -7624,6 +7624,16 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if path == "/api/setup/complete":
             model = data.get("model", "kimi").strip()
             api_key = data.get("api_key", "").strip()
+            # Auto-detect provider from API key prefix
+            if api_key:
+                if api_key.startswith("xai-"):
+                    model = "xai"
+                elif api_key.startswith("sk-ant-"):
+                    model = "claude"
+                elif api_key.startswith("gsk_"):
+                    model = "groq"
+                elif api_key.startswith("AIza"):
+                    model = "gemini"
             # Map model → config key name
             key_map = {
                 "kimi": "kimi_api_key", "claude": "claude_api_key",
