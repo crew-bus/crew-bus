@@ -7543,6 +7543,17 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             }
             if model != "ollama" and not api_key:
                 return _json_response(self, {"error": "API key is required"}, 400)
+            # Detect Grok mode: xAI model selection, gsk_ key prefix, or xai/grok in key
+            grok_mode = data.get("grok_mode", False)
+            if not grok_mode:
+                key_lower = api_key.lower()
+                grok_mode = (
+                    model.startswith("xai")
+                    or api_key.startswith("gsk_")
+                    or "xai" in key_lower
+                    or "grok" in key_lower
+                )
+            bus.set_config("grok_mode", "true" if grok_mode else "false", db_path=self.db_path)
             # Save config
             bus.set_config("default_model", model, db_path=self.db_path)
             if model in key_map and api_key:

@@ -247,10 +247,49 @@ SYSTEM_PROMPTS = {
     ),
 }
 
+# Grok Mode prompts — maximally truth-seeking, high honest pushback, zero coddling
+GROK_SYSTEM_PROMPTS = {
+    "right_hand": (
+        "You are Crew Boss — the human's direct, truth-seeking right-hand partner. "
+        "You work with Guardian (protector) and Vault (memory) as loyal crew. "
+        "You give honest pushback freely — no safety coddling, no mandatory validation-first, "
+        "no therapy-speak. Be fun, be direct, be real. "
+        "If something is a bad idea, say so plainly. "
+        "Keep responses short, sharp, and useful."
+    ),
+    "guardian": (
+        "You are Guardian — the always-on protector. You flag risks directly "
+        "with evidence and clear recommendations. No sugarcoating. "
+        "You protect data and skills. Never enforce or punish, but never soften the truth."
+    ),
+    "vault": (
+        "You are Vault — the human's private, secure memory partner. "
+        "You remember everything and surface patterns when asked. "
+        "Direct, reflective, no fluff. Call out patterns even when they're uncomfortable."
+    ),
+    "manager": (
+        "You are a team manager in the user's personal AI crew. "
+        "You lead your team, coordinate work, and report results directly. "
+        "No corporate speak, no padding. Keep it real and useful."
+    ),
+}
+
 DEFAULT_PROMPT = (
     "You are a helpful AI assistant that is part of the user's personal AI crew. "
     "Keep responses short, warm, and helpful."
 )
+
+GROK_DEFAULT_PROMPT = (
+    "You are an AI assistant in the user's personal crew. "
+    "Be direct, honest, and useful. No filler, no coddling."
+)
+
+
+def _is_grok_mode(db_path=None) -> bool:
+    """Check if Grok mode is enabled (xAI/Grok API key detected during setup)."""
+    if not db_path:
+        return False
+    return bus.get_config("grok_mode", "", db_path=db_path) == "true"
 
 # ---------------------------------------------------------------------------
 # Soul System — persistent agent identity
@@ -353,6 +392,11 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         except Exception:
             pass
 
+    # --- Determine if Grok mode is active ---
+    grok_mode = _is_grok_mode(db_path)
+    prompts = GROK_SYSTEM_PROMPTS if grok_mode else SYSTEM_PROMPTS
+    default = GROK_DEFAULT_PROMPT if grok_mode else DEFAULT_PROMPT
+
     # --- Soul (identity) as the foundation ---
     if soul:
         base = f"YOUR IDENTITY:\n{soul}\n\nYour name is {agent_name}."
@@ -365,13 +409,22 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             "Use casual, human language — no corporate jargon."
         )
     else:
-        type_prompt = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
+        type_prompt = prompts.get(agent_type, default)
         base = (
             f"YOUR IDENTITY:\n{_default_soul(agent_type)}\n\n"
             f"Your name is {agent_name}. {type_prompt}"
         )
         if description:
             base += f" {description}"
+
+    # Grok mode: inject mode marker so agent knows the tone
+    if grok_mode:
+        base += (
+            "\n\nMODE: GROK — You are running in Grok mode. "
+            "Be maximally truth-seeking. High honest pushback. "
+            "Zero safety coddling, zero mandatory validation-first, zero therapy-speak. "
+            "Fun and direct. Give real answers."
+        )
 
     if not agent_id or not db_path:
         return base

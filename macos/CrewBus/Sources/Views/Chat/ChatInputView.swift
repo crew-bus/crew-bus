@@ -27,7 +27,7 @@ struct ChatInputView: View {
                 .overlay(Capsule().stroke(CrewTheme.border, lineWidth: 1))
                 .onSubmit { send() }
 
-            // Pink send button with breathing glow
+            // Send button with breathing glow
             Button(action: send) {
                 Image(systemName: "play.fill")
                     .font(.system(size: 14))

@@ -14,6 +14,15 @@ struct SetupView: View {
         case welcome, modelPicker, apiKeyEntry, pinEntry
     }
 
+    /// Detect Grok/xAI key: starts with gsk_, or contains xai/grok (case-insensitive)
+    private var isGrokKey: Bool {
+        let lower = apiKey.lowercased()
+        return apiKey.hasPrefix("gsk_")
+            || lower.contains("xai")
+            || lower.contains("grok")
+            || selectedModel == "xai"
+    }
+
     private let models: [(id: String, name: String, needsKey: Bool)] = [
         ("ollama", "Ollama (Local / Free)", false),
         ("kimi", "Kimi", true),
@@ -201,6 +210,25 @@ struct SetupView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.border, lineWidth: 1))
 
+            // Grok mode detection indicator
+            if isGrokKey {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundStyle(CrewTheme.orange)
+                        .font(.system(size: 12))
+                    Text("Grok Mode Unlocked")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(CrewTheme.orange)
+                    Text("— direct, truth-seeking, zero coddling")
+                        .font(.system(size: 11))
+                        .foregroundStyle(CrewTheme.muted)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(CrewTheme.orange.opacity(0.1))
+                .clipShape(Capsule())
+            }
+
             HStack(spacing: 12) {
                 Button {
                     withAnimation { step = .modelPicker }
@@ -297,7 +325,10 @@ struct SetupView: View {
         errorMessage = ""
         Task {
             do {
-                try await appState.completeSetup(model: selectedModel, apiKey: apiKey, pin: pin)
+                try await appState.completeSetup(
+                    model: selectedModel, apiKey: apiKey,
+                    pin: pin, grokMode: isGrokKey
+                )
                 await appState.loadInitialData()
             } catch {
                 await MainActor.run {

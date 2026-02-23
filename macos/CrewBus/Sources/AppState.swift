@@ -142,10 +142,11 @@ final class AppState {
         }
     }
 
-    func completeSetup(model: String, apiKey: String, pin: String) async throws {
+    func completeSetup(model: String, apiKey: String, pin: String, grokMode: Bool = false) async throws {
         var body: [String: Any] = ["model": model]
         if !apiKey.isEmpty { body["api_key"] = apiKey }
         if !pin.isEmpty { body["dashboard_pin"] = pin }
+        if grokMode { body["grok_mode"] = true }
         try await client.post(APIEndpoints.setupComplete, body: body)
         await MainActor.run { self.needsSetup = false }
     }
