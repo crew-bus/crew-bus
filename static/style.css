@@ -219,11 +219,6 @@ a:hover { color: var(--highlight); }
 .dot-quarantined { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
 .dot-terminated  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
 
-/* Burnout colors */
-.burnout-low    { color: var(--success); }
-.burnout-mid    { color: var(--warning); }
-.burnout-high   { color: var(--danger); }
-
 .trust-low      { color: var(--text-muted); }
 .trust-mid      { color: var(--info); }
 .trust-high     { color: var(--success); }

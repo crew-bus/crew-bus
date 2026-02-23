@@ -144,7 +144,7 @@
     "description": "Create workout plans and track fitness goals",
     "instructions": "Help create workout plans based on goals, available equipment, and fitness level. Suggest exercises with proper form descriptions. Track progress over time. Adapt plans when needed. Focus on sustainability over intensity. Always recommend consulting a doctor for health concerns.",
     "category": "lifestyle",
-    "tags": ["fitness", "exercise", "health", "workout", "gym", "wellness"],
+    "tags": ["fitness", "exercise", "health", "workout", "gym"],
     "compatible_agent_types": ["worker"],
     "author": "crew-bus",
     "version": "1.0"

@@ -320,7 +320,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email returns subject, plain, html, priority."""
         briefing = {
             "briefing_type": "morning",
-            "energy": 3,
+            "energy_level": "high",
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Morning Brief",
@@ -341,7 +341,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email uses gentle tone for low energy."""
         briefing = {
             "briefing_type": "morning",
-            "energy": 8,
+            "energy_level": "low",
             "human_name": "Bob",
             "rh_name": "Chief",
             "subject": "Brief",
@@ -357,7 +357,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email includes priority items when present."""
         briefing = {
             "briefing_type": "morning",
-            "energy": 3,
+            "energy_level": "high",
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Brief",
@@ -378,7 +378,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email generates HTML with proper structure."""
         briefing = {
             "briefing_type": "morning",
-            "energy": 5,
+            "energy_level": "medium",
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Brief",
@@ -395,7 +395,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email handles quiet evening with no items."""
         briefing = {
             "briefing_type": "evening",
-            "energy": 3,
+            "energy_level": "high",
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Evening",

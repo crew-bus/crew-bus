@@ -84,31 +84,6 @@ function updateTrust() {
     });
 }
 
-// --- Burnout Score ---
-function updateBurnout() {
-    var slider = document.getElementById('burnoutSlider') || document.getElementById('settingsBurnout');
-    if (!slider) return;
-    var score = parseInt(slider.value);
-
-    fetch('/api/burnout', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({score: score})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) {
-            var level = score <= 3 ? 'low' : score <= 6 ? 'moderate' : 'high';
-            showToast('Burnout score updated to ' + score + ' (' + level + ')', 'success');
-        } else {
-            showToast(data.error || 'Failed to update', 'error');
-        }
-    })
-    .catch(function(err) {
-        showToast('Network error: ' + err, 'error');
-    });
-}
-
 // --- Agent Actions ---
 function agentAction(action, agentId) {
     fetch('/api/' + action + '/' + agentId, {

@@ -6,7 +6,6 @@ public struct Agent: Codable, Identifiable, Hashable {
     public let agentType: String
     public let status: String
     public let trustScore: Int?
-    public let burnoutScore: Int?
     public let displayName: String?
     public let unreadCount: Int?
     public let lastMessageTime: String?

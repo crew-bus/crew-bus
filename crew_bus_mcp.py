@@ -150,7 +150,7 @@ def get_agent_chat(agent_name: str, limit: int = 20) -> str:
 
 @mcp.tool()
 def get_crew_stats() -> str:
-    """Get a dashboard overview of the crew — agent counts, trust score, burnout, etc."""
+    """Get a dashboard overview of the crew — agent counts, trust score, energy, etc."""
     stats = _api_get("/api/stats")
     return json.dumps(stats, indent=2)
 

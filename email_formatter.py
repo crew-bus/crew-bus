@@ -10,13 +10,13 @@ from datetime import datetime, timezone
 
 
 def format_morning_brief(briefing_data: dict, human_name: str,
-                         energy_score: int = 5) -> dict:
+                         energy_level: str = "medium") -> dict:
     """Format a morning briefing as a professional email.
 
     Args:
         briefing_data: Output from RightHand.compile_briefing("morning").
         human_name: The human's name.
-        energy_score: Current energy score (1-10).
+        energy_level: Current energy level (high/medium/low).
 
     Returns:
         {subject: str, plain: str, html: str}
@@ -29,9 +29,9 @@ def format_morning_brief(briefing_data: dict, human_name: str,
     lines = []
 
     # Greeting based on energy
-    if energy_score >= 7:
+    if energy_level == "low":
         lines.append(f"Light day ahead, {human_name}. Only the essentials today.")
-    elif energy_score >= 4:
+    elif energy_level == "medium":
         lines.append(f"Good morning, {human_name}. Here's your rundown.")
     else:
         lines.append(f"Productive day ahead, {human_name}. Here's your full rundown.")
@@ -57,7 +57,7 @@ def format_morning_brief(briefing_data: dict, human_name: str,
     overnight = sections.get("overnight", [])
     non_priority = [m for m in overnight
                     if m.get("priority") not in ("high", "critical")]
-    if non_priority and energy_score < 7:
+    if non_priority and energy_level != "low":
         lines.append("-" * 50)
         lines.append(f"OVERNIGHT ACTIVITY ({len(overnight)} messages)")
         lines.append("-" * 50)
@@ -80,7 +80,7 @@ def format_morning_brief(briefing_data: dict, human_name: str,
 
     # Autonomous decisions summary
     auto = sections.get("auto_handled", [])
-    if auto and energy_score < 7:
+    if auto and energy_level != "low":
         lines.append("-" * 50)
         lines.append(f"HANDLED AUTONOMOUSLY ({len(auto)} decisions)")
         lines.append("-" * 50)
@@ -110,13 +110,13 @@ def format_morning_brief(briefing_data: dict, human_name: str,
 
 
 def format_evening_summary(briefing_data: dict, human_name: str,
-                           energy_score: int = 5) -> dict:
+                           energy_level: str = "medium") -> dict:
     """Format an evening summary as a professional email.
 
     Args:
         briefing_data: Output from RightHand.compile_briefing("evening").
         human_name: The human's name.
-        energy_score: Current energy score (1-10).
+        energy_level: Current energy level (high/medium/low).
 
     Returns:
         {subject: str, plain: str, html: str}
@@ -127,7 +127,7 @@ def format_evening_summary(briefing_data: dict, human_name: str,
 
     lines = []
 
-    if energy_score >= 7:
+    if energy_level == "low":
         lines.append(f"Quick wrap-up, {human_name}. Rest up tonight.")
     else:
         lines.append(f"End of day summary, {human_name}.")

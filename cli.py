@@ -16,7 +16,6 @@ Usage:
     crew-bus report <agent>             Compile subordinate report
     crew-bus deliver <message_id>       Deliver a queued message
     crew-bus trust <human> <score>      Set Crew Boss trust score
-    crew-bus burnout <human> <score>    Set human burnout score
     crew-bus briefing <human> <type>    Generate briefing (morning|evening|urgent)
     crew-bus autonomy <right_hand>      Show Crew Boss autonomy level and stats
     crew-bus decisions [--agent <id>]   Show decision history
@@ -163,12 +162,10 @@ def cmd_status(args):
         active_disp = "yes" if a["active"] else "no"
         parent = a.get("parent_name") or "--"
 
-        # Add trust/burnout info for special types
+        # Add trust info for special types
         extra = ""
         if a["agent_type"] == "right_hand":
             extra = f" [trust:{a['trust_score']}]"
-        elif a["agent_type"] == "human":
-            extra = f" [energy:{a.get('burnout_score', 5)}]"
 
         print(f"  {a['name']:<22} {a['agent_type']:<16} {status_disp:<14} "
               f"{active_disp:<8} {a['channel']:<10} {parent}{extra}")
@@ -340,11 +337,11 @@ def cmd_briefing(args):
     briefing = engine.compile_briefing(args.type)
 
     # Format as email
-    burnout = agent.get("burnout_score", 5)
+    energy_level = briefing.get("energy_level", "medium")
     if args.type == "morning":
-        email = format_morning_brief(briefing, agent["name"], burnout)
+        email = format_morning_brief(briefing, agent["name"], energy_level)
     elif args.type == "evening":
-        email = format_evening_summary(briefing, agent["name"], burnout)
+        email = format_evening_summary(briefing, agent["name"], energy_level)
     elif args.type == "urgent":
         email = format_urgent_alert(briefing, agent["name"])
     else:
@@ -510,11 +507,10 @@ def cmd_accuracy(args):
 # ---------------------------------------------------------------------------
 
 def cmd_state(args):
-    """Show current human state (burnout, energy, activity, mood)."""
+    """Show current human state (energy, activity, mood)."""
     agent = _resolve_agent(args.human)
     state = bus.get_human_state(agent["id"])
     print(f"  Human State: {agent['name']}")
-    print(f"  Energy:         {state.get('burnout_score', 5)}/10")
     print(f"  Energy:         {state['energy_level']}")
     print(f"  Activity:       {state['current_activity']}")
     print(f"  Mood:           {state['mood_indicator']}")

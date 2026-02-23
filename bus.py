@@ -262,7 +262,6 @@ def init_db(db_path: Optional[Path] = None) -> None:
                             CHECK(channel IN ('telegram','signal','email','console')),
             channel_address TEXT,
             trust_score     INTEGER NOT NULL DEFAULT 1 CHECK(trust_score BETWEEN 1 AND 10),
-            burnout_score   INTEGER NOT NULL DEFAULT 5 CHECK(burnout_score BETWEEN 1 AND 10),  -- legacy column, unused
             budget_limit    REAL    NOT NULL DEFAULT 0.0,
             quiet_hours_start TEXT,
             quiet_hours_end   TEXT,
@@ -320,7 +319,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             agent_id    INTEGER NOT NULL REFERENCES agents(id),
             rule_type   TEXT    NOT NULL
-                        CHECK(rule_type IN ('quiet_hours','busy_signal','burnout_threshold','focus_mode')),
+                        CHECK(rule_type IN ('quiet_hours','busy_signal','focus_mode')),
             rule_config TEXT    NOT NULL DEFAULT '{}',
             enabled     INTEGER NOT NULL DEFAULT 1,
             created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
@@ -393,7 +392,6 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE TABLE IF NOT EXISTS human_state (
             id                      INTEGER PRIMARY KEY AUTOINCREMENT,
             human_id                INTEGER NOT NULL REFERENCES agents(id),
-            burnout_score           INTEGER NOT NULL DEFAULT 5 CHECK(burnout_score BETWEEN 1 AND 10),  -- legacy column, unused
             energy_level            TEXT    NOT NULL DEFAULT 'medium'
                                     CHECK(energy_level IN ('high','medium','low')),
             current_activity        TEXT    NOT NULL DEFAULT 'working'
@@ -442,17 +440,6 @@ def init_db(db_path: Optional[Path] = None) -> None:
             status                  TEXT    NOT NULL DEFAULT 'healthy'
                                     CHECK(status IN ('healthy','attention_needed','at_risk','stale')),
             updated_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-        );
-
-        -- legacy table, unused (strategy idea system removed)
-        CREATE TABLE IF NOT EXISTS rejection_history (
-            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-            human_id            INTEGER NOT NULL REFERENCES agents(id),
-            strategy_agent_id   INTEGER NOT NULL REFERENCES agents(id),
-            idea_subject        TEXT    NOT NULL,
-            idea_body           TEXT    NOT NULL DEFAULT '',
-            rejection_reason    TEXT,
-            created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         );
 
         -- ========= Private Sessions =========
@@ -742,8 +729,6 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_relationship     ON relationship_tracker(human_id, status);
         CREATE INDEX IF NOT EXISTS idx_human_state      ON human_state(human_id);
         CREATE INDEX IF NOT EXISTS idx_trust_config     ON trust_config(human_id);
-        CREATE INDEX IF NOT EXISTS idx_rejection_human  ON rejection_history(human_id, created_at);
-        CREATE INDEX IF NOT EXISTS idx_rejection_strat  ON rejection_history(strategy_agent_id, idea_subject);
         CREATE INDEX IF NOT EXISTS idx_private_sessions_active ON private_sessions(human_id, agent_id, active);
         CREATE INDEX IF NOT EXISTS idx_team_mailbox_unread ON team_mailbox(team_id, read, severity);
         CREATE INDEX IF NOT EXISTS idx_team_mailbox_agent_rate ON team_mailbox(from_agent_id, created_at);
@@ -1051,7 +1036,7 @@ def load_hierarchy(config_path: str, db_path: Optional[Path] = None) -> dict:
             "hierarchy": {
                 "human": config["human"],
                 "right_hand": config["right_hand"],
-                "core_crew": config.get("core_crew", config.get("crew", {})),
+                "crew": config.get("crew", {}),
                 "departments": config.get("departments", []),
             },
         }
@@ -1081,7 +1066,6 @@ def _load_v2_hierarchy(config: dict, config_path: str,
         "channel": human_def.get("channel", "console"),
         "channel_address": human_def.get("channel_address"),
         "description": human_def.get("description", "Human principal"),
-        "burnout_score": human_def.get("burnout_score", 5),
         "quiet_hours_start": qh.get("start"),
         "quiet_hours_end": qh.get("end"),
         "timezone": human_def.get("timezone", "UTC"),
@@ -1116,7 +1100,7 @@ def _load_v2_hierarchy(config: dict, config_path: str,
     created.append(rh_def["name"])
 
     # 2b. Register Security Agent (Guardian)
-    crew = hier.get("core_crew", hier.get("crew", {}))
+    crew = hier.get("crew", {})
     sec_def = crew.get("security")
     if isinstance(sec_def, dict):
         _upsert_agent(conn, {
@@ -1199,8 +1183,8 @@ def _load_v2_hierarchy(config: dict, config_path: str,
     ).fetchone()
     if not existing_hs:
         conn.execute(
-            "INSERT INTO human_state (human_id, burnout_score) VALUES (?, ?)",
-            (human_id, human_def.get("burnout_score", 5)),
+            "INSERT INTO human_state (human_id) VALUES (?)",
+            (human_id,),
         )
 
     # 2f. Load relationships from config
@@ -1308,7 +1292,6 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
     channel = agent_def.get("channel", "console")
     address = agent_def.get("channel_address")
     trust = agent_def.get("trust_score", 1)
-    burnout = agent_def.get("burnout_score", 5)
     budget_limit = agent_def.get("budget_limit", 0.0)
     qh_start = agent_def.get("quiet_hours_start")
     qh_end = agent_def.get("quiet_hours_end")
@@ -1322,11 +1305,11 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
     if existing:
         conn.execute(
             "UPDATE agents SET agent_type=?, role=?, channel=?, channel_address=?, "
-            "trust_score=?, burnout_score=?, budget_limit=?, "
+            "trust_score=?, budget_limit=?, "
             "quiet_hours_start=?, quiet_hours_end=?, timezone=?, "
             "active=?, capabilities=?, description=?, model=?, "
             "updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE name=?",
-            (agent_type, role, channel, address, trust, burnout, budget_limit,
+            (agent_type, role, channel, address, trust, budget_limit,
              qh_start, qh_end, tz,
              is_active, caps, desc, model, name),
         )
@@ -1334,11 +1317,11 @@ def _upsert_agent(conn: sqlite3.Connection, agent_def: dict) -> int:
     else:
         cur = conn.execute(
             "INSERT INTO agents (name, agent_type, role, channel, channel_address, "
-            "trust_score, burnout_score, budget_limit, "
+            "trust_score, budget_limit, "
             "quiet_hours_start, quiet_hours_end, timezone, "
             "active, capabilities, description, model) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, agent_type, role, channel, address, trust, burnout, budget_limit,
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, agent_type, role, channel, address, trust, budget_limit,
              qh_start, qh_end, tz,
              is_active, caps, desc, model),
         )
@@ -2043,25 +2026,6 @@ def _load_crew_format(config: dict, config_path: str,
         })
         created.append(name)
 
-        # Burnout rule from agent-level config
-        burnout_def = agent_def.get("burnout", {})
-        if burnout_def:
-            _upsert_timing_rule(conn, agent_id, "burnout_threshold", {
-                "threshold_minutes": burnout_def.get("threshold_minutes", 180),
-                "nudge_style": burnout_def.get("nudge_style", "gentle"),
-                "message": burnout_def.get("message", ""),
-            })
-
-    # --- Global burnout config ---
-    global_burnout = config.get("burnout", {})
-    if global_burnout.get("enabled"):
-        _upsert_timing_rule(conn, human_id, "burnout_threshold", {
-            "threshold_minutes": global_burnout.get("threshold_minutes", 180),
-            "nudge_style": global_burnout.get("nudge_style", "warm"),
-            "message": global_burnout.get("message", ""),
-            "hard_limit_minutes": global_burnout.get("hard_limit_minutes"),
-            "hard_limit_action": global_burnout.get("hard_limit_action"),
-        })
 
     # --- Help agent ---
     _upsert_agent(conn, {
@@ -2617,7 +2581,7 @@ def _alert_agent_status_change(conn, agent: dict, action: str):
 
 
 # ---------------------------------------------------------------------------
-# Trust and Burnout
+# Trust and Energy
 # ---------------------------------------------------------------------------
 
 def update_trust_score(human_id: int, new_score: int,
@@ -3882,7 +3846,7 @@ def update_human_state(human_id: int, state: dict,
     """Create or update the dynamic human state.
 
     state dict keys (all optional):
-        burnout_score (1-10), energy_level (high/medium/low),
+        energy_level (high/medium/low),
         current_activity (working/meeting/driving/resting/family_time/unavailable),
         mood_indicator (good/neutral/stressed/frustrated/energized),
         last_social_activity (ISO timestamp), last_family_contact (ISO timestamp),
@@ -3896,7 +3860,7 @@ def update_human_state(human_id: int, state: dict,
     if existing:
         sets = []
         vals = []
-        for key in ("burnout_score", "energy_level", "current_activity",
+        for key in ("energy_level", "current_activity",
                      "mood_indicator", "last_social_activity",
                      "last_family_contact", "consecutive_work_days"):
             if key in state:
@@ -3912,12 +3876,11 @@ def update_human_state(human_id: int, state: dict,
     else:
         conn.execute(
             "INSERT INTO human_state "
-            "(human_id, burnout_score, energy_level, current_activity, "
+            "(human_id, energy_level, current_activity, "
             " mood_indicator, last_social_activity, last_family_contact, "
             " consecutive_work_days, updated_by) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?,?)",
             (human_id,
-             state.get("burnout_score", 5),
              state.get("energy_level", "medium"),
              state.get("current_activity", "working"),
              state.get("mood_indicator", "neutral"),
@@ -3925,14 +3888,6 @@ def update_human_state(human_id: int, state: dict,
              state.get("last_family_contact"),
              state.get("consecutive_work_days", 0),
              updated_by),
-        )
-
-    # Also sync burnout to agents table
-    if "burnout_score" in state:
-        conn.execute(
-            "UPDATE agents SET burnout_score=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
-            "WHERE id=?",
-            (state["burnout_score"], human_id),
         )
 
     _audit(conn, "human_state_updated", human_id, {

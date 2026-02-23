@@ -6,11 +6,9 @@ struct AdjustSettingsSheet: View {
     @Environment(AppState.self) private var appState
 
     @State private var trustScore: Double
-    @State private var burnoutScore: Double
 
-    init(trustScore: Int, burnoutScore: Int) {
+    init(trustScore: Int) {
         _trustScore = State(initialValue: Double(trustScore))
-        _burnoutScore = State(initialValue: Double(burnoutScore))
     }
 
     var body: some View {
@@ -35,22 +33,11 @@ struct AdjustSettingsSheet: View {
                     .tint(CrewTheme.accent)
             }
 
-            // Burnout Score
-            VStack(alignment: .leading, spacing: 12) {
-                Text("BURNOUT SCORE")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(CrewTheme.muted)
-
-                Slider(value: $burnoutScore, in: 1...10, step: 1)
-                    .tint(CrewTheme.accent)
-            }
-
             Spacer()
 
             Button {
                 Task {
                     await appState.updateTrustScore(Int(trustScore))
-                    await appState.updateBurnoutScore(Int(burnoutScore))
                     dismiss()
                 }
             } label: {

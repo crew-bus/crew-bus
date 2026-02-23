@@ -20,8 +20,8 @@ def _fresh_db():
     # Human
     conn.execute(
         "INSERT INTO agents (id, name, agent_type, role, status, active, "
-        "burnout_score, trust_score) "
-        "VALUES (1, 'TestHuman', 'human', 'human', 'active', 1, 3, 1)"
+        "trust_score) "
+        "VALUES (1, 'TestHuman', 'human', 'human', 'active', 1, 1)"
     )
     # Crew Boss
     conn.execute(
@@ -289,16 +289,18 @@ def test_compile_invalid_type():
 
 
 def test_morning_briefing_energy_tone():
-    """Morning briefing adapts tone based on energy score."""
+    """Morning briefing adapts tone based on energy level."""
     db = _fresh_db()
 
-    # Set low energy (high burnout_score in DB)
+    # Set low energy via human_state table
+    rh = _make_rh(db)
+    # Trigger human_state creation first
+    rh.assess_human_state()
     conn = bus.get_conn(db)
-    conn.execute("UPDATE agents SET burnout_score=8 WHERE id=1")
+    conn.execute("UPDATE human_state SET energy_level='low' WHERE human_id=1")
     conn.commit()
     conn.close()
 
-    rh = _make_rh(db)
     briefing = rh.compile_briefing("morning")
     # Low energy uses lighter tone
     assert "light" in briefing["body_plain"].lower() or "essential" in briefing["body_plain"].lower()
@@ -391,12 +393,13 @@ def test_reputation_overpromising():
 def test_reputation_low_energy():
     """protect_reputation flags messages during low energy."""
     db = _fresh_db()
+    rh = _make_rh(db)
+    # Trigger human_state creation first
+    rh.assess_human_state()
     conn = bus.get_conn(db)
-    conn.execute("UPDATE agents SET burnout_score=8 WHERE id=1")
+    conn.execute("UPDATE human_state SET energy_level='low' WHERE human_id=1")
     conn.commit()
     conn.close()
-
-    rh = _make_rh(db)
     message = {
         "subject": "Quick note",
         "body": "Just a short message.",
@@ -414,14 +417,14 @@ def test_assess_human_state():
     db = _fresh_db()
     rh = _make_rh(db)
     state = rh.assess_human_state()
-    assert "energy_score" in state
+    assert "energy_level" in state
     assert "recommended_load" in state
     assert "messages_received_today" in state
     assert "decisions_made_today" in state
 
 
 def test_assess_human_state_low_energy():
-    """assess_human_state recommends emergency_only load at low energy."""
+    """assess_human_state recommends light load at low energy."""
     db = _fresh_db()
     # assess_human_state reads from human_state table via bus.get_human_state()
     rh = _make_rh(db)
@@ -429,13 +432,13 @@ def test_assess_human_state_low_energy():
     rh.assess_human_state()
     # Now update the human_state table
     conn = bus.get_conn(db)
-    conn.execute("UPDATE human_state SET burnout_score=9 WHERE human_id=1")
+    conn.execute("UPDATE human_state SET energy_level='low' WHERE human_id=1")
     conn.commit()
     conn.close()
 
     state = rh.assess_human_state()
-    assert state["energy_score"] == 9
-    assert state["recommended_load"] == "emergency_only"
+    assert state["energy_level"] == "low"
+    assert state["recommended_load"] == "light"
 
 
 def test_assess_human_state_high_energy():
@@ -446,12 +449,12 @@ def test_assess_human_state_high_energy():
     rh.assess_human_state()
     # Now update
     conn = bus.get_conn(db)
-    conn.execute("UPDATE human_state SET burnout_score=1 WHERE human_id=1")
+    conn.execute("UPDATE human_state SET energy_level='high' WHERE human_id=1")
     conn.commit()
     conn.close()
 
     state = rh.assess_human_state()
-    assert state["energy_score"] == 1
+    assert state["energy_level"] == "high"
     assert state["recommended_load"] == "full"
 
 
@@ -499,7 +502,7 @@ def test_heartbeat_energy_check():
     rh.assess_human_state()
     # Set low energy in human_state table
     conn = bus.get_conn(db)
-    conn.execute("UPDATE human_state SET burnout_score=8 WHERE human_id=1")
+    conn.execute("UPDATE human_state SET energy_level='low' WHERE human_id=1")
     conn.commit()
     conn.close()
 

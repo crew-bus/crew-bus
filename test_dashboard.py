@@ -188,8 +188,8 @@ conn.execute(
 )
 conn.execute(
     "INSERT INTO timing_rules (agent_id, rule_type, rule_config, enabled) VALUES (?, ?, ?, ?)",
-    (HUMAN, "burnout_threshold",
-     json.dumps({"threshold": 7, "action": "queue_non_urgent"}), 1)
+    (HUMAN, "focus_mode",
+     json.dumps({"duration_minutes": 90, "action": "queue_non_urgent"}), 1)
 )
 conn.commit()
 conn.close()
@@ -233,7 +233,7 @@ m2 = seed_message(CFO, CHIEF, "report", "Monthly P&L summary",
     "normal", "read", days_ago=3, hours_ago=1)
 msg_count += 1
 
-m3 = seed_message(QUANT, CHIEF, "alert", "Burnout indicators elevated",
+m3 = seed_message(QUANT, CHIEF, "alert", "Low energy indicators elevated",
     "Sleep score: 62/100. Screen time up 40% this week. "
     "Calendar density: 7.2 hrs/day scheduled. Recommend blocking Friday PM for recovery.",
     "high", "read", days_ago=3)
@@ -371,7 +371,7 @@ msg_count += 1
 
 m24 = seed_message(QUANT, CHIEF, "report", "Morning vitals check",
     "Sleep: 7.2 hrs (improving). HRV: 52ms (good). "
-    "Calendar today: 4.5 hrs scheduled. Burnout risk: LOW.",
+    "Calendar today: 4.5 hrs scheduled. Fatigue risk: LOW.",
     "low", "delivered", hours_ago=2)
 msg_count += 1
 
@@ -587,7 +587,7 @@ k_count += 1
 seed_knowledge(CHIEF, "preference",
     "Morning briefing format",
     {"format": "numbered action items first, then context",
-     "max_items": 5, "include_wellness": True},
+     "max_items": 5, "include_energy": True},
     tags="briefing,morning,format", days_ago=3)
 k_count += 1
 
@@ -660,8 +660,7 @@ knowledge_total = conn.execute("SELECT COUNT(*) FROM knowledge_store").fetchone(
 audit_total = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
 timing_total = conn.execute("SELECT COUNT(*) FROM timing_rules").fetchone()[0]
 
-# Get trust from Crew Boss agent, energy from human agent
-human_row = conn.execute("SELECT burnout_score FROM agents WHERE id=?", (HUMAN,)).fetchone()
+# Get trust from Crew Boss agent
 rh_row = conn.execute("SELECT trust_score FROM agents WHERE id=?", (CHIEF,)).fetchone()
 
 conn.close()
@@ -673,7 +672,6 @@ print(f"  Knowledge:   {knowledge_total} entries")
 print(f"  Audit log:   {audit_total} entries")
 print(f"  Timing rules: {timing_total}")
 print(f"  Trust score:  {rh_row['trust_score']}/10 (on Crew Boss)")
-print(f"  Energy:       {human_row['burnout_score']}/10 (on Human)")
 print()
 print("=" * 50)
 print("  Dashboard ready at http://localhost:8420")

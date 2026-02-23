@@ -21,7 +21,7 @@ class RightHand:
 
     Manages all communication flow to and from the human based on:
     - Trust score (1-10): governs autonomy level
-    - Burnout score: protects human's cognitive load
+    - Energy level: protects human's cognitive load
     - Timing rules: quiet hours, busy signals, focus mode
     - Knowledge store: past decisions, rejections, preferences
     """
@@ -118,7 +118,7 @@ class RightHand:
                 self._log("queue", message, f"Queued idea: {filter_result['reason']}")
                 return decision
 
-        # Check timing rules (burnout, quiet hours, busy, focus)
+        # Check timing rules (quiet hours, busy, focus)
         timing = bus.should_deliver_now(self.human_id, priority, self.db_path)
 
         if not timing["deliver"]:
@@ -238,21 +238,29 @@ class RightHand:
             }
         """
         self._refresh()
-        energy = self.human.get("burnout_score", 5)
         now = datetime.now(timezone.utc)
         human_name = self.human["name"]
         rh_name = self.rh["name"]
 
+        # Get energy_level from human_state (high/medium/low)
+        conn = bus.get_conn(self.db_path)
+        row = conn.execute(
+            "SELECT energy_level FROM human_state WHERE human_id=?",
+            (self.human_id,),
+        ).fetchone()
+        conn.close()
+        energy_level = row["energy_level"] if row else "medium"
+
         if briefing_type == "morning":
-            return self._compile_morning(now, energy, human_name, rh_name)
+            return self._compile_morning(now, energy_level, human_name, rh_name)
         elif briefing_type == "evening":
-            return self._compile_evening(now, energy, human_name, rh_name)
+            return self._compile_evening(now, energy_level, human_name, rh_name)
         elif briefing_type == "urgent":
             return self._compile_urgent(now, human_name, rh_name)
         else:
             raise ValueError(f"Unknown briefing type: {briefing_type}")
 
-    def _compile_morning(self, now: datetime, burnout: int,
+    def _compile_morning(self, now: datetime, energy_level: str,
                          human_name: str, rh_name: str) -> dict:
         """Compile the morning briefing."""
         # Get overnight messages (last 12 hours)
@@ -294,11 +302,11 @@ class RightHand:
         date_str = now.strftime("%A %b %d")
         item_count = len(inbox) + len(queued)
 
-        # Tone based on burnout
-        if burnout >= 7:
+        # Tone based on energy level
+        if energy_level == "low":
             greeting = f"Light day ahead, {human_name}. Only the essentials."
             priority_label = "Just one thing to look at" if item_count <= 1 else f"Only {item_count} items need attention"
-        elif burnout >= 4:
+        elif energy_level == "medium":
             greeting = f"Good morning, {human_name}. Here's your rundown."
             priority_label = f"{item_count} items for your review"
         else:
@@ -360,7 +368,7 @@ class RightHand:
             "priority": "high" if priority_items else "normal",
             "item_count": item_count,
             "briefing_type": "morning",
-            "burnout": burnout,
+            "energy_level": energy_level,
             "human_name": human_name,
             "rh_name": rh_name,
             "sections": {
@@ -371,7 +379,7 @@ class RightHand:
             },
         }
 
-    def _compile_evening(self, now: datetime, burnout: int,
+    def _compile_evening(self, now: datetime, energy_level: str,
                          human_name: str, rh_name: str) -> dict:
         """Compile the evening summary."""
         cutoff = (now - timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -396,7 +404,7 @@ class RightHand:
 
         date_str = now.strftime("%A %b %d")
 
-        if burnout >= 7:
+        if energy_level == "low":
             greeting = f"Quick wrap-up, {human_name}. Rest up tonight."
         else:
             greeting = f"End of day summary, {human_name}."
@@ -439,7 +447,7 @@ class RightHand:
             "priority": "normal",
             "item_count": len(decisions),
             "briefing_type": "evening",
-            "burnout": burnout,
+            "energy_level": energy_level,
             "human_name": human_name,
             "rh_name": rh_name,
             "sections": {
@@ -484,7 +492,7 @@ class RightHand:
             "priority": "critical",
             "item_count": len(critical),
             "briefing_type": "urgent",
-            "burnout": 0,
+            "energy_level": "high",
             "human_name": human_name,
             "rh_name": rh_name,
             "sections": {"critical": [dict(m) for m in critical]},
@@ -549,7 +557,7 @@ class RightHand:
     def protect_reputation(self, outbound_message: dict) -> dict:
         """Review outbound communication before it leaves the system.
 
-        Checks tone, burnout-driven risk, and consistency with the human's
+        Checks tone, energy-driven risk, and consistency with the human's
         personal brand.
 
         Args:
@@ -560,16 +568,22 @@ class RightHand:
              concerns: list, suggested_edits: str|None}
         """
         self._refresh()
-        energy = self.human.get("burnout_score", 5)
         concerns = []
         body = outbound_message.get("body", "")
         subject = outbound_message.get("subject", "")
 
         # Check if written during low-energy or late-night
-        if energy >= 7:
+        conn = bus.get_conn(self.db_path)
+        row = conn.execute(
+            "SELECT energy_level FROM human_state WHERE human_id=?",
+            (self.human_id,),
+        ).fetchone()
+        conn.close()
+        energy_level = row["energy_level"] if row else "medium"
+        if energy_level == "low":
             concerns.append(
-                "Written during low energy (score %d/10). "
-                "Flag for morning review." % energy
+                "Written during low energy. "
+                "Flag for morning review."
             )
 
         # Check for late-night writing
@@ -651,7 +665,7 @@ class RightHand:
         cognitive load level.
 
         Returns:
-            {energy_score, energy, activity, mood, consecutive_work_days,
+            {energy_level, activity, mood, consecutive_work_days,
              social_isolation_days, messages_received_today,
              decisions_made_today, recommended_load}
         """
@@ -682,23 +696,21 @@ class RightHand:
             except (ValueError, TypeError):
                 social_days = 0
 
-        burnout = state.get("burnout_score", 5)
         energy = state.get("energy_level", "medium")
         activity = state.get("current_activity", "working")
 
         # Determine recommended load
-        if burnout >= 8 or activity in ("driving", "unavailable"):
+        if activity in ("driving", "unavailable"):
             load = "emergency_only"
-        elif burnout >= 6 or activity in ("resting", "family_time"):
+        elif activity in ("resting", "family_time"):
             load = "minimal"
-        elif burnout >= 4 or energy == "low":
+        elif energy == "low":
             load = "light"
         else:
             load = "full"
 
         return {
-            "energy_score": burnout,
-            "energy": energy,
+            "energy_level": energy,
             "activity": activity,
             "mood": state.get("mood_indicator", "neutral"),
             "consecutive_work_days": state.get("consecutive_work_days", 0),
@@ -735,7 +747,7 @@ class Heartbeat:
     """Proactive background scheduler for the Crew Boss.
 
     Runs every N minutes, checks a list of conditions, and takes action.
-    Context-aware: respects burnout, quiet hours, and focus mode.
+    Context-aware: respects energy level, quiet hours, and focus mode.
     """
 
     DEFAULT_CHECKS = [
@@ -882,7 +894,7 @@ class Heartbeat:
 
     def _check_energy(self) -> Optional[dict]:
         state = self.rh.assess_human_state()
-        if state.get("energy_score", state.get("burnout_score", 5)) >= 7:
+        if state.get("energy_level", "medium") == "low":
             return {"action_needed": True, "type": "low_energy_alert", "data": state}
         return None
 
@@ -1480,7 +1492,7 @@ class Heartbeat:
             bus.set_config(result["config_key"], today, db_path=self.db_path)
             print(f"[heartbeat] sent {action_type}")
 
-        elif action_type in ("burnout_alert", "low_energy_alert"):
+        elif action_type == "low_energy_alert":
             state = result["data"]
             bus.send_message(
                 from_id=self.rh.rh_id, to_id=self.rh.human_id,

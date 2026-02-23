@@ -85,7 +85,11 @@ Crew Bus is a native macOS app built with SwiftUI. No browser windows, no Electr
 
 ## Install
 
-Download the DMG from [crew-bus.dev/install](https://crew-bus.dev/install), drag to Applications, and launch. Native SwiftUI macOS 14.0+ app only.
+1. Download the DMG from https://crew-bus.dev/install
+2. Drag Crew Bus.app to your Applications folder
+3. Launch it
+
+Native SwiftUI macOS 14.0+ app only. Runs 100% locally on your Mac.
 
 ---
 

@@ -112,7 +112,7 @@ try:
     check("1.2", "crew-bus" in html, "Landing page contains 'crew-bus'")
     check("1.3", "data-page=\"crew\"" in html, "Landing page has data-page=crew")
     check("1.4", "trust-slider" in html, "Landing page has trust slider")
-    check("1.5", "energy-slider" in html or "burnout-slider" in html, "Landing page has energy slider")
+    check("1.5", "energy-slider" in html, "Landing page has energy slider")
 except Exception as e:
     check("1.1", False, f"Landing page request failed: {e}")
 
@@ -476,7 +476,7 @@ try:
 except Exception as e:
     check("9.4", False, f"Type filter check failed: {e}")
 
-# Test energy update via API (burnout endpoint removed, skip gracefully)
+# Test energy update via API (legacy endpoint removed, skip gracefully)
 check("9.5", True, "Energy update API — endpoint removed, skipping")
 check("9.6", True, "Energy score in stats — skipping (legacy endpoint removed)")
 

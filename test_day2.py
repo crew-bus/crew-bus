@@ -138,7 +138,7 @@ s3_start = passed
 msg = bus.send_message(
     quant["id"], chief["id"],
     message_type="alert",
-    subject="Burnout elevated, recommend light schedule",
+    subject="Low energy detected, recommend light schedule",
     body="Multiple signals: sleep quality declining, screen time up 35%, calendar overbooked 3 days running.",
     priority="high",
     db_path=TEST_DB,
@@ -182,7 +182,7 @@ rh = RightHand(chief["id"], ryan["id"], db_path=TEST_DB)
 filter_result = rh.filter_idea(idea_msg["message_id"])
 check("5.1", filter_result["action"] == "queue",
       f"Idea action: {filter_result['action']}")
-check("5.2", "energy" in filter_result["reason"].lower() or "burnout" in filter_result["reason"].lower(),
+check("5.2", "energy" in filter_result["reason"].lower(),
       f"Reason mentions energy: {filter_result['reason'][:80]}")
 
 # Log the decision

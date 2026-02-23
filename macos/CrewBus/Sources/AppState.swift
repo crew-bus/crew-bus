@@ -129,15 +129,6 @@ final class AppState {
         }
     }
 
-    func updateBurnoutScore(_ score: Int) async {
-        do {
-            try await client.post(APIEndpoints.burnout, body: ["score": score])
-            await loadInitialData()
-        } catch {
-            print("Failed to update burnout score: \(error)")
-        }
-    }
-
     func checkSetupStatus() async {
         struct SetupStatus: Decodable {
             let needsSetup: Bool

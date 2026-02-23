@@ -29,8 +29,7 @@ struct DashboardView: View {
                 .sheet(isPresented: $showSettings) {
                     if let stats = appState.stats {
                         AdjustSettingsSheet(
-                            trustScore: stats.trustScore,
-                            burnoutScore: stats.burnoutScore
+                            trustScore: stats.trustScore
                         )
                     }
                 }

@@ -290,7 +290,7 @@ def format_briefing_email(briefing_data: dict, human_profile: dict) -> dict:
             from_name (str):   Crew Boss's name.
     """
     briefing_type = briefing_data.get("briefing_type", "morning")
-    burnout = briefing_data.get("energy", briefing_data.get("burnout", 5))
+    energy_level = briefing_data.get("energy_level", "medium")
     human_name = briefing_data.get("human_name", human_profile.get("name", "Boss"))
     rh_name = briefing_data.get("rh_name", "Chief")
     sections = briefing_data.get("sections", {})
@@ -301,9 +301,9 @@ def format_briefing_email(briefing_data: dict, human_profile: dict) -> dict:
     lines = []
 
     # Greeting (energy-adaptive)
-    if burnout >= 7:
+    if energy_level == "low":
         lines.append(f"Hey {human_name}. Taking it easy today — here's the short version.\n")
-    elif burnout >= 5:
+    elif energy_level == "medium":
         lines.append(f"Good morning, {human_name}. Here's your rundown.\n")
     else:
         lines.append(f"Morning, {human_name}. Full speed ahead.\n")
@@ -344,7 +344,7 @@ def format_briefing_email(briefing_data: dict, human_profile: dict) -> dict:
 
     # Handled autonomously
     autonomous = sections.get("autonomous", [])
-    if autonomous and burnout < 7:
+    if autonomous and energy_level != "low":
         lines.append("=" * 50)
         lines.append("HANDLED AUTONOMOUSLY")
         lines.append("=" * 50)
