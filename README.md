@@ -1,26 +1,43 @@
-# 🚌 crew-bus
+# Crew Bus
 
 **Your agents. Your hardware. Your rules.**
 
-crew-bus is open-source software that runs on your own machine and lets your AI agents work together as a coordinated team — no cloud dependency, no API subscriptions, no data leaving your network.
+Crew Bus is open-source software that runs on your own machine and lets your AI agents work together as a coordinated team — no cloud dependency, no API subscriptions, no data leaving your network.
 
-> Most agent frameworks send your data to someone else's servers and charge you monthly for the privilege. crew-bus runs locally, costs $29 once, and puts a security Guardian between your agents and the outside world.
+> Most agent frameworks send your data to someone else's servers and charge you monthly for the privilege. Crew Bus runs locally, costs $29 once, and puts a security Guardian between your agents and the outside world.
 
 [![GitHub release](https://img.shields.io/github/v/release/crew-bus/crew-bus)](https://github.com/crew-bus/crew-bus/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen)](#)
+[![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](#download)
 
 ---
 
-## Why crew-bus?
+## Download
+
+**[Download Crew Bus for Mac](https://github.com/crew-bus/crew-bus/releases/latest)** (macOS 14.0+)
+
+Native SwiftUI app — no browser, no Electron. Just a real Mac app.
+
+1. Download `CrewBus-1.0.0.dmg`
+2. Drag **Crew Bus** to Applications
+3. Launch and your crew is ready
+
+The app is code-signed and notarized by Apple for safe installation.
+
+---
+
+## Why Crew Bus?
 
 Setting up a team of AI agents today is painful. You download a framework, wrestle with config files, wire up message routing, figure out which agent talks to which, pray nothing breaks — and your data flows through someone else's cloud the whole time.
 
-crew-bus takes a different approach:
+Crew Bus takes a different approach:
 
+- **Native Mac app.** A real SwiftUI desktop app — not a web page in a wrapper.
 - **Runs on your hardware.** Your laptop, your desktop, your home server. Your data never leaves your network unless you tell it to.
 - **Works out of the box.** Three agents in a triangle — Crew Boss, Guardian, Vault — ready to go in minutes, not hours.
 - **Built-in security from day one.** The Guardian agent controls all external access, vets every skill before install, and monitors everything in real time. No other agent framework ships with an immune system.
+- **Auto-updates via Sparkle.** The app checks for updates automatically — every 2 hours during your first 14 days for rapid bug fixes, then every 6 hours after that.
 - **One price, forever.** $29 lifetime Guardian Activation key. No subscriptions. No per-token charges. No surprise bills.
 
 ---
@@ -28,16 +45,16 @@ crew-bus takes a different approach:
 ## How It Works
 
 ```
-         ┌──────────┐
-         │Crew Boss │  ← your AI right-hand
-         └──┬───┬───┘
-            │   │
-   ┌────────┘   └────────┐
-   │                      │
-┌──┴───────┐       ┌──────┴──┐
-│ Guardian │       │  Vault  │
-│ protects │       │remembers│
-└──────────┘       └─────────┘
+         +------------+
+         | Crew Boss  |  <- your AI right-hand
+         +--+------+--+
+            |      |
+   +--------+      +--------+
+   |                         |
++--+-------+          +-----+---+
+| Guardian |          |  Vault  |
+| protects |          |remembers|
++----------+          +---------+
 ```
 
 **Boss talks, Guard protects, Vault remembers.**
@@ -50,73 +67,93 @@ crew-bus takes a different approach:
 
 ---
 
-## Quick Start
+## The App
+
+Crew Bus is a native macOS app built with SwiftUI. No browser windows, no Electron, no web views.
+
+**Dashboard** — See your entire crew at a glance. Crew Boss at the top, Guardian and Vault in the inner circle, teams on the right. Dark mode with particle effects.
+
+**Chat** — Talk to any agent directly. Crew Boss handles most things, but you can go straight to Guardian or Vault when needed.
+
+**Teams** — Spin up task-specific teams with manager and worker agents. Name them, assign them, disband them when done.
+
+**Channels** — Organized communication lanes for your crew.
+
+**Update Settings** — Auto-update preferences, channel picker (Stable / Latest), early access mode indicator.
+
+**Security & Devices** — PIN lock, device management, auth modes.
+
+---
+
+## Quick Start (Developer)
+
+If you want to run from source instead of the DMG:
 
 ```bash
 # Clone the repo
 git clone https://github.com/crew-bus/crew-bus.git
 cd crew-bus
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Start crew-bus
+# Start the backend server
 python3 dashboard.py
+
+# Build the Mac app
+cd macos
+xcodegen generate
+xcodebuild build -scheme CrewBus -destination "platform=macOS"
 ```
 
-Open `http://localhost:8420` and you're running. Three agents in a triangle, ready to coordinate.
-
-To unlock Guardian features (web search, Skill Store, Skill Sandbox), grab a [$29 lifetime activation key at crew-bus.dev](https://crew-bus.dev).
+Or just run the Python server standalone at `http://localhost:8420`.
 
 ---
 
 ## Features
 
 ### Core (Free & Open Source)
+- **Native Mac app** — SwiftUI, code-signed, notarized, auto-updates via Sparkle
 - **3 coordinated agents** — Crew Boss (right-hand), Guardian (security), Vault (private journal)
 - **Hierarchical message routing** — every message flows through the bus
 - **Private sessions** — isolated conversations per agent
 - **Team mailboxes** — agents can send structured messages to each other
 - **Local-first** — runs entirely on your machine
-- **Dashboard** — web UI to monitor and interact with your crew
+- **Dashboard** — native UI to monitor and interact with your crew
 - **Expandable** — spawn additional teams and agents when you need them
+- **Audit log** — full trail of every action across your crew
+- **Observability** — real-time health metrics and monitoring
+- **Claude Desktop integration** — link your crew to Claude via MCP
 
 ### Guardian Activation ($29 lifetime)
 
-#### 🔍 Web Search
-Every agent can search the internet and read URLs. Powered by DuckDuckGo — no API key needed, zero external dependencies. Internal IPs are blocked. Guardian controls all access.
+**Web Search** — Every agent can search the internet and read URLs. Powered by DuckDuckGo — no API key needed, zero external dependencies. Internal IPs are blocked. Guardian controls all access.
 
-#### 🏪 Skill Store
-20 curated skills across 10 categories — creative writing, homework help, budget tracking, meal planning, music production, lead finding, fitness planning, data analysis, and more. Guardian analyzes what an agent needs, recommends the best skill, vets it for safety, and installs it. Community skills from trusted HTTPS sources also supported.
+**Skill Store** — 20 curated skills across 10 categories — creative writing, homework help, budget tracking, meal planning, music production, lead finding, fitness planning, data analysis, and more. Guardian analyzes what an agent needs, recommends the best skill, vets it for safety, and installs it. Community skills from trusted HTTPS sources also supported.
 
-#### 🛡️ Skill Sandbox
-Guardian monitors every installed skill in real time:
-- **Health scoring** (0–100) per skill
-- **Error rate tracking** and charter violation detection
-- **Automatic quarantine** for degraded skills
-- **Restore with re-vetting** before reinstall
-- **Full audit trail** of every action
+**Skill Sandbox** — Guardian monitors every installed skill in real time: health scoring (0-100), error rate tracking, charter violation detection, automatic quarantine for degraded skills, restore with re-vetting, and full audit trail.
 
 ---
 
-## crew-bus vs. The Alternatives
+## Crew Bus vs. The Alternatives
 
-| | **crew-bus** | **CrewAI** | **AutoGen** | **LangGraph** |
+| | **Crew Bus** | **CrewAI** | **AutoGen** | **LangGraph** |
 |---|---|---|---|---|
-| **Runs locally** | ✅ Your hardware, your data | ❌ Cloud-first, AMP platform | ⚠️ Possible but not default | ⚠️ Requires setup |
-| **Built-in security agent** | ✅ Guardian monitors everything | ❌ No equivalent | ❌ No equivalent | ❌ No equivalent |
-| **Skill marketplace** | ✅ 20 curated + community skills | ❌ Manual tool setup | ❌ Manual tool setup | ❌ Manual tool setup |
-| **Runtime skill monitoring** | ✅ Health scores, auto-quarantine | ❌ None | ❌ None | ❌ None |
-| **Setup time** | Minutes | Hours | Hours | Hours |
-| **Pricing** | $29 once (core is free) | Free OSS / Enterprise $$$  | Free OSS | Free OSS |
-| **Target user** | Individuals, small teams | Enterprise dev teams | Researchers, developers | Advanced developers |
-| **Dependencies** | Python + your LLM | Python + UV + cloud APIs | Python + cloud APIs | Python + LangChain ecosystem |
+| **Native desktop app** | Yes | No | No | No |
+| **Runs locally** | Your hardware, your data | Cloud-first | Possible but not default | Requires setup |
+| **Built-in security agent** | Guardian monitors everything | No equivalent | No equivalent | No equivalent |
+| **Skill marketplace** | 20 curated + community skills | Manual tool setup | Manual tool setup | Manual tool setup |
+| **Runtime skill monitoring** | Health scores, auto-quarantine | None | None | None |
+| **Auto-updates** | Sparkle (signed + notarized) | N/A | N/A | N/A |
+| **Setup time** | Download DMG, drag to Applications | Hours | Hours | Hours |
+| **Pricing** | $29 once (core is free) | Free OSS / Enterprise | Free OSS | Free OSS |
+| **Target user** | Everyone | Enterprise dev teams | Researchers | Advanced developers |
 
 ### The real difference
 
 CrewAI, AutoGen, and LangGraph are powerful frameworks built for developers who want to code agent systems from scratch. They assume you'll wire everything together yourself.
 
-**crew-bus is built for people who want agents working together *today*.** You get a pre-configured crew, a security layer, a skill marketplace, and a dashboard — all running on your own machine. No PhD in prompt engineering required.
+**Crew Bus is built for people who want agents working together *today*.** You get a pre-configured crew, a security layer, a skill marketplace, and a native Mac app — all running on your own machine. No PhD in prompt engineering required.
 
 ---
 
@@ -134,33 +171,41 @@ CrewAI, AutoGen, and LangGraph are powerful frameworks built for developers who 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│              Dashboard (Web UI)          │
-├─────────────────────────────────────────┤
-│              API Layer (stdlib)          │
-├─────────────────────────────────────────┤
-│           Agent Worker Engine            │
-│  ┌─────────────────────────────────┐    │
-│  │  Crew Boss  │ Guardian │  Vault │    │
-│  └─────────────────────────────────┘    │
-├─────────────────────────────────────────┤
-│  Guardian Layer                         │
-│  ┌──────────┬───────────┬───────────┐   │
-│  │Web Bridge│Skill Store│  Sandbox  │   │
-│  └──────────┴───────────┴───────────┘   │
-├─────────────────────────────────────────┤
-│           SQLite (Local DB)             │
-└─────────────────────────────────────────┘
++-------------------------------------------+
+|          Crew Bus (SwiftUI Mac App)        |
++-------------------------------------------+
+|              API Layer (stdlib)            |
++-------------------------------------------+
+|           Agent Worker Engine              |
+|  +-------------------------------------+  |
+|  |  Crew Boss  |  Guardian  |   Vault  |  |
+|  +-------------------------------------+  |
++-------------------------------------------+
+|  Guardian Layer                           |
+|  +----------+-----------+-----------+     |
+|  |Web Bridge| Skill Store|  Sandbox |     |
+|  +----------+-----------+-----------+     |
++-------------------------------------------+
+|           SQLite (Local DB)               |
++-------------------------------------------+
 ```
 
-Everything runs in a single process on your machine. No Docker required. No cloud services. No external databases.
+Everything runs on your machine. No Docker required. No cloud services. No external databases.
+
+---
+
+## System Requirements
+
+- macOS 14.0 (Sonoma) or later
+- Python 3.9+ (bundled server)
+- Any LLM provider (local or API-based)
 
 ---
 
 ## Roadmap
 
 - [ ] Voice interface — talk to your crew
-- [ ] Mobile companion app
+- [ ] iOS companion app
 - [ ] Plugin SDK — build and share your own skills
 - [ ] Multi-machine crew networking (LAN)
 - [ ] WhatsApp & Telegram bridge for on-the-go access
@@ -169,7 +214,12 @@ Everything runs in a single process on your machine. No Docker required. No clou
 
 ## Contributing
 
-crew-bus is open source and contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Crew Bus is open source and contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+```bash
+# Run tests before submitting
+pytest
+```
 
 ---
 
@@ -182,11 +232,10 @@ MIT — use it however you want.
 ## Links
 
 - **Website:** [crew-bus.dev](https://crew-bus.dev)
+- **Download:** [Latest Release](https://github.com/crew-bus/crew-bus/releases/latest)
 - **GitHub:** [github.com/crew-bus/crew-bus](https://github.com/crew-bus/crew-bus)
-- **Releases:** [Latest Release](https://github.com/crew-bus/crew-bus/releases/latest)
 - **Activation Keys:** [crew-bus.dev](https://crew-bus.dev) ($29 lifetime)
 
 ---
 
-*Built by one person who got tired of agent frameworks that make simple things complicated.*
-*crew-bus — your agents, your hardware, your rules.*
+*Built for everyone — kids, teens, moms, dads, families, artists, hobbyists, small businesses, startups, ex-coders. Every human gets their own local Crew Bus — private, sovereign.*
