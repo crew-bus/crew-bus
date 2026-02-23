@@ -50,7 +50,8 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
     "set-your-activation-key-in-env"  # placeholder — production key via env
 )
 
-# Agent types in the universal hierarchy
+# Core 3 agents + team types
+CORE_AGENTS = ("right_hand", "guardian", "vault")
 VALID_AGENT_TYPES = (
     "human", "right_hand", "guardian", "vault",
     "manager", "worker", "specialist", "help",
