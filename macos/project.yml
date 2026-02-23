@@ -44,6 +44,8 @@ targets:
       DEVELOPMENT_TEAM: "KGG7W48LZG"
       CODE_SIGN_STYLE: Manual
       CODE_SIGN_IDENTITY: "Developer ID Application"
+      ENABLE_HARDENED_RUNTIME: true
+      OTHER_CODE_SIGN_FLAGS: "--timestamp"
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     entitlements:
       path: CrewBus/Resources/CrewBus.entitlements

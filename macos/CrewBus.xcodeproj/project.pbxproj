@@ -17,6 +17,7 @@
 		3F66163D09E4DEA3453AAF8A /* ConnectionLinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18B547946D8D3B693EF2F53C /* ConnectionLinesView.swift */; };
 		431E120B95675A375EC8FB29 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00EADCE776DFD8136570AC3 /* MainView.swift */; };
 		4645261FA38304B05BA6D63B /* CrewFaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C1D45251A4E72EDD8D3A07 /* CrewFaceView.swift */; };
+		4B1F782E97E5E3C0DAA3BDCF /* UpdateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85FE8C9BD09C19DCD6147C7 /* UpdateSettingsView.swift */; };
 		504991FED8D356396E7F2488 /* CrewTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FC84BF2472292212AA5546 /* CrewTheme.swift */; };
 		58BE4ED4491CCE0782A01405 /* HamburgerMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */; };
 		5BEF888C9FE78D9880B0410A /* ChannelListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923A657AB5F4951ECB429DC2 /* ChannelListView.swift */; };
@@ -38,6 +39,8 @@
 		A0E7F71DE2D6A589BFBAC9CF /* TopBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6177D5823DA899CCE92DA5A /* TopBarView.swift */; };
 		A271ACFC7F2C5AC8DBAD83DD /* SocialDraftsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F76DFDB65D482AFB9CC51875 /* SocialDraftsView.swift */; };
 		AA815DD85854F66332C1EE7D /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3497324F6468615DEFFE93 /* AgentDetailView.swift */; };
+		B5F57138D43FC1C7E2A92A4E /* UpdateBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A69491AFB1FE34EEF03FDB5 /* UpdateBannerView.swift */; };
+		B6D0D6C14DFC938DC8C7DA6D /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FA6B0056757EBD341EDEA364 /* Sparkle */; };
 		B90D1CAAA33B07C3422486C6 /* MessageFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D17DF2A403E3B7B7670D9D /* MessageFeedView.swift */; };
 		BA99BCB7A854527EC7A4D097 /* TeamsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF2D639DA36B53CD81572350 /* TeamsPanelView.swift */; };
 		BAA373537C6EA2B5AE495890 /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B770D509ADCD35EBF44EAD94 /* ChatInputView.swift */; };
@@ -45,6 +48,7 @@
 		C5D459DE8F5B59162AC0E757 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2999E8FD9F11268D74B1E12 /* ServerManager.swift */; };
 		D1035F19679A4FD0AF77393B /* TeamDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36817F57D49A30D568A55C3E /* TeamDetailView.swift */; };
 		D5149E85FAC71E538584308C /* CrewBusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */; };
+		D963AD37E31B25617F364906 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A7F9B7228EFC275C85D68B /* UpdateManager.swift */; };
 		DA380C55B1122518A89EC858 /* PinEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68190188CB881EB1062700E9 /* PinEntryView.swift */; };
 		DE81EEFB2DDC2044E80791FD /* LearningSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C13897DC5B6F0493ACDF1A3 /* LearningSection.swift */; };
 		E12E524EF45C1DF5C5BF0C03 /* ChatHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4188DAC9CCF4660FA2FD2A61 /* ChatHeaderView.swift */; };
@@ -66,6 +70,7 @@
 		1ED8D0E61CBE76BCA05389A7 /* SkillsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsSection.swift; sourceTree = "<group>"; };
 		1F46844ADE6818BED4204515 /* AuditLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditLogView.swift; sourceTree = "<group>"; };
 		2475BF29C20FA52CDA350524 /* AdjustSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustSettingsSheet.swift; sourceTree = "<group>"; };
+		2A69491AFB1FE34EEF03FDB5 /* UpdateBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateBannerView.swift; sourceTree = "<group>"; };
 		2B3497324F6468615DEFFE93 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
 		2C13897DC5B6F0493ACDF1A3 /* LearningSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningSection.swift; sourceTree = "<group>"; };
 		36817F57D49A30D568A55C3E /* TeamDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamDetailView.swift; sourceTree = "<group>"; };
@@ -80,6 +85,7 @@
 		799142024EB373FF7B662127 /* AddTeamSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTeamSheet.swift; sourceTree = "<group>"; };
 		822FE8EC1115088542E04188 /* ThinkingLevelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelSection.swift; sourceTree = "<group>"; };
 		857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeExtensionView.swift; sourceTree = "<group>"; };
+		87A7F9B7228EFC275C85D68B /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
 		8F0661EB2A8874C95DFC6E09 /* AgentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSettingsView.swift; sourceTree = "<group>"; };
 		923A657AB5F4951ECB429DC2 /* ChannelListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelListView.swift; sourceTree = "<group>"; };
 		9BD71D73370934F8411A84A5 /* SoulEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoulEditorSection.swift; sourceTree = "<group>"; };
@@ -91,6 +97,7 @@
 		C0CCCD4F566325270667F568 /* ChatBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBubbleView.swift; sourceTree = "<group>"; };
 		C2E3512DF9E80BDDBF96AE95 /* AgentCircleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCircleView.swift; sourceTree = "<group>"; };
 		C6AA6EEB2284ADE853777AB7 /* ObservabilityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservabilityView.swift; sourceTree = "<group>"; };
+		C85FE8C9BD09C19DCD6147C7 /* UpdateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSettingsView.swift; sourceTree = "<group>"; };
 		D7564036E5861AFC600BD9AA /* StatsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsCardView.swift; sourceTree = "<group>"; };
 		DB8BC222B5C256BB435235D5 /* CrewBusKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CrewBusKit; path = ../CrewBusKit; sourceTree = SOURCE_ROOT; };
 		DC2B08A9E596959EC7D9CF13 /* ParticlesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticlesView.swift; sourceTree = "<group>"; };
@@ -111,6 +118,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6432771414C237C6A7115DBD /* CrewBusKit in Frameworks */,
+				B6D0D6C14DFC938DC8C7DA6D /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -170,6 +178,7 @@
 				E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */,
 				B9FC84BF2472292212AA5546 /* CrewTheme.swift */,
 				A2999E8FD9F11268D74B1E12 /* ServerManager.swift */,
+				87A7F9B7228EFC275C85D68B /* UpdateManager.swift */,
 				DBAB6FA772C17B45DDB56FD4 /* Views */,
 			);
 			name = Sources;
@@ -203,8 +212,17 @@
 				1ED8D0E61CBE76BCA05389A7 /* SkillsSection.swift */,
 				9BD71D73370934F8411A84A5 /* SoulEditorSection.swift */,
 				822FE8EC1115088542E04188 /* ThinkingLevelSection.swift */,
+				C85FE8C9BD09C19DCD6147C7 /* UpdateSettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		BE937D7C0BB1090A7B63DB26 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				2A69491AFB1FE34EEF03FDB5 /* UpdateBannerView.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 		CABCE59C3DEC83F702B11B5D /* Chat */ = {
@@ -232,6 +250,7 @@
 				650EFF007EE07C287EA5553D /* Auth */,
 				B857A36AC541C6514259D933 /* Channels */,
 				CABCE59C3DEC83F702B11B5D /* Chat */,
+				BE937D7C0BB1090A7B63DB26 /* Components */,
 				1DD0596CC70D67C90414348F /* CrewFace */,
 				F792B7254D5BB848C9EE1CE0 /* Dashboard */,
 				27E6EC80BBF6324E80E96C35 /* Decisions */,
@@ -308,6 +327,7 @@
 			name = CrewBus;
 			packageProductDependencies = (
 				2A3D76AC94280AA0F1171339 /* CrewBusKit */,
+				FA6B0056757EBD341EDEA364 /* Sparkle */,
 			);
 			productName = CrewBus;
 			productReference = 4DD639FF261CF61B860C9270 /* CrewBus.app */;
@@ -323,7 +343,8 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					B589BDC7FC8E164554439CFA = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = KGG7W48LZG;
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -338,6 +359,7 @@
 			mainGroup = 3864487F334DF916C6CB98BC;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				A6B0399A3D3523B49E1A3F89 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				7C9F75A04717380241440242 /* XCLocalSwiftPackageReference "../CrewBusKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -399,6 +421,9 @@
 				9A495D6374B14F3BCDA3AFA1 /* ThinkingLevelSection.swift in Sources */,
 				A0E7F71DE2D6A589BFBAC9CF /* TopBarView.swift in Sources */,
 				953B4FE94F37433BF732AB9B /* TrustEnergyPillsView.swift in Sources */,
+				B5F57138D43FC1C7E2A92A4E /* UpdateBannerView.swift in Sources */,
+				D963AD37E31B25617F364906 /* UpdateManager.swift in Sources */,
+				4B1F782E97E5E3C0DAA3BDCF /* UpdateSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,15 +435,19 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CrewBus/Resources/CrewBus.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = KGG7W48LZG;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = CrewBus/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = com.crewbus.mac;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
@@ -486,15 +515,19 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CrewBus/Resources/CrewBus.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = KGG7W48LZG;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = CrewBus/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = com.crewbus.mac;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
@@ -594,10 +627,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A6B0399A3D3523B49E1A3F89 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		2A3D76AC94280AA0F1171339 /* CrewBusKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CrewBusKit;
+		};
+		FA6B0056757EBD341EDEA364 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A6B0399A3D3523B49E1A3F89 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
