@@ -5612,7 +5612,7 @@ TEAM_TEMPLATES = {
         "name": "Freelance",
         "icon": "\U0001f4bc",  # 💼
         "paid": True,
-        "price_annual": 50,
+        "price_annual": 30,
         "price_trial": 10,
         "trial_days": 30,
         "workers": [
@@ -5625,7 +5625,7 @@ TEAM_TEMPLATES = {
         "name": "Side Hustle",
         "icon": "\U0001f4b0",  # 💰
         "paid": True,
-        "price_annual": 50,
+        "price_annual": 30,
         "price_trial": 10,
         "trial_days": 30,
         "workers": [
