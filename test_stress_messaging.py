@@ -39,7 +39,7 @@ def setup():
         name = f"Worker-{i}"
         conn.execute(
             "INSERT INTO agents (name, agent_type, status, active) VALUES (?, ?, 'active', 1)",
-            (name, "strategy"),
+            (name, "worker"),
         )
         agents[f"worker_{i}"] = conn.execute(
             "SELECT * FROM agents WHERE name=?", (name,)

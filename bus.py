@@ -52,12 +52,12 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
 
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
-    "human", "right_hand", "guardian", "security",
-    "vault", "manager", "worker", "specialist", "help",
+    "human", "right_hand", "guardian", "vault",
+    "manager", "worker", "specialist", "help",
 )
 
 # Role is now derived from agent_type for routing purposes
-VALID_ROLES = ("human", "right_hand", "security", "core_crew", "manager", "worker")
+VALID_ROLES = ("human", "right_hand", "security", "manager", "worker")
 
 MAX_TEAM_AGENTS = 10  # Max agents per team (1 manager + 9 workers)
 
@@ -67,8 +67,6 @@ VALID_MESSAGE_TYPES = ("report", "task", "alert", "escalation", "idea", "briefin
 VALID_PRIORITIES = ("low", "normal", "high", "critical")
 VALID_MESSAGE_STATUSES = ("queued", "delivered", "read", "archived")
 
-# Core crew agent types — Crew Boss, Guardian, Vault (report to Crew Boss)
-CORE_CREW_TYPES = ("right_hand", "guardian", "vault")
 
 # Decision types for the decision log
 VALID_DECISION_TYPES = (
@@ -78,7 +76,7 @@ VALID_DECISION_TYPES = (
 
 # Threat domains for security events
 VALID_THREAT_DOMAINS = (
-    "physical", "digital", "financial", "legal",
+    "physical", "digital",
     "reputation", "mutiny", "relationship", "integrity",
 )
 
@@ -93,7 +91,7 @@ VALID_RELATIONSHIP_STATUSES = ("healthy", "attention_needed", "at_risk", "stale"
 VALID_KNOWLEDGE_CATEGORIES = ("decision", "contact", "lesson", "preference", "rejection")
 
 # Timing rule types
-VALID_TIMING_RULES = ("quiet_hours", "busy_signal", "burnout_threshold", "focus_mode")
+VALID_TIMING_RULES = ("quiet_hours", "busy_signal", "focus_mode")
 
 
 def _role_for_type(agent_type: str) -> str:
@@ -102,10 +100,8 @@ def _role_for_type(agent_type: str) -> str:
         return "human"
     if agent_type == "right_hand":
         return "right_hand"
-    if agent_type in ("guardian", "security"):
+    if agent_type == "guardian":
         return "security"
-    if agent_type in CORE_CREW_TYPES:
-        return "core_crew"
     if agent_type == "manager":
         return "manager"
     return "worker"
@@ -419,7 +415,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             security_agent_id       INTEGER NOT NULL REFERENCES agents(id),
             threat_domain           TEXT    NOT NULL
                                     CHECK(threat_domain IN (
-                                        'physical','digital','financial','legal',
+                                        'physical','digital',
                                         'reputation','mutiny','relationship','integrity')),
             severity                TEXT    NOT NULL DEFAULT 'info'
                                     CHECK(severity IN ('info','low','medium','high','critical')),
@@ -978,48 +974,35 @@ def _seed_routing_rules(cur: sqlite3.Cursor) -> None:
     rules = [
         # Crew Boss is the gatekeeper
         ("right_hand", "human", 1, 0, "Crew Boss delivers to human"),
-        ("right_hand", "core_crew", 1, 0, "Crew Boss manages core crew"),
-        ("right_hand", "security", 1, 0, "Crew Boss manages security agent"),
+        ("right_hand", "security", 1, 0, "Crew Boss manages Guardian"),
         ("right_hand", "manager", 1, 0, "Crew Boss manages department managers"),
         ("right_hand", "worker", 1, 0, "Crew Boss can reach any worker"),
 
         # Human can message anyone (ultimate authority)
         ("human", "right_hand", 1, 0, "Human directs Crew Boss"),
-        ("human", "security", 1, 0, "Human can reach security agent"),
-        ("human", "core_crew", 1, 0, "Human can reach any agent"),
+        ("human", "security", 1, 0, "Human can reach Guardian"),
         ("human", "manager", 1, 0, "Human can reach any agent"),
         ("human", "worker", 1, 0, "Human can reach any agent"),
 
-        # Security agent reports to Crew Boss only (unless direct feed enabled)
-        ("security", "right_hand", 1, 0, "Security reports to Crew Boss"),
+        # Guardian reports to Crew Boss (unless direct feed enabled)
+        ("security", "right_hand", 1, 0, "Guardian reports to Crew Boss"),
         ("security", "human", 1, 0, "Guardian can reach human directly"),
-        ("security", "core_crew", 0, 0, "Security cannot message core crew"),
-        ("security", "manager", 0, 0, "Security cannot message managers"),
-        ("security", "worker", 0, 0, "Security cannot message workers"),
-
-        # Core crew reports to Crew Boss only
-        ("core_crew", "right_hand", 1, 0, "Core crew reports to Crew Boss"),
-        ("core_crew", "human", 0, 0, "Core crew must go through Crew Boss"),
-        ("core_crew", "core_crew", 0, 0, "Core crew cannot message each other"),
-        ("core_crew", "security", 0, 0, "Core crew cannot message security"),
-        ("core_crew", "manager", 0, 0, "Core crew cannot message managers directly"),
-        ("core_crew", "worker", 0, 0, "Core crew cannot message workers directly"),
+        ("security", "manager", 0, 0, "Guardian cannot message managers"),
+        ("security", "worker", 0, 0, "Guardian cannot message workers"),
 
         # Managers report to Crew Boss
         ("manager", "right_hand", 1, 0, "Managers report to Crew Boss"),
         ("manager", "worker", 1, 0, "Managers message their workers"),
         ("manager", "human", 0, 0, "Managers must go through Crew Boss"),
         ("manager", "manager", 0, 0, "Managers cannot message other managers"),
-        ("manager", "core_crew", 0, 0, "Managers cannot message core crew"),
-        ("manager", "security", 0, 0, "Managers cannot message security"),
+        ("manager", "security", 0, 0, "Managers cannot message Guardian"),
 
-        # Workers report to their manager
+        # Workers report to their manager (Vault is a worker)
         ("worker", "manager", 1, 0, "Workers report to their manager"),
-        ("worker", "right_hand", 1, 0, "Workers can safety-escalate to Crew Boss"),
+        ("worker", "right_hand", 1, 0, "Workers can escalate to Crew Boss"),
         ("worker", "human", 0, 0, "Workers cannot message human directly"),
         ("worker", "worker", 0, 0, "Workers cannot message other workers"),
-        ("worker", "core_crew", 0, 0, "Workers cannot message core crew"),
-        ("worker", "security", 0, 0, "Workers cannot message security"),
+        ("worker", "security", 0, 0, "Workers cannot message Guardian"),
     ]
     cur.executemany(
         "INSERT INTO routing_rules (from_role, to_role, allowed, require_approval, description) "
@@ -1048,9 +1031,8 @@ def _audit(conn: sqlite3.Connection, event_type: str,
 def load_hierarchy(config_path: str, db_path: Optional[Path] = None) -> dict:
     """Parse a v2 YAML config file and register all agents into the database.
 
-    Supports the nested hierarchy format with human, right_hand, core_crew,
-    departments, and timing rules. Also supports the v1 flat format for
-    backwards compatibility.
+    Supports the nested hierarchy format with human, right_hand, crew agents,
+    departments, and timing rules. Also supports the v1 flat format.
 
     Returns a summary dict of agents created.
     """
@@ -1061,7 +1043,7 @@ def load_hierarchy(config_path: str, db_path: Optional[Path] = None) -> dict:
     if "hierarchy" in config:
         return _load_v2_hierarchy(config, config_path, db_path)
     elif "human" in config and "right_hand" in config:
-        # Spec format: organization + human/right_hand/core_crew/departments at top level
+        # Spec format: organization + human/right_hand/crew/departments at top level
         # Wrap them under "hierarchy" key for the v2 loader
         org_name = config.get("organization", {}).get("name", "")
         wrapped = {
@@ -1069,7 +1051,7 @@ def load_hierarchy(config_path: str, db_path: Optional[Path] = None) -> dict:
             "hierarchy": {
                 "human": config["human"],
                 "right_hand": config["right_hand"],
-                "core_crew": config.get("core_crew", {}),
+                "core_crew": config.get("core_crew", config.get("crew", {})),
                 "departments": config.get("departments", []),
             },
         }
@@ -1114,7 +1096,7 @@ def _load_v2_hierarchy(config: dict, config_path: str,
             "timezone": human_def.get("timezone", "UTC"),
         })
     if "timezone" in human_def:
-        _upsert_timing_rule(conn, human_id, "burnout_threshold", {
+        _upsert_timing_rule(conn, human_id, "focus_mode", {
             "threshold": 7,
             "timezone": human_def["timezone"],
         })
@@ -1133,9 +1115,9 @@ def _load_v2_hierarchy(config: dict, config_path: str,
     })
     created.append(rh_def["name"])
 
-    # 2b. Register Security Agent (if present in core_crew)
-    core_crew = hier.get("core_crew", {})
-    sec_def = core_crew.get("security")
+    # 2b. Register Security Agent (Guardian)
+    crew = hier.get("core_crew", hier.get("crew", {}))
+    sec_def = crew.get("security")
     if isinstance(sec_def, dict):
         _upsert_agent(conn, {
             "name": sec_def["name"],
@@ -1243,8 +1225,8 @@ def _load_v2_hierarchy(config: dict, config_path: str,
 
     conn.commit()
 
-    # 3. Register core crew (excluding security, already handled above)
-    for crew_type, crew_def in core_crew.items():
+    # 3. Register crew agents (excluding security, already handled above)
+    for crew_type, crew_def in crew.items():
         if not isinstance(crew_def, dict):
             continue
         if crew_type == "security":
@@ -4002,7 +3984,7 @@ def log_security_event(security_agent_id: int, threat_domain: str,
                        db_path: Optional[Path] = None) -> int:
     """Log a security event and return the event_id.
 
-    threat_domain: physical, digital, financial, legal, reputation, mutiny, relationship, integrity
+    threat_domain: physical, digital, reputation, mutiny, relationship, integrity
     severity: info, low, medium, high, critical
     """
     if threat_domain not in VALID_THREAT_DOMAINS:

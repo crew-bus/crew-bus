@@ -85,7 +85,7 @@ check("setup.hierarchy", len(agents_loaded) >= 10,
 conn = bus.get_conn(TEST_DB)
 human = conn.execute("SELECT * FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
 crew_boss = conn.execute("SELECT * FROM agents WHERE agent_type='right_hand' LIMIT 1").fetchone()
-wellness = conn.execute("SELECT * FROM agents WHERE agent_type='wellness' LIMIT 1").fetchone()
+wellness = conn.execute("SELECT * FROM agents WHERE agent_type='worker' LIMIT 1").fetchone()
 guard = conn.execute("SELECT * FROM agents WHERE agent_type='security' LIMIT 1").fetchone()
 # Find a team manager and worker
 manager = conn.execute("SELECT * FROM agents WHERE agent_type='manager' LIMIT 1").fetchone()
@@ -95,7 +95,7 @@ conn.close()
 
 check("setup.human", human is not None, f"Human: {human['name'] if human else 'N/A'}")
 check("setup.crew_boss", crew_boss is not None, f"Crew Boss: {crew_boss['name'] if crew_boss else 'N/A'}")
-check("setup.wellness", wellness is not None, f"Wellness: {wellness['name'] if wellness else 'N/A'}")
+check("setup.worker", wellness is not None, f"Worker: {wellness['name'] if wellness else 'N/A'}")
 
 # ---------------------------------------------------------------------------
 # Test 1: Start a private session

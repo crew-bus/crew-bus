@@ -9,10 +9,8 @@ reports directly to the Crew Boss and can recommend quarantining agents.
 Threat domains monitored:
     - mutiny:       agents acting outside their role or circumventing hierarchy
     - digital:      unusual message patterns, failed permission attempts
-    - financial:    suspicious transaction patterns (stub)
     - reputation:   external reputation threats (stub)
     - physical:     physical security concerns (stub)
-    - legal:        legal exposure risks (stub)
     - relationship: relationship-related threats (stub)
 """
 
@@ -36,19 +34,21 @@ MESSAGE_VOLUME_THRESHOLDS = {
     "worker": 20,
     "specialist": 20,
     "manager": 50,
-    "core_crew": 50,
+    "guardian": 50,
+    "vault": 50,
     "security": 50,
     "right_hand": 100,
     "human": 999,       # humans can send as many as they want
 }
 
 # Message types that are unusual for certain roles.
-# Workers should not be sending strategy-level messages, for example.
+# Workers should not be sending briefing or escalation messages, for example.
 UNUSUAL_MESSAGE_TYPES_BY_ROLE = {
     "worker": ("briefing", "escalation"),
     "specialist": ("briefing",),
     "manager": (),
-    "core_crew": (),
+    "guardian": (),
+    "vault": (),
     "security": (),
     "right_hand": (),
     "human": (),
@@ -262,8 +262,8 @@ class SecurityAgent:
         Crew Boss for medium-severity and above events via a bus message.
 
         Args:
-            threat_domain:      One of: physical, digital, financial, legal,
-                                reputation, mutiny, relationship.
+            threat_domain:      One of: physical, digital,
+                                reputation, mutiny, relationship, integrity.
             severity:           One of: info, low, medium, high, critical.
             title:              Short human-readable event title.
             details:            Optional dict of structured event data.
@@ -323,36 +323,6 @@ class SecurityAgent:
                 "Reputation monitoring not yet connected. "
                 "This is a placeholder for future integration with "
                 "external monitoring services."
-            ),
-        }
-
-    def check_financial_threats(self, recent_transactions: list) -> dict:
-        """Analyze recent financial transactions for threat patterns.
-
-        Placeholder for future integration with financial monitoring.
-        Would check for unusual amounts, unknown counterparties,
-        suspicious timing patterns, and compliance red flags.
-
-        Args:
-            recent_transactions: List of transaction dicts. Expected keys
-                                 include 'amount', 'counterparty', 'date',
-                                 'description'.
-
-        Returns:
-            dict with financial threat analysis results (placeholder data).
-        """
-        scanned_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        return {
-            "status": "placeholder",
-            "transactions_analyzed": len(recent_transactions),
-            "threats_found": 0,
-            "flags": [],
-            "scanned_at": scanned_at,
-            "note": (
-                "Financial threat detection not yet connected. "
-                "This is a placeholder for future integration with "
-                "transaction monitoring and anomaly detection."
             ),
         }
 

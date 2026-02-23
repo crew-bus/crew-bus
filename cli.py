@@ -168,7 +168,7 @@ def cmd_status(args):
         if a["agent_type"] == "right_hand":
             extra = f" [trust:{a['trust_score']}]"
         elif a["agent_type"] == "human":
-            extra = f" [burnout:{a['burnout_score']}]"
+            extra = f" [energy:{a.get('burnout_score', 5)}]"
 
         print(f"  {a['name']:<22} {a['agent_type']:<16} {status_disp:<14} "
               f"{active_disp:<8} {a['channel']:<10} {parent}{extra}")
@@ -514,7 +514,7 @@ def cmd_state(args):
     agent = _resolve_agent(args.human)
     state = bus.get_human_state(agent["id"])
     print(f"  Human State: {agent['name']}")
-    print(f"  Burnout:        {state['burnout_score']}/10")
+    print(f"  Energy:         {state.get('burnout_score', 5)}/10")
     print(f"  Energy:         {state['energy_level']}")
     print(f"  Activity:       {state['current_activity']}")
     print(f"  Mood:           {state['mood_indicator']}")

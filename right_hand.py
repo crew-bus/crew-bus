@@ -238,15 +238,15 @@ class RightHand:
             }
         """
         self._refresh()
-        burnout = self.human["burnout_score"]
+        energy = self.human.get("burnout_score", 5)
         now = datetime.now(timezone.utc)
         human_name = self.human["name"]
         rh_name = self.rh["name"]
 
         if briefing_type == "morning":
-            return self._compile_morning(now, burnout, human_name, rh_name)
+            return self._compile_morning(now, energy, human_name, rh_name)
         elif briefing_type == "evening":
-            return self._compile_evening(now, burnout, human_name, rh_name)
+            return self._compile_evening(now, energy, human_name, rh_name)
         elif briefing_type == "urgent":
             return self._compile_urgent(now, human_name, rh_name)
         else:
@@ -560,16 +560,16 @@ class RightHand:
              concerns: list, suggested_edits: str|None}
         """
         self._refresh()
-        burnout = self.human["burnout_score"]
+        energy = self.human.get("burnout_score", 5)
         concerns = []
         body = outbound_message.get("body", "")
         subject = outbound_message.get("subject", "")
 
-        # Check if written during high-burnout or late-night
-        if burnout >= 7:
+        # Check if written during low-energy or late-night
+        if energy >= 7:
             concerns.append(
-                "Written during high burnout (score %d/10). "
-                "Flag for morning review." % burnout
+                "Written during low energy (score %d/10). "
+                "Flag for morning review." % energy
             )
 
         # Check for late-night writing
@@ -651,7 +651,7 @@ class RightHand:
         cognitive load level.
 
         Returns:
-            {burnout_score, energy, activity, mood, consecutive_work_days,
+            {energy_score, energy, activity, mood, consecutive_work_days,
              social_isolation_days, messages_received_today,
              decisions_made_today, recommended_load}
         """
@@ -697,7 +697,7 @@ class RightHand:
             load = "full"
 
         return {
-            "burnout_score": burnout,
+            "energy_score": burnout,
             "energy": energy,
             "activity": activity,
             "mood": state.get("mood_indicator", "neutral"),
@@ -831,7 +831,7 @@ class Heartbeat:
             return self._check_briefing(now, check, "evening")
 
         if check_type == "burnout_check":
-            return self._check_burnout()
+            return self._check_energy()
 
         if check_type == "stale_messages":
             return self._check_stale(now, check.get("max_hours", 24))
@@ -880,11 +880,10 @@ class Heartbeat:
         return {"action_needed": True, "type": f"{briefing_type}_briefing",
                 "data": briefing, "config_key": config_key}
 
-    def _check_burnout(self) -> Optional[dict]:
+    def _check_energy(self) -> Optional[dict]:
         state = self.rh.assess_human_state()
-        if state["burnout_score"] >= 7:
-            return {"action_needed": True, "type": "burnout_alert",
-                    "data": state}
+        if state.get("energy_score", state.get("burnout_score", 5)) >= 7:
+            return {"action_needed": True, "type": "low_energy_alert", "data": state}
         return None
 
     def _check_stale(self, now: datetime,
@@ -1303,11 +1302,11 @@ class Heartbeat:
                 "WHERE a.active = 1 AND mgr.agent_type = 'manager'"
             ).fetchall()
 
-            # Fallback: if no teams exist yet, use the Communications core agent
+            # Fallback: if no teams exist yet, use any active worker
             if not agents:
                 agents = conn.execute(
                     "SELECT id, name, agent_type FROM agents "
-                    "WHERE active = 1 AND agent_type = 'communications'"
+                    "WHERE active = 1 AND agent_type = 'worker'"
                 ).fetchall()
 
             # Check what was posted recently to avoid duplicates
@@ -1481,21 +1480,20 @@ class Heartbeat:
             bus.set_config(result["config_key"], today, db_path=self.db_path)
             print(f"[heartbeat] sent {action_type}")
 
-        elif action_type == "burnout_alert":
+        elif action_type in ("burnout_alert", "low_energy_alert"):
             state = result["data"]
             bus.send_message(
                 from_id=self.rh.rh_id, to_id=self.rh.human_id,
                 message_type="alert",
-                subject="Burnout check-in",
+                subject="Energy check-in",
                 body=(
-                    f"Hey, your energy seems low (burnout: "
-                    f"{state['burnout_score']}/10). Maybe take a break? "
+                    f"Hey, your energy seems low. Maybe take a break? "
                     f"I'll keep things running. Current load recommendation: "
                     f"{state['recommended_load']}."
                 ),
                 priority="normal", db_path=self.db_path,
             )
-            print("[heartbeat] sent burnout check-in")
+            print("[heartbeat] sent energy check-in")
 
         elif action_type == "stale_reminder":
             count = len(result["data"])

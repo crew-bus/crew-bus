@@ -410,7 +410,7 @@ def _build_system_prompt(agent_type: str, agent_name: str,
 
     # --- Inject human profile FIRST (tiny, critical — never gets truncated) ---
     try:
-        if agent_type in bus.CORE_CREW_TYPES:
+        if agent_type in ("right_hand", "guardian", "vault"):
             conn = bus.get_conn(db_path)
             try:
                 human_row = conn.execute(
@@ -2303,7 +2303,7 @@ def _process_with_timeout(row, db_path: Path):
 def _process_single_message(row, db_path: Path):
     """Process one queued message — call LLM, insert reply, handle shortcuts.
 
-    Error handling strategy:
+    Error handling approach:
       - DB errors reading agent info: log and continue with defaults
       - LLM errors: handled by call_llm's fallback chain; if all providers
         fail, a friendly error message is delivered to the human

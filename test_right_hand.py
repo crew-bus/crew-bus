@@ -402,7 +402,7 @@ def test_reputation_high_burnout():
         "body": "Just a short message.",
     }
     result = rh.protect_reputation(message)
-    assert any("burnout" in c.lower() for c in result["concerns"])
+    assert any("energy" in c.lower() for c in result["concerns"])
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +414,7 @@ def test_assess_human_state():
     db = _fresh_db()
     rh = _make_rh(db)
     state = rh.assess_human_state()
-    assert "burnout_score" in state
+    assert "energy_score" in state
     assert "recommended_load" in state
     assert "messages_received_today" in state
     assert "decisions_made_today" in state
@@ -434,7 +434,7 @@ def test_assess_human_state_high_burnout():
     conn.close()
 
     state = rh.assess_human_state()
-    assert state["burnout_score"] == 9
+    assert state["energy_score"] == 9
     assert state["recommended_load"] == "emergency_only"
 
 
@@ -451,7 +451,7 @@ def test_assess_human_state_low_burnout():
     conn.close()
 
     state = rh.assess_human_state()
-    assert state["burnout_score"] == 1
+    assert state["energy_score"] == 1
     assert state["recommended_load"] == "full"
 
 
@@ -504,10 +504,10 @@ def test_heartbeat_burnout_check():
     conn.close()
 
     hb = right_hand.Heartbeat(rh, db_path=db)
-    result = hb._check_burnout()
+    result = hb._check_energy()
     assert result is not None
     assert result["action_needed"] is True
-    assert result["type"] == "burnout_alert"
+    assert result["type"] == "low_energy_alert"
 
 
 def test_heartbeat_burnout_check_ok():
@@ -515,5 +515,5 @@ def test_heartbeat_burnout_check_ok():
     db = _fresh_db()
     rh = _make_rh(db)
     hb = right_hand.Heartbeat(rh, db_path=db)
-    result = hb._check_burnout()
+    result = hb._check_energy()
     assert result is None

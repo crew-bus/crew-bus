@@ -311,16 +311,6 @@ def test_check_reputation():
     assert "CrewBus Inc" in result["business_names"]
 
 
-def test_check_financial_threats():
-    """check_financial_threats returns placeholder response."""
-    db = _fresh_db()
-    sa = security.SecurityAgent(3, 2, db_path=db)
-    transactions = [{"amount": 100, "counterparty": "Test"}]
-    result = sa.check_financial_threats(transactions)
-    assert result["status"] == "placeholder"
-    assert result["transactions_analyzed"] == 1
-
-
 # ---------------------------------------------------------------------------
 # scan_reply_integrity
 # ---------------------------------------------------------------------------

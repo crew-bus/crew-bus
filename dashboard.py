@@ -344,7 +344,7 @@ GUARDIAN_DESCRIPTION = (
 
 
     "TEAM LIMITS:\n"
-    "Each team can have up to 10 agents (1 manager + 9 workers).\n\n"
+    "Each team can have up to 10 agents (1 manager + workers).\n\n"
     "RULES:\n"
     "- Keep it warm, fun, simple. No jargon.\n"
     "- Always confirm before creating, deactivating, or terminating.\n"

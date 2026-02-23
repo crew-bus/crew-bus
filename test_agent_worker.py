@@ -35,7 +35,7 @@ def _setup_db():
     conn.execute(
         "INSERT INTO agents (name, agent_type, role, parent_agent_id, status, active) "
         "VALUES (?, ?, ?, 2, ?, ?)",
-        ("Vault", "vault", "core_crew", "active", 1),
+        ("Vault", "vault", "worker", "active", 1),
     )
     conn.commit()
     conn.close()

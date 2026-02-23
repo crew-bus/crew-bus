@@ -8,7 +8,7 @@ Crew Bus is open-source software that runs on your Mac and lets your AI agents w
 
 [![GitHub release](https://img.shields.io/github/v/release/crew-bus/crew-bus)](https://github.com/crew-bus/crew-bus/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen)](#)
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](#download)
 
 ---
@@ -85,16 +85,7 @@ Crew Bus is a native macOS app built with SwiftUI. No browser windows, no Electr
 
 ## Install
 
-Download the DMG from [crew-bus.dev/install](https://crew-bus.dev/install), drag to Applications, launch. That's it.
-
-### Build from source (developers)
-
-```bash
-git clone https://github.com/crew-bus/crew-bus.git
-cd crew-bus/macos
-xcodegen generate
-xcodebuild build -scheme CrewBus -destination "platform=macOS"
-```
+Download the DMG from [crew-bus.dev/install](https://crew-bus.dev/install), drag to Applications, and launch. Native SwiftUI macOS 14.0+ app only.
 
 ---
 

@@ -133,7 +133,7 @@ check("search_catalog() category filter affects results",
       True)  # Just verify no crash; exact results depend on catalog
 
 # 8. search_catalog with agent_type
-results_fin = skill_store.search_catalog("track", agent_type="financial", db_path=TEST_DB)
+results_fin = skill_store.search_catalog("track", agent_type="worker", db_path=TEST_DB)
 check("search_catalog() with agent_type runs without error",
       isinstance(results_fin, list))
 

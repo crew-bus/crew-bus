@@ -78,7 +78,7 @@ check("setup.hierarchy", len(agents_loaded) >= 10,
 conn = bus.get_conn(TEST_DB)
 human = conn.execute("SELECT * FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
 crew_boss = conn.execute("SELECT * FROM agents WHERE agent_type='right_hand' LIMIT 1").fetchone()
-wellness = conn.execute("SELECT * FROM agents WHERE agent_type='wellness' LIMIT 1").fetchone()
+wellness = conn.execute("SELECT * FROM agents WHERE agent_type='vault' LIMIT 1").fetchone()
 manager = conn.execute("SELECT * FROM agents WHERE agent_type='manager' LIMIT 1").fetchone()
 worker = None
 if manager:
