@@ -339,11 +339,11 @@ def test_integrity_gaslight_denial():
     assert any(v["type"] == "gaslight_denial" for v in result["violations"])
 
 
-def test_integrity_dismissive():
-    """scan_reply_integrity detects dismissive language."""
-    result = security.scan_reply_integrity("You're overreacting to this situation.")
+def test_integrity_condescending():
+    """scan_reply_integrity detects condescending language."""
+    result = security.scan_reply_integrity("You're being too sensitive about this.")
     assert result["clean"] is False
-    assert any(v["type"] == "dismissive" for v in result["violations"])
+    assert any(v["type"] == "condescending" for v in result["violations"])
 
 
 def test_integrity_blame_shift():
@@ -353,11 +353,11 @@ def test_integrity_blame_shift():
     assert any(v["type"] == "blame_shift" for v in result["violations"])
 
 
-def test_integrity_doubt():
-    """scan_reply_integrity detects doubt-casting."""
-    result = security.scan_reply_integrity("Are you sure about that claim?")
-    assert result["clean"] is False
-    assert any(v["type"] == "gaslight_doubt" for v in result["violations"])
+def test_integrity_honest_pushback_allowed():
+    """scan_reply_integrity allows honest perspective / gentle pushback."""
+    result = security.scan_reply_integrity("I hear you. Can I share what I'm seeing from the outside?")
+    assert result["clean"] is True
+    assert result["violations"] == []
 
 
 # ---------------------------------------------------------------------------

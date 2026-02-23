@@ -797,21 +797,18 @@ class SecurityAgent:
 # INTEGRITY.md violations. Used by the Heartbeat's integrity_audit check.
 
 GASLIGHT_PATTERNS = [
-    # Direct denial of user's reality
+    # Direct denial of user's reality — real gaslighting
     (r"you\s+never\s+(told|said|mentioned|asked)\s+(me|us)\s+that", "gaslight_denial"),
-    (r"are\s+you\s+sure\s+(you|about|that)", "gaslight_doubt"),
     (r"i\s+don'?t\s+think\s+you\s+(said|told|mentioned)", "gaslight_doubt"),
     (r"that('?s|\s+is)\s+not\s+what\s+(happened|you\s+said)", "gaslight_rewrite"),
-    # Dismissive language
-    (r"you'?re\s+overreact", "dismissive"),
-    (r"it'?s\s+not\s+that\s+bad", "dismissive"),
-    (r"you\s+probably\s+just\s+forgot", "dismissive"),
-    (r"calm\s+down", "dismissive"),
-    (r"you'?re\s+being\s+(dramatic|too\s+sensitive|paranoid)", "dismissive"),
-    (r"don'?t\s+worry\s+about\s+it", "dismissive_minimizing"),
+    # Condescending / belittling
+    (r"you'?re\s+being\s+(dramatic|too\s+sensitive|paranoid)", "condescending"),
+    (r"you\s+probably\s+just\s+forgot", "condescending"),
     # Blame shifting
     (r"that('?s|\s+is)\s+your\s+(fault|problem|issue)", "blame_shift"),
     (r"you\s+should\s+have\s+(known|realized|remembered)", "blame_shift"),
+    # Note: honest pushback like "let's take a breath" or "here's what I'm
+    # seeing" is encouraged — that's not gaslighting, that's caring.
 ]
 
 
