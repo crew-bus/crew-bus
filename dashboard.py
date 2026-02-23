@@ -4260,6 +4260,13 @@ function submitSetup(){
   var btn=document.getElementById('setup-btn');
   var key=(keyInput.value||'').trim();
   errEl.textContent='';
+  // Auto-detect provider from API key prefix
+  if(key){
+    if(key.indexOf('xai-')===0)model='xai';
+    else if(key.indexOf('sk-ant-')===0)model='claude';
+    else if(key.indexOf('gsk_')===0)model='groq';
+    else if(key.indexOf('AIza')===0)model='gemini';
+  }
   // Ollama doesn't need a key
   if(model!=='ollama' && !key){
     var provName=sel.options[sel.selectedIndex].dataset.keyName;
