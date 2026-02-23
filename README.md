@@ -34,7 +34,7 @@ Setting up a team of AI agents today is painful. You download a framework, wrest
 Crew Bus takes a different approach:
 
 - **Native Mac app.** A real SwiftUI desktop app — not a web page in a wrapper.
-- **Runs on your hardware.** Your laptop, your desktop, your home server. Your data never leaves your network unless you tell it to.
+- **Runs on your Mac.** Your machine, your data. Nothing leaves your network unless you tell it to.
 - **Works out of the box.** Three agents in a triangle — Crew Boss, Guardian, Vault — ready to go in minutes, not hours.
 - **Built-in security from day one.** The Guardian agent controls all external access, vets every skill before install, and monitors everything in real time. No other agent framework ships with an immune system.
 - **Auto-updates via Sparkle.** The app checks for updates automatically — every 2 hours during your first 14 days for rapid bug fixes, then every 6 hours after that.
@@ -75,9 +75,7 @@ Crew Bus is a native macOS app built with SwiftUI. No browser windows, no Electr
 
 **Chat** — Talk to any agent directly. Crew Boss handles most things, but you can go straight to Guardian or Vault when needed.
 
-**Teams** — Spin up task-specific teams with manager and worker agents. Name them, assign them, disband them when done.
-
-**Channels** — Organized communication lanes for your crew.
+**Teams** — Team templates coming soon — specialized agent groups for business, creative, and more.
 
 **Update Settings** — Auto-update preferences, channel picker (Stable / Latest), early access mode indicator.
 
@@ -106,7 +104,7 @@ xcodegen generate
 xcodebuild build -scheme CrewBus -destination "platform=macOS"
 ```
 
-Or just run the Python server standalone at `http://localhost:8420`.
+The Mac app connects to this backend automatically on launch.
 
 ---
 
@@ -120,7 +118,7 @@ Or just run the Python server standalone at `http://localhost:8420`.
 - **Team mailboxes** — agents can send structured messages to each other
 - **Local-first** — runs entirely on your machine
 - **Dashboard** — native UI to monitor and interact with your crew
-- **Expandable** — spawn additional teams and agents when you need them
+- **Teams (coming soon)** — specialized agent groups for business, creative, and more
 - **Audit log** — full trail of every action across your crew
 - **Observability** — real-time health metrics and monitoring
 - **Claude Desktop integration** — link your crew to Claude via MCP
@@ -208,7 +206,7 @@ Everything runs on your machine. No Docker required. No cloud services. No exter
 - [ ] iOS companion app
 - [ ] Plugin SDK — build and share your own skills
 - [ ] Multi-machine crew networking (LAN)
-- [ ] WhatsApp & Telegram bridge for on-the-go access
+- [ ] Messaging integrations for on-the-go access
 
 ---
 
