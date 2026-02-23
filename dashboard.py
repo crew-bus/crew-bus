@@ -3356,7 +3356,7 @@ async function activateLicense(type){
       else{showToast(team.error||'Team creation failed','error')}
       await loadTeams();
       // Show referral code for business management
-      if(template==='business'){
+      if(template==='freelance'||template==='sidehustle'||template==='custom'){
         try{
           var ref=await api('/api/referral/code');
           if(ref.ok&&ref.code){
@@ -3386,7 +3386,7 @@ async function submitPayKey(){
       if(team.ok){showToast('Team "'+team.team_name+'" created!')}
       else{showToast(team.error||'Team creation failed','error')}
       await loadTeams();
-      if(template==='business'){
+      if(template==='freelance'||template==='sidehustle'||template==='custom'){
         try{var ref=await api('/api/referral/code');if(ref.ok&&ref.code)showReferralCode(ref.code);}catch(e){}
       }
     }else{
@@ -3397,7 +3397,7 @@ async function submitPayKey(){
 function showReferralCode(code){
   showToast('Referral code: '+code+' \u2014 share it to give friends a free 30-day trial!');
   // Also show in a confirm-style dialog with copy button
-  var msg='Share this with friends to give them a free 30-day Business Management trial:';
+  var msg='Share this with friends to give them a free 30-day trial:';
   var ok=showConfirm('\u{1F517} Your Referral Code',msg+' '+code,'Copy Code');
   ok.then(function(r){
     if(r&&navigator.clipboard){
@@ -4511,6 +4511,27 @@ document.addEventListener('DOMContentLoaded',function(){
   checkSetupNeeded();
   checkForUpdates();
   checkAuthRequired();
+  // Handle Stripe success redirect — show activation key
+  var sp=new URLSearchParams(window.location.search);
+  var stripeSid=sp.get('stripe_success');
+  if(stripeSid){
+    window.history.replaceState({},'','/');
+    (async function(){
+      for(var attempt=0;attempt<10;attempt++){
+        try{
+          var r=await api('/api/stripe/key?session_id='+encodeURIComponent(stripeSid));
+          if(r.ok&&r.activation_key){
+            showConfirm('Payment Successful!','Your activation key:\\n\\n'+r.activation_key+'\\n\\nCopy this key and paste it when activating your team or Guardian.','Copy Key').then(function(ok){
+              if(ok&&navigator.clipboard)navigator.clipboard.writeText(r.activation_key).then(function(){showToast('Activation key copied!')});
+            });
+            return;
+          }
+        }catch(e){}
+        await new Promise(function(r){setTimeout(r,3000)});
+      }
+      showToast('Payment received! Your activation key is being generated. Check back shortly.','info');
+    })();
+  }
 });
 """
 
@@ -5564,9 +5585,7 @@ def _is_paid_team_agent(conn, agent_row):
     base_name = team_name.rsplit(" ", 1)[0] if team_name and team_name[-1].isdigit() else team_name
     for tpl in TEAM_TEMPLATES.values():
         if tpl["name"] == base_name or tpl["name"] == team_name:
-            if tpl.get("locked_name"):
-                return False  # free team
-            return True  # paid team
+            return bool(tpl.get("paid"))
     # Custom/unknown teams are treated as paid (they required a key to create)
     return True
 
@@ -5587,11 +5606,15 @@ def _get_team_agents(db_path, team_id):
     finally:
         conn.close()
 
-# All teams are free. "locked_name": True means the team title cannot be changed.
+# Free templates have "locked_name": True.  Paid templates have "paid": True.
 TEAM_TEMPLATES = {
     "freelance": {
         "name": "Freelance",
         "icon": "\U0001f4bc",  # 💼
+        "paid": True,
+        "price_annual": 50,
+        "price_trial": 10,
+        "trial_days": 30,
         "workers": [
             ("Lead Finder", "Scans job boards and communities for freelance gigs."),
             ("Invoice Bot", "Drafts invoices, tracks payments, and sends reminders."),
@@ -5601,6 +5624,10 @@ TEAM_TEMPLATES = {
     "sidehustle": {
         "name": "Side Hustle",
         "icon": "\U0001f4b0",  # 💰
+        "paid": True,
+        "price_annual": 50,
+        "price_trial": 10,
+        "trial_days": 30,
         "workers": [
             ("Market Scout", "Researches demand, pricing, and competition for your idea."),
             ("Content Creator", "Drafts posts, product descriptions, and marketing copy."),
@@ -5610,6 +5637,10 @@ TEAM_TEMPLATES = {
     "custom": {
         "name": "Custom Team",
         "icon": "\u2699\ufe0f",  # ⚙️
+        "paid": True,
+        "price_annual": 50,
+        "price_trial": 10,
+        "trial_days": 30,
         "workers": [
             ("Assistant", "A general-purpose helper for your custom team."),
         ],
@@ -5646,8 +5677,8 @@ TEAM_TEMPLATES = {
     },
 }
 
-# Master promo code — unlocks any template, annual (set via env var)
-MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "CREWBUS-RYAN-2026")
+# Master promo code — unlocks any template, annual (must be set via env var)
+MASTER_PROMO = os.environ.get("CREWBUS_MASTER_PROMO", "")
 
 def _validate_promo(code, template, db_path):
     """Validate a promo code. Returns {valid, grant_type} or {valid, error}."""
@@ -6032,8 +6063,8 @@ def _stripe_create_guard_checkout(handler):
     try:
         checkout_params = {
             "mode": "payment",
-            "success_url": f"{SITE_URL}/activate/success.html?session_id={{CHECKOUT_SESSION_ID}}",
-            "cancel_url": f"{SITE_URL}/activate",
+            "success_url": f"{SITE_URL}/?stripe_success={{CHECKOUT_SESSION_ID}}",
+            "cancel_url": f"{SITE_URL}/",
             "line_items": [],
         }
         if STRIPE_GUARD_PRICE_ID:
@@ -6087,23 +6118,26 @@ def _stripe_webhook(handler):
     payload = handler.rfile.read(content_length)
     sig_header = handler.headers.get("Stripe-Signature", "")
 
-    if STRIPE_WEBHOOK_SECRET:
-        try:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-        except (ValueError, stripe.error.SignatureVerificationError):
-            return _json_response(handler, {"error": "invalid signature"}, 400)
-    else:
-        try:
-            event = json.loads(payload)
-        except json.JSONDecodeError:
-            return _json_response(handler, {"error": "invalid JSON"}, 400)
+    if not STRIPE_WEBHOOK_SECRET:
+        return _json_response(handler, {"error": "Webhook secret not configured"}, 503)
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return _json_response(handler, {"error": "invalid signature"}, 400)
 
     if event.get("type") == "checkout.session.completed":
         session = event["data"]["object"]
         if session.get("payment_status") == "paid":
             key = _generate_activation_key()
             bus.activate_guard(key, db_path=handler.db_path)
-            # In production: send activation key via email to session customer_email
+            # Store key by session ID so the success page can retrieve it
+            sid = session.get("id", "")
+            if sid:
+                bus.set_config(f"stripe_key_{sid}", key, db_path=handler.db_path)
+            # Store key by customer email for lookup/support
+            email = session.get("customer_details", {}).get("email") or session.get("customer_email")
+            if email:
+                bus.set_config(f"stripe_key_email_{email}", key, db_path=handler.db_path)
 
     return _json_response(handler, {"received": True})
 
@@ -6276,6 +6310,15 @@ class CrewBusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/guard/checkin":
             return _json_response(self, _get_guard_checkin(self.db_path))
+
+        if path == "/api/stripe/key":
+            session_id = qs.get("session_id", [""])[0]
+            if not session_id:
+                return _json_response(self, {"error": "missing session_id"}, 400)
+            key = bus.get_config(f"stripe_key_{session_id}", db_path=self.db_path)
+            if key:
+                return _json_response(self, {"ok": True, "activation_key": key})
+            return _json_response(self, {"error": "Key not found. Payment may still be processing."}, 404)
 
         if path == "/api/update/check":
             return _json_response(self, _check_for_updates())
