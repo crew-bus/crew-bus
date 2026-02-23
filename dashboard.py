@@ -6092,6 +6092,7 @@ def _stripe_create_guard_checkout(handler):
                 "quantity": 1,
             })
 
+        checkout_params["metadata"] = {"template": "guard"}
         session = stripe.checkout.Session.create(**checkout_params)
         return _json_response(handler, {"url": session.url})
     except Exception as e:
@@ -6116,6 +6117,38 @@ def _stripe_verify_session(handler, session_id):
     except Exception as e:
         return _json_response(handler, {"error": str(e)}, 500)
 
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", "noreply@crew-bus.dev")
+
+def _email_activation_key(to_email, key, key_type="guard"):
+    """Email an activation key to the buyer. Fails silently if SMTP not configured."""
+    if not SMTP_HOST or not to_email:
+        return
+    import smtplib
+    from email.mime.text import MIMEText
+    label = "Guardian Skills" if key_type == "guard" else f"{key_type.title()} Team"
+    body = (
+        f"Thanks for purchasing {label} on Crew Bus!\n\n"
+        f"Your activation key:\n{key}\n\n"
+        "Paste this key in your Crew Bus dashboard to activate.\n\n"
+        "— The Crew Bus Team"
+    )
+    msg = MIMEText(body)
+    msg["Subject"] = f"Your Crew Bus Activation Key — {label}"
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_email
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
+            s.starttls()
+            if SMTP_USER:
+                s.login(SMTP_USER, SMTP_PASS)
+            s.sendmail(SMTP_FROM, [to_email], msg.as_string())
+    except Exception:
+        pass  # Non-fatal — key is also shown on success page
+
 def _stripe_webhook(handler):
     """Handle Stripe webhook events (payment confirmations, etc.)."""
     if not STRIPE_AVAILABLE:
@@ -6135,16 +6168,21 @@ def _stripe_webhook(handler):
     if event.get("type") == "checkout.session.completed":
         session = event["data"]["object"]
         if session.get("payment_status") == "paid":
-            key = _generate_activation_key()
-            bus.activate_guard(key, db_path=handler.db_path)
+            # Determine key type from Stripe metadata (default: guard)
+            metadata = session.get("metadata") or {}
+            key_type = metadata.get("template", "guard")
+            key = _generate_activation_key(key_type=key_type)
+            if key_type == "guard":
+                bus.activate_guard(key, db_path=handler.db_path)
             # Store key by session ID so the success page can retrieve it
             sid = session.get("id", "")
             if sid:
                 bus.set_config(f"stripe_key_{sid}", key, db_path=handler.db_path)
-            # Store key by customer email for lookup/support
+            # Store key by customer email for lookup/support + send email
             email = session.get("customer_details", {}).get("email") or session.get("customer_email")
             if email:
                 bus.set_config(f"stripe_key_email_{email}", key, db_path=handler.db_path)
+                _email_activation_key(email, key, key_type)
 
     return _json_response(handler, {"received": True})
 
