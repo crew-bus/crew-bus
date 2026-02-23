@@ -3,22 +3,25 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Install — Crew Bus</title>
-    <meta name="description" content="Install Crew Bus in one command. Free, local, private. No cloud accounts, no API keys, no sign-ups.">
+    <title>Download — Crew Bus</title>
+    <meta name="description" content="Download Crew Bus for Mac. A native SwiftUI app — no browser, no Electron. Just drag to Applications and launch.">
     <link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="../img/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../img/favicon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="../img/apple-touch-icon.png">
     <link rel="stylesheet" href="../css/site.css">
 </head>
 <body>
 
 <nav class="nav" id="nav">
     <div class="nav-inner">
-        <a href="/" class="nav-brand"><span class="nav-logo">&#9632;</span> crew-bus</a>
+        <a href="/" class="nav-brand"><img src="/img/logo-192.png" alt="Crew Bus" class="nav-logo-img"> crew-bus</a>
         <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
         <div class="nav-links" id="navLinks">
             <a href="/#why-different">Why It's Different</a>
             <a href="/#your-crew">Your Crew</a>
             <a href="/pricing">Pricing</a>
-            <a href="/install" class="active" style="color:var(--highlight)">Install</a>
+            <a href="/install" class="active" style="color:var(--highlight)">Download</a>
             <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
         </div>
     </div>
@@ -27,60 +30,64 @@
 <!-- Hero -->
 <section class="section" style="padding-top: 8rem; padding-bottom: 2rem;">
     <div class="container container-narrow text-center">
-        <h1 class="section-title">Install Crew Bus</h1>
-        <p class="section-sub">Free. Local. Private. Your personal AI crew running on your own hardware — no cloud, no sign-ups, no strings attached.</p>
+        <img src="/img/logo-512.png" alt="Crew Bus" style="width:120px;height:120px;border-radius:24px;margin-bottom:1.5rem;box-shadow:0 8px 30px rgba(59,130,246,0.25);">
+        <h1 class="section-title">Download Crew Bus</h1>
+        <p class="section-sub">A native Mac app. No browser, no Electron, no web views. Just a real SwiftUI desktop app running on your hardware.</p>
     </div>
 </section>
 
 <!-- Download -->
 <section class="section" style="padding-top: 0;">
     <div class="container container-narrow text-center">
-        <h2 class="section-title">Download the Installer</h2>
-        <p class="section-sub">One file. Five minutes. Your crew is ready.</p>
         <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0;">
-            <a href="/downloads/Install-Crew-Bus.dmg" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;text-decoration:none;">
-                &#63743; Download for macOS
+            <a href="/downloads/CrewBus-1.0.0.dmg" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;text-decoration:none;">
+                &#63743; Download for Mac
             </a>
-            <button onclick="downloadInstaller('install-crewbus.sh')" class="btn btn-primary btn-lg" style="font-size:1.15rem;padding:1rem 2.5rem;cursor:pointer;">
-                &#128039; Download for Linux
-            </button>
         </div>
-        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 2rem;max-width:520px;margin:0 auto;text-align:left;">
+        <p style="color:var(--text-dim);font-size:0.9rem;margin-bottom:2rem;">Version 1.0.0 &middot; macOS 14.0 (Sonoma) or later &middot; Code-signed &amp; notarized by Apple</p>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 2rem;max-width:520px;margin:0 auto;text-align:left;">
             <p style="font-weight:600;margin-bottom:0.8rem;font-size:1.1rem;">Three steps:</p>
             <ol style="margin:0;padding-left:1.3rem;line-height:2.2;font-size:1.05rem;">
-                <li>Click the download button above</li>
-                <li>Open the .dmg and double-click <strong>Install Crew Bus</strong></li>
-                <li>The installer does the rest — your crew is ready in minutes</li>
+                <li>Download <strong>CrewBus-1.0.0.dmg</strong></li>
+                <li>Drag <strong>Crew Bus</strong> to Applications</li>
+                <li>Launch — your crew is ready</li>
             </ol>
-            <p style="margin-top:1rem;color:var(--text-dim);font-size:0.85rem;">macOS may ask you to confirm the first time — right-click the app and choose "Open" if it does.</p>
         </div>
-        <p style="color:var(--text-dim);margin-top:1.2rem;font-size:0.9rem;">No accounts. No credit card. Takes about 5 minutes.</p>
+        <p style="color:var(--text-dim);margin-top:1.2rem;font-size:0.9rem;">No accounts. No credit card. No cloud sign-ups.</p>
         <p style="margin-top:1.5rem;font-size:1rem;">Don't want to install it yourself? <a href="/installer" style="color:var(--highlight);font-weight:600;">Let a verified installer do it for you</a> — remotely or in person.</p>
     </div>
 </section>
 
-<!-- What the Installer Does -->
+<!-- What You Get -->
 <section class="section section-dark">
     <div class="container">
-        <h2 class="section-title">What the Installer Does</h2>
-        <p class="section-sub">Three steps, fully automated. Here's what happens behind the scenes.</p>
+        <h2 class="section-title">What You Get</h2>
+        <p class="section-sub">Three agents working together in a triangle. Ready in minutes.</p>
         <div class="steps">
             <div class="step">
                 <div class="step-number">1</div>
-                <h3>Checks &amp; Clones</h3>
-                <p>Verifies Python 3.10+ is installed, then clones the Crew Bus repo to your machine.</p>
+                <h3>Crew Boss</h3>
+                <p>Your AI right-hand. Handles 80% of everything — wellness, strategy, finances, daily life. The brain of your crew.</p>
             </div>
             <div class="step">
                 <div class="step-number">2</div>
-                <h3>Installs Dependencies</h3>
-                <p>Sets up a virtual environment, installs Python packages, and installs Ollama for local AI.</p>
+                <h3>Guardian</h3>
+                <p>Your always-on protector. Controls web access, vets every skill for safety, monitors everything in real time.</p>
             </div>
             <div class="step">
                 <div class="step-number">3</div>
-                <h3>Launches Your Crew</h3>
-                <p>Starts the dashboard — your crew is live. Guardian walks you through the rest.</p>
+                <h3>Vault</h3>
+                <p>Your private journal. Remembers moods, goals, finances, dreams. Connects dots across weeks and months. Never nags.</p>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="section">
+    <div class="container container-narrow text-center">
+        <h2 class="section-title">Built Different</h2>
+        <p style="font-size:1.1rem;color:var(--text-dim);max-width:600px;margin:0 auto 1.5rem;">Native SwiftUI app with auto-updates via Sparkle. Dark mode dashboard with particle effects. Chat with any agent directly. Spin up task-specific teams. All running on your hardware, all private.</p>
     </div>
 </section>
 
@@ -88,7 +95,7 @@
 <section class="section">
     <div class="container container-narrow text-center">
         <h2 class="section-title">Add Skills Anytime</h2>
-        <p style="font-size:1.1rem;color:var(--text-dim);max-width:600px;margin:0 auto 1.5rem;">What you install today is the full platform — but it's also a launchpad. Every agent can learn new skills from the Skill Store, downloaded and verified by Guardian. Wellness can learn breathing exercises. Strategy can learn market analysis. Crew Boss can learn anything you need. Your crew starts simple and grows with you.</p>
+        <p style="font-size:1.1rem;color:var(--text-dim);max-width:600px;margin:0 auto 1.5rem;">What you install today is the full platform — but it's also a launchpad. Every agent can learn new skills from the Skill Store, downloaded and verified by Guardian. Your crew starts simple and grows with you.</p>
         <a href="/activate" class="btn btn-outline">Learn About the Skill Store</a>
     </div>
 </section>
@@ -97,13 +104,12 @@
 <section class="section">
     <div class="container container-narrow">
         <h2 class="section-title">System Requirements</h2>
-        <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; max-width: 480px; margin: 0 auto;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; max-width: 480px; margin: 0 auto;">
             <ul style="list-style: none; padding: 0; margin: 0; font-size: 1rem; line-height: 2.2;">
-                <li>&#9989; macOS or Linux</li>
-                <li>&#9989; Python 3.10+</li>
+                <li>&#9989; macOS 14.0 (Sonoma) or later</li>
+                <li>&#9989; Apple Silicon or Intel Mac</li>
                 <li>&#9989; 4 GB+ RAM (8 GB recommended)</li>
-                <li>&#9989; 2 GB disk space</li>
-                <li>&#9989; Git installed</li>
+                <li>&#9989; 500 MB disk space</li>
             </ul>
             <p style="margin-top:1.2rem;color:var(--text-dim);font-size:0.9rem;">No cloud accounts. No API keys. No sign-ups.</p>
         </div>
@@ -122,11 +128,25 @@
     </div>
 </section>
 
+<!-- Developer -->
+<section class="section section-dark">
+    <div class="container container-narrow text-center">
+        <h2 class="section-title">Developer?</h2>
+        <p style="font-size:1.1rem;color:var(--text-dim);margin-bottom:1.5rem;">Run from source instead of the DMG.</p>
+        <div style="background:#0d1117;border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:520px;margin:0 auto;text-align:left;font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:0.85rem;color:var(--success);line-height:1.8;">
+            git clone https://github.com/crew-bus/crew-bus.git<br>
+            cd crew-bus/macos<br>
+            xcodegen generate<br>
+            xcodebuild build -scheme CrewBus -destination "platform=macOS"
+        </div>
+    </div>
+</section>
+
 <footer class="footer">
     <div class="container">
         <div class="footer-grid">
             <div class="footer-col"><h4>crew-bus</h4><p class="footer-desc">Your personal AI crew — Boss talks, Guard protects, Vault remembers. Free, open source, and built for every human.</p></div>
-            <div class="footer-col"><h4>Product</h4><ul><li><a href="/#your-crew">Your Crew</a></li><li><a href="/install">Install</a></li><li><a href="/pricing">Pricing</a></li><li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li></ul></div>
+            <div class="footer-col"><h4>Product</h4><ul><li><a href="/#your-crew">Your Crew</a></li><li><a href="/install">Download</a></li><li><a href="/pricing">Pricing</a></li><li><a href="https://github.com/crew-bus/crew-bus">GitHub</a></li></ul></div>
             <div class="footer-col"><h4>Legal</h4><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul></div>
         </div>
         <div class="footer-bottom"><p>&copy; 2025-2026 Crew Bus. MIT License. One human at the top, always.</p></div>
@@ -134,18 +154,5 @@
 </footer>
 
 <script src="../js/site.js"></script>
-<script>
-function downloadInstaller(filename) {
-    fetch('https://raw.githubusercontent.com/crew-bus/crew-bus/main/install.sh')
-        .then(r => r.blob())
-        .then(blob => {
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(a.href);
-        });
-}
-</script>
 </body>
 </html>
