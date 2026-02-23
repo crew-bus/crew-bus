@@ -7614,7 +7614,7 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             guardian_id = None
             try:
                 conn.execute(
-                    "UPDATE agents SET model=? WHERE model='' OR model IS NULL",
+                    "UPDATE agents SET model=? WHERE model='' OR model IS NULL OR model='kimi'",
                     (model,),
                 )
                 conn.commit()
@@ -7995,8 +7995,8 @@ def _ensure_guardian(db_path):
         # Guardian — the always-on protector + setup guide
         conn.execute(
             "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
-            "trust_score, model, description) VALUES "
-            "('Guardian', 'guardian', 'security', 'console', ?, 8, 'kimi', ?)",
+            "trust_score, description) VALUES "
+            "('Guardian', 'guardian', 'security', 'console', ?, 8, ?)",
             (boss_id, GUARDIAN_DESCRIPTION)
         )
 

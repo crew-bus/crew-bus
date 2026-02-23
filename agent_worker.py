@@ -1798,7 +1798,7 @@ def _call_openai_compat(messages: list, model: str, api_url: str,
         "max_tokens": 1024,
     }).encode("utf-8")
 
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "User-Agent": "CrewBus/1.0"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
