@@ -83,7 +83,7 @@ def cmd_load(args):
     print(f"Agents: {', '.join(result['agents_loaded'])}")
     print(f"Database: {bus.DB_PATH}")
     print()
-    print("Crew is live! Open http://localhost:8080 to see your dashboard.")
+    print("Crew is live! Open the Crew Bus app to see your dashboard.")
 
 
 def cmd_send(args):
