@@ -142,27 +142,6 @@ class RightHand:
         return decision
 
     # ------------------------------------------------------------------
-    # Strategy idea filtering
-    # ------------------------------------------------------------------
-
-    def filter_idea(self, idea_message_id: Optional[int]) -> dict:
-        """Check whether a strategy idea should reach the human.
-
-        Examines knowledge_store for past rejections of similar ideas.
-        Also checks human burnout level.
-
-        Args:
-            idea_message_id: The message ID of the idea.
-
-        Returns:
-            {action: "pass"|"filter"|"queue", reason: str}
-        """
-        if idea_message_id is None:
-            return {"action": "pass", "reason": "No message ID provided, passing through"}
-
-        return bus.filter_strategy_idea(self.rh_id, idea_message_id, self.db_path)
-
-    # ------------------------------------------------------------------
     # Escalation handling
     # ------------------------------------------------------------------
 

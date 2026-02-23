@@ -1,8 +1,8 @@
 # Crew Bus
 
-**Your agents. Your hardware. Your rules.**
+**Your agents. Your Mac. Your rules.**
 
-Crew Bus is open-source software that runs on your own machine and lets your AI agents work together as a coordinated team — no cloud dependency, no API subscriptions, no data leaving your network.
+Crew Bus is open-source software that runs on your Mac and lets your AI agents work together as a coordinated team — no cloud dependency, no API subscriptions, no data leaving your Mac.
 
 > Most agent frameworks send your data to someone else's servers and charge you monthly for the privilege. Crew Bus runs locally, costs $29 once, and puts a security Guardian between your agents and the outside world.
 
@@ -34,7 +34,7 @@ Setting up a team of AI agents today is painful. You download a framework, wrest
 Crew Bus takes a different approach:
 
 - **Native Mac app.** A real SwiftUI desktop app — not a web page in a wrapper.
-- **Runs on your Mac.** Native Mac app, your data. Nothing leaves your Mac unless you tell it to.
+- **Runs on your Mac.** Your data stays on your Mac. Nothing leaves unless you tell it to.
 - **Works out of the box.** Three agents in a triangle — Crew Boss, Guardian, Vault — ready to go in minutes, not hours.
 - **Built-in security from day one.** The Guardian agent controls all external access, vets every skill before install, and monitors everything in real time. No other agent framework ships with an immune system.
 - **Auto-updates via Sparkle.** The app checks for updates automatically — every 2 hours during your first 14 days for rapid bug fixes, then every 6 hours after that.
@@ -83,28 +83,18 @@ Crew Bus is a native macOS app built with SwiftUI. No browser windows, no Electr
 
 ---
 
-## Quick Start (Developer)
+## Install
 
-If you want to run from source instead of the DMG:
+Download the DMG from [crew-bus.dev/install](https://crew-bus.dev/install), drag to Applications, launch. That's it.
+
+### Build from source (developers)
 
 ```bash
-# Clone the repo
 git clone https://github.com/crew-bus/crew-bus.git
-cd crew-bus
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Start the backend server
-python3 dashboard.py
-
-# Build the Mac app
-cd macos
+cd crew-bus/macos
 xcodegen generate
 xcodebuild build -scheme CrewBus -destination "platform=macOS"
 ```
-
-The Mac app connects to this backend automatically on launch.
 
 ---
 
@@ -116,7 +106,7 @@ The Mac app connects to this backend automatically on launch.
 - **Hierarchical message routing** — every message flows through the bus
 - **Private sessions** — isolated conversations per agent
 - **Team mailboxes** — agents can send structured messages to each other
-- **Local-first** — runs entirely on your machine
+- **Local-first** — runs entirely on your Mac
 - **Dashboard** — native UI to monitor and interact with your crew
 - **Teams (coming soon)** — specialized agent groups for business, creative, and more
 - **Audit log** — full trail of every action across your crew
@@ -138,7 +128,7 @@ The Mac app connects to this backend automatically on launch.
 | | **Crew Bus** | **CrewAI** | **AutoGen** | **LangGraph** |
 |---|---|---|---|---|
 | **Native desktop app** | Yes | No | No | No |
-| **Runs locally** | Your Mac, your data | Cloud-first | Possible but not default | Requires setup |
+| **Runs on your Mac** | Your Mac, your data | Cloud-first | Possible but not default | Requires setup |
 | **Built-in security agent** | Guardian monitors everything | No equivalent | No equivalent | No equivalent |
 | **Skill marketplace** | 20 curated + community skills | Manual tool setup | Manual tool setup | Manual tool setup |
 | **Runtime skill monitoring** | Health scores, auto-quarantine | None | None | None |
@@ -151,7 +141,7 @@ The Mac app connects to this backend automatically on launch.
 
 CrewAI, AutoGen, and LangGraph are powerful frameworks built for developers who want to code agent systems from scratch. They assume you'll wire everything together yourself.
 
-**Crew Bus is built for people who want agents working together *today*.** You get a pre-configured crew, a security layer, a skill marketplace, and a native Mac app — all running on your own machine. No PhD in prompt engineering required.
+**Crew Bus is built for people who want agents working together *today*.** You get a pre-configured crew, a security layer, a skill marketplace, and a native Mac app — all running on your Mac. No PhD in prompt engineering required.
 
 ---
 
@@ -188,14 +178,13 @@ CrewAI, AutoGen, and LangGraph are powerful frameworks built for developers who 
 +-------------------------------------------+
 ```
 
-Everything runs on your machine. No Docker required. No cloud services. No external databases.
+Everything runs on your Mac. No Docker required. No cloud services. No external databases.
 
 ---
 
 ## System Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Python 3.9+ (bundled server)
 - Any LLM provider (local or API-based)
 
 ---
@@ -205,7 +194,6 @@ Everything runs on your machine. No Docker required. No cloud services. No exter
 - [ ] Voice interface — talk to your crew
 - [ ] iOS companion app
 - [ ] Plugin SDK — build and share your own skills
-- [ ] Multi-machine crew networking (LAN)
 - [ ] Mobile companion for on-the-go access
 
 ---

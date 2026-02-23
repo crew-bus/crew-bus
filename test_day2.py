@@ -3,8 +3,8 @@ test_day2.py - Full Day 2 integration test for crew-bus.
 
 Simulates a complete day of operations for Ryan Johnson:
   Step 1:  Load ryan_stack.yaml, initialize all agents
-  Step 2:  Set burnout score to 7 (high - long day yesterday)
-  Step 3:  Quant sends wellness alert to Chief
+  Step 2:  Set energy level to low (long day yesterday)
+  Step 3:  Quant sends alert to Chief
   Step 4:  V4 submits business idea to Chief
   Step 5:  Chief filters: burnout is high, idea not urgent, queue for tomorrow
   Step 6:  RJC-Manager escalates: client emergency (pressure tank leaking)
@@ -113,32 +113,26 @@ results["step_1"] = f"{passed - s1_start}/5"
 
 
 # ============================================================
-# Step 2: Set burnout to 7 (high)
+# Step 2: Update human state (energy level low)
 # ============================================================
 
-section("Step 2: Set burnout to 7 (high - long day yesterday)")
+section("Step 2: Set energy_level to low (long day yesterday)")
 s2_start = passed
 
-bus.update_burnout_score(ryan["id"], 7, TEST_DB)
-ryan = get_agent("Ryan") or get_agent("Human")
-
-check("2.1", ryan["burnout_score"] == 7,
-      f"Burnout set to 7: {ryan['burnout_score']}")
-
-# Also update human_state table
-bus.update_human_state(ryan["id"], {"burnout_score": 7, "energy_level": "low"}, db_path=TEST_DB)
+# Update human_state table
+bus.update_human_state(ryan["id"], {"energy_level": "low"}, db_path=TEST_DB)
 state = bus.get_human_state(ryan["id"], TEST_DB)
-check("2.2", state["burnout_score"] == 7,
-      f"Human state burnout: {state['burnout_score']}")
+check("2.1", state["energy_level"] == "low",
+      f"Human state energy_level: {state['energy_level']}")
 
-results["step_2"] = f"{passed - s2_start}/2"
+results["step_2"] = f"{passed - s2_start}/1"
 
 
 # ============================================================
-# Step 3: Quant sends wellness alert to Chief
+# Step 3: Quant sends alert to Chief
 # ============================================================
 
-section("Step 3: Quant wellness alert -> Chief")
+section("Step 3: Quant alert -> Chief")
 s3_start = passed
 
 msg = bus.send_message(
@@ -381,7 +375,7 @@ check("14.2", "subject" in briefing,
       f"Has subject: {briefing.get('subject', 'NONE')[:60]}")
 
 # Format as professional email
-email = format_morning_brief(briefing, ryan["name"], ryan["burnout_score"])
+email = format_morning_brief(briefing, ryan["name"], 5)
 check("14.3", "subject" in email and len(email["plain"]) > 50,
       f"Formatted email: {len(email['plain'])} chars")
 
@@ -408,7 +402,7 @@ evening = rh.compile_briefing("evening")
 check("15.1", evening is not None,
       f"Evening briefing generated")
 
-email_eve = format_evening_summary(evening, ryan["name"], ryan["burnout_score"])
+email_eve = format_evening_summary(evening, ryan["name"], 5)
 check("15.2", "subject" in email_eve,
       f"Evening subject: {email_eve.get('subject', 'NONE')[:60]}")
 

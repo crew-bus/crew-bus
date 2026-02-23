@@ -336,7 +336,7 @@ THINKING_PROMPTS = {
 # Auto-resolve map: agent_type → default thinking level
 _AUTO_THINKING = {
     "right_hand": "deep",
-    "strategy": "deep",
+    "vault": "standard",
     "manager": "standard",
     "guardian": "standard",
     "worker": "minimal",

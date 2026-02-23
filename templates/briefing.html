@@ -29,10 +29,6 @@
         <div class="stat-value priority-{{ briefing.priority }}">{{ briefing.priority|upper }}</div>
         <div class="stat-label">Priority</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value {% if briefing.burnout <= 3 %}burnout-low{% elif briefing.burnout <= 6 %}burnout-mid{% else %}burnout-high{% endif %}">{{ briefing.burnout }}</div>
-        <div class="stat-label">Burnout Level</div>
-    </div>
 </div>
 
 <!-- Briefing Body -->

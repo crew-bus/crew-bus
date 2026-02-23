@@ -4,7 +4,7 @@ crew-bus core engine (v2 - Human-First Architecture).
 Local message bus for AI agent coordination built around the Crew Boss pattern.
 Every human has a personal AI Chief of Staff (Crew Boss) that sits between them
 and all other agents. The Crew Boss filters, prioritizes, and manages cognitive
-load based on trust score, burnout awareness, and timing rules.
+load based on trust score and timing rules.
 
 The hierarchy is universal - same pattern for individuals, families, small
 businesses, and enterprises. Only the config changes.
@@ -53,7 +53,6 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
 # Agent types in the universal hierarchy
 VALID_AGENT_TYPES = (
     "human", "right_hand", "guardian", "security",
-    "strategy", "wellness", "financial", "legal", "communications",
     "vault", "manager", "worker", "specialist", "help",
 )
 
@@ -267,7 +266,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
                             CHECK(channel IN ('telegram','signal','email','console')),
             channel_address TEXT,
             trust_score     INTEGER NOT NULL DEFAULT 1 CHECK(trust_score BETWEEN 1 AND 10),
-            burnout_score   INTEGER NOT NULL DEFAULT 5 CHECK(burnout_score BETWEEN 1 AND 10),
+            burnout_score   INTEGER NOT NULL DEFAULT 5 CHECK(burnout_score BETWEEN 1 AND 10),  -- legacy column, unused
             budget_limit    REAL    NOT NULL DEFAULT 0.0,
             quiet_hours_start TEXT,
             quiet_hours_end   TEXT,
@@ -398,7 +397,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
         CREATE TABLE IF NOT EXISTS human_state (
             id                      INTEGER PRIMARY KEY AUTOINCREMENT,
             human_id                INTEGER NOT NULL REFERENCES agents(id),
-            burnout_score           INTEGER NOT NULL DEFAULT 5 CHECK(burnout_score BETWEEN 1 AND 10),
+            burnout_score           INTEGER NOT NULL DEFAULT 5 CHECK(burnout_score BETWEEN 1 AND 10),  -- legacy column, unused
             energy_level            TEXT    NOT NULL DEFAULT 'medium'
                                     CHECK(energy_level IN ('high','medium','low')),
             current_activity        TEXT    NOT NULL DEFAULT 'working'
@@ -449,6 +448,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             updated_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         );
 
+        -- legacy table, unused (strategy idea system removed)
         CREATE TABLE IF NOT EXISTS rejection_history (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             human_id            INTEGER NOT NULL REFERENCES agents(id),
@@ -2214,9 +2214,9 @@ def _check_routing(conn: sqlite3.Connection,
     if from_type == "human":
         return {"allowed": True, "require_approval": False, "reason": "Human authority"}
 
-    # --- Messages TO human: only Crew Boss, Security, Wellness ---
+    # --- Messages TO human: only Crew Boss, Security, Guardian ---
     if to_type == "human":
-        if from_type in ("right_hand", "security", "wellness", "guardian"):
+        if from_type in ("right_hand", "security", "guardian"):
             return {"allowed": True, "require_approval": False,
                     "reason": from_type + " can reach human"}
         return {"allowed": False, "require_approval": False,
@@ -2260,13 +2260,6 @@ def send_message(from_id: int, to_id: int, message_type: str,
         routing = _check_routing(conn, sender, recipient)
     finally:
         conn.close()
-
-    # Extra check: wellness -> human only allowed for critical priority
-    if (sender["agent_type"] == "wellness" and recipient["agent_type"] == "human"
-            and priority != "critical"
-            and routing.get("reason") != "Active private session"):
-        routing = {"allowed": False, "require_approval": False,
-                   "reason": "Wellness can only message human with critical priority"}
 
     if not routing["allowed"]:
         raise PermissionError(
@@ -2441,15 +2434,12 @@ def list_agents(db_path: Optional[Path] = None) -> list[dict]:
         "ORDER BY CASE a.agent_type "
         "  WHEN 'human' THEN 0 "
         "  WHEN 'right_hand' THEN 1 "
-        "  WHEN 'strategy' THEN 2 "
-        "  WHEN 'wellness' THEN 3 "
-        "  WHEN 'financial' THEN 4 "
-        "  WHEN 'legal' THEN 5 "
-        "  WHEN 'communications' THEN 6 "
-        "  WHEN 'manager' THEN 8 "
-        "  WHEN 'worker' THEN 9 "
-        "  WHEN 'specialist' THEN 10 "
-        "  ELSE 11 END, a.name"
+        "  WHEN 'guardian' THEN 2 "
+        "  WHEN 'vault' THEN 3 "
+        "  WHEN 'manager' THEN 4 "
+        "  WHEN 'worker' THEN 5 "
+        "  WHEN 'specialist' THEN 6 "
+        "  ELSE 7 END, a.name"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -2679,33 +2669,6 @@ def update_trust_score(human_id: int, new_score: int,
     conn.close()
 
 
-def update_burnout_score(human_id: int, new_score: int,
-                         db_path: Optional[Path] = None) -> None:
-    """Update the burnout score for a human (called by wellness agent)."""
-    if not 1 <= new_score <= 10:
-        raise ValueError(f"Burnout score must be 1-10, got {new_score}")
-
-    conn = get_conn(db_path)
-    human = conn.execute("SELECT * FROM agents WHERE id=?", (human_id,)).fetchone()
-    if not human:
-        conn.close()
-        raise ValueError(f"Agent id={human_id} not found")
-    if human["agent_type"] != "human":
-        conn.close()
-        raise ValueError(f"Agent '{human['name']}' is not a human")
-
-    old_score = human["burnout_score"]
-    conn.execute(
-        "UPDATE agents SET burnout_score=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
-        "WHERE id=?", (new_score, human_id),
-    )
-    _audit(conn, "burnout_score_updated", human_id, {
-        "old_score": old_score, "new_score": new_score,
-    })
-    conn.commit()
-    conn.close()
-
-
 def get_autonomy_level(right_hand_id: int,
                        db_path: Optional[Path] = None) -> dict:
     """Return what actions are allowed at the current trust score.
@@ -2820,7 +2783,7 @@ def should_deliver_now(human_id: int, message_priority: str,
                        db_path: Optional[Path] = None) -> dict:
     """Check whether a message should be delivered to the human right now.
 
-    Checks burnout score, quiet hours, busy signals, and message priority.
+    Checks quiet hours, busy signals, and message priority.
     Critical/safety messages ALWAYS deliver regardless of timing.
 
     Returns: {deliver: bool, reason: str, delay_until: str|None}
@@ -2836,17 +2799,6 @@ def should_deliver_now(human_id: int, message_priority: str,
         raise ValueError(f"Agent id={human_id} not found")
 
     now = datetime.now(timezone.utc)
-    burnout = human["burnout_score"]
-
-    # Check burnout threshold
-    if burnout >= 7 and message_priority in ("low", "normal"):
-        conn.close()
-        morning = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
-        return {
-            "deliver": False,
-            "reason": f"Burnout score is {burnout}/10. Queuing non-urgent message for morning.",
-            "delay_until": morning.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
 
     # Check quiet hours
     quiet_rule = conn.execute(
@@ -2939,7 +2891,7 @@ def log_decision(right_hand_id: int, human_id: int, decision_type: str,
         context: JSON-serializable dict of decision context.
         action: What the Crew Boss decided to do.
         reasoning: Human-readable explanation of why (for learning).
-        pattern_tags: Tags for pattern matching (e.g. ["rejected_idea", "high_burnout"]).
+        pattern_tags: Tags for pattern matching (e.g. ["rejected_idea"]).
 
     Returns the decision_id.
     """
@@ -2991,19 +2943,6 @@ def record_human_feedback(decision_id: int, override: bool,
         "human_action": human_action,
         "note": note,
     })
-
-    # If this was an override of a strategy idea filter, store as rejection pattern
-    if override and decision["decision_type"] == "filter":
-        ctx = json.loads(decision["context"])
-        if ctx.get("message_type") == "idea":
-            conn.execute(
-                "INSERT INTO knowledge_store (agent_id, category, subject, content, tags) "
-                "VALUES (?, 'rejection', ?, ?, ?)",
-                (decision["right_hand_id"],
-                 f"Human overrode filter on idea: {ctx.get('subject', 'unknown')}",
-                 json.dumps({"decision_id": decision_id, "context": ctx, "human_action": human_action}),
-                 ctx.get("tags", "")),
-            )
 
     conn.commit()
     conn.close()
@@ -3441,8 +3380,6 @@ def seed_default_heartbeats(db_path: Optional[Path] = None):
          "Evening wrap-up: summarize today and suggest tomorrow's focus"),
         ("guardian", "every 4h",
          "Security check: review recent activity for integrity concerns"),
-        ("wellness", "daily 10am",
-         "Energy check: review message patterns and flag burnout signals"),
     ]
     conn = get_conn(db_path)
     for agent_type, schedule, task in defaults:
@@ -3559,152 +3496,6 @@ def synthesize_memories(agent_id: int, older_than_days: int = 7,
 
     return {"ok": True, "compacted": len(old_memories),
             "summaries_created": summaries_created}
-
-
-# ---------------------------------------------------------------------------
-# Rejection History
-# ---------------------------------------------------------------------------
-
-def log_rejection(human_id: int, strategy_agent_id: int,
-                  subject: str, body: str = "",
-                  reason: Optional[str] = None,
-                  db_path: Optional[Path] = None) -> int:
-    """Record a rejected strategy idea for future pattern matching.
-
-    The Crew Boss uses rejection history to filter similar future ideas
-    before they reach the human. This is the foundation of recursive learning.
-
-    Returns the rejection_id.
-    """
-    conn = get_conn(db_path)
-    cur = conn.execute(
-        "INSERT INTO rejection_history "
-        "(human_id, strategy_agent_id, idea_subject, idea_body, rejection_reason) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (human_id, strategy_agent_id, subject, body, reason),
-    )
-    rejection_id = cur.lastrowid
-    _audit(conn, "idea_rejected", human_id,
-           {"rejection_id": rejection_id, "strategy_agent_id": strategy_agent_id,
-            "subject": subject, "reason": reason})
-    conn.commit()
-    conn.close()
-    return rejection_id
-
-
-def get_rejection_history(human_id: int, limit: int = 20,
-                          db_path: Optional[Path] = None) -> list[dict]:
-    """Get the human's rejection history for strategy ideas.
-
-    Returns list of rejection dicts sorted by most recent first.
-    Used by Crew Boss to filter similar future ideas.
-    """
-    conn = get_conn(db_path)
-    rows = conn.execute(
-        "SELECT r.*, a.name AS strategy_agent_name "
-        "FROM rejection_history r "
-        "JOIN agents a ON r.strategy_agent_id = a.id "
-        "WHERE r.human_id = ? "
-        "ORDER BY r.created_at DESC LIMIT ?",
-        (human_id, limit),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-# ---------------------------------------------------------------------------
-# Strategy Idea Filtering
-# ---------------------------------------------------------------------------
-
-def filter_strategy_idea(right_hand_id: int, idea_message_id: int,
-                         db_path: Optional[Path] = None) -> dict:
-    """Check whether a strategy idea should be passed to the human.
-
-    Looks at rejection history in knowledge_store to see if similar ideas
-    have been rejected before. Also considers current burnout score.
-
-    Returns: {action: "pass"|"filter"|"queue", reason: str}
-    """
-    conn = get_conn(db_path)
-
-    msg = conn.execute("SELECT * FROM messages WHERE id=?", (idea_message_id,)).fetchone()
-    if not msg:
-        conn.close()
-        raise ValueError(f"Message id={idea_message_id} not found")
-
-    rh = conn.execute("SELECT * FROM agents WHERE id=?", (right_hand_id,)).fetchone()
-    if not rh:
-        conn.close()
-        raise ValueError(f"Agent id={right_hand_id} not found")
-
-    # Find the human
-    human = conn.execute(
-        "SELECT * FROM agents WHERE id=?", (rh["parent_agent_id"],),
-    ).fetchone()
-
-    subject = msg["subject"]
-    body = msg["body"]
-
-    # Check for similar past rejections - search using key words from
-    # the idea subject to find related rejections.  We split on spaces
-    # and look for any significant word (>3 chars) matching.
-    stop_words = {"the", "a", "an", "for", "and", "or", "in", "of", "to", "with", "from"}
-    words = [w.strip(".,!?;:") for w in subject.split()
-             if len(w.strip(".,!?;:")) > 3 and w.lower() not in stop_words]
-
-    rejections = []
-    seen_ids = set()
-
-    # Check dedicated rejection_history table first
-    for word in words:
-        rows = conn.execute(
-            "SELECT * FROM rejection_history "
-            "WHERE human_id = ? "
-            "AND (idea_subject LIKE ? OR idea_body LIKE ?) "
-            "ORDER BY created_at DESC LIMIT 5",
-            (human["id"] if human else 0, f"%{word}%", f"%{word}%"),
-        ).fetchall()
-        for r in rows:
-            key = ("rh", r["id"])
-            if key not in seen_ids:
-                rejections.append(r)
-                seen_ids.add(key)
-
-    # Also check knowledge_store for rejection category entries
-    for word in words:
-        rows = conn.execute(
-            "SELECT * FROM knowledge_store WHERE category='rejection' "
-            "AND (subject LIKE ? OR content LIKE ? OR tags LIKE ?) "
-            "ORDER BY created_at DESC LIMIT 5",
-            (f"%{word}%", f"%{word}%", f"%{word}%"),
-        ).fetchall()
-        for r in rows:
-            key = ("ks", r["id"])
-            if key not in seen_ids:
-                rejections.append(r)
-                seen_ids.add(key)
-
-    conn.close()
-
-    if len(rejections) >= 2:
-        return {
-            "action": "filter",
-            "reason": f"Found {len(rejections)} similar past rejections. Filtering idea.",
-            "similar_rejections": len(rejections),
-        }
-
-    # Check burnout
-    if human and human["burnout_score"] >= 7:
-        return {
-            "action": "queue",
-            "reason": f"Human burnout is {human['burnout_score']}/10. Queuing for lower-burnout moment.",
-        }
-
-    # Novel idea, low burnout - pass through
-    return {
-        "action": "pass",
-        "reason": "Novel idea, no similar rejections found. Passing to human.",
-    }
 
 
 # ---------------------------------------------------------------------------

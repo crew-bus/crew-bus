@@ -440,12 +440,12 @@ except Exception as e:
 
 # Send a new message via bridge
 bridge_v4 = CrewBridge(v4["name"], db_path=TEST_DB)
-v4_result = bridge_v4.submit_idea(
+v4_result = bridge_v4.report(
     subject="YouTube Shorts for Lead Gen",
     body="Quick 30-second videos showing before/after of rural property jobs"
 )
 check("9.1", v4_result.get("ok") is True,
-      f"V4 submitted idea: message_id={v4_result.get('message_id')}")
+      f"V4 sent report: message_id={v4_result.get('message_id')}")
 
 # Get message count after
 try:
@@ -570,32 +570,6 @@ try:
           f"Found {len(overridden)} overridden decision(s)")
 except Exception as e:
     check("bonus.4", False, f"Decisions API failed: {e}")
-
-
-# ---------------------------------------------------------------------------
-# Bonus: Wellness agent bridge
-# ---------------------------------------------------------------------------
-
-section("Bonus: Wellness agent bridge")
-
-bridge_quant = CrewBridge(quant["name"], db_path=TEST_DB)
-wellness_result = bridge_quant.update_wellness(
-    burnout_score=7,
-    notes="Long work week, multiple client emergencies"
-)
-check("wellness.1", wellness_result.get("ok") is True,
-      f"Wellness update succeeded: burnout={wellness_result.get('burnout_score')}")
-
-# Verify burnout changed
-ryan_updated = bus.get_agent_by_name(ryan["name"], TEST_DB)
-check("wellness.2", ryan_updated["burnout_score"] == 7,
-      f"Ryan burnout updated to {ryan_updated['burnout_score']}")
-
-# Non-wellness agent should fail
-bridge_cfo = CrewBridge(cfo["name"], db_path=TEST_DB)
-bad_wellness = bridge_cfo.update_wellness(burnout_score=3)
-check("wellness.3", bad_wellness.get("ok") is False,
-      f"Non-wellness agent blocked: {bad_wellness.get('error', '')[:50]}")
 
 
 # ---------------------------------------------------------------------------

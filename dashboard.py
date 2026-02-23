@@ -38,14 +38,12 @@ API — all existing endpoints preserved, plus new ones:
   GET  /api/decisions                 -> decision log
   GET  /api/audit                     -> audit trail
   POST /api/trust                     -> update trust score
-  POST /api/burnout                   -> update burnout score
   POST /api/quarantine/<id>           -> quarantine agent
   POST /api/restore/<id>              -> restore agent
   POST /api/decision/<id>/approve     -> approve decision
   POST /api/decision/<id>/override    -> override decision
 
 FREE AND OPEN SOURCE — crew-bus is free infrastructure for the world.
-Security Guard module available separately (paid activation key).
 """
 
 import base64
@@ -279,15 +277,6 @@ DEFAULT_PORT = 8420
 DEFAULT_DB = bus.DB_PATH
 _server_port = DEFAULT_PORT  # updated at server start with actual port
 
-# WhatsApp bridge subprocess management
-WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
-_wa_bridge_process = None
-_wa_bridge_lock = threading.Lock()
-
-# Telegram bridge subprocess management
-TG_BRIDGE_URL = os.environ.get("TG_BRIDGE_URL", "http://localhost:3002")
-_tg_bridge_process = None
-_tg_bridge_lock = threading.Lock()
 
 # Guardian — the always-on protector and setup guide.
 # Merges the old Wizard (setup) + Guard (security) into one agent that
@@ -980,7 +969,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
   outline:none;
 }
 
-/* Trust + Energy score indicators (below teams) */
+/* Trust score indicator (below agents) */
 .indicators{
   display:flex;gap:14px;justify-content:center;
   padding:16px 0 8px;
@@ -994,12 +983,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .indicator:hover{border-color:var(--mu)}
 .indicator label{font-size:.7rem;color:var(--mu);text-transform:uppercase;letter-spacing:.04em;cursor:pointer}
 .indicator .val{font-size:1.1rem;font-weight:700}
-.burnout-dot{
-  width:12px;height:12px;border-radius:50%;
-  display:inline-block;vertical-align:middle;
-}
-
-/* ── Trust/Burnout popup ── */
+/* ── Trust popup ── */
 .tb-popup{
   display:none;position:fixed;top:50%;left:50%;
   transform:translate(-50%,-50%);
@@ -1227,15 +1211,6 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .chat-msg .chat-time{font-size:.6rem;opacity:.5;margin-top:3px}
 .chat-msg.from-agent .chat-time{color:var(--mu)}
 .chat-msg.from-human .chat-time{color:rgba(255,255,255,.6)}
-
-/* WhatsApp QR code in chat */
-.wa-qr-container{
-  background:#fff;border-radius:12px;padding:16px;margin:8px 0;
-  text-align:center;max-width:280px;
-}
-.wa-qr-container svg{width:220px;height:220px;display:block;margin:0 auto 8px}
-.wa-qr-label{font-size:.75rem;color:#555;margin-top:6px}
-.wa-qr-loading{color:var(--mu);font-size:.8rem;padding:24px;text-align:center}
 
 /* Empty state — friendly first message */
 .chat-empty{
@@ -2104,12 +2079,6 @@ function dotClass(status,agent_type,checkIn,active){
   return 'dot-green';
 }
 
-function burnoutDotColor(score){
-  if(score<=3)return 'var(--gn)';
-  if(score<=6)return 'var(--yl)';
-  return 'var(--rd)';
-}
-
 function accentColor(type){
   var m={'right_hand':'#ffffff','guardian':'#d18616','vault':'#a78bfa'};
   return m[type]||'#ffffff';
@@ -2357,24 +2326,17 @@ async function loadCircle(){
   renderBubble('bubble-vault',vault,null);
 
   var trustEl=document.getElementById('trust-val');
-  var burnoutDot=document.getElementById('burnout-dot');
-  // Update popup sliders too
+  // Update popup slider too
   var trustSlider=document.getElementById('trust-slider');
-  var burnoutSlider=document.getElementById('burnout-slider');
   if(trustEl)trustEl.textContent=stats.trust_score||1;
-  if(burnoutDot)burnoutDot.style.background=burnoutDotColor(stats.burnout_score||5);
   if(trustSlider)trustSlider.value=stats.trust_score||1;
-  if(burnoutSlider)burnoutSlider.value=stats.burnout_score||5;
   var td=document.getElementById('tb-trust-display');
   if(td)td.textContent=stats.trust_score||1;
 
-  // Dynamic labels — boss name for trust, human name for energy
+  // Dynamic label — boss name for trust
   var trustLbl=document.getElementById('trust-label');
-  var energyLbl=document.getElementById('energy-label');
   var bossName=stats.boss_name||'Crew Boss';
-  var humanName=stats.human_name||'Human';
   if(trustLbl)trustLbl.textContent=bossName+' Trust Score';
-  if(energyLbl)energyLbl.textContent='Your Energy Score';
 
   loadTeams();
   loadGuardianBanner();
@@ -2492,7 +2454,7 @@ function setDayNight(mode,el){
   if(tc)tc.content=mode==='day'?'#f0f2f5':'#0d1117';
 }
 
-// FIX 3: Trust/Burnout popup instead of old sliders
+// Trust popup
 function openTBPopup(){
   document.getElementById('tb-popup-overlay').classList.add('open');
   document.getElementById('tb-popup').classList.add('open');
@@ -2506,11 +2468,6 @@ async function onTrustChange(val){
   var td=document.getElementById('tb-trust-display');
   if(td)td.textContent=val;
   await apiPost('/api/trust',{score:parseInt(val)});
-  loadCircle();
-}
-
-async function onBurnoutChange(val){
-  await apiPost('/api/burnout',{score:parseInt(val)});
   loadCircle();
 }
 
@@ -3247,19 +3204,6 @@ function renderChat(messages){
   wrap.innerHTML=messages.map(function(m){
     var cls=m.direction==='from_human'?'from-human':'from-agent';
     if(m.private)cls+=' private';
-    // WhatsApp QR code rendering
-    if(m.text&&m.text.indexOf('[WA_QR]')!==-1){
-      var parts=m.text.split('[WA_QR]');
-      var afterText=parts[1]?parts[1].trim():'Scan with WhatsApp';
-      var qrId='wa-qr-'+Math.random().toString(36).substr(2,6);
-      setTimeout(function(){loadWaQr(qrId)},100);
-      return '<div class="chat-msg '+cls+'"><div>'+
-        '<div class="wa-qr-container" id="'+qrId+'">'+
-        '<div class="wa-qr-loading">Loading QR code...</div>'+
-        '</div>'+
-        '<div style="margin-top:6px">'+esc(afterText)+'</div>'+
-        '</div><div class="chat-time">'+timeAgo(m.time)+'</div></div>';
-    }
     return '<div class="chat-msg '+cls+'"><div>'+esc(m.text)+'</div>'+
       '<div class="chat-time">'+timeAgo(m.time)+'</div></div>';
   }).join('');
@@ -3267,31 +3211,6 @@ function renderChat(messages){
   var agentMsgs=messages.filter(function(m){return m.direction!=='from_human'});
   if(agentMsgs.length>0&&typingEl){typingEl.style.display='none';}
   wrap.scrollTop=wrap.scrollHeight;
-}
-
-function loadWaQr(containerId){
-  var el=document.getElementById(containerId);
-  if(!el)return;
-  var attempts=0;
-  var maxAttempts=15;
-  function tryFetch(){
-    fetch('/api/wa/qr').then(function(r){return r.json()}).then(function(d){
-      if(d.svg){
-        el.innerHTML=d.svg+'<div class="wa-qr-label">Scan with WhatsApp</div>';
-      }else if(d.status==='connected'){
-        el.innerHTML='<div style="padding:16px;color:#27ae60;font-weight:600">Connected!</div>';
-      }else{
-        attempts++;
-        if(attempts<maxAttempts){setTimeout(tryFetch,3000)}
-        else{el.innerHTML='<div class="wa-qr-loading">QR code not available. Ask Guardian to try again.</div>'}
-      }
-    }).catch(function(){
-      attempts++;
-      if(attempts<maxAttempts){setTimeout(tryFetch,3000)}
-      else{el.innerHTML='<div class="wa-qr-loading">Bridge not responding.</div>'}
-    });
-  }
-  tryFetch();
 }
 
 function closeAgentSpace(){
@@ -4860,13 +4779,10 @@ def _build_html():
       <span class="bubble-label">Vault</span><span class="bubble-sub"></span>
     </div>
   </div>
-  <!-- Score indicators below core crew -->
+  <!-- Score indicators below agents -->
   <div class="indicators" id="bottom-indicators">
     <div class="indicator" onclick="openTBPopup()">
       <label id="trust-label">Crew Boss Trust Score</label><span class="val" id="trust-val" style="color:#fff">5</span>
-    </div>
-    <div class="indicator" onclick="openTBPopup()">
-      <label id="energy-label">Human Energy Score</label><span class="burnout-dot" id="burnout-dot" style="background:var(--gn)"></span>
     </div>
   </div>
 </div>
@@ -4904,8 +4820,7 @@ def _build_html():
 <div class="compose-toast" id="compose-toast"></div>
 </div>
 
-<!-- FIX 3: Trust/Burnout popup (replaces old bottom-sheet sliders) -->
-<!-- IDs trust-slider and burnout-slider kept for test compat -->
+<!-- Trust popup -->
 <div class="tb-popup-overlay" id="tb-popup-overlay" onclick="closeTBPopup()"></div>
 <div class="tb-popup" id="tb-popup">
   <h3>Adjust Settings</h3>
@@ -4914,9 +4829,6 @@ def _build_html():
   <input type="range" id="trust-slider" min="1" max="10" value="5"
     oninput="document.getElementById('tb-trust-display').textContent=this.value"
     onchange="onTrustChange(this.value)">
-  <label>Energy Score</label>
-  <input type="range" id="burnout-slider" min="1" max="10" value="5"
-    onchange="onBurnoutChange(this.value)">
   <button class="tb-close" onclick="closeTBPopup()">Done</button>
 </div>
 
@@ -5365,7 +5277,6 @@ def _get_stats(db_path):
             "human_id": human["id"] if human else None,
             "boss_name": rh["name"] if rh else "Crew Boss",
             "trust_score": rh["trust_score"] if rh else 1,
-            "burnout_score": human["burnout_score"] if human else 5,
             "agent_count": agent_count,
             "message_count": msg_count,
             "decision_count": decision_count,
@@ -5533,137 +5444,7 @@ def _clear_agent_chat(db_path, agent_id):
         """, (hid, agent_id, agent_id, hid))
     return {"ok": True}
 
-# ---------------------------------------------------------------------------
-# WhatsApp bridge subprocess management
-# ---------------------------------------------------------------------------
 
-def _wa_bridge_dir():
-    """Return the absolute path to the wa-bridge directory."""
-    here = Path(__file__).resolve().parent
-    candidate = here / "wa-bridge"
-    if candidate.exists() and (candidate / "bridge.js").exists():
-        return str(candidate)
-    # Try parent dirs (worktree scenario)
-    for p in [here.parent, here.parent.parent]:
-        c = p / "wa-bridge"
-        if c.exists() and (c / "bridge.js").exists():
-            return str(c)
-    return None
-
-def _start_wa_bridge():
-    """Start the WhatsApp bridge as a subprocess."""
-    global _wa_bridge_process
-    with _wa_bridge_lock:
-        if _wa_bridge_process and _wa_bridge_process.poll() is None:
-            return {"ok": True, "status": "already_running", "pid": _wa_bridge_process.pid}
-        bridge_dir = _wa_bridge_dir()
-        if not bridge_dir:
-            return {"ok": False, "error": "wa-bridge directory not found"}
-        try:
-            _wa_bridge_process = subprocess.Popen(
-                ["node", os.path.join(bridge_dir, "bridge.js")],
-                cwd=bridge_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                env={**os.environ, "BUS_URL": f"http://localhost:{_server_port}"},
-            )
-            return {"ok": True, "status": "started", "pid": _wa_bridge_process.pid}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
-
-def _stop_wa_bridge():
-    """Stop the WhatsApp bridge subprocess."""
-    global _wa_bridge_process
-    with _wa_bridge_lock:
-        if not _wa_bridge_process or _wa_bridge_process.poll() is not None:
-            _wa_bridge_process = None
-            return {"ok": True, "status": "not_running"}
-        _wa_bridge_process.terminate()
-        try:
-            _wa_bridge_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            _wa_bridge_process.kill()
-        _wa_bridge_process = None
-        return {"ok": True, "status": "stopped"}
-
-def _wa_bridge_status():
-    """Check WhatsApp bridge status."""
-    import urllib.request
-    import urllib.error
-    running = _wa_bridge_process is not None and _wa_bridge_process.poll() is None
-    if not running:
-        return {"running": False, "status": "not_running"}
-    try:
-        req = urllib.request.Request(f"{WA_BRIDGE_URL}/status")
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            data["running"] = True
-            return data
-    except Exception:
-        return {"running": True, "status": "starting", "pid": _wa_bridge_process.pid}
-
-def _wa_bridge_qr():
-    """Fetch the current QR SVG from the bridge."""
-    import urllib.request
-    try:
-        req = urllib.request.Request(f"{WA_BRIDGE_URL}/qr/svg")
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return {"svg": None, "status": "unavailable"}
-
-# ---------------------------------------------------------------------------
-# Telegram bridge subprocess management
-# ---------------------------------------------------------------------------
-
-def _start_tg_bridge():
-    """Start the Telegram bridge as a subprocess."""
-    global _tg_bridge_process
-    with _tg_bridge_lock:
-        if _tg_bridge_process and _tg_bridge_process.poll() is None:
-            return {"ok": True, "status": "already_running", "pid": _tg_bridge_process.pid}
-        bridge_script = Path(__file__).resolve().parent / "telegram_bridge.py"
-        if not bridge_script.exists():
-            return {"ok": False, "error": "telegram_bridge.py not found"}
-        try:
-            _tg_bridge_process = subprocess.Popen(
-                [sys.executable, str(bridge_script)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                env={**os.environ, "BUS_URL": f"http://localhost:{_server_port}"},
-            )
-            return {"ok": True, "status": "started", "pid": _tg_bridge_process.pid}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
-
-def _stop_tg_bridge():
-    """Stop the Telegram bridge subprocess."""
-    global _tg_bridge_process
-    with _tg_bridge_lock:
-        if not _tg_bridge_process or _tg_bridge_process.poll() is not None:
-            _tg_bridge_process = None
-            return {"ok": True, "status": "not_running"}
-        _tg_bridge_process.terminate()
-        try:
-            _tg_bridge_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            _tg_bridge_process.kill()
-        _tg_bridge_process = None
-        return {"ok": True, "status": "stopped"}
-
-def _tg_bridge_status():
-    """Check Telegram bridge status."""
-    running = _tg_bridge_process is not None and _tg_bridge_process.poll() is None
-    if not running:
-        return {"running": False, "status": "not_running"}
-    try:
-        req = urllib.request.Request(f"{TG_BRIDGE_URL}/status")
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            data["running"] = True
-            return data
-    except Exception:
-        return {"running": True, "status": "starting", "pid": _tg_bridge_process.pid}
 
 def _send_chat(db_path, agent_id, text):
     conn = bus.get_conn(db_path)
@@ -6570,15 +6351,6 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 "activated_at": info["activated_at"] if info else None,
             })
 
-        if path == "/api/wa/status":
-            return _json_response(self, _wa_bridge_status())
-
-        if path == "/api/tg/status":
-            return _json_response(self, _tg_bridge_status())
-
-        if path == "/api/wa/qr":
-            return _json_response(self, _wa_bridge_qr())
-
         m = re.match(r"^/api/skills/(\d+)$", path)
         if m:
             skills = bus.get_agent_skills(int(m.group(1)), db_path=self.db_path)
@@ -6815,24 +6587,6 @@ class CrewBusHandler(BaseHTTPRequestHandler):
                 return _json_response(self, {"error": str(e)}, 400)
             return _json_response(self, {"ok": True, "trust_score": score})
 
-        if path == "/api/burnout":
-            score = data.get("score")
-            if score is None:
-                return _json_response(self, {"error": "need score"}, 400)
-            score = int(score)
-            conn = bus.get_conn(self.db_path)
-            try:
-                human = conn.execute("SELECT id FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
-                if not human:
-                    return _json_response(self, {"error": "no human agent — load a config first"}, 500)
-            finally:
-                conn.close()
-            try:
-                bus.update_burnout_score(human["id"], score, db_path=self.db_path)
-            except ValueError as e:
-                return _json_response(self, {"error": str(e)}, 400)
-            return _json_response(self, {"ok": True, "burnout_score": score})
-
         m = re.match(r"^/api/quarantine/(\d+)$", path)
         if m:
             try:
@@ -6918,18 +6672,6 @@ class CrewBusHandler(BaseHTTPRequestHandler):
         if m:
             result = bus.mark_mailbox_read(int(m.group(2)), db_path=self.db_path)
             return _json_response(self, result)
-
-        if path == "/api/wa/start":
-            return _json_response(self, _start_wa_bridge())
-
-        if path == "/api/wa/stop":
-            return _json_response(self, _stop_wa_bridge())
-
-        if path == "/api/tg/start":
-            return _json_response(self, _start_tg_bridge())
-
-        if path == "/api/tg/stop":
-            return _json_response(self, _stop_tg_bridge())
 
         if path == "/api/guard/activate":
             key = data.get("key", "").strip()
@@ -8133,7 +7875,7 @@ def _ensure_guardian(db_path):
                     conn.execute(
                         "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, "
                         "parent_agent_id, trust_score, description) VALUES "
-                        "('Vault', 'vault', 'core_crew', 'console', ?, 5, ?)",
+                        "('Vault', 'vault', 'vault', 'console', ?, 5, ?)",
                         (boss["id"], VAULT_DESCRIPTION)
                     )
                     conn.commit()
@@ -8198,7 +7940,7 @@ def _ensure_guardian(db_path):
         # Vault — private journal and life-data agent
         conn.execute(
             "INSERT OR IGNORE INTO agents (name, agent_type, role, channel, parent_agent_id, "
-            "trust_score, description) VALUES ('Vault', 'vault', 'core_crew', 'console', ?, 5, ?)",
+            "trust_score, description) VALUES ('Vault', 'vault', 'vault', 'console', ?, 5, ?)",
             (boss_id, VAULT_DESCRIPTION)
         )
 
@@ -8487,7 +8229,7 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1",
     # Start the AI agent worker (Ollama-powered responses)
     agent_worker.start_worker(db_path=actual_db)
 
-    # Start the heartbeat scheduler (proactive briefings, burnout checks, dream cycle)
+    # Start the heartbeat scheduler (proactive briefings, dream cycle)
     global _heartbeat
     try:
         conn = bus.get_conn(actual_db)
@@ -8538,7 +8280,6 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1",
         if _heartbeat:
             _heartbeat.stop()
         agent_worker.stop_worker()
-        _stop_wa_bridge()
         server.shutdown()
     else:
         if open_browser:
@@ -8550,7 +8291,6 @@ def run_server(port=DEFAULT_PORT, db_path=None, config=None, host="127.0.0.1",
             if _heartbeat:
                 _heartbeat.stop()
             agent_worker.stop_worker()
-            _stop_wa_bridge()
             server.shutdown()
 
 if __name__ == "__main__":

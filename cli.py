@@ -316,17 +316,6 @@ def cmd_trust(args):
         sys.exit(1)
 
 
-def cmd_burnout(args):
-    """Update burnout score for a human."""
-    agent = _resolve_agent(args.human)
-    try:
-        bus.update_burnout_score(agent["id"], args.score)
-        print(f"Burnout score for {agent['name']} set to {args.score}/10")
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
 def cmd_briefing(args):
     """Generate a briefing for the human."""
     from right_hand import RightHand
@@ -936,12 +925,6 @@ def main():
     p.add_argument("human", help="Human agent name or ID")
     p.add_argument("score", type=int, help="Trust score (1-10)")
     p.set_defaults(func=cmd_trust)
-
-    # burnout
-    p = sub.add_parser("burnout", help="Set human burnout score")
-    p.add_argument("human", help="Human agent name or ID")
-    p.add_argument("score", type=int, help="Burnout score (1-10)")
-    p.set_defaults(func=cmd_burnout)
 
     # briefing
     p = sub.add_parser("briefing", help="Generate briefing for human")

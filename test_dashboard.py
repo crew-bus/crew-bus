@@ -5,7 +5,7 @@ Populates the database with:
   - Full agent hierarchy from stack config (ryan_stack.yaml or example_stack.yaml)
   - 25+ messages across agents spanning 3 days
   - 10+ Crew Boss decisions (mix of approved and overridden)
-  - Trust score and burnout score variations
+  - Trust score variations
   - At least one quarantined agent
   - Timing rules (quiet hours)
   - Knowledge store entries
@@ -164,19 +164,14 @@ def seed_audit(event_type, agent_id, details, days_ago=0, hours_ago=0):
 # Step 2: Set trust score and burnout score
 # ---------------------------------------------------------------------------
 
-print("[seed] Setting trust/burnout scores ...")
+print("[seed] Setting trust scores ...")
 
 # Set Crew Boss trust to 6 (assistant level)
 bus.update_trust_score(HUMAN, 6, db_path=DB_FILE)
 
-# Set burnout to 4 (moderate)
-bus.update_burnout_score(HUMAN, 4, db_path=DB_FILE)
-
 # Audit trail of score changes
 seed_audit("trust_change", CHIEF, {"old": 1, "new": 4, "reason": "Initial ramp-up"}, days_ago=3)
 seed_audit("trust_change", CHIEF, {"old": 4, "new": 6, "reason": "Solid first week"}, days_ago=1)
-seed_audit("burnout_change", HUMAN, {"old": 5, "new": 7, "reason": "Heavy sprint"}, days_ago=2)
-seed_audit("burnout_change", HUMAN, {"old": 7, "new": 4, "reason": "Weekend recovery"}, days_ago=0)
 
 
 # ---------------------------------------------------------------------------

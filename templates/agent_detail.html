@@ -62,11 +62,6 @@
             </p>
             {% endif %}
             {% if agent.agent_type == 'human' %}
-            <p><strong>Burnout Score:</strong>
-                <span class="{% if agent.burnout_score <= 3 %}burnout-low{% elif agent.burnout_score <= 6 %}burnout-mid{% else %}burnout-high{% endif %} fw-bold">
-                    {{ agent.burnout_score }}/10
-                </span>
-            </p>
             {% endif %}
             {% set counts = agent_msg_counts(agent.id) %}
             <p><strong>Sent (24h):</strong> {{ counts.sent }}</p>

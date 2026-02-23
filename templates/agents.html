@@ -20,7 +20,6 @@
         <div class="agent-name">{{ tree.human.name }}</div>
         <div class="agent-role">Principal</div>
         <div class="agent-stats">
-            Burnout: <span class="{% if tree.human.burnout_score <= 3 %}burnout-low{% elif tree.human.burnout_score <= 6 %}burnout-mid{% else %}burnout-high{% endif %}">{{ tree.human.burnout_score }}/10</span>
         </div>
     </a>
 </div>
@@ -50,9 +49,9 @@
 <div class="tree-connector">|</div>
 
 <!-- Crew Agents -->
-{% if tree.core_crew %}
+{% if tree.crew %}
 <div class="tree-level">
-    {% for agent in tree.core_crew %}
+    {% for agent in tree.crew %}
     <a href="/agent/{{ agent.id }}" class="agent-card {% if not agent.active %}inactive-card{% endif %}" style="text-decoration:none;color:inherit">
         <div class="flex items-center justify-between mb-1">
             <span class="dot {% if not agent.active %}dot-inactive{% elif agent.status == 'active' %}dot-active{% elif agent.status == 'quarantined' %}dot-quarantined{% else %}dot-terminated{% endif %}"></span>
