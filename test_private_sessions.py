@@ -85,7 +85,7 @@ check("setup.hierarchy", len(agents_loaded) >= 10,
 conn = bus.get_conn(TEST_DB)
 human = conn.execute("SELECT * FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
 crew_boss = conn.execute("SELECT * FROM agents WHERE agent_type='right_hand' LIMIT 1").fetchone()
-wellness = conn.execute("SELECT * FROM agents WHERE agent_type='worker' LIMIT 1").fetchone()
+test_agent = conn.execute("SELECT * FROM agents WHERE agent_type='worker' LIMIT 1").fetchone()
 guard = conn.execute("SELECT * FROM agents WHERE agent_type='security' LIMIT 1").fetchone()
 # Find a team manager and worker
 manager = conn.execute("SELECT * FROM agents WHERE agent_type='manager' LIMIT 1").fetchone()
@@ -95,7 +95,7 @@ conn.close()
 
 check("setup.human", human is not None, f"Human: {human['name'] if human else 'N/A'}")
 check("setup.crew_boss", crew_boss is not None, f"Crew Boss: {crew_boss['name'] if crew_boss else 'N/A'}")
-check("setup.worker", wellness is not None, f"Worker: {wellness['name'] if wellness else 'N/A'}")
+check("setup.worker", test_agent is not None, f"Worker: {test_agent['name'] if test_agent else 'N/A'}")
 
 # ---------------------------------------------------------------------------
 # Test 1: Start a private session
@@ -103,7 +103,7 @@ check("setup.worker", wellness is not None, f"Worker: {wellness['name'] if welln
 
 section("Test 1: Start a private session")
 
-session = bus.start_private_session(human["id"], wellness["id"], channel="web",
+session = bus.start_private_session(human["id"], test_agent["id"], channel="web",
                                      timeout_minutes=30, db_path=TEST_DB)
 check("start.ok", session.get("session_id") is not None,
       f"Session ID: {session.get('session_id')}")
@@ -118,7 +118,7 @@ session_id = session["session_id"]
 
 section("Test 2: Duplicate session returns existing")
 
-session2 = bus.start_private_session(human["id"], wellness["id"], channel="web",
+session2 = bus.start_private_session(human["id"], test_agent["id"], channel="web",
                                       timeout_minutes=30, db_path=TEST_DB)
 check("dup.same_id", session2.get("session_id") == session_id,
       f"Got {session2.get('session_id')}, expected {session_id}")
@@ -141,7 +141,7 @@ check("msg_h2a.id", msg_result.get("message_id") is not None,
 
 section("Test 4: Send private message (agent -> human)")
 
-msg_result2 = bus.send_private_message(session_id, wellness["id"],
+msg_result2 = bus.send_private_message(session_id, test_agent["id"],
                                         "Of course, I'm here to help. What's on your mind?",
                                         db_path=TEST_DB)
 check("msg_a2h.ok", msg_result2.get("ok") is True, f"Result: {msg_result2}")
@@ -171,11 +171,11 @@ public_msgs = conn.execute("""
     SELECT * FROM messages
     WHERE (from_agent_id=? OR to_agent_id=?)
     AND private_session_id IS NULL
-""", (wellness["id"], wellness["id"])).fetchall()
+""", (test_agent["id"], test_agent["id"])).fetchall()
 all_msgs = conn.execute("""
     SELECT * FROM messages
     WHERE (from_agent_id=? OR to_agent_id=?)
-""", (wellness["id"], wellness["id"])).fetchall()
+""", (test_agent["id"], test_agent["id"])).fetchall()
 conn.close()
 check("boss_cant_see.excluded", len(public_msgs) < len(all_msgs),
       f"Public: {len(public_msgs)}, All: {len(all_msgs)}")
@@ -254,10 +254,10 @@ check("cleanup.count", closed_count >= 1, f"Closed {closed_count} expired sessio
 
 section("Test 10: One active session per pair")
 
-# The original wellness session should still be active
-active_well = bus.get_active_private_session(human["id"], wellness["id"], db_path=TEST_DB)
+# The original test_agent session should still be active
+active_well = bus.get_active_private_session(human["id"], test_agent["id"], db_path=TEST_DB)
 check("one_per_pair.exists", active_well is not None,
-      f"Active wellness session: {active_well['id'] if active_well else None}")
+      f"Active test_agent session: {active_well['id'] if active_well else None}")
 check("one_per_pair.same_id", active_well["id"] == session_id,
       f"Got {active_well['id']}, expected {session_id}")
 
@@ -267,11 +267,11 @@ check("one_per_pair.same_id", active_well["id"] == session_id,
 
 section("Test 11: Routing override")
 
-# Normally wellness -> human is blocked (must go through Crew Boss).
+# Normally test_agent -> human is blocked (must go through Crew Boss).
 # With active session it should be allowed via send_message.
 try:
     route_msg = bus.send_message(
-        from_id=wellness["id"], to_id=human["id"],
+        from_id=test_agent["id"], to_id=human["id"],
         message_type="report", subject="Private routing test",
         body="This should work due to active private session",
         priority="normal", db_path=TEST_DB)
@@ -302,7 +302,7 @@ check("end.ended_by", ended["ended_by"] == "human", f"ended_by: {ended['ended_by
 check("end.msg_count", ended["message_count"] == 2, f"message_count: {ended['message_count']}")
 
 # Verify routing override no longer works
-active_check = bus.get_active_private_session(human["id"], wellness["id"], db_path=TEST_DB)
+active_check = bus.get_active_private_session(human["id"], test_agent["id"], db_path=TEST_DB)
 check("end.no_active", active_check is None, "No active session after end")
 
 # ---------------------------------------------------------------------------
@@ -316,7 +316,7 @@ conn = bus.get_conn(TEST_DB)
 priv_msgs = conn.execute("""
     SELECT * FROM messages WHERE private_session_id IS NOT NULL
     AND ((from_agent_id=? AND to_agent_id=?) OR (from_agent_id=? AND to_agent_id=?))
-""", (human["id"], wellness["id"], wellness["id"], human["id"])).fetchall()
+""", (human["id"], test_agent["id"], test_agent["id"], human["id"])).fetchall()
 conn.close()
 check("chat_history.count", len(priv_msgs) == 2,
       f"Found {len(priv_msgs)} private messages in chat history")
@@ -350,7 +350,7 @@ else:
 section("Test 15: Invalid agent rejected")
 
 # Try to send from an agent not in the session
-new_session = bus.start_private_session(human["id"], wellness["id"],
+new_session = bus.start_private_session(human["id"], test_agent["id"],
                                          channel="web", timeout_minutes=30, db_path=TEST_DB)
 bad_msg = bus.send_private_message(new_session["session_id"], guard["id"],
                                     "I shouldn't be able to send this", db_path=TEST_DB)
@@ -373,11 +373,11 @@ check("nosession.none", no_session is None, f"Result: {no_session}")
 
 section("Test 17: Message count increments")
 
-mc_session = bus.start_private_session(human["id"], wellness["id"],
+mc_session = bus.start_private_session(human["id"], test_agent["id"],
                                         channel="web", timeout_minutes=30, db_path=TEST_DB)
 mc_id = mc_session["session_id"]
 bus.send_private_message(mc_id, human["id"], "msg 1", db_path=TEST_DB)
-bus.send_private_message(mc_id, wellness["id"], "msg 2", db_path=TEST_DB)
+bus.send_private_message(mc_id, test_agent["id"], "msg 2", db_path=TEST_DB)
 bus.send_private_message(mc_id, human["id"], "msg 3", db_path=TEST_DB)
 
 conn = bus.get_conn(TEST_DB)

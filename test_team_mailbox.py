@@ -78,7 +78,7 @@ check("setup.hierarchy", len(agents_loaded) >= 10,
 conn = bus.get_conn(TEST_DB)
 human = conn.execute("SELECT * FROM agents WHERE agent_type='human' LIMIT 1").fetchone()
 crew_boss = conn.execute("SELECT * FROM agents WHERE agent_type='right_hand' LIMIT 1").fetchone()
-wellness = conn.execute("SELECT * FROM agents WHERE agent_type='vault' LIMIT 1").fetchone()
+vault = conn.execute("SELECT * FROM agents WHERE agent_type='vault' LIMIT 1").fetchone()
 manager = conn.execute("SELECT * FROM agents WHERE agent_type='manager' LIMIT 1").fetchone()
 worker = None
 if manager:
@@ -203,8 +203,8 @@ check("mgr_send.ok", mgr_msg.get("ok") is True, f"Result: {mgr_msg}")
 
 section("Test 7: Non-team agent rejected")
 
-# Core agent like wellness should be rejected
-bad_result = bus.send_to_team_mailbox(wellness["id"], "I'm not in a team",
+# Core agent like vault should be rejected
+bad_result = bus.send_to_team_mailbox(vault["id"], "I'm not in a team",
                                        "This shouldn't work",
                                        severity="info", db_path=TEST_DB)
 check("nonteam.rejected", bad_result.get("ok") is not True,

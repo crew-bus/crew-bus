@@ -741,7 +741,7 @@ class Heartbeat:
     DEFAULT_CHECKS = [
         {"type": "morning_briefing", "enabled": False, "hour": 8},
         {"type": "evening_summary", "enabled": False, "hour": 18},
-        {"type": "burnout_check", "enabled": False},
+        {"type": "energy_check", "enabled": False},
         {"type": "stale_messages", "enabled": True, "max_hours": 24},
         {"type": "relationship_nudge", "enabled": False},
         {"type": "dream_cycle", "enabled": False, "hour": 3},
@@ -830,7 +830,7 @@ class Heartbeat:
         if check_type == "evening_summary":
             return self._check_briefing(now, check, "evening")
 
-        if check_type == "burnout_check":
+        if check_type == "energy_check":
             return self._check_energy()
 
         if check_type == "stale_messages":

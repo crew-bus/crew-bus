@@ -1,4 +1,4 @@
-"""Tests for right_hand.py — RightHand decision engine, trust scoring, burnout, briefings."""
+"""Tests for right_hand.py — RightHand decision engine, trust scoring, energy, briefings."""
 
 import json
 import tempfile
@@ -288,11 +288,11 @@ def test_compile_invalid_type():
         assert "Unknown briefing type" in str(e)
 
 
-def test_morning_briefing_burnout_tone():
-    """Morning briefing adapts tone based on burnout score."""
+def test_morning_briefing_energy_tone():
+    """Morning briefing adapts tone based on energy score."""
     db = _fresh_db()
 
-    # Set high burnout
+    # Set low energy (high burnout_score in DB)
     conn = bus.get_conn(db)
     conn.execute("UPDATE agents SET burnout_score=8 WHERE id=1")
     conn.commit()
@@ -300,7 +300,7 @@ def test_morning_briefing_burnout_tone():
 
     rh = _make_rh(db)
     briefing = rh.compile_briefing("morning")
-    # High burnout uses lighter tone
+    # Low energy uses lighter tone
     assert "light" in briefing["body_plain"].lower() or "essential" in briefing["body_plain"].lower()
 
 
@@ -388,8 +388,8 @@ def test_reputation_overpromising():
     assert any("overpromising" in c.lower() for c in result["concerns"])
 
 
-def test_reputation_high_burnout():
-    """protect_reputation flags messages during high burnout."""
+def test_reputation_low_energy():
+    """protect_reputation flags messages during low energy."""
     db = _fresh_db()
     conn = bus.get_conn(db)
     conn.execute("UPDATE agents SET burnout_score=8 WHERE id=1")
@@ -420,8 +420,8 @@ def test_assess_human_state():
     assert "decisions_made_today" in state
 
 
-def test_assess_human_state_high_burnout():
-    """assess_human_state recommends emergency_only load at high burnout."""
+def test_assess_human_state_low_energy():
+    """assess_human_state recommends emergency_only load at low energy."""
     db = _fresh_db()
     # assess_human_state reads from human_state table via bus.get_human_state()
     rh = _make_rh(db)
@@ -438,8 +438,8 @@ def test_assess_human_state_high_burnout():
     assert state["recommended_load"] == "emergency_only"
 
 
-def test_assess_human_state_low_burnout():
-    """assess_human_state recommends full load at low burnout."""
+def test_assess_human_state_high_energy():
+    """assess_human_state recommends full load at high energy."""
     db = _fresh_db()
     rh = _make_rh(db)
     # Trigger human_state creation first
@@ -487,17 +487,17 @@ def test_heartbeat_default_checks():
     check_types = [c["type"] for c in checks]
     assert "morning_briefing" in check_types
     assert "evening_summary" in check_types
-    assert "burnout_check" in check_types
+    assert "energy_check" in check_types
     assert "integrity_audit" in check_types
 
 
-def test_heartbeat_burnout_check():
-    """Heartbeat burnout check triggers at high burnout."""
+def test_heartbeat_energy_check():
+    """Heartbeat energy check triggers at low energy."""
     db = _fresh_db()
     rh = _make_rh(db)
     # Trigger human_state creation
     rh.assess_human_state()
-    # Set high burnout in human_state table
+    # Set low energy in human_state table
     conn = bus.get_conn(db)
     conn.execute("UPDATE human_state SET burnout_score=8 WHERE human_id=1")
     conn.commit()
@@ -510,8 +510,8 @@ def test_heartbeat_burnout_check():
     assert result["type"] == "low_energy_alert"
 
 
-def test_heartbeat_burnout_check_ok():
-    """Heartbeat burnout check returns None when burnout is low."""
+def test_heartbeat_energy_check_ok():
+    """Heartbeat energy check returns None when energy is high."""
     db = _fresh_db()
     rh = _make_rh(db)
     hb = right_hand.Heartbeat(rh, db_path=db)

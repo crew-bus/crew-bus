@@ -161,7 +161,7 @@ def seed_audit(event_type, agent_id, details, days_ago=0, hours_ago=0):
 
 
 # ---------------------------------------------------------------------------
-# Step 2: Set trust score and burnout score
+# Step 2: Set trust score and energy score
 # ---------------------------------------------------------------------------
 
 print("[seed] Setting trust scores ...")
@@ -247,7 +247,7 @@ msg_count += 1
 
 m5 = seed_message(CHIEF, HUMAN, "report", "Morning briefing - Day summary",
     "3 items need your attention today: strategy review, P&L sign-off, and "
-    "Acme NDA revisions. Quant flagged elevated burnout - I blocked your Friday PM.",
+    "Acme NDA revisions. Quant flagged low energy - I blocked your Friday PM.",
     "normal", "read", days_ago=3)
 msg_count += 1
 
@@ -301,9 +301,9 @@ m13 = seed_message(MEMORY, CHIEF, "report", "Knowledge base growth report",
     "low", "read", days_ago=2, hours_ago=1)
 msg_count += 1
 
-m14 = seed_message(QUANT, CHIEF, "report", "Weekly wellness summary",
+m14 = seed_message(QUANT, CHIEF, "report", "Weekly energy summary",
     "Average sleep: 6.8 hrs (target: 7.5). Exercise: 3 sessions. "
-    "Stress markers: moderate. Overall wellness score: 68/100.",
+    "Stress markers: moderate. Overall energy score: 68/100.",
     "normal", "delivered", days_ago=2)
 msg_count += 1
 
@@ -412,7 +412,7 @@ d1 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Competitor launched early", "priority": "critical", "from": "V4"},
     "Deliver immediately - critical business intelligence",
     "Critical priority from strategy agent. Competitor launch impacts our timeline. "
-    "Human needs to know immediately regardless of burnout level.",
+    "Human needs to know immediately regardless of energy level.",
     human_override=0, days_ago=1, hours_ago=10)
 dec_count += 1
 
@@ -443,11 +443,11 @@ d4 = seed_decision(CHIEF, HUMAN, "handle",
     days_ago=2, hours_ago=1)
 dec_count += 1
 
-# Decision 5: Queued non-urgent during high burnout (approved)
+# Decision 5: Queued non-urgent during low energy (approved)
 d5 = seed_decision(CHIEF, HUMAN, "queue",
-    {"message_subject": "Weekly wellness summary", "priority": "normal", "from": "Quant"},
-    "Queue - burnout score elevated, non-urgent",
-    "Burnout score was 7 at time of message. Wellness summary is informational. "
+    {"message_subject": "Weekly energy summary", "priority": "normal", "from": "Quant"},
+    "Queue - energy low, non-urgent",
+    "Energy score was 3 at time of message. Energy summary is informational. "
     "Will deliver in evening briefing when human has more bandwidth.",
     human_override=0, days_ago=2)
 dec_count += 1
@@ -494,7 +494,7 @@ dec_count += 1
 d10 = seed_decision(CHIEF, HUMAN, "deliver",
     {"message_subject": "Morning briefing", "priority": "normal", "from": "Crew-Boss"},
     "Deliver - daily briefing for human",
-    "Compiled overnight items, today's priorities, and wellness update. "
+    "Compiled overnight items, today's priorities, and energy update. "
     "3 action items identified.",
     human_override=0, hours_ago=3)
 dec_count += 1
@@ -550,7 +550,7 @@ k_count = 0
 
 seed_knowledge(CHIEF, "decision",
     "Competitor response protocol",
-    {"rule": "Deliver competitor alerts immediately regardless of burnout",
+    {"rule": "Deliver competitor alerts immediately regardless of energy level",
      "learned_from": "d1", "confidence": 0.95},
     tags="competitor,strategy,urgent", days_ago=1)
 k_count += 1
@@ -600,11 +600,11 @@ seed_knowledge(CHIEF, "lesson",
 k_count += 1
 
 seed_knowledge(CHIEF, "decision",
-    "Burnout-based message queueing",
-    {"rule": "When burnout > 6, queue all normal/low priority messages",
-     "exceptions": ["financial alerts > $10K", "competitor intelligence", "legal deadlines"],
+    "Energy-based message queueing",
+    {"rule": "When energy < 4, queue all normal/low priority messages",
+     "exceptions": ["urgent alerts > $10K", "competitor intelligence", "deadlines"],
      "learned_from": "multiple decisions"},
-    tags="burnout,queueing,rules", days_ago=2)
+    tags="energy,queueing,rules", days_ago=2)
 k_count += 1
 
 print(f"  Created {k_count} knowledge entries")
@@ -660,7 +660,7 @@ knowledge_total = conn.execute("SELECT COUNT(*) FROM knowledge_store").fetchone(
 audit_total = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
 timing_total = conn.execute("SELECT COUNT(*) FROM timing_rules").fetchone()[0]
 
-# Get trust from Crew Boss agent, burnout from human agent
+# Get trust from Crew Boss agent, energy from human agent
 human_row = conn.execute("SELECT burnout_score FROM agents WHERE id=?", (HUMAN,)).fetchone()
 rh_row = conn.execute("SELECT trust_score FROM agents WHERE id=?", (CHIEF,)).fetchone()
 
@@ -673,7 +673,7 @@ print(f"  Knowledge:   {knowledge_total} entries")
 print(f"  Audit log:   {audit_total} entries")
 print(f"  Timing rules: {timing_total}")
 print(f"  Trust score:  {rh_row['trust_score']}/10 (on Crew Boss)")
-print(f"  Burnout:      {human_row['burnout_score']}/10 (on Human)")
+print(f"  Energy:       {human_row['burnout_score']}/10 (on Human)")
 print()
 print("=" * 50)
 print("  Dashboard ready at http://localhost:8420")

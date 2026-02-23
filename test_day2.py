@@ -6,7 +6,7 @@ Simulates a complete day of operations for Ryan Johnson:
   Step 2:  Set energy level to low (long day yesterday)
   Step 3:  Quant sends alert to Chief
   Step 4:  V4 submits business idea to Chief
-  Step 5:  Chief filters: burnout is high, idea not urgent, queue for tomorrow
+  Step 5:  Chief filters: energy is low, idea not urgent, queue for tomorrow
   Step 6:  RJC-Manager escalates: client emergency (pressure tank leaking)
   Step 7:  Chief assesses: urgent + client emergency = deliver NOW
   Step 8:  Lead-Tracker tries to message Ryan directly
@@ -171,7 +171,7 @@ results["step_4"] = f"{passed - s4_start}/1"
 
 
 # ============================================================
-# Step 5: Chief filters idea (burnout high, not urgent, queue)
+# Step 5: Chief filters idea (energy low, not urgent, queue)
 # ============================================================
 
 section("Step 5: Chief filters V4 idea -> queue for tomorrow")
@@ -182,8 +182,8 @@ rh = RightHand(chief["id"], ryan["id"], db_path=TEST_DB)
 filter_result = rh.filter_idea(idea_msg["message_id"])
 check("5.1", filter_result["action"] == "queue",
       f"Idea action: {filter_result['action']}")
-check("5.2", "burnout" in filter_result["reason"].lower(),
-      f"Reason mentions burnout: {filter_result['reason'][:80]}")
+check("5.2", "energy" in filter_result["reason"].lower() or "burnout" in filter_result["reason"].lower(),
+      f"Reason mentions energy: {filter_result['reason'][:80]}")
 
 # Log the decision
 d1 = rh._log("filter", {"subject": "Fire-Ready Property Certification", "from": "V4"}, "queue")
@@ -214,7 +214,7 @@ results["step_6"] = f"{passed - s6_start}/1"
 
 
 # ============================================================
-# Step 7: Chief delivers emergency to Ryan (despite burnout)
+# Step 7: Chief delivers emergency to Ryan (despite low energy)
 # ============================================================
 
 section("Step 7: Chief delivers emergency to Ryan NOW")
@@ -234,7 +234,7 @@ check("7.1", esc_result["action"] == "deliver_to_human",
 # Verify delivery check passes for critical
 delivery = bus.should_deliver_now(ryan["id"], "critical", TEST_DB)
 check("7.2", delivery["deliver"] is True,
-      f"Critical delivers despite burnout: {delivery['deliver']}")
+      f"Critical delivers despite low energy: {delivery['deliver']}")
 
 results["step_7"] = f"{passed - s7_start}/2"
 
@@ -317,7 +317,7 @@ s11_start = passed
 
 delivery = bus.should_deliver_now(ryan["id"], "normal", TEST_DB)
 check("11.1", delivery["deliver"] is False,
-      f"GST not delivered (burnout=7): deliver={delivery['deliver']}")
+      f"GST not delivered (low energy): deliver={delivery['deliver']}")
 
 # Log the queue decision
 d2 = rh._log("queue", {"subject": "GST filing due in 5 days", "from": "CFO"}, "queue")

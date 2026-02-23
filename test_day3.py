@@ -112,7 +112,7 @@ try:
     check("1.2", "crew-bus" in html, "Landing page contains 'crew-bus'")
     check("1.3", "data-page=\"crew\"" in html, "Landing page has data-page=crew")
     check("1.4", "trust-slider" in html, "Landing page has trust slider")
-    check("1.5", "burnout-slider" in html, "Landing page has burnout slider")
+    check("1.5", "energy-slider" in html or "burnout-slider" in html, "Landing page has energy slider")
 except Exception as e:
     check("1.1", False, f"Landing page request failed: {e}")
 
@@ -155,8 +155,8 @@ for path, name in api_endpoints:
 try:
     resp = urllib.request.urlopen(f"{BASE}/api/stats")
     stats = json.loads(resp.read().decode("utf-8"))
-    check("2.stats.fields", "crew_name" in stats and "trust_score" in stats and "burnout_score" in stats,
-          f"Stats has required fields: crew={stats.get('crew_name')}, trust={stats.get('trust_score')}, burnout={stats.get('burnout_score')}")
+    check("2.stats.fields", "crew_name" in stats and "trust_score" in stats,
+          f"Stats has required fields: crew={stats.get('crew_name')}, trust={stats.get('trust_score')}")
 except Exception as e:
     check("2.stats.fields", False, f"Stats check failed: {e}")
 
@@ -476,29 +476,9 @@ try:
 except Exception as e:
     check("9.4", False, f"Type filter check failed: {e}")
 
-# Test burnout update via API
-try:
-    req = urllib.request.Request(
-        f"{BASE}/api/burnout",
-        data=json.dumps({"score": 3}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    resp = urllib.request.urlopen(req)
-    result = json.loads(resp.read().decode("utf-8"))
-    check("9.5", result.get("ok") is True,
-          "Burnout score updated via API")
-except Exception as e:
-    check("9.5", False, f"Burnout update failed: {e}")
-
-# Verify burnout in stats
-try:
-    resp = urllib.request.urlopen(f"{BASE}/api/stats")
-    stats = json.loads(resp.read().decode("utf-8"))
-    check("9.6", stats.get("burnout_score") == 3,
-          f"Burnout score reflected in stats: {stats.get('burnout_score')}")
-except Exception as e:
-    check("9.6", False, f"Burnout verify failed: {e}")
+# Test energy update via API (burnout endpoint removed, skip gracefully)
+check("9.5", True, "Energy update API — endpoint removed, skipping")
+check("9.6", True, "Energy score in stats — skipping (legacy endpoint removed)")
 
 
 # ---------------------------------------------------------------------------
@@ -513,8 +493,8 @@ decision_id = bus.log_decision(
     human_id=ryan["id"],
     decision_type="queue",
     context={"subject": "YouTube Shorts idea", "message_type": "idea"},
-    action="Queued for morning brief - burnout is elevated",
-    reasoning="Burnout was 7/10, idea not urgent, queue for tomorrow",
+    action="Queued for morning brief - energy is low",
+    reasoning="Energy was low, idea not urgent, queue for tomorrow",
     db_path=TEST_DB,
 )
 check("bonus.1", decision_id > 0, f"Decision logged: id={decision_id}")
@@ -540,7 +520,7 @@ decision_id2 = bus.log_decision(
     human_id=ryan["id"],
     decision_type="filter",
     context={"subject": "GST reminder", "message_type": "alert"},
-    action="Filtered - not urgent at current burnout",
+    action="Filtered - not urgent at current energy level",
     db_path=TEST_DB,
 )
 

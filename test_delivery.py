@@ -320,7 +320,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email returns subject, plain, html, priority."""
         briefing = {
             "briefing_type": "morning",
-            "burnout": 3,
+            "energy": 3,
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Morning Brief",
@@ -337,11 +337,11 @@ class TestFormatBriefingEmail:
         assert "Alice" in result["plain"]
         assert "Chief" in result["from_name"]
 
-    def test_high_burnout_tone(self):
-        """format_briefing_email uses gentle tone for high burnout."""
+    def test_low_energy_tone(self):
+        """format_briefing_email uses gentle tone for low energy."""
         briefing = {
             "briefing_type": "morning",
-            "burnout": 8,
+            "energy": 8,
             "human_name": "Bob",
             "rh_name": "Chief",
             "subject": "Brief",
@@ -357,7 +357,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email includes priority items when present."""
         briefing = {
             "briefing_type": "morning",
-            "burnout": 3,
+            "energy": 3,
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Brief",
@@ -378,7 +378,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email generates HTML with proper structure."""
         briefing = {
             "briefing_type": "morning",
-            "burnout": 5,
+            "energy": 5,
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Brief",
@@ -395,7 +395,7 @@ class TestFormatBriefingEmail:
         """format_briefing_email handles quiet evening with no items."""
         briefing = {
             "briefing_type": "evening",
-            "burnout": 3,
+            "energy": 3,
             "human_name": "Alice",
             "rh_name": "Chief",
             "subject": "Evening",
