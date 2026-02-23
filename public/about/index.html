@@ -3,9 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>About — crew-bus</title>
-    <meta name="description" content="crew-bus is free, open-source infrastructure for organizing AI agents. The soft takeoff philosophy: one human at the top, always.">
+    <title>About — Crew Bus</title>
+    <meta name="description" content="Crew Bus is a native Mac app that gives you a personal AI crew — Crew Boss, Guardian, and Vault. Open source, private, local-first.">
     <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
     <link rel="stylesheet" href="/css/site.css">
     <link rel="stylesheet" href="/css/legal.css">
 </head>
@@ -16,11 +18,10 @@
         <a href="/" class="nav-brand"><img src="/img/logo-192.png" alt="Crew Bus" class="nav-logo-img"> crew-bus</a>
         <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
         <div class="nav-links" id="navLinks">
-            <a href="/#features">Features</a>
-            <a href="/installer">Installers</a>
-            <a href="/jobs">Job Board</a>
-            <a href="/#pricing">Pricing</a>
-            <a href="/install">Install</a>
+            <a href="/#why-different">Why It's Different</a>
+            <a href="/#your-crew">Your Crew</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/install">Download</a>
             <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
         </div>
     </div>
@@ -28,43 +29,47 @@
 
 <main class="legal-page">
     <div class="container container-narrow">
-        <h1>About crew-bus</h1>
-        <p class="legal-updated">The soft takeoff philosophy</p>
+        <h1>About Crew Bus</h1>
+        <p class="legal-updated">Your agents. Your hardware. Your rules.</p>
 
         <h2>The Problem</h2>
-        <p>AI agents are multiplying. Every tool, every platform, every SaaS product is adding agents. But nobody built the infrastructure to organize them.</p>
-        <p>Without structure, agents compete for your attention. Without hierarchy, they bypass each other. Without awareness of your energy, they burn you out. The agent revolution shouldn't come at the cost of the human running the show.</p>
+        <p>AI agents are multiplying. Every tool, every platform, every SaaS product is adding agents. But they all send your data to someone else's servers and charge you monthly for the privilege.</p>
+        <p>Without structure, agents compete for your attention. Without a security layer, they can't be trusted. Without running on your own machine, your private life isn't private.</p>
 
         <h2>The Solution</h2>
-        <p>crew-bus is a message bus — free, open-source, local-first — that organizes your AI agents into a crew with a chain of command.</p>
-        <p>One human at the top. Always. A Crew Boss (AI Chief of Staff) sits between you and every other agent. It filters noise, prioritizes what matters, and learns your preferences. Trust slider from 1 (it asks about everything) to 10 (it handles almost everything autonomously).</p>
+        <p>Crew Bus is a native Mac app — built with SwiftUI, not a browser wrapper — that runs a coordinated AI crew on your own hardware. Three agents working together in a triangle:</p>
+        <ul>
+            <li><strong>Crew Boss</strong> — your AI right-hand. Handles 80% of everything. Sits between you and every other agent, filtering noise and prioritizing what matters.</li>
+            <li><strong>Guardian</strong> — the crew's immune system. Controls web access, vets every skill for safety, monitors runtime health, and auto-quarantines anything suspicious.</li>
+            <li><strong>Vault</strong> — your private journal. Remembers everything — moods, goals, finances, relationships, dreams. Never nags. Only speaks when spoken to.</li>
+        </ul>
 
         <h2>The Soft Takeoff</h2>
         <p>We believe in soft takeoff — not the sci-fi kind. The kind where humans gradually delegate more to AI, at their own pace, with guardrails they control.</p>
         <ul>
-            <li><strong>Trust is earned, not assumed.</strong> Your Crew Boss starts at trust level 1 and earns its way up through decisions you approve.</li>
-            <li><strong>Burnout is real.</strong> The system tracks your energy and queues non-urgent messages when you're running hot.</li>
-            <li><strong>Privacy is non-negotiable.</strong> Private sessions are logged as events, never content. Your data stays on your machine.</li>
-            <li><strong>The chain of command is enforced.</strong> No agent bypasses the hierarchy unless you explicitly allow it.</li>
+            <li><strong>Trust is earned, not assumed.</strong> Your Crew Boss starts cautious and learns your preferences over time.</li>
+            <li><strong>Security is built in from day one.</strong> Guardian controls all external access and monitors every installed skill in real time.</li>
+            <li><strong>Privacy is non-negotiable.</strong> Everything runs on your machine. No cloud. No telemetry. No data leaving your network.</li>
+            <li><strong>One human at the top, always.</strong> You're in charge. The crew works for you.</li>
         </ul>
 
-        <h2>Free Infrastructure</h2>
-        <p>The core bus — message routing, hierarchy enforcement, trust-based autonomy, burnout awareness, quiet hours, multi-channel delivery, briefings, private sessions, team mailbox, dashboard, CLI — is free forever. MIT License. No cloud required.</p>
-        <p>The Security Guard module ($29 one-time) adds anomaly detection and threat monitoring. Installer permits ($25 each, first free) let verified professionals sell their services on the marketplace.</p>
+        <h2>The App</h2>
+        <p>Crew Bus is a real Mac app — native SwiftUI, code-signed and notarized by Apple, with auto-updates via Sparkle. No browser windows, no Electron, no web views. Just download the DMG, drag to Applications, and launch.</p>
+        <p>The dashboard shows your crew in a triangle — Boss on top, Guardian and Vault below. Chat with any agent directly. Spin up task-specific teams. Monitor everything from one place.</p>
+
+        <h2>Free & Open Source</h2>
+        <p>The core app is free forever. MIT License. The $29 lifetime Guardian Activation unlocks the Skill Store — 20 curated skills, web search for every agent, runtime skill monitoring with health scores and auto-quarantine.</p>
+        <p>No subscriptions. No per-token charges. No surprise bills.</p>
 
         <h2>Built for Everyone</h2>
-        <p>The hierarchy pattern is universal. An individual running 5 personal AI agents uses the same architecture as an enterprise with 50 agents across departments. Only the YAML config changes.</p>
-        <p>If you can edit a YAML file, you can run a crew. If you can't, find an installer.</p>
-
-        <h2>Open Source</h2>
-        <p>crew-bus is MIT licensed. Fork it. Modify it. Run it on your own hardware. No telemetry. No cloud accounts. No vendor lock-in.</p>
+        <p>Kids, teens, moms, dads, families, artists, hobbyists, small businesses, startups, ex-coders. Every human gets their own local Crew Bus — private, sovereign.</p>
         <p><a href="https://github.com/crew-bus/crew-bus">github.com/crew-bus/crew-bus</a></p>
     </div>
 </main>
 
 <footer class="footer">
     <div class="container">
-        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License. Built for humans who run AI crews.</p></div>
+        <div class="footer-bottom"><p>&copy; 2025-2026 Crew Bus. MIT License. One human at the top, always.</p></div>
     </div>
 </footer>
 

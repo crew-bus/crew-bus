@@ -3,9 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FAQ — crew-bus</title>
-    <meta name="description" content="Frequently asked questions about crew-bus. How it works, pricing, security, privacy, and marketplace.">
+    <title>FAQ — Crew Bus</title>
+    <meta name="description" content="Frequently asked questions about Crew Bus. How it works, pricing, security, privacy, and the native Mac app.">
     <link rel="icon" type="image/svg+xml" href="/img/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
     <link rel="stylesheet" href="/css/site.css">
     <link rel="stylesheet" href="/css/legal.css">
 </head>
@@ -16,11 +18,10 @@
         <a href="/" class="nav-brand"><img src="/img/logo-192.png" alt="Crew Bus" class="nav-logo-img"> crew-bus</a>
         <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
         <div class="nav-links" id="navLinks">
-            <a href="/#features">Features</a>
-            <a href="/installer">Installers</a>
-            <a href="/jobs">Job Board</a>
-            <a href="/#pricing">Pricing</a>
-            <a href="/install">Install</a>
+            <a href="/#why-different">Why It's Different</a>
+            <a href="/#your-crew">Your Crew</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/install">Download</a>
             <a href="https://github.com/crew-bus/crew-bus" class="btn btn-sm btn-outline">GitHub</a>
         </div>
     </div>
@@ -33,105 +34,98 @@
         <h2>General</h2>
 
         <details open>
-            <summary>What is crew-bus?</summary>
-            <p>crew-bus is a free, open-source message bus that organizes your AI agents into a crew with a chain of command. It puts one human at the top with an AI Chief of Staff (Crew Boss) managing all other agents.</p>
+            <summary>What is Crew Bus?</summary>
+            <p>Crew Bus is a native Mac app that gives you a personal AI crew — three agents working together on your own hardware. Crew Boss handles 80% of everything, Guardian keeps you safe, and Vault remembers your whole life privately. Free, open source, no cloud.</p>
         </details>
 
         <details>
-            <summary>How is crew-bus different from other agent frameworks?</summary>
-            <p>Most agent frameworks focus on agent-to-agent communication. crew-bus focuses on <strong>human-agent</strong> communication. The hierarchy is enforced — agents can't bypass the chain of command. Burnout awareness, quiet hours, and trust-based autonomy are built into the core, not bolted on.</p>
+            <summary>How is Crew Bus different from other agent frameworks?</summary>
+            <p>Most agent frameworks are developer tools that require hours of setup and send your data through the cloud. Crew Bus is a real Mac app you download and launch in minutes. It comes with a built-in security agent (Guardian), a private journal agent (Vault), and a coordinator (Crew Boss) — all running locally. No other framework ships with an immune system.</p>
         </details>
 
         <details>
             <summary>What agents come built-in?</summary>
-            <p>Five core agents: <strong>Crew Boss</strong> (AI Chief of Staff), <strong>Guard</strong> (Security), <strong>Wellness</strong> (Burnout monitoring), <strong>Ideas</strong> (Strategy), and <strong>Wallet</strong> (Financial). You can add unlimited agents and departments via YAML config.</p>
+            <p>Three core agents: <strong>Crew Boss</strong> (your AI right-hand), <strong>Guardian</strong> (security and web access control), and <strong>Vault</strong> (private journal and life-data). You can also spin up task-specific teams with additional agents.</p>
         </details>
 
         <details>
             <summary>Do I need cloud accounts or API keys?</summary>
-            <p>No. crew-bus runs entirely on your machine. SQLite database, no cloud dependency. The only external calls are optional delivery channels (Telegram, email) and Stripe for payments.</p>
+            <p>No. Crew Bus runs entirely on your machine. The only external calls are to your chosen LLM provider (for AI responses) and optionally to Stripe (for Guardian Activation payment). Your data never leaves your machine.</p>
         </details>
 
-        <h2>Trust & Autonomy</h2>
+        <h2>The App</h2>
 
         <details>
-            <summary>How does the trust system work?</summary>
-            <p>Trust is a score from 1-10 that you set via slider. At trust 1, the Crew Boss asks you about everything. At trust 10, it handles most decisions autonomously and only escalates critical or unprecedented situations. The Crew Boss earns trust by making good decisions — you approve or override, and it learns.</p>
+            <summary>What kind of app is this?</summary>
+            <p>A native SwiftUI Mac app — not a web page in a wrapper. No browser windows, no Electron, no web views. Code-signed and notarized by Apple. Auto-updates via Sparkle.</p>
         </details>
 
         <details>
-            <summary>Can agents override my decisions?</summary>
-            <p>No. The hierarchy is enforced at the routing level. No agent can bypass the chain of command unless you explicitly allow it (via escalation safety bypass for emergency situations). You are always the final authority.</p>
+            <summary>What are the system requirements?</summary>
+            <p>macOS 14.0 (Sonoma) or later. Apple Silicon or Intel Mac. 4 GB+ RAM (8 GB recommended). About 500 MB disk space.</p>
+        </details>
+
+        <details>
+            <summary>Is there a Windows or Linux version?</summary>
+            <p>Not yet. Crew Bus is macOS-only right now. Windows and Linux are on the roadmap.</p>
+        </details>
+
+        <details>
+            <summary>How do I install it?</summary>
+            <p>Download the DMG from <a href="/install">crew-bus.dev/install</a>, drag Crew Bus to Applications, and launch. Three steps, five minutes.</p>
         </details>
 
         <h2>Security & Privacy</h2>
 
         <details>
-            <summary>What does the Security Guard module do?</summary>
-            <p>The Guard scans agent behavior for anomalies — unusual message volume, routing violations, mutiny attempts, timing irregularities. It monitors six threat domains (digital, financial, reputation, legal, physical, mutiny) and automatically escalates to the Crew Boss.</p>
+            <summary>What does Guardian do?</summary>
+            <p>Guardian is your crew's immune system. It controls all web access, vets every skill before installation, monitors installed skills in real time with health scores (0-100), auto-quarantines anything that degrades, and provides a full audit trail. It also scans for prompt injection, data exfiltration, and jailbreak attempts.</p>
         </details>
 
         <details>
             <summary>Are private sessions really private?</summary>
-            <p>Yes. When you start a private session with an agent, the content is never logged. The Crew Boss logs the occurrence (that a session happened) but never sees the content. This is enforced at the database level.</p>
+            <p>Yes. When you talk to Vault, the content stays between you and Vault. No other agent sees it. Everything is stored locally in SQLite on your machine.</p>
         </details>
 
         <details>
             <summary>Where is my data stored?</summary>
-            <p>Locally. SQLite file on your machine. No telemetry. No cloud sync. No data leaves your machine unless you explicitly configure external delivery channels.</p>
+            <p>Locally. SQLite database on your Mac. No telemetry. No cloud sync. No data leaves your machine unless you explicitly tell it to (e.g., web search via Guardian).</p>
+        </details>
+
+        <h2>Pricing</h2>
+
+        <details>
+            <summary>Is the core really free forever?</summary>
+            <p>Yes. MIT License. The full native Mac app with all three agents, the dashboard, chat, teams, channels, and auto-updates — free forever. No trial periods, no feature gates, no usage limits.</p>
+        </details>
+
+        <details>
+            <summary>What does the $29 Guardian Activation unlock?</summary>
+            <p>Web search for every agent (powered by DuckDuckGo, no API key needed). The Skill Store with 20 curated skills across 10 categories. Runtime skill monitoring with health scores, error tracking, and auto-quarantine. One payment, lifetime key, never expires.</p>
+        </details>
+
+        <details>
+            <summary>Are there subscriptions?</summary>
+            <p>No. $29 once, forever. No recurring charges. No per-token fees. No surprise bills.</p>
         </details>
 
         <h2>Installer Marketplace</h2>
 
         <details>
             <summary>What is the installer marketplace?</summary>
-            <p>It connects people who want crew-bus set up with verified professionals who do the setup. Installers are KYC-verified, rated by the community, and searchable by postal code.</p>
-        </details>
-
-        <details>
-            <summary>How does KYC verification work?</summary>
-            <p>Installers upload a government ID. The photo is SHA-256 hashed on the client side — the raw image never leaves the device and is never stored. Only the hash is used for verification.</p>
-        </details>
-
-        <details>
-            <summary>What does an installer permit include?</summary>
-            <p>Marketplace listing, job board access, video meet & greet capability, community reviews, and 6 months of free Guardian key messaging. First permit is free. Additional permits are $25 each.</p>
-        </details>
-
-        <h2>Pricing</h2>
-
-        <details>
-            <summary>Is the core really free?</summary>
-            <p>Yes. MIT License. Free forever. No trial periods, no feature gates, no usage limits. The full message bus and all core features.</p>
-        </details>
-
-        <details>
-            <summary>Are there subscriptions?</summary>
-            <p>No. Guard activation is a one-time $29 payment. Installer permits are $25 each (first free). No recurring charges.</p>
-        </details>
-
-        <h2>Technical</h2>
-
-        <details>
-            <summary>What are the system requirements?</summary>
-            <p>Python 3.9+. No other dependencies for the core. SQLite is built into Python. The dashboard runs on port 8080. Works on Linux, macOS, and Windows.</p>
-        </details>
-
-        <details>
-            <summary>Can I deploy it on a server?</summary>
-            <p>Yes. We provide Nginx configs, systemd service files, and a one-command setup script for Hetzner. Any Linux server works. See the <code>deploy/</code> directory in the repo.</p>
+            <p>It connects people who want Crew Bus set up with verified professionals who do the setup — remotely or in person. Installers are verified, rated by the community, and searchable by location.</p>
         </details>
 
         <details>
             <summary>Can I use my own LLM/AI provider?</summary>
-            <p>crew-bus is the message bus, not the AI. It coordinates agents — you bring your own AI. Agents can use any LLM, API, or local model. The bus just routes messages between them and you.</p>
+            <p>Yes. Crew Bus supports multiple LLM providers including Kimi, Claude, OpenAI, Groq, Gemini, and Ollama (fully local). You can pick a different model for each agent.</p>
         </details>
     </div>
 </main>
 
 <footer class="footer">
     <div class="container">
-        <div class="footer-bottom"><p>&copy; 2025 crew-bus. MIT License.</p></div>
+        <div class="footer-bottom"><p>&copy; 2025-2026 Crew Bus. MIT License. One human at the top, always.</p></div>
     </div>
 </footer>
 

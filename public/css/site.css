@@ -1309,7 +1309,7 @@ body::after {
 
 .pricing-featured {
     border-color: var(--highlight);
-    box-shadow: 0 0 20px rgba(233, 69, 96, 0.15);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
 }
 
 .pricing-badge {
