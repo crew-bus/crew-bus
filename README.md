@@ -34,7 +34,7 @@ Setting up a team of AI agents today is painful. You download a framework, wrest
 Crew Bus takes a different approach:
 
 - **Native Mac app.** A real SwiftUI desktop app — not a web page in a wrapper.
-- **Runs on your Mac.** Your machine, your data. Nothing leaves your network unless you tell it to.
+- **Runs on your Mac.** Native Mac app, your data. Nothing leaves your Mac unless you tell it to.
 - **Works out of the box.** Three agents in a triangle — Crew Boss, Guardian, Vault — ready to go in minutes, not hours.
 - **Built-in security from day one.** The Guardian agent controls all external access, vets every skill before install, and monitors everything in real time. No other agent framework ships with an immune system.
 - **Auto-updates via Sparkle.** The app checks for updates automatically — every 2 hours during your first 14 days for rapid bug fixes, then every 6 hours after that.
@@ -138,7 +138,7 @@ The Mac app connects to this backend automatically on launch.
 | | **Crew Bus** | **CrewAI** | **AutoGen** | **LangGraph** |
 |---|---|---|---|---|
 | **Native desktop app** | Yes | No | No | No |
-| **Runs locally** | Your hardware, your data | Cloud-first | Possible but not default | Requires setup |
+| **Runs locally** | Your Mac, your data | Cloud-first | Possible but not default | Requires setup |
 | **Built-in security agent** | Guardian monitors everything | No equivalent | No equivalent | No equivalent |
 | **Skill marketplace** | 20 curated + community skills | Manual tool setup | Manual tool setup | Manual tool setup |
 | **Runtime skill monitoring** | Health scores, auto-quarantine | None | None | None |
@@ -206,7 +206,7 @@ Everything runs on your machine. No Docker required. No cloud services. No exter
 - [ ] iOS companion app
 - [ ] Plugin SDK — build and share your own skills
 - [ ] Multi-machine crew networking (LAN)
-- [ ] Messaging integrations for on-the-go access
+- [ ] Mobile companion for on-the-go access
 
 ---
 

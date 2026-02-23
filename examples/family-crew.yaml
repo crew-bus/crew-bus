@@ -45,7 +45,7 @@ crew_boss:
 # -----------------------------------------------------------
 agents:
 
-  - name: "Friend & Family Helper"
+  - name: "Family Organizer"
     role: family
     icon: "\U0001F3E0"   # 🏠
     color: "#4dd0b8"
@@ -65,28 +65,28 @@ agents:
       # Evening wrap-up at 8pm
       evening_checkin: "20:00"
 
-  - name: "Health Buddy"
-    role: wellness
+  - name: "Break Reminder"
+    role: breaks
     icon: "\U0001F49A"   # 💚
     color: "#66d97a"
     trust: 8
     description: >
-      Watches energy levels for the whole family. Gentle burnout
+      Watches energy levels for the whole family. Gentle break
       nudges, screen-time awareness, and quiet hours so everyone
       gets the rest they need.
     features:
-      burnout_detection: true
+      break_detection: true
       quiet_hours: true
       hydration_reminders: true
       screen_time_awareness: true
-      family_wellness_score: true
-    burnout:
+      family_health_score: true
+    breaks:
       # If anyone's been going hard for 3+ hours, suggest a break
       threshold_minutes: 180
       nudge_style: gentle
       message: "Hey, looks like someone could use a breather. How about a 10-minute break?"
 
-  - name: "Life Assistant"
+  - name: "Daily Planner"
     role: daily
     icon: "\u26A1"       # ⚡
     color: "#64b5f6"

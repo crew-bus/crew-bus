@@ -79,11 +79,8 @@ body {
     z-index: 0;
 }
 
-.line-family  { width: 160px; transform: rotate(-90deg); animation: lineIn 0.4s ease 3.0s forwards; background: linear-gradient(90deg, rgba(77,208,184,0.3), rgba(77,208,184,0.03)); }
-.line-muse    { width: 160px; transform: rotate(-18deg); animation: lineIn 0.4s ease 3.5s forwards; background: linear-gradient(90deg, rgba(179,136,255,0.3), rgba(179,136,255,0.03)); }
-.line-health  { width: 160px; transform: rotate(54deg);  animation: lineIn 0.4s ease 4.0s forwards; background: linear-gradient(90deg, rgba(102,217,122,0.3), rgba(102,217,122,0.03)); }
-.line-growth  { width: 160px; transform: rotate(126deg); animation: lineIn 0.4s ease 4.5s forwards; background: linear-gradient(90deg, rgba(255,171,87,0.3), rgba(255,171,87,0.03)); }
-.line-life    { width: 160px; transform: rotate(198deg); animation: lineIn 0.4s ease 5.0s forwards; background: linear-gradient(90deg, rgba(100,181,246,0.3), rgba(100,181,246,0.03)); }
+.line-guardian { width: 160px; transform: rotate(-150deg); animation: lineIn 0.4s ease 3.0s forwards; background: linear-gradient(90deg, rgba(209,134,22,0.3), rgba(209,134,22,0.03)); }
+.line-vault   { width: 160px; transform: rotate(-30deg);  animation: lineIn 0.4s ease 3.5s forwards; background: linear-gradient(90deg, rgba(156,107,219,0.3), rgba(156,107,219,0.03)); }
 
 @keyframes lineIn {
     from { opacity: 0; }
@@ -179,47 +176,21 @@ body {
     max-width: 85%;
 }
 
-/* Per-agent positioning & colors */
-.agent-family {
-    margin-top: -160px;
-    width: 120px;
-    height: 120px;
-    border-color: #4dd0b8;
+/* Per-agent positioning & colors — triangle layout */
+.agent-guardian {
+    margin-top: 100px;
+    margin-left: -120px;
+    border-color: #d18616;
     animation: agentIn 0.8s ease 3.0s forwards;
-    box-shadow: 0 0 25px rgba(77,208,184,0.3), 0 0 60px rgba(77,208,184,0.1);
+    box-shadow: 0 0 25px rgba(209,134,22,0.3), 0 0 60px rgba(209,134,22,0.1);
 }
-.agent-family .agent-label { font-size: 0.4rem; letter-spacing: 0.5px; }
 
-.agent-muse {
-    margin-top: -49px;
-    margin-left: 152px;
-    border-color: #b388ff;
+.agent-vault {
+    margin-top: 100px;
+    margin-left: 120px;
+    border-color: #9c6bdb;
     animation: agentIn 0.8s ease 3.5s forwards;
-    box-shadow: 0 0 25px rgba(179,136,255,0.3), 0 0 60px rgba(179,136,255,0.1);
-}
-
-.agent-health {
-    margin-top: 82px;
-    margin-left: 94px;
-    border-color: #66d97a;
-    animation: agentIn 0.8s ease 4.0s forwards;
-    box-shadow: 0 0 25px rgba(102,217,122,0.3), 0 0 60px rgba(102,217,122,0.1);
-}
-
-.agent-growth {
-    margin-top: 82px;
-    margin-left: -94px;
-    border-color: #ffab57;
-    animation: agentIn 0.8s ease 4.5s forwards;
-    box-shadow: 0 0 25px rgba(255,171,87,0.3), 0 0 60px rgba(255,171,87,0.1);
-}
-
-.agent-life {
-    margin-top: -49px;
-    margin-left: -152px;
-    border-color: #64b5f6;
-    animation: agentIn 0.8s ease 5.0s forwards;
-    box-shadow: 0 0 25px rgba(100,181,246,0.3), 0 0 60px rgba(100,181,246,0.1);
+    box-shadow: 0 0 25px rgba(156,107,219,0.3), 0 0 60px rgba(156,107,219,0.1);
 }
 
 @keyframes agentIn {
@@ -229,31 +200,16 @@ body {
 }
 
 /* Synchronized breathe after all agents appear */
-.agent-family  { animation: agentIn 0.8s ease 3.0s forwards, breatheTeal   2.5s ease-in-out 6.5s infinite; }
-.agent-muse    { animation: agentIn 0.8s ease 3.5s forwards, breathePurple 2.5s ease-in-out 6.8s infinite; }
-.agent-health  { animation: agentIn 0.8s ease 4.0s forwards, breatheGreen  2.5s ease-in-out 7.1s infinite; }
-.agent-growth  { animation: agentIn 0.8s ease 4.5s forwards, breatheOrange 2.5s ease-in-out 7.4s infinite; }
-.agent-life    { animation: agentIn 0.8s ease 5.0s forwards, breatheBlue   2.5s ease-in-out 7.7s infinite; }
+.agent-guardian { animation: agentIn 0.8s ease 3.0s forwards, breatheGold   2.5s ease-in-out 6.5s infinite; }
+.agent-vault    { animation: agentIn 0.8s ease 3.5s forwards, breathePurple 2.5s ease-in-out 6.8s infinite; }
 
-@keyframes breatheTeal {
-    0%, 100% { box-shadow: 0 0 25px rgba(77,208,184,0.3), 0 0 60px rgba(77,208,184,0.1); }
-    50% { box-shadow: 0 0 40px rgba(77,208,184,0.5), 0 0 80px rgba(77,208,184,0.2), 0 0 120px rgba(77,208,184,0.08); }
+@keyframes breatheGold {
+    0%, 100% { box-shadow: 0 0 25px rgba(209,134,22,0.3), 0 0 60px rgba(209,134,22,0.1); }
+    50% { box-shadow: 0 0 40px rgba(209,134,22,0.5), 0 0 80px rgba(209,134,22,0.2), 0 0 120px rgba(209,134,22,0.08); }
 }
 @keyframes breathePurple {
-    0%, 100% { box-shadow: 0 0 25px rgba(179,136,255,0.3), 0 0 60px rgba(179,136,255,0.1); }
-    50% { box-shadow: 0 0 40px rgba(179,136,255,0.5), 0 0 80px rgba(179,136,255,0.2), 0 0 120px rgba(179,136,255,0.08); }
-}
-@keyframes breatheGreen {
-    0%, 100% { box-shadow: 0 0 25px rgba(102,217,122,0.3), 0 0 60px rgba(102,217,122,0.1); }
-    50% { box-shadow: 0 0 40px rgba(102,217,122,0.5), 0 0 80px rgba(102,217,122,0.2), 0 0 120px rgba(102,217,122,0.08); }
-}
-@keyframes breatheOrange {
-    0%, 100% { box-shadow: 0 0 25px rgba(255,171,87,0.3), 0 0 60px rgba(255,171,87,0.1); }
-    50% { box-shadow: 0 0 40px rgba(255,171,87,0.5), 0 0 80px rgba(255,171,87,0.2), 0 0 120px rgba(255,171,87,0.08); }
-}
-@keyframes breatheBlue {
-    0%, 100% { box-shadow: 0 0 25px rgba(100,181,246,0.3), 0 0 60px rgba(100,181,246,0.1); }
-    50% { box-shadow: 0 0 40px rgba(100,181,246,0.5), 0 0 80px rgba(100,181,246,0.2), 0 0 120px rgba(100,181,246,0.08); }
+    0%, 100% { box-shadow: 0 0 25px rgba(156,107,219,0.3), 0 0 60px rgba(156,107,219,0.1); }
+    50% { box-shadow: 0 0 40px rgba(156,107,219,0.5), 0 0 80px rgba(156,107,219,0.2), 0 0 120px rgba(156,107,219,0.08); }
 }
 
 /* Boss breathe glow */
@@ -522,47 +478,26 @@ body {
 
     <!-- Circle Diagram -->
     <div class="diagram">
-        <!-- Connection lines -->
-        <div class="connection-line line-family"></div>
-        <div class="connection-line line-muse"></div>
-        <div class="connection-line line-health"></div>
-        <div class="connection-line line-growth"></div>
-        <div class="connection-line line-life"></div>
+        <!-- Connection lines — triangle -->
+        <div class="connection-line line-guardian"></div>
+        <div class="connection-line line-vault"></div>
 
-        <!-- Crew Boss (center) -->
+        <!-- Crew Boss (center/top) -->
         <div class="boss">
             <span class="boss-icon">&#10025;</span>
             <span class="boss-label">Crew Boss</span>
         </div>
 
-        <!-- Agent: Friend & Family Helper (top, 0deg) -->
-        <div class="agent agent-family">
-            <span class="agent-icon">&#127968;</span>
-            <span class="agent-label">Friend &amp; Family Helper</span>
+        <!-- Agent: Guardian (bottom-left) -->
+        <div class="agent agent-guardian">
+            <span class="agent-icon">&#128737;</span>
+            <span class="agent-label">Guardian</span>
         </div>
 
-        <!-- Agent: Muse (72deg — upper right) -->
-        <div class="agent agent-muse">
-            <span class="agent-icon">&#127912;</span>
-            <span class="agent-label">Muse</span>
-        </div>
-
-        <!-- Agent: Health Buddy (144deg — lower right) -->
-        <div class="agent agent-health">
-            <span class="agent-icon">&#128154;</span>
-            <span class="agent-label">Health Buddy</span>
-        </div>
-
-        <!-- Agent: Growth Coach (216deg — lower left) -->
-        <div class="agent agent-growth">
-            <span class="agent-icon">&#127793;</span>
-            <span class="agent-label">Growth Coach</span>
-        </div>
-
-        <!-- Agent: Life Assistant (288deg — upper left) -->
-        <div class="agent agent-life">
-            <span class="agent-icon">&#9889;</span>
-            <span class="agent-label">Life Assistant</span>
+        <!-- Agent: Vault (bottom-right) -->
+        <div class="agent agent-vault">
+            <span class="agent-icon">&#128302;</span>
+            <span class="agent-label">Vault</span>
         </div>
     </div>
 

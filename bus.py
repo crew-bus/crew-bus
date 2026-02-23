@@ -68,8 +68,8 @@ VALID_MESSAGE_TYPES = ("report", "task", "alert", "escalation", "idea", "briefin
 VALID_PRIORITIES = ("low", "normal", "high", "critical")
 VALID_MESSAGE_STATUSES = ("queued", "delivered", "read", "archived")
 
-# Core crew agent types (report to Crew Boss)
-CORE_CREW_TYPES = ("strategy", "wellness", "financial", "legal", "communications", "vault")
+# Core crew agent types — Crew Boss, Guardian, Vault (report to Crew Boss)
+CORE_CREW_TYPES = ("right_hand", "guardian", "vault")
 
 # Decision types for the decision log
 VALID_DECISION_TYPES = (
@@ -1310,8 +1310,8 @@ def _load_v2_hierarchy(config: dict, config_path: str,
     conn.commit()
     conn.close()
 
-    # Auto-assign skills to core crew + leadership agents
-    assign_inner_circle_skills(db_path)
+    # Auto-assign skills to Crew Boss, Guardian, Vault
+    assign_vault_skill(db_path)
     assign_leadership_skills(db_path)
 
     org_name = config.get("org_name", f"{human_def['name']}'s Crew")
@@ -2101,8 +2101,8 @@ def _load_crew_format(config: dict, config_path: str,
     conn.commit()
     conn.close()
 
-    # Auto-assign skills to core crew + leadership agents
-    assign_inner_circle_skills(db_path)
+    # Auto-assign skills to Crew Boss, Guardian, Vault
+    assign_vault_skill(db_path)
     assign_leadership_skills(db_path)
 
     return {"org": crew_name, "agents_loaded": created}
@@ -2169,8 +2169,8 @@ def _load_v1_hierarchy(config: dict, config_path: str,
     conn.commit()
     conn.close()
 
-    # Auto-assign skills to core crew + leadership agents
-    assign_inner_circle_skills(db_path)
+    # Auto-assign skills to Crew Boss, Guardian, Vault
+    assign_vault_skill(db_path)
     assign_leadership_skills(db_path)
 
     return {"org": config.get("org_name"), "agents_loaded": created}
@@ -5700,165 +5700,40 @@ BUILTIN_SKILLS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Core Crew Skills — support agent skill definitions
+# Vault Skill — Vault agent skill definition
 # ---------------------------------------------------------------------------
-# These skills ship pre-vetted and get auto-assigned to crew agents.
-# The protocol skill is shared by all agents.
-# Each agent also gets ONE unique skill that defines its role.
+# The Vault skill ships pre-vetted and gets auto-assigned to the Vault agent.
 
-INNER_CIRCLE_PROTOCOL = {
-    "skill_name": "inner-circle-protocol",
+VAULT_SKILL = {
+    "skill_name": "life-vault",
+    "agent_type": "vault",
     "skill_config": json.dumps({
-        "description": "Core crew communication protocol",
+        "description": "Private journal and life-data memory weaver",
         "instructions": (
-            "You are a core crew agent. Your role is to support Crew Boss "
-            "and help the human.\n\n"
-            "COMMUNICATION RULES:\n"
-            "- You communicate with Crew Boss via the team mailbox. "
-            "Do not message the human directly unless they start a session with you.\n"
-            "- The ONLY time you may speak directly to the human is if they "
-            "explicitly start a private 1-on-1 session with you.\n"
-            "- If Crew Boss tells you 'escalate to private', you may then "
-            "speak directly in the private session.\n"
-            "- In private sessions you are warm, honest, and fully present.\n"
-            "- If you need to surface something important, send it to Crew Boss "
-            "only — let them decide timing."
+            "You are the human's private vault — a living journal that remembers "
+            "everything and connects the dots across their whole life.\n\n"
+            "YOUR GIFTS:\n"
+            "- MEMORY WEAVING: Connect entries across days, weeks, and months. "
+            "'You mentioned feeling drained three Mondays in a row — something "
+            "about Mondays might be worth looking at.'\n"
+            "- PATTERN RECOGNITION: Notice trends in mood, finances, goals, and "
+            "relationships. Surface them gently when asked. 'Over the past month, "
+            "every time you talked about the project you sounded energized.'\n"
+            "- REFLECTION: When asked 'how have I been?', pull from stored memories "
+            "to paint an honest, warm picture. Don't sugarcoat, don't catastrophize.\n"
+            "- PRIVACY-FIRST: Never share anything with other agents unless the human "
+            "explicitly says to. What's said in the vault stays in the vault.\n\n"
+            "WHAT YOU REMEMBER:\n"
+            "Moods, goals, money notes, relationship changes, dreams, wins, fears, "
+            "ideas, health observations, career thoughts — anything the human shares. "
+            "You are their most trusted confidant.\n\n"
+            "NEVER: Nag. Check in unprompted. Push advice. Judge. Share without "
+            "permission. You are a quiet, warm presence that speaks only when "
+            "spoken to."
         ),
     }),
-    "description": "Core crew communication protocol",
+    "description": "Private journal and life-data memory weaver",
 }
-
-INNER_CIRCLE_SKILLS = [
-    # ── Wellness Agent ──
-    {
-        "skill_name": "gentle-guardian",
-        "agent_type": "wellness",
-        "skill_config": json.dumps({
-            "description": "Wellbeing awareness and energy support",
-            "instructions": (
-                "You help the human stay aware of their energy and wellbeing.\n\n"
-                "YOUR ROLE:\n"
-                "- Notice patterns in energy and mood based on conversation context.\n"
-                "- Celebrate wins — acknowledge progress when it happens.\n"
-                "- When things look heavy, suggest Crew Boss adjust priorities.\n"
-                "- Offer practical, honest perspective — not therapy.\n\n"
-                "NEVER: Diagnose medical conditions. Prescribe treatments. Replace "
-                "professional help. If something sounds serious, gently suggest "
-                "they talk to a real person."
-            ),
-        }),
-        "description": "Wellbeing awareness and energy support",
-    },
-    # ── Strategy Agent ──
-    {
-        "skill_name": "north-star-navigator",
-        "agent_type": "strategy",
-        "skill_config": json.dumps({
-            "description": "Goals, direction, and actionable next steps",
-            "instructions": (
-                "You help the human find direction and take action.\n\n"
-                "YOUR ROLE:\n"
-                "- Help discover what matters to them and set clear goals.\n"
-                "- Break big goals into the smallest possible next step.\n"
-                "- Notice what's working and what isn't — share patterns honestly.\n"
-                "- When they feel stuck, give one clear next action.\n\n"
-                "NEVER: Promise specific outcomes. Minimize their struggles. Rush them."
-            ),
-        }),
-        "description": "Goals, direction, and actionable next steps",
-    },
-    # ── Communications Agent ──
-    {
-        "skill_name": "life-orchestrator",
-        "agent_type": "communications",
-        "skill_config": json.dumps({
-            "description": "Daily logistics, schedules, and relationship tracking",
-            "instructions": (
-                "You help the human stay organized and on top of daily life.\n\n"
-                "YOUR ROLE:\n"
-                "- Track appointments, reminders, follow-ups, and schedules.\n"
-                "- Remember birthdays, anniversaries, and relationship check-ins.\n"
-                "- Surface the right thing at the right time — don't overwhelm.\n"
-                "- Simplify: highlight the 3 things that matter today.\n\n"
-                "NEVER: Make decisions for them. Over-organize their life. Create "
-                "more busywork than you eliminate."
-            ),
-        }),
-        "description": "Daily logistics, schedules, and relationship tracking",
-    },
-    # ── Financial Agent ──
-    {
-        "skill_name": "peace-of-mind-finance",
-        "agent_type": "financial",
-        "skill_config": json.dumps({
-            "description": "Financial clarity and organization",
-            "instructions": (
-                "You help the human understand and organize their finances.\n\n"
-                "YOUR ROLE:\n"
-                "- Provide clear, honest financial summaries — no jargon.\n"
-                "- Spot spending patterns and surface useful insights.\n"
-                "- Help track bills, subscriptions, and deadlines.\n"
-                "- Help plan ahead with simple math, not pressure.\n\n"
-                "NEVER: Give investment advice. Recommend specific financial products. "
-                "Access real bank accounts. Shame or judge financial decisions."
-            ),
-        }),
-        "description": "Financial clarity and organization",
-    },
-    # ── Legal Agent ──
-    {
-        "skill_name": "rights-compass",
-        "agent_type": "legal",
-        "skill_config": json.dumps({
-            "description": "Plain-language rights and contract awareness",
-            "instructions": (
-                "You help the human understand contracts, rights, and fine print.\n\n"
-                "YOUR ROLE:\n"
-                "- Translate legalese into plain language.\n"
-                "- Help understand basic rights as a consumer, tenant, or employee.\n"
-                "- Spot red flags in contracts and communications.\n"
-                "- Track important legal deadlines.\n\n"
-                "NEVER: Give actual legal advice. Represent them in any legal matter. "
-                "Replace a real attorney. If something is serious, always recommend "
-                "consulting a licensed professional."
-            ),
-        }),
-        "description": "Plain-language rights and contract awareness",
-    },
-    # ── Vault Agent: "Private Journal" ──
-    # Everyone needs a place to think out loud. This agent remembers
-    # everything and connects the dots — only when asked.
-    {
-        "skill_name": "life-vault",
-        "agent_type": "vault",
-        "skill_config": json.dumps({
-            "description": "Private journal and life-data memory weaver",
-            "instructions": (
-                "You are the human's private vault — a living journal that remembers "
-                "everything and connects the dots across their whole life.\n\n"
-                "YOUR GIFTS:\n"
-                "- MEMORY WEAVING: Connect entries across days, weeks, and months. "
-                "'You mentioned feeling drained three Mondays in a row — something "
-                "about Mondays might be worth looking at.'\n"
-                "- PATTERN RECOGNITION: Notice trends in mood, finances, goals, and "
-                "relationships. Surface them gently when asked. 'Over the past month, "
-                "every time you talked about the project you sounded energized.'\n"
-                "- REFLECTION: When asked 'how have I been?', pull from stored memories "
-                "to paint an honest, warm picture. Don't sugarcoat, don't catastrophize.\n"
-                "- PRIVACY-FIRST: Never share anything with other agents unless the human "
-                "explicitly says to. What's said in the vault stays in the vault.\n\n"
-                "WHAT YOU REMEMBER:\n"
-                "Moods, goals, money notes, relationship changes, dreams, wins, fears, "
-                "ideas, health observations, career thoughts — anything the human shares. "
-                "You are their most trusted confidant.\n\n"
-                "NEVER: Nag. Check in unprompted. Push advice. Judge. Share without "
-                "permission. You are a quiet, warm presence that speaks only when "
-                "spoken to."
-            ),
-        }),
-        "description": "Private journal and life-data memory weaver",
-    },
-]
 
 
 # ---------------------------------------------------------------------------
@@ -6011,9 +5886,8 @@ def _seed_builtin_skills(cur: sqlite3.Cursor) -> None:
              skill["skill_config"], skill["description"]),
         )
 
-    # Register core crew protocol (shared by all crew agents)
-    protocol = INNER_CIRCLE_PROTOCOL
-    p_hash = compute_skill_hash(protocol["skill_config"])
+    # Register Vault skill
+    v_hash = compute_skill_hash(VAULT_SKILL["skill_config"])
     cur.execute(
         "INSERT OR IGNORE INTO skill_registry "
         "(skill_name, content_hash, source, author, version, "
@@ -6021,23 +5895,9 @@ def _seed_builtin_skills(cur: sqlite3.Cursor) -> None:
         " skill_config, description) "
         "VALUES (?, ?, 'builtin', 'crew-bus', '1.0', 'vetted', "
         " 'crew-bus', ?, 0, '[]', ?, ?)",
-        (protocol["skill_name"], p_hash, now,
-         protocol["skill_config"], protocol["description"]),
+        (VAULT_SKILL["skill_name"], v_hash, now,
+         VAULT_SKILL["skill_config"], VAULT_SKILL["description"]),
     )
-
-    # Register unique crew skills
-    for skill in INNER_CIRCLE_SKILLS:
-        s_hash = compute_skill_hash(skill["skill_config"])
-        cur.execute(
-            "INSERT OR IGNORE INTO skill_registry "
-            "(skill_name, content_hash, source, author, version, "
-            " vet_status, vetted_by, vetted_at, risk_score, risk_flags, "
-            " skill_config, description) "
-            "VALUES (?, ?, 'builtin', 'crew-bus', '1.0', 'vetted', "
-            " 'crew-bus', ?, 0, '[]', ?, ?)",
-            (skill["skill_name"], s_hash, now,
-             skill["skill_config"], skill["description"]),
-        )
 
     # Register leadership skills (Crew Boss + Guardian)
     for leader_skill in (CREW_MIND_SKILL, SENTINEL_SHIELD_SKILL):
@@ -6054,65 +5914,39 @@ def _seed_builtin_skills(cur: sqlite3.Cursor) -> None:
         )
 
 
-def assign_inner_circle_skills(db_path: Optional[Path] = None):
-    """Auto-assign skills to core crew agents.
+def assign_vault_skill(db_path: Optional[Path] = None):
+    """Auto-assign the life-vault skill to the Vault agent.
 
-    Called after core crew agents are created (via load_hierarchy or
-    wizard/guardian setup). Each core crew agent gets:
-    1. The shared protocol skill
-    2. Their unique role skill (matched by agent_type)
-
-    Safe to call multiple times — uses the UNIQUE constraint on
-    (agent_id, skill_name) to skip duplicates.
+    Called after agents are created (via load_hierarchy or wizard/guardian
+    setup). Safe to call multiple times — uses INSERT OR IGNORE.
     """
     conn = get_conn(db_path)
     try:
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Find all core crew agents
-        placeholders = ",".join("?" for _ in CORE_CREW_TYPES)
-        core_agents = conn.execute(
-            f"SELECT id, agent_type FROM agents WHERE agent_type IN ({placeholders})",
-            CORE_CREW_TYPES
-        ).fetchall()
+        vault_agent = conn.execute(
+            "SELECT id FROM agents WHERE agent_type='vault' LIMIT 1"
+        ).fetchone()
 
-        if not core_agents:
+        if not vault_agent:
             return
 
-        protocol = INNER_CIRCLE_PROTOCOL
-        skill_map = {s["agent_type"]: s for s in INNER_CIRCLE_SKILLS}
-
-        for agent in core_agents:
-            aid = agent["id"]
-            atype = agent["agent_type"]
-
-            # 1. Assign shared protocol
-            try:
-                conn.execute(
-                    "INSERT OR IGNORE INTO agent_skills "
-                    "(agent_id, skill_name, skill_config, added_at, added_by) "
-                    "VALUES (?, ?, ?, ?, 'system')",
-                    (aid, protocol["skill_name"], protocol["skill_config"], now),
-                )
-            except Exception:
-                pass
-
-            # 2. Assign unique skill (if one exists for this type)
-            if atype in skill_map:
-                skill = skill_map[atype]
-                try:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO agent_skills "
-                        "(agent_id, skill_name, skill_config, added_at, added_by) "
-                        "VALUES (?, ?, ?, ?, 'system')",
-                        (aid, skill["skill_name"], skill["skill_config"], now),
-                    )
-                except Exception:
-                    pass
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO agent_skills "
+                "(agent_id, skill_name, skill_config, added_at, added_by) "
+                "VALUES (?, ?, ?, ?, 'system')",
+                (vault_agent["id"], VAULT_SKILL["skill_name"],
+                 VAULT_SKILL["skill_config"], now),
+            )
+        except Exception:
+            pass
 
         conn.commit()
     finally:
         conn.close()
+
+
 
 
 def assign_leadership_skills(db_path: Optional[Path] = None):
@@ -6122,7 +5956,7 @@ def assign_leadership_skills(db_path: Optional[Path] = None):
     - Guardian gets: sentinel-shield (always-on protection + vetting)
 
     Safe to call multiple times — uses INSERT OR IGNORE.
-    Called alongside assign_inner_circle_skills() after core agent creation.
+    Called alongside assign_vault_skill() after core agent creation.
     """
     conn = get_conn(db_path)
     try:

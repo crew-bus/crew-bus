@@ -31,7 +31,7 @@ crew_boss:
   description: >
     Your launch right-hand. Routes 80% of tasks so you don't have
     to micromanage. Keeps the team on message (warm, human, no hype),
-    watches burnout, and makes sure nothing slips through the cracks.
+    watches pacing, and makes sure nothing slips through the cracks.
   trust: 8
   features:
     morning_brief: true
@@ -200,9 +200,9 @@ quiet_hours:
   message: "Launch crew is resting. Good launches run on good sleep."
 
 # -----------------------------------------------------------
-# Burnout Protection
+# Break Reminders
 # -----------------------------------------------------------
-burnout:
+breaks:
   enabled: true
   # If you've been grinding content for 3+ hours, take a break
   threshold_minutes: 180

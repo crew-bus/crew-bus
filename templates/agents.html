@@ -49,7 +49,7 @@
 
 <div class="tree-connector">|</div>
 
-<!-- Core Crew -->
+<!-- Crew Agents -->
 {% if tree.core_crew %}
 <div class="tree-level">
     {% for agent in tree.core_crew %}
@@ -59,7 +59,7 @@
             <span class="badge badge-success">{{ agent.agent_type|upper }}</span>
         </div>
         <div class="agent-name">{{ agent.name }}</div>
-        <div class="agent-role">Core Crew</div>
+        <div class="agent-role">Crew Agent</div>
         <div class="agent-stats">
             {% set counts = agent_msg_counts(agent.id) %}
             {{ counts.sent }}&#8593; {{ counts.received }}&#8595;

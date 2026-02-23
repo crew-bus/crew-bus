@@ -58,7 +58,7 @@ final class AppState {
     let client: APIClient
     let chatService: ChatService
 
-    /// Agents that are part of the core crew (not human, not manager/worker)
+    /// Crew Boss, Guardian, and Vault (not human, not manager/worker)
     var crewAgents: [Agent] {
         agents.filter { agent in
             !agent.isHuman && !["manager", "worker"].contains(agent.agentType)

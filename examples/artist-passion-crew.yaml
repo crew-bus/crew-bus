@@ -3,8 +3,8 @@
 # ============================================================
 # A creative-first crew for artists, musicians, writers,
 # hobbyists, and anyone who wants to make cool stuff.
-# Muse keeps you inspired. Growth Coach keeps you on track.
-# Health Buddy makes sure you don't burn out.
+# Muse keeps you inspired. Progress Tracker keeps you on track.
+# Break Reminder makes sure you take breaks when needed.
 #
 # Load it:
 #   crew-bus load examples/artist-passion-crew.yaml
@@ -18,7 +18,7 @@
 crew:
   name: "My Creative Crew"
   mode: passion
-  description: "Your personal creative studio crew — inspiration on tap, habits that stick, and someone watching your back so you don't burn out."
+  description: "Your personal creative studio crew — inspiration on tap, habits that stick, and someone watching your back."
 
 # -----------------------------------------------------------
 # Crew Boss — your chill, encouraging right-hand
@@ -82,8 +82,8 @@ agents:
         - "60 days?! You're basically unstoppable!"
         - "100 DAYS! Legend status unlocked!"
 
-  - name: "Health Buddy"
-    role: wellness
+  - name: "Break Reminder"
+    role: breaks
     icon: "\U0001F49A"   # 💚
     color: "#66d97a"
     trust: 8
@@ -92,18 +92,18 @@ agents:
       Gentle reminders to stretch, hydrate, and step away when you've
       been in the zone too long.
     features:
-      burnout_detection: true
+      break_detection: true
       quiet_hours: true
       hydration_reminders: true
       posture_nudges: true
       creative_breaks: true
-    burnout:
+    breaks:
       # Artists can hyperfocus — nudge after 2.5 hours
       threshold_minutes: 150
       nudge_style: gentle
       message: "You've been creating for a while — amazing focus! Maybe grab some water and stretch for 5?"
 
-  - name: "Growth Coach"
+  - name: "Progress Tracker"
     role: growth
     icon: "\U0001F331"   # 🌱
     color: "#ffab57"

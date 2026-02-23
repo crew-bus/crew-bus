@@ -32,8 +32,8 @@ result = bridge.report(
 )
 ```
 
-Reports go to your direct parent in the hierarchy. If you are core crew, they
-go to Crew Boss. If you are a department worker, they go to your department
+Reports go to your direct parent in the hierarchy. If you are Crew Boss, Guardian,
+or Vault, they route accordingly. If you are a department worker, they go to your department
 manager, who forwards to Crew Boss.
 
 ### 2. Check Your Inbox
@@ -107,23 +107,7 @@ results = bridge.search_knowledge("pressure tank")
 results = bridge.search_knowledge("Dave Wilson", category="contact")
 ```
 
-### 8. Update Wellness (Wellness Agents Only)
-
-```python
-bridge.update_wellness(burnout_score=7, notes="Long work week, multiple client emergencies")
-```
-
-### 9. Submit Ideas (Strategy Agents Only)
-
-```python
-bridge.submit_idea(
-    subject="YouTube shorts for lead generation",
-    body="Quick 30-second videos showing before/after of jobs...",
-    category="marketing"
-)
-```
-
-### 10. Check Your Status
+### 8. Check Your Status
 
 ```python
 status = bridge.get_status()
@@ -161,19 +145,6 @@ bridge.report("New Lead Logged", "Dave Wilson, 250-334-5678, pressure tank, Blac
 bridge.post_knowledge("contact", "Dave Wilson",
     "Pressure tank replacement. Black Creek. 250-334-5678",
     tags=["lead", "plumbing"])
-```
-
-### Wellness Check (Core Crew)
-```python
-bridge = CrewBridge("Quant")
-bridge.update_wellness(7, "Long day, multiple emergencies, skipped lunch")
-bridge.report("Wellness Alert", "Ryan burnout rising. Recommend lighter tomorrow.")
-```
-
-### Financial Alert (Core Crew)
-```python
-bridge = CrewBridge("CFO")
-bridge.alert("GST Filing Due", "Q1 GST due in 14 days. $2,847 owing.", priority="high")
 ```
 
 ### Safety Escalation (Any Agent)

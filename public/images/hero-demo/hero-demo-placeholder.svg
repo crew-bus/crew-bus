@@ -11,28 +11,13 @@
       <stop offset="0%" style="stop-color:rgba(255,255,255,0.25)"/>
       <stop offset="100%" style="stop-color:rgba(255,255,255,0)"/>
     </radialGradient>
-    <!-- Teal glow for Family -->
-    <filter id="glowTeal" x="-50%" y="-50%" width="200%" height="200%">
+    <!-- Gold glow for Guardian -->
+    <filter id="glowGold" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="6" result="blur"/>
       <feComposite in="SourceGraphic" in2="blur" operator="over"/>
     </filter>
-    <!-- Purple glow for Muse -->
+    <!-- Purple glow for Vault -->
     <filter id="glowPurple" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-    <!-- Green glow for Health -->
-    <filter id="glowGreen" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-    <!-- Orange glow for Growth -->
-    <filter id="glowOrange" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-    <!-- Blue glow for Life -->
-    <filter id="glowBlue" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="6" result="blur"/>
       <feComposite in="SourceGraphic" in2="blur" operator="over"/>
     </filter>
@@ -62,70 +47,42 @@
   <g opacity="0.03">
     <line x1="0" y1="0" x2="720" y2="440" stroke="#fff" stroke-width="0.5"/>
     <line x1="720" y1="0" x2="0" y2="440" stroke="#fff" stroke-width="0.5"/>
-    <circle cx="360" cy="190" r="180" fill="none" stroke="#fff" stroke-width="0.5"/>
-    <circle cx="360" cy="190" r="120" fill="none" stroke="#fff" stroke-width="0.5"/>
+    <circle cx="360" cy="170" r="140" fill="none" stroke="#fff" stroke-width="0.5"/>
+    <circle cx="360" cy="170" r="90" fill="none" stroke="#fff" stroke-width="0.5"/>
   </g>
 
-  <!-- Connection lines from boss to agents (subtle) -->
-  <g opacity="0.12">
-    <line x1="360" y1="190" x2="360" y2="52" stroke="#4dd0b8" stroke-width="1"/>
-    <line x1="360" y1="190" x2="491" y2="133" stroke="#b388ff" stroke-width="1"/>
-    <line x1="360" y1="190" x2="441" y2="305" stroke="#66d97a" stroke-width="1"/>
-    <line x1="360" y1="190" x2="279" y2="305" stroke="#ffab57" stroke-width="1"/>
-    <line x1="360" y1="190" x2="229" y2="133" stroke="#64b5f6" stroke-width="1"/>
+  <!-- Connection lines from boss to agents (triangle) -->
+  <g opacity="0.15">
+    <line x1="360" y1="100" x2="260" y2="280" stroke="#d18616" stroke-width="1.5"/>
+    <line x1="360" y1="100" x2="460" y2="280" stroke="#9c6bdb" stroke-width="1.5"/>
   </g>
 
   <!-- ===== AGENT BUBBLES ===== -->
 
-  <!-- Friend & Family Helper (top, 0deg) — teal -->
+  <!-- Guardian (bottom-left) — gold -->
   <g>
-    <circle cx="360" cy="52" r="38" fill="rgba(12,14,22,0.92)" stroke="#4dd0b8" stroke-width="2"/>
-    <circle cx="360" cy="52" r="38" fill="none" stroke="#4dd0b8" stroke-width="1" opacity="0.3" filter="url(#glowTeal)"/>
-    <text x="360" y="46" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">&#127968;</text>
-    <text x="360" y="61" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.5" font-weight="700" letter-spacing="0.5" text-transform="uppercase">FRIEND &amp; FAMILY</text>
-    <text x="360" y="69" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.5" font-weight="700" letter-spacing="0.5" text-transform="uppercase">HELPER</text>
+    <circle cx="260" cy="280" r="38" fill="rgba(12,14,22,0.92)" stroke="#d18616" stroke-width="2"/>
+    <circle cx="260" cy="280" r="38" fill="none" stroke="#d18616" stroke-width="1" opacity="0.3" filter="url(#glowGold)"/>
+    <text x="260" y="274" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="18">&#128737;</text>
+    <text x="260" y="292" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="7" font-weight="700" letter-spacing="0.8" text-transform="uppercase">GUARDIAN</text>
   </g>
 
-  <!-- Muse (72deg — upper right) — purple -->
+  <!-- Vault (bottom-right) — purple -->
   <g>
-    <circle cx="491" cy="133" r="34" fill="rgba(12,14,22,0.92)" stroke="#b388ff" stroke-width="2"/>
-    <circle cx="491" cy="133" r="34" fill="none" stroke="#b388ff" stroke-width="1" opacity="0.3" filter="url(#glowPurple)"/>
-    <text x="491" y="129" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">&#127912;</text>
-    <text x="491" y="143" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="7" font-weight="700" letter-spacing="0.8" text-transform="uppercase">MUSE</text>
+    <circle cx="460" cy="280" r="38" fill="rgba(12,14,22,0.92)" stroke="#9c6bdb" stroke-width="2"/>
+    <circle cx="460" cy="280" r="38" fill="none" stroke="#9c6bdb" stroke-width="1" opacity="0.3" filter="url(#glowPurple)"/>
+    <text x="460" y="274" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="18">&#128302;</text>
+    <text x="460" y="292" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="7" font-weight="700" letter-spacing="0.8" text-transform="uppercase">VAULT</text>
   </g>
 
-  <!-- Health Buddy (144deg — lower right) — green -->
-  <g>
-    <circle cx="441" cy="305" r="34" fill="rgba(12,14,22,0.92)" stroke="#66d97a" stroke-width="2"/>
-    <circle cx="441" cy="305" r="34" fill="none" stroke="#66d97a" stroke-width="1" opacity="0.3" filter="url(#glowGreen)"/>
-    <text x="441" y="300" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">&#128154;</text>
-    <text x="441" y="314" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.5" font-weight="700" letter-spacing="0.5" text-transform="uppercase">HEALTH BUDDY</text>
-  </g>
-
-  <!-- Growth Coach (216deg — lower left) — orange -->
-  <g>
-    <circle cx="279" cy="305" r="34" fill="rgba(12,14,22,0.92)" stroke="#ffab57" stroke-width="2"/>
-    <circle cx="279" cy="305" r="34" fill="none" stroke="#ffab57" stroke-width="1" opacity="0.3" filter="url(#glowOrange)"/>
-    <text x="279" y="300" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">&#127793;</text>
-    <text x="279" y="314" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.5" font-weight="700" letter-spacing="0.5" text-transform="uppercase">GROWTH COACH</text>
-  </g>
-
-  <!-- Life Assistant (288deg — upper left) — blue -->
-  <g>
-    <circle cx="229" cy="133" r="34" fill="rgba(12,14,22,0.92)" stroke="#64b5f6" stroke-width="2"/>
-    <circle cx="229" cy="133" r="34" fill="none" stroke="#64b5f6" stroke-width="1" opacity="0.3" filter="url(#glowBlue)"/>
-    <text x="229" y="129" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">&#9889;</text>
-    <text x="229" y="143" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.5" font-weight="700" letter-spacing="0.5" text-transform="uppercase">LIFE ASSISTANT</text>
-  </g>
-
-  <!-- ===== CREW BOSS — center ===== -->
+  <!-- ===== CREW BOSS — top of triangle ===== -->
   <g>
     <!-- Outer glow ring -->
-    <circle cx="360" cy="190" r="58" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="20"/>
+    <circle cx="360" cy="100" r="58" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="20"/>
     <!-- Boss circle -->
-    <circle cx="360" cy="190" r="50" fill="rgba(12,14,22,0.95)" stroke="rgba(255,255,255,0.9)" stroke-width="2.5" filter="url(#glowWhite)"/>
-    <text x="360" y="184" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="22">&#10025;</text>
-    <text x="360" y="202" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="9" font-weight="700" letter-spacing="1.5" text-transform="uppercase">CREW BOSS</text>
+    <circle cx="360" cy="100" r="50" fill="rgba(12,14,22,0.95)" stroke="rgba(255,255,255,0.9)" stroke-width="2.5" filter="url(#glowWhite)"/>
+    <text x="360" y="94" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="22">&#10025;</text>
+    <text x="360" y="112" text-anchor="middle" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="9" font-weight="700" letter-spacing="1.5" text-transform="uppercase">CREW BOSS</text>
   </g>
 
   <!-- ===== PLAY BUTTON OVERLAY ===== -->
@@ -144,7 +101,7 @@
   <rect x="0" y="424" width="720" height="16" rx="16" fill="rgba(12,14,22,0.95)"/>
 
   <text x="360" y="395" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="0.5">15-second demo</text>
-  <text x="360" y="418" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="400">Watch your friendly crew come to life</text>
+  <text x="360" y="418" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="400">Watch your crew come to life</text>
 
   <!-- Outer frame border (on top of everything) -->
   <rect x="0.5" y="0.5" width="719" height="439" rx="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>

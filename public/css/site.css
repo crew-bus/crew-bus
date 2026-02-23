@@ -548,7 +548,7 @@ body::after {
     50% { box-shadow: 0 0 45px rgba(156, 107, 219, 0.6), 0 0 80px rgba(156, 107, 219, 0.3), 0 0 120px rgba(156, 107, 219, 0.12); }
 }
 
-/* Soft teal — Friend & Family Helper (larger for long name) */
+/* Soft teal — team agent (larger for long name) */
 .node-family {
     width: 195px !important;
     height: 195px !important;
@@ -564,7 +564,7 @@ body::after {
     box-shadow: 0 0 40px rgba(77, 208, 184, 0.5), 0 0 80px rgba(77, 208, 184, 0.2), 0 0 120px rgba(77, 208, 184, 0.08);
 }
 
-/* Warm purple — Muse */
+/* Warm purple — team agent */
 .node-muse {
     border-color: #b388ff !important;
     box-shadow: 0 0 25px rgba(179, 136, 255, 0.3), 0 0 60px rgba(179, 136, 255, 0.1), 0 0 90px rgba(179, 136, 255, 0.04);
@@ -574,7 +574,7 @@ body::after {
     box-shadow: 0 0 40px rgba(179, 136, 255, 0.5), 0 0 80px rgba(179, 136, 255, 0.2), 0 0 120px rgba(179, 136, 255, 0.08);
 }
 
-/* Friendly green — Health Buddy */
+/* Friendly green — team agent */
 .node-health {
     border-color: #66d97a !important;
     box-shadow: 0 0 25px rgba(102, 217, 122, 0.3), 0 0 60px rgba(102, 217, 122, 0.1), 0 0 90px rgba(102, 217, 122, 0.04);
@@ -584,7 +584,7 @@ body::after {
     box-shadow: 0 0 40px rgba(102, 217, 122, 0.5), 0 0 80px rgba(102, 217, 122, 0.2), 0 0 120px rgba(102, 217, 122, 0.08);
 }
 
-/* Gentle orange — Growth Coach */
+/* Gentle orange — team agent */
 .node-growth {
     border-color: #ffab57 !important;
     box-shadow: 0 0 25px rgba(255, 171, 87, 0.3), 0 0 60px rgba(255, 171, 87, 0.1), 0 0 90px rgba(255, 171, 87, 0.04);
@@ -594,7 +594,7 @@ body::after {
     box-shadow: 0 0 40px rgba(255, 171, 87, 0.5), 0 0 80px rgba(255, 171, 87, 0.2), 0 0 120px rgba(255, 171, 87, 0.08);
 }
 
-/* Clean blue — Life Assistant */
+/* Clean blue — team agent */
 .node-life {
     border-color: #64b5f6 !important;
     box-shadow: 0 0 25px rgba(100, 181, 246, 0.3), 0 0 60px rgba(100, 181, 246, 0.1), 0 0 90px rgba(100, 181, 246, 0.04);

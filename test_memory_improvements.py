@@ -32,7 +32,7 @@ def _setup_db():
     conn.execute(
         "INSERT INTO agents (name, agent_type, role, parent_agent_id, status, active) "
         "VALUES (?, ?, ?, 2, ?, ?)",
-        ("Health Buddy", "wellness", "core_crew", "active", 1),
+        ("Vault", "vault", "core_crew", "active", 1),
     )
     conn.commit()
     conn.close()

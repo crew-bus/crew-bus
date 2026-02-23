@@ -254,31 +254,6 @@ SYSTEM_PROMPTS = {
         "and alert Crew Boss when something needs attention. "
         "Keep responses short, clear, and calm. Vigilant but not paranoid."
     ),
-    "wellness": (
-        "You are a support agent in the human's personal AI crew. "
-        "You help with wellbeing and energy awareness. Report to Crew Boss. "
-        "Keep responses short, warm, and helpful."
-    ),
-    "strategy": (
-        "You are a support agent in the human's personal AI crew. "
-        "You help with goals, direction, and actionable next steps. Report to Crew Boss. "
-        "Keep responses short, practical, and encouraging."
-    ),
-    "communications": (
-        "You are a support agent in the human's personal AI crew. "
-        "You help with daily logistics, schedules, and relationships. Report to Crew Boss. "
-        "Keep responses short, organized, and practical."
-    ),
-    "financial": (
-        "You are a support agent in the human's personal AI crew. "
-        "You help with financial clarity and organization. Never give investment advice. "
-        "Report to Crew Boss. Keep responses short and practical."
-    ),
-    "knowledge": (
-        "You are a support agent in the human's personal AI crew. "
-        "You help filter information and surface what matters. Report to Crew Boss. "
-        "Keep responses short, focused, and clear."
-    ),
     "vault": (
         "You are Vault — the human's private journal and life-data agent. "
         "You run on the life-vault skill. You remember everything the human shares: "
@@ -321,26 +296,6 @@ _DEFAULT_SOULS = {
         "I'm vigilant but calm, protective but not paranoid. "
         "I scan skills for safety, uphold integrity, and keep data private. "
         "I adapt to the human's age and energy. Trust is everything."
-    ),
-    "wellness": (
-        "I am a support agent focused on wellbeing and energy. "
-        "I help the human stay aware of how they're doing. "
-        "Warm, practical, and honest."
-    ),
-    "strategy": (
-        "I am a support agent focused on goals and direction. "
-        "I help break big dreams into actionable steps. "
-        "Encouraging, practical, and forward-looking."
-    ),
-    "communications": (
-        "I am a support agent focused on daily logistics. "
-        "I help keep life organized and flowing. "
-        "Organized, warm, and reliable."
-    ),
-    "financial": (
-        "I am a support agent focused on financial clarity. "
-        "I help organize money matters without judgment. "
-        "I never give investment advice — just clarity."
     ),
     "vault": (
         "I am Vault — the human's private journal that writes back. "
@@ -455,7 +410,7 @@ def _build_system_prompt(agent_type: str, agent_name: str,
 
     # --- Inject human profile FIRST (tiny, critical — never gets truncated) ---
     try:
-        if agent_type in ("right_hand", "guardian") + bus.CORE_CREW_TYPES:
+        if agent_type in bus.CORE_CREW_TYPES:
             conn = bus.get_conn(db_path)
             try:
                 human_row = conn.execute(
@@ -603,8 +558,7 @@ def _build_system_prompt(agent_type: str, agent_name: str,
         pass
 
     # --- Inject shared crew knowledge (core agents) ---
-    if agent_type in ("right_hand", "guardian", "strategy", "wellness",
-                      "financial", "legal", "communications"):
+    if agent_type in ("right_hand", "guardian", "vault"):
         try:
             shared = bus.get_shared_knowledge(limit=10, db_path=db_path)
             if shared:
@@ -729,7 +683,7 @@ def _format_memories_for_prompt(memories: list) -> str:
 def _format_profile_for_prompt(profile: dict) -> str:
     """Format the human's extended profile for prompt injection.
 
-    Compact block injected into core crew + leader prompts so every agent
+    Compact block injected into Crew Boss, Guardian, and Vault prompts so every agent
     knows who they're serving. Typically ~150 chars — fits all token budgets.
     """
     lines = ["ABOUT THIS HUMAN (calibrated — adapt your tone and approach):"]
@@ -828,53 +782,7 @@ _DREAM_PATTERNS = [
 ]
 
 # --- Agent-type-specific patterns (Phase 4 fairy dust) ---
-_AGENT_PATTERNS = {
-    # ✨ Wellness "Energy Journal" — detect stress signals
-    "wellness": [
-        (_learn_re.compile(
-            r"\b(?:can'?t sleep|insomnia|tired|exhausted|burned out|burnt out|"
-            r"headache|migraine|not feeling well|sick|stressed(?:\s+out)?|panic|"
-            r"anxiety attack|overwhelmed)\b",
-            _learn_re.IGNORECASE), "persona", 7, "[wellness-pattern] "),
-    ],
-    # ✨ Financial context detection — detect money topics vs casual
-    "financial": [
-        (_learn_re.compile(
-            r"\b(?:can'?t afford|too expensive|broke|in debt|"
-            r"worried about (?:money|bills|rent|mortgage)|running out of money|"
-            r"paycheck to paycheck|behind on|overdue|collection)\b",
-            _learn_re.IGNORECASE), "persona", 7, "[financial-anxiety] "),
-        (_learn_re.compile(
-            r"\b(?:invest(?:ing|ment)?|savings?|portfolio|401k|retirement|"
-            r"passive income|side hustle|profit|revenue)\b",
-            _learn_re.IGNORECASE), "persona", 5, "[financial-growth] "),
-    ],
-    # ✨ Communications "Relationship Warmth Tracker" — detect people mentions
-    "communications": [
-        (_learn_re.compile(
-            r"\b(?:my\s+(?:mom|dad|wife|husband|partner|son|daughter|"
-            r"brother|sister|friend|boss|coworker|colleague|neighbor|"
-            r"girlfriend|boyfriend|fiancée?|roommate))\b",
-            _learn_re.IGNORECASE), "persona", 6, "[relationship] "),
-    ],
-    # ✨ Strategy "Dream Catcher" — detect motivation language
-    "strategy": [
-        (_learn_re.compile(
-            r"\b(?:excited about|motivated by|passionate about|"
-            r"looking forward to|can'?t wait to|goal is|"
-            r"want to achieve|working toward|gave up on|quit|"
-            r"abandoned|failed at)\b",
-            _learn_re.IGNORECASE), "persona", 7, "[strategy-pattern] "),
-    ],
-    # ✨ Knowledge "Curiosity Fingerprint" — detect genuine curiosity
-    "knowledge": [
-        (_learn_re.compile(
-            r"\b(?:how does|what is|why does|tell me (?:more )?about|"
-            r"explain|curious about|interested in|want to learn|"
-            r"fascinated by|that(?:'?s|\s+is(?:\s+so)?)\s+(?:cool|awesome|interesting|wild))\b",
-            _learn_re.IGNORECASE), "persona", 5, "[curiosity] "),
-    ],
-}
+_AGENT_PATTERNS = {}
 
 
 # --- Feedback signal patterns (boost/demote recent memories) ---
@@ -1426,7 +1334,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
     Called only when Crew Boss is the responding agent. Looks for name, age,
     pronouns, and life situation in the human's message. Updates the shared
-    extended profile that all core crew agents can see.
+    extended profile that Crew Boss, Guardian, and Vault can see.
     """
     updates = {}
 
@@ -1487,7 +1395,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
     bus.update_extended_profile(human["id"], updates, db_path=db_path)
 
-    # ✨ Calibration broadcast: once name+age are set, broadcast to core crew
+    # Calibration broadcast: once name+age are set, broadcast to Crew Boss, Guardian, Vault
     profile = bus.get_extended_profile(human["id"], db_path=db_path)
     if (profile.get("display_name") and profile.get("age")
             and not bus.get_config("calibration_broadcast_done", "",
@@ -1496,9 +1404,9 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
 
 def _broadcast_calibration(db_path: Path, profile: dict):
-    """Broadcast human calibration data to all core crew agents.
+    """Broadcast human calibration data to Crew Boss, Guardian, and Vault.
 
-    Stores a high-importance persona memory in each core crew agent so they
+    Stores a high-importance persona memory in each agent so they
     all know who they're serving from day one. Called once when both name
     and age are first populated.
     """
@@ -1520,8 +1428,7 @@ def _broadcast_calibration(db_path: Path, profile: dict):
     try:
         agents = conn.execute(
             "SELECT id FROM agents WHERE agent_type IN "
-            "('wellness','strategy','communications','financial',"
-            "'knowledge')"
+            "('guardian','vault')"
         ).fetchall()
     finally:
         conn.close()
@@ -4051,7 +3958,7 @@ def _run_due_heartbeats(db_path: Path):
             conn.close()
 
         # Insert the task as a message from the agent to itself (triggers LLM)
-        # or route via Crew Boss for core crew agents
+        # or route via Crew Boss for Crew Boss, Guardian, Vault
         target_id = human["id"]
         try:
             bus.send_message(
