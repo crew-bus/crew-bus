@@ -1057,7 +1057,7 @@ class Heartbeat:
                 source = v.get("source", "INTEGRITY.md")
                 severity = v.get("severity", "high")
                 label = "Charter" if source == "CREW_CHARTER.md" else "Integrity"
-                action = ("Warn agent; second violation = firing protocol"
+                action = ("Coach agent; escalate to human if repeated"
                           if source == "CREW_CHARTER.md"
                           else "Review agent response and retrain if needed")
                 bus.log_security_event(
