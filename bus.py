@@ -50,12 +50,10 @@ GUARD_ACTIVATION_VERIFY_KEY = os.environ.get(
     "set-your-activation-key-in-env"  # placeholder — production key via env
 )
 
-# Core 3 agents + team types
+# Exactly 3 core agents only
 CORE_AGENTS = ("right_hand", "guardian", "vault")
-VALID_AGENT_TYPES = (
-    "human", "right_hand", "guardian", "vault",
-    "manager", "worker", "specialist", "help",
-)
+# All valid types: human + core agents + team types
+VALID_AGENT_TYPES = ("human",) + CORE_AGENTS + ("manager", "worker", "specialist", "help")
 
 # Role is now derived from agent_type for routing purposes
 VALID_ROLES = ("human", "right_hand", "security", "manager", "worker")
