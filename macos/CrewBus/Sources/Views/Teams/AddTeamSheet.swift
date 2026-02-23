@@ -49,9 +49,9 @@ struct AddTeamSheet: View {
                     teamOption(emoji: "🎓", name: "School", desc: "Tutor, Research Assistant, Study Planner", free: true)
                     teamOption(emoji: "🎨", name: "Passion Project", desc: "Project Planner, Skill Coach, Progress Tracker", free: true)
                     teamOption(emoji: "🏠", name: "Household", desc: "Meal Planner, Budget Tracker, Schedule", free: true)
-                    teamOption(emoji: "💼", name: "Freelance", desc: "Lead Finder, Invoice Bot, Follow-up", price: "$5 trial · $30/yr")
-                    teamOption(emoji: "⚡", name: "Side Hustle", desc: "Market Scout, Content, Sales", price: "$5 trial · $30/yr")
-                    teamOption(emoji: "🧩", name: "Custom", desc: "You name it, pick the agents", price: "$10 trial · $50/yr")
+                    teamOption(emoji: "💼", name: "Freelance", desc: "Lead Finder, Invoice Bot, Follow-up", free: true)
+                    teamOption(emoji: "⚡", name: "Side Hustle", desc: "Market Scout, Content, Sales", free: true)
+                    teamOption(emoji: "🧩", name: "Custom", desc: "You name it, pick the agents", free: true)
                 }
             }
 
