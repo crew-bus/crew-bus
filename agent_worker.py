@@ -2501,7 +2501,7 @@ def _process_single_message(row, db_path: Path):
         _set_face(agent_id, emotion="happy", action="speaking", effect="sparkles")
         # Execute any wizard_action commands embedded in the reply
         try:
-            clean_reply = _execute_wizard_actions(reply, db_path)
+            clean_reply = _execute_wizard_actions(reply, db_path, agent_id=agent_id, agent_type=agent_type)
         except Exception as e:
             _logger.warning("Wizard action failed for %s: %s", agent_name, e)
             clean_reply = reply
@@ -2827,7 +2827,7 @@ def _synthesize_team_reports(manager_id: int, db_path: Path):
                      model=model, db_path=db_path)
 
     if reply and reply.strip():
-        clean_reply = _execute_wizard_actions(reply, db_path)
+        clean_reply = _execute_wizard_actions(reply, db_path, agent_id=manager_id, agent_type="manager")
         clean_reply = _extract_social_drafts(clean_reply, manager_id, db_path)
         clean_reply = _extract_delegations(clean_reply, manager_id, db_path)
 
@@ -3210,7 +3210,7 @@ def _handle_telegram_setup(db_path: Path, guardian_id: int, human_id: int):
     threading.Thread(target=_tg_poller, daemon=True).start()
 
 
-def _execute_wizard_actions(reply: str, db_path: Path) -> str:
+def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, agent_type: str = "") -> str:
     """Parse and execute wizard_action/guardian_action JSON commands from an LLM reply.
 
     The Guardian (formerly Wizard) agent can embed action commands in its replies like:
@@ -3580,18 +3580,23 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                                 f"   {r.get('url', '')}\n"
                                 f"   {r.get('snippet', '')}\n"
                             )
-                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _caller_id = agent_id
+                        _caller_type = agent_type
+                        if not _caller_id:
+                            guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                            _caller_id = guardian["id"] if guardian else None
+                            _caller_type = "guardian"
                         _conn = bus.get_conn(db_path)
                         _h = _conn.execute(
                             "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
                         ).fetchone()
                         _conn.close()
-                        if guardian and _h:
+                        if _caller_id and _h:
                             _insert_reply_direct(
-                                db_path, guardian["id"], _h[0],
-                                results_text, agent_type="guardian",
+                                db_path, _caller_id, _h[0],
+                                results_text, agent_type=_caller_type,
                             )
-                        print(f"[guardian] web search: {query} "
+                        print(f"[{_caller_type or 'agent'}] web search: {query} "
                               f"({result.get('count', 0)} results)")
                     else:
                         print(f"[guardian] web search failed: "
@@ -3611,18 +3616,23 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
                         content_text = f"\n[WEB PAGE: {url}]\n{result.get('content', '')}"
                         if result.get("truncated"):
                             content_text += "\n[content truncated]"
-                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _caller_id = agent_id
+                        _caller_type = agent_type
+                        if not _caller_id:
+                            guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                            _caller_id = guardian["id"] if guardian else None
+                            _caller_type = "guardian"
                         _conn = bus.get_conn(db_path)
                         _h = _conn.execute(
                             "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
                         ).fetchone()
                         _conn.close()
-                        if guardian and _h:
+                        if _caller_id and _h:
                             _insert_reply_direct(
-                                db_path, guardian["id"], _h[0],
-                                content_text, agent_type="guardian",
+                                db_path, _caller_id, _h[0],
+                                content_text, agent_type=_caller_type,
                             )
-                        print(f"[guardian] read URL: {url}")
+                        print(f"[{_caller_type or 'agent'}] read URL: {url}")
                     else:
                         print(f"[guardian] URL read failed: "
                               f"{result.get('error')}")
