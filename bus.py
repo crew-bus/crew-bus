@@ -4635,7 +4635,7 @@ def crew_dm(from_id: int, to_name: str, body: str,
 
     try:
         result = send_message(from_id, to_id, "task",
-                              subject=f"DM from agent",
+                              subject=f"DM from agent (hop=0)",
                               body=body, priority="normal", db_path=db_path)
         return {"ok": True, "message_id": result["message_id"], "to": row["name"]}
     except (PermissionError, ValueError) as e:

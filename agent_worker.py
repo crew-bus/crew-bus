@@ -617,7 +617,10 @@ def _build_system_prompt(agent_type: str, agent_name: str,
             "{\"crew_action\":\"dm\",\"to\":\"AgentName\",\"message\":\"your message\"}\n\n"
             "You can send MULTIPLE DMs in one reply — just delegate to whoever makes sense.\n"
             "If a task isn't your specialty, DM the right agent. Don't ask the human who to send it to.\n"
-            "Don't say 'I'll check' without including the actual JSON DM."
+            "Don't say 'I'll check' without including the actual JSON DM.\n\n"
+            "When you receive a reply from another agent (a DM relay), "
+            "synthesize it into a clear, friendly answer for the human. "
+            "Attribute the source (e.g., 'Guardian reports...'). Keep it concise."
         )
         parts.append(crew_comms)
     except Exception:
@@ -2533,12 +2536,50 @@ def _process_single_message(row, db_path: Path):
                 _logger.warning("Fan-out failed for %s: %s", agent_name, e)
 
         # Don't store empty replies (can happen when LLM returns only action blocks)
+        # But if a crew DM was sent, insert a brief status so the human isn't left with silence
         if not clean_reply or not clean_reply.strip():
+            if sender_type == "human" and '"crew_action"' in reply and '"dm"' in reply:
+                _insert_reply_direct(
+                    db_path, agent_id, human_id,
+                    f"On it — I've reached out to the crew and I'll have an answer for you shortly.",
+                    human_msg=user_text, agent_type=agent_type,
+                )
             return
 
-        # Insert reply directly — always works, bypasses routing rules
-        _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
-                             human_msg=user_text, agent_type=agent_type)
+        # Branch reply routing: agent-to-agent replies get queued or routed to human
+        if sender_type != "human" and clean_reply:
+            # Agent-to-agent reply: check hop count
+            _subject = (row.get("subject") or "")
+            _hop_match = _re.search(r'hop=(\d+)', _subject)
+            _current_hop = int(_hop_match.group(1)) if _hop_match else 0
+
+            if _current_hop >= 1:
+                # Relay being processed → route final answer to the human
+                conn = bus.get_conn(db_path)
+                try:
+                    _h = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                    _human_agent_id = _h["id"] if _h else human_id
+                finally:
+                    conn.close()
+                _insert_reply_direct(db_path, agent_id, _human_agent_id, clean_reply,
+                                     human_msg=user_text, agent_type=agent_type)
+            else:
+                # First reply (hop=0) → queue back to sender for synthesis
+                with bus.db_write(db_path) as conn:
+                    conn.execute(
+                        "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
+                        "subject, body, priority, status) VALUES (?, ?, 'report', "
+                        "?, ?, 'normal', 'queued')",
+                        (agent_id, human_id,
+                         f'DM reply (hop=1) from {agent_name}',
+                         clean_reply),
+                    )
+        else:
+            # Normal human→agent reply
+            _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
+                                 human_msg=user_text, agent_type=agent_type)
 
         # ── Skill health tracking (Guardian runtime monitoring) ──
         try:
