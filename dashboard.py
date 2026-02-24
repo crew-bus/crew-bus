@@ -1151,7 +1151,7 @@ body.day-mode .magic-particle.mp-green{background:rgba(102,217,122,0.10);box-sha
 .avatar-picker-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:998}
 .avatar-picker{
   display:none;position:absolute;top:56px;left:50px;z-index:999;
-  background:var(--card);border:1px solid var(--bd);border-radius:14px;
+  background:var(--sf);border:1px solid var(--bd);border-radius:14px;
   padding:10px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.5);
 }
 .avatar-picker.open,.avatar-picker-overlay.open{display:block}
@@ -1642,14 +1642,14 @@ tr.override td{background:rgba(210,153,34,.08)}
 }
 .team-mailbox-dropdown{
   display:none;position:absolute;bottom:100%;left:0;z-index:61;margin-bottom:4px;
-  background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
   width:320px;max-height:340px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);
   padding:8px;
 }
 .team-mailbox-dropdown.open{display:block}
 .team-linked-dropdown{
   display:none;position:absolute;bottom:100%;right:0;z-index:61;margin-bottom:4px;
-  background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);
   width:260px;max-height:280px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);
   padding:8px;
 }
@@ -2254,17 +2254,17 @@ async function loadDrafts(){
   drafts.forEach(function(d){
     var icon=platformIcons[d.platform]||'📋';
     var sc=statusColors[d.status]||'var(--mu)';
-    html+='<div style="background:var(--sf);border:1px solid var(--br);border-radius:10px;padding:16px;margin-bottom:12px">';
+    html+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px">';
     html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
     html+='<div style="display:flex;align-items:center;gap:8px">';
     html+='<span style="font-size:1.2rem">'+icon+'</span>';
-    html+='<span style="font-weight:600;color:var(--fg)">'+esc(d.platform)+'</span>';
+    html+='<span style="font-weight:600;color:var(--tx)">'+esc(d.platform)+'</span>';
     if(d.target)html+='<span style="color:var(--mu);font-size:.8rem">\u2192 '+esc(d.target)+'</span>';
     html+='</div>';
     html+='<span style="background:'+sc+';color:#fff;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600">'+d.status+'</span>';
     html+='</div>';
-    if(d.title)html+='<div style="font-weight:600;margin-bottom:6px;color:var(--fg)">'+esc(d.title)+'</div>';
-    html+='<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:12px;font-size:.82rem;color:var(--fg);max-height:300px;overflow-y:auto;margin:0 0 10px">'+esc(d.body)+'</pre>';
+    if(d.title)html+='<div style="font-weight:600;margin-bottom:6px;color:var(--tx)">'+esc(d.title)+'</div>';
+    html+='<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:.82rem;color:var(--tx);max-height:300px;overflow-y:auto;margin:0 0 10px">'+esc(d.body)+'</pre>';
     html+='<div style="display:flex;gap:6px;justify-content:flex-end">';
     html+='<button onclick="copyDraft('+d.id+')" style="background:var(--ac);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem">📋 Copy</button>';
     if(d.status==='draft'){
@@ -2309,13 +2309,6 @@ async function publishDraft(id){
   }catch(e){showToast('Publish failed: '+e,'error')}
 }
 
-function showToast(msg){
-  var t=document.createElement('div');
-  t.textContent=msg;
-  t.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--ac);color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:.85rem;animation:fadeIn .2s';
-  document.body.appendChild(t);
-  setTimeout(function(){t.remove()},2000);
-}
 
 // ══════════ MAIN CIRCLE ══════════
 
@@ -2385,7 +2378,7 @@ async function loadGuardianBanner(forceOpen){
     '<div id="guardian-btn-area" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
     '<button onclick="showGuardianCheckout()" style="background:#d18616;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">\u{1F6D2} Unlock Skills \u2014 $29 one-time</button>'+
     '<div style="display:flex;gap:6px;flex:1;min-width:200px">'+
-    '<input id="guardian-key-main" type="text" placeholder="Have an activation key? Paste here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 12px;color:var(--fg);font-size:.85rem">'+
+    '<input id="guardian-key-main" type="text" placeholder="Have an activation key? Paste here" style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px 12px;color:var(--tx);font-size:.85rem">'+
     '<button onclick="activateGuardianFromBanner()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div></div>'+
     '<div id="guardian-buy-area" style="display:none"></div>'+
     '<div id="guardian-banner-msg" style="margin-top:8px;font-size:.8rem;min-height:1em"></div></div>';
@@ -2566,7 +2559,7 @@ async function openAgentSpace(agentId){
     '</select></div>'+
     '<div id="as-apikey-row" style="display:none;margin-top:6px">'+
     '<div style="display:flex;gap:6px;align-items:center">'+
-    '<input id="as-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.8rem">'+
+    '<input id="as-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.8rem">'+
     '<button onclick="saveModelApiKey()" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">Save Key</button>'+
     '</div><div id="as-apikey-msg" style="font-size:.75rem;color:var(--mu);margin-top:4px"></div></div>'+
     '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">'+
@@ -2583,7 +2576,7 @@ async function openAgentSpace(agentId){
       '</select></div>'+
       '<div id="as-default-apikey-row" style="display:none;margin-top:6px">'+
       '<div style="display:flex;gap:6px;align-items:center">'+
-      '<input id="as-default-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.8rem">'+
+      '<input id="as-default-apikey-input" type="password" placeholder="Paste API key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.8rem">'+
       '<button onclick="saveDefaultModelApiKey()" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">Save Key</button>'+
       '</div><div id="as-default-apikey-msg" style="font-size:.75rem;color:var(--mu);margin-top:4px"></div></div>'+
       '</div>'+
@@ -2727,7 +2720,7 @@ function startRenameAgent(){
         // Update cached data too
         var cached=agentsData.find(function(a){return a.id==agentId;});
         if(cached)cached.name=newName;
-        loadAgents();
+        loadCircle();
         loadTeams();
       }else{
         el.textContent=oldName;
@@ -2883,7 +2876,7 @@ async function loadGuardAndSkills(agentId, agentType){
           '<span style="color:#d18616;font-weight:600">Skills Locked</span></div>'+
           '<div id="guard-detail-btn"><button onclick="showGuardDetailCheckout()" class="btn" style="display:block;width:100%;text-align:center;background:#d18616;color:#000;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:600;margin-bottom:10px;font-size:.9rem">🛒 Unlock Skills \u2014 $29 one-time</button></div>'+
           '<div id="guard-detail-stripe" style="display:none;margin-bottom:10px"></div>'+
-          '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
+          '<div style="display:flex;gap:6px"><input id="guard-key-input" type="text" placeholder="Paste activation key here" style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.85rem">'+
           '<button onclick="submitGuardKey()" class="btn" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
           '<div id="guard-key-msg" style="margin-top:6px;font-size:.8rem;color:var(--mu)">$29 keeps the skill vetting engine updated for years to come.</div></div>';
       }
@@ -2906,8 +2899,8 @@ async function loadGuardAndSkills(agentId, agentType){
         var badge=vs==='vetted'?'<span style="color:#2ea043;font-size:.75rem">\u2705 Vetted</span>':
                   vs==='blocked'?'<span style="color:#f85149;font-size:.75rem">\u{1F6AB} Blocked</span>':
                   '<span style="color:#d18616;font-size:.75rem">\u26A0\uFE0F Unvetted</span>';
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">'+
-          '<span style="color:var(--fg)">'+esc(s.skill_name)+'</span>'+
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)">'+
+          '<span style="color:var(--tx)">'+esc(s.skill_name)+'</span>'+
           '<div style="display:flex;gap:8px;align-items:center">'+badge+
           '<span style="color:var(--mu);font-size:.7rem">'+timeAgo(s.added_at)+'</span></div></div>';
       }).join('');
@@ -2917,10 +2910,10 @@ async function loadGuardAndSkills(agentId, agentType){
     if(activated){
       html+='<button onclick="openAddSkillForm('+agentId+')" class="btn" style="margin-top:8px;background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">+ Add Skill</button>';
       html+='<div id="add-skill-form" style="display:none;margin-top:8px">'+
-        '<input id="new-skill-name" type="text" placeholder="Skill name" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem;margin-bottom:6px">'+
-        '<textarea id="new-skill-config" placeholder="Skill config JSON (optional)" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.82rem;margin-bottom:6px;font-family:monospace;resize:vertical"></textarea>'+
+        '<input id="new-skill-name" type="text" placeholder="Skill name" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.85rem;margin-bottom:6px">'+
+        '<textarea id="new-skill-config" placeholder="Skill config JSON (optional)" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.82rem;margin-bottom:6px;font-family:monospace;resize:vertical"></textarea>'+
         '<div style="display:flex;gap:6px"><button onclick="submitNewSkill('+agentId+')" class="btn" style="background:#2ea043;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">\u{1F6E1}\uFE0F Vet & Save</button>'+
-        '<button onclick="document.getElementById(\'add-skill-form\').style.display=\'none\'" class="btn" style="background:var(--s2);color:var(--fg);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
+        '<button onclick="document.getElementById(\'add-skill-form\').style.display=\'none\'" class="btn" style="background:var(--bd);color:var(--tx);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
         '<div id="add-skill-msg" style="margin-top:4px;font-size:.8rem"></div></div>';
     }else{
       html+='<p style="color:var(--mu);font-size:.8rem;margin-top:4px">Activate Guard to add skills \u2192</p>';
@@ -2993,7 +2986,7 @@ async function submitNewSkill(agentId,forceOverride){
         flagHtml+
         '<div style="margin-top:6px;display:flex;gap:6px">'+
         '<button onclick="submitNewSkill('+agentId+',true)" class="btn" style="background:#2ea043;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">\u2705 I trust this \u2014 approve</button>'+
-        '<button onclick="document.getElementById(\'add-skill-msg\').innerHTML=\'\'" class="btn" style="background:var(--s2);color:var(--fg);border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">Cancel</button></div></div>';
+        '<button onclick="document.getElementById(\'add-skill-msg\').innerHTML=\'\'" class="btn" style="background:var(--bd);color:var(--tx);border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem">Cancel</button></div></div>';
       msg.style.color='';
     }
   }else{
@@ -3005,19 +2998,19 @@ async function loadMemories(agentId){
   var el=document.getElementById('as-memory-section');
   if(!el)return;
   var memories=[];try{memories=await api('/api/agent/'+agentId+'/memories');}catch(e){}
-  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">🧠 Memories ('+memories.length+')</summary>';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--tx);font-size:.9rem">🧠 Memories ('+memories.length+')</summary>';
   html+='<div style="margin-top:8px">';
   if(memories&&memories.length>0){
     html+=memories.map(function(m){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--br)">'+
-        '<span style="color:var(--fg);font-size:.85rem">'+esc(m.content).substring(0,80)+(m.content.length>80?'...':'')+'</span>'+
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">'+
+        '<span style="color:var(--tx);font-size:.85rem">'+esc(m.content).substring(0,80)+(m.content.length>80?'...':'')+'</span>'+
         '<button onclick="forgetMemory('+agentId+','+m.id+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px" title="Forget this">\u2716</button></div>';
     }).join('');
   }else{
     html+='<p style="color:var(--mu);font-size:.85rem">No memories yet. Type "remember ..." in chat.</p>';
   }
   html+='<div style="display:flex;gap:6px;margin-top:8px">'+
-    '<input id="add-memory-input" type="text" placeholder="Add a memory..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">'+
+    '<input id="add-memory-input" type="text" placeholder="Add a memory..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.85rem">'+
     '<button onclick="addMemoryUI('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">+</button></div>';
   html+='</div></details>';
   el.innerHTML=html;
@@ -3042,9 +3035,9 @@ function loadSoulSection(agentId, agent){
   var el=document.getElementById('as-soul-section');
   if(!el)return;
   var soul=agent.soul||'';
-  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u2728 Identity & Soul</summary>';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--tx);font-size:.9rem">\u2728 Identity & Soul</summary>';
   html+='<div style="margin-top:8px">';
-  html+='<textarea id="soul-textarea" rows="4" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;resize:vertical;font-family:inherit;line-height:1.4" placeholder="Define this agent\'s personality, values, and identity...">'+esc(soul)+'</textarea>';
+  html+='<textarea id="soul-textarea" rows="4" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;color:var(--tx);font-size:.85rem;resize:vertical;font-family:inherit;line-height:1.4" placeholder="Define this agent\'s personality, values, and identity...">'+esc(soul)+'</textarea>';
   html+='<div style="display:flex;gap:6px;margin-top:6px;align-items:center">';
   html+='<button onclick="saveSoul('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">Save Soul</button>';
   html+='<span id="soul-msg" style="font-size:.8rem;color:var(--mu)"></span>';
@@ -3070,8 +3063,8 @@ function loadThinkingSection(agentId, agent){
   var levels=['auto','off','minimal','standard','deep','ultra'];
   var labels={'auto':'Auto','off':'Off','minimal':'Minimal','standard':'Standard','deep':'Deep','ultra':'Ultra'};
   var html='<div style="display:flex;align-items:center;gap:8px;margin-top:4px">';
-  html+='<span style="font-weight:600;color:var(--fg);font-size:.9rem">\u{1F9E0} Thinking:</span>';
-  html+='<select id="thinking-select" onchange="changeThinking('+agentId+',this.value)" style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:4px 10px;color:var(--fg);font-size:.85rem">';
+  html+='<span style="font-weight:600;color:var(--tx);font-size:.9rem">\u{1F9E0} Thinking:</span>';
+  html+='<select id="thinking-select" onchange="changeThinking('+agentId+',this.value)" style="background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:4px 10px;color:var(--tx);font-size:.85rem">';
   levels.forEach(function(l){html+='<option value="'+l+'"'+(l===level?' selected':'')+'>'+labels[l]+'</option>';});
   html+='</select>';
   html+='<span id="thinking-msg" style="font-size:.8rem;color:var(--mu)"></span>';
@@ -3091,13 +3084,13 @@ async function loadHeartbeatSection(agentId){
   var el=document.getElementById('as-heartbeat-section');
   if(!el)return;
   var tasks=[];try{tasks=await api('/api/agent/'+agentId+'/heartbeat');}catch(e){}
-  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u{1F493} Heartbeat Tasks ('+tasks.length+')</summary>';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--tx);font-size:.9rem">\u{1F493} Heartbeat Tasks ('+tasks.length+')</summary>';
   html+='<div style="margin-top:8px">';
   if(tasks&&tasks.length>0){
     tasks.forEach(function(t){
       var on=t.enabled?true:false;
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">';
-      html+='<div style="flex:1"><div style="color:var(--fg);font-size:.85rem">'+esc(t.task).substring(0,80)+'</div>';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)">';
+      html+='<div style="flex:1"><div style="color:var(--tx);font-size:.85rem">'+esc(t.task).substring(0,80)+'</div>';
       html+='<div style="color:var(--mu);font-size:.75rem">'+esc(t.schedule)+(t.last_run?' \u2022 last: '+timeAgo(t.last_run):'')+'</div></div>';
       html+='<div style="display:flex;gap:4px;align-items:center">';
       html+='<button onclick="toggleHeartbeat('+t.id+','+(on?0:1)+','+agentId+')" style="background:none;border:1px solid '+(on?'#2ea04366':'#f8514944')+';color:'+(on?'#2ea043':'#f85149')+';cursor:pointer;font-size:.7rem;padding:2px 8px;border-radius:4px">'+(on?'On':'Off')+'</button>';
@@ -3107,14 +3100,14 @@ async function loadHeartbeatSection(agentId){
   }else{
     html+='<p style="color:var(--mu);font-size:.85rem">No heartbeat tasks set.</p>';
   }
-  html+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--br)">';
+  html+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">';
   html+='<div style="display:flex;gap:6px;margin-bottom:4px">';
-  html+='<select id="hb-schedule" style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:4px 8px;color:var(--fg);font-size:.82rem">';
+  html+='<select id="hb-schedule" style="background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;color:var(--tx);font-size:.82rem">';
   html+='<option value="every 30m">Every 30m</option><option value="every 1h">Every 1h</option><option value="every 4h">Every 4h</option>';
   html+='<option value="daily 9am">Daily 9am</option><option value="daily 6pm">Daily 6pm</option><option value="daily 10am">Daily 10am</option>';
   html+='<option value="weekly monday 9am">Weekly Mon 9am</option></select></div>';
   html+='<div style="display:flex;gap:6px">';
-  html+='<input id="hb-task" type="text" placeholder="Task description..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:.85rem">';
+  html+='<input id="hb-task" type="text" placeholder="Task description..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;color:var(--tx);font-size:.85rem">';
   html+='<button onclick="addHeartbeat('+agentId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600">+</button></div>';
   html+='</div></div></details>';
   el.innerHTML=html;
@@ -3145,13 +3138,13 @@ async function loadLearningSection(agentId){
   var data={errors:[],learnings:[]};
   try{data=await api('/api/agent/'+agentId+'/learnings');}catch(e){}
   var total=data.errors.length+data.learnings.length;
-  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--fg);font-size:.9rem">\u{1F4DA} Learning Log ('+total+')</summary>';
+  var html='<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;color:var(--tx);font-size:.9rem">\u{1F4DA} Learning Log ('+total+')</summary>';
   html+='<div style="margin-top:8px">';
   if(data.errors.length>0){
     html+='<div style="margin-bottom:8px"><div style="color:#f85149;font-weight:600;font-size:.82rem;margin-bottom:4px">Mistakes to Avoid</div>';
     data.errors.forEach(function(e){
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
-      html+='<span style="color:var(--fg);font-size:.82rem">'+esc(e.content).substring(0,90)+'</span>';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--bd)">';
+      html+='<span style="color:var(--tx);font-size:.82rem">'+esc(e.content).substring(0,90)+'</span>';
       html+='<button onclick="forgetMemory('+agentId+','+e.id+');loadLearningSection('+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px">\u2716</button>';
       html+='</div>';
     });
@@ -3160,8 +3153,8 @@ async function loadLearningSection(agentId){
   if(data.learnings.length>0){
     html+='<div><div style="color:#2ea043;font-weight:600;font-size:.82rem;margin-bottom:4px">What Works Well</div>';
     data.learnings.forEach(function(l){
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
-      html+='<span style="color:var(--fg);font-size:.82rem">'+esc(l.content).substring(0,90)+'</span>';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--bd)">';
+      html+='<span style="color:var(--tx);font-size:.82rem">'+esc(l.content).substring(0,90)+'</span>';
       html+='<button onclick="forgetMemory('+agentId+','+l.id+');loadLearningSection('+agentId+')" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:.7rem;padding:2px 6px">\u2716</button>';
       html+='</div>';
     });
@@ -3345,9 +3338,9 @@ async function activateLicense(type){
       var sc=document.getElementById('pay-stripe-checkout');
       sc.innerHTML='<p style="color:var(--mu);font-size:.8rem;margin-bottom:10px">Complete payment below. After paying, you\'ll receive an activation key.</p>'+
         '<stripe-buy-button buy-button-id="'+btnId+'" publishable-key="'+STRIPE_PK+'"></stripe-buy-button>'+
-        '<div style="margin-top:14px;border-top:1px solid var(--br);padding-top:12px">'+
+        '<div style="margin-top:14px;border-top:1px solid var(--bd);padding-top:12px">'+
         '<p style="color:var(--mu);font-size:.8rem;margin-bottom:6px">Already paid? Paste your activation key:</p>'+
-        '<div style="display:flex;gap:6px"><input id="pay-key-after" type="text" placeholder="Paste activation key..." style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem">'+
+        '<div style="display:flex;gap:6px"><input id="pay-key-after" type="text" placeholder="Paste activation key..." style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;color:var(--tx);font-size:.85rem">'+
         '<button onclick="submitPayKey()" style="background:var(--ac);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600">Activate</button></div>'+
         '<div id="pay-key-msg" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
       sc.style.display='block';
@@ -3522,7 +3515,7 @@ async function terminateAgent(agentId,agentName,agentType){
     if(r.ok){
       showToast(agentName+' has been terminated.');
       closeAgentSpace();
-      loadAgents();loadTeams();
+      loadCircle();loadTeams();
     }else{
       showToast(r.error||'Failed to terminate agent.','error');
     }
@@ -3547,7 +3540,7 @@ async function pauseAgent(agentId,agentName,isManager){
       }
     }
     showToast(agentName+(isManager?' and team':'')+' paused.');
-    closeAgentSpace();loadAgents();loadTeams();
+    closeAgentSpace();loadCircle();loadTeams();
   }catch(e){showToast('Error pausing agent.','error');}
 }
 
@@ -3567,7 +3560,7 @@ async function resumeAgent(agentId,agentName,isManager){
       }
     }
     showToast(agentName+(isManager?' and team':'')+' resumed.');
-    closeAgentSpace();loadAgents();loadTeams();
+    closeAgentSpace();loadCircle();loadTeams();
   }catch(e){showToast('Error resuming agent.','error');}
 }
 
@@ -3681,19 +3674,19 @@ async function openTeamDash(teamId){
   });
   // Hire Agent button (if under max)
   if(mgr&&teamAgents.length<10){
-    html+='<div class="team-worker-bubble" onclick="showHireForm('+teamId+',\''+esc(mgr.name)+'\')" style="cursor:pointer;opacity:.7;border:2px dashed var(--br);border-radius:12px;padding:8px">'+
-      '<div class="team-worker-circle" style="background:var(--s2)">\u2795</div>'+
+    html+='<div class="team-worker-bubble" onclick="showHireForm('+teamId+',\''+esc(mgr.name)+'\')" style="cursor:pointer;opacity:.7;border:2px dashed var(--bd);border-radius:12px;padding:8px">'+
+      '<div class="team-worker-circle" style="background:var(--bd)">\u2795</div>'+
       '<span class="team-worker-label" style="color:var(--mu)">Hire Agent</span></div>';
   }
   html+='</div>';
   // Hire agent form (hidden by default)
-  html+='<div id="hire-form-'+teamId+'" style="display:none;margin:12px auto;max-width:340px;padding:16px;background:var(--sf);border:1px solid var(--br);border-radius:10px">'+
+  html+='<div id="hire-form-'+teamId+'" style="display:none;margin:12px auto;max-width:340px;padding:16px;background:var(--sf);border:1px solid var(--bd);border-radius:10px">'+
     '<div style="font-weight:700;margin-bottom:8px">Hire a new agent</div>'+
-    '<input id="hire-name-'+teamId+'" type="text" placeholder="Agent name" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;margin-bottom:6px;box-sizing:border-box">'+
-    '<input id="hire-desc-'+teamId+'" type="text" placeholder="What does this agent do? (optional)" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:.85rem;margin-bottom:8px;box-sizing:border-box">'+
+    '<input id="hire-name-'+teamId+'" type="text" placeholder="Agent name" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;color:var(--tx);font-size:.85rem;margin-bottom:6px;box-sizing:border-box">'+
+    '<input id="hire-desc-'+teamId+'" type="text" placeholder="What does this agent do? (optional)" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;color:var(--tx);font-size:.85rem;margin-bottom:8px;box-sizing:border-box">'+
     '<div style="display:flex;gap:6px">'+
     '<button onclick="submitHire('+teamId+')" style="background:var(--ac);color:#000;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:.85rem">Hire</button>'+
-    '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--s2);color:var(--fg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
+    '<button onclick="document.getElementById(\'hire-form-'+teamId+'\').style.display=\'none\'" style="background:var(--bd);color:var(--tx);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.85rem">Cancel</button></div>'+
     '<div id="hire-msg-'+teamId+'" style="margin-top:6px;font-size:.8rem;min-height:1em"></div></div>';
 
   // Footer: mailbox icon (bottom-left) + linked teams icon (bottom-right)
@@ -3737,7 +3730,7 @@ async function loadLinkedTeams(teamId){
     var otherTeams=allTeams.filter(function(tt){return tt.id!==teamId&&linkedIds.indexOf(tt.id)===-1});
     if(otherTeams.length>0){
       html+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center">'+
-        '<select id="link-team-select" style="padding:6px;font-size:.8rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:4px;flex:1">';
+        '<select id="link-team-select" style="padding:6px;font-size:.8rem;background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:4px;flex:1">';
       otherTeams.forEach(function(tt){html+='<option value="'+tt.id+'">'+esc(tt.name)+'</option>'});
       html+='</select>'+
         '<button onclick="linkTeam('+teamId+')" style="background:var(--ac);color:#000;border:none;padding:6px 12px;border-radius:4px;font-size:.8rem;cursor:pointer">\u{1F517} Link</button></div>';
@@ -4297,7 +4290,7 @@ function submitSetup(){
         setTimeout(function(){overlay.style.display='none'},600);
         bootDashboard();
         setTimeout(function(){
-          if(d.wizard_id){openAgentChat(d.wizard_id);}
+          if(d.wizard_id){openAgentSpace(d.wizard_id);}
         },800);
       } else {
         errEl.textContent=d.error||'Setup failed. Please try again.';
@@ -4789,8 +4782,8 @@ def _build_html():
 <div id="view-crew" class="view active">
 <div class="time-bar">
   <div class="day-night-toggle">
-    <button class="dn-btn active" onclick="setDayNight('day',this)" title="Day mode">\u2600\uFE0F</button>
-    <button class="dn-btn" onclick="setDayNight('night',this)" title="Night mode">🌙</button>
+    <button class="dn-btn" onclick="setDayNight('day',this)" title="Day mode">\u2600\uFE0F</button>
+    <button class="dn-btn active" onclick="setDayNight('night',this)" title="Night mode">🌙</button>
   </div>
 </div>
 <div class="main-layout">
@@ -4970,7 +4963,7 @@ def _build_html():
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <h1 style="margin:0">Social Drafts</h1>
     <div style="display:flex;gap:8px">
-      <select id="drafts-platform-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
+      <select id="drafts-platform-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:4px 8px;font-size:.85rem">
         <option value="">All Platforms</option>
         <option value="reddit">Reddit</option>
         <option value="twitter">Twitter/X</option>
@@ -4981,7 +4974,7 @@ def _build_html():
         <option value="website">Website</option>
         <option value="other">Other</option>
       </select>
-      <select id="drafts-status-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:4px 8px;font-size:.85rem">
+      <select id="drafts-status-filter" onchange="loadDrafts()" style="background:var(--sf);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:4px 8px;font-size:.85rem">
         <option value="">All Status</option>
         <option value="draft">Draft</option>
         <option value="approved">Approved</option>
@@ -4998,7 +4991,7 @@ def _build_html():
 <div class="legacy-container">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <h1 style="margin:0">Observability</h1>
-    <button onclick="loadTelemetryStats();loadTelemetrySpans()" style="background:var(--sf);border:1px solid var(--br);color:var(--fg);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85rem">Refresh</button>
+    <button onclick="loadTelemetryStats();loadTelemetrySpans()" style="background:var(--sf);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85rem">Refresh</button>
   </div>
   <div id="otel-stats"></div>
   <h3 style="color:#e6edf3;margin:20px 0 8px;font-size:.9rem">Recent Spans</h3>
@@ -5144,14 +5137,14 @@ def _build_html():
   <div class="confirm-box" style="max-width:420px">
     <h3>💬 Share Your Feedback</h3>
     <p style="font-size:.8rem;color:var(--mu);margin-bottom:12px">Help us make Crew Bus better. Your feedback goes directly to the dev team.</p>
-    <select class="setup-select" id="feedback-type" style="margin-bottom:10px;padding:8px;width:100%;font-size:.85rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:6px">
+    <select class="setup-select" id="feedback-type" style="margin-bottom:10px;padding:8px;width:100%;font-size:.85rem;background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:6px">
       <option value="bug">Bug Report</option>
       <option value="feature">Feature Request</option>
       <option value="ux">UX / Usability</option>
       <option value="other">Other</option>
     </select>
     <textarea id="feedback-text" rows="5" placeholder="Tell us what's on your mind..."
-      style="width:100%;padding:10px;font-size:.85rem;background:var(--sf);color:var(--fg);border:1px solid var(--br);border-radius:8px;resize:vertical;font-family:inherit"></textarea>
+      style="width:100%;padding:10px;font-size:.85rem;background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:8px;resize:vertical;font-family:inherit"></textarea>
     <div class="setup-error" id="feedback-error"></div>
     <div class="confirm-actions" style="margin-top:10px">
       <button class="confirm-cancel" onclick="closeFeedback()">Cancel</button>
@@ -5168,15 +5161,15 @@ def _build_html():
     <div id="pay-plan-chooser">
       <p style="color:var(--mu);font-size:.8rem;margin:0 0 14px">Choose a plan to get started</p>
       <div style="display:flex;gap:12px;margin:0 0 14px">
-        <button onclick="activateLicense('trial')" style="flex:1;background:var(--sf);border:2px solid var(--br);border-radius:10px;padding:18px 10px;cursor:pointer;transition:border-color .2s,transform .15s;color:inherit" onmouseover="this.style.borderColor='var(--ac)';this.style.transform='scale(1.03)'" onmouseout="this.style.borderColor='var(--br)';this.style.transform='scale(1)'">
+        <button onclick="activateLicense('trial')" style="flex:1;background:var(--sf);border:2px solid var(--bd);border-radius:10px;padding:18px 10px;cursor:pointer;transition:border-color .2s,transform .15s;color:inherit" onmouseover="this.style.borderColor='var(--ac)';this.style.transform='scale(1.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.transform='scale(1)'">
           <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-trial-price">$10</div>
-          <div style="font-size:.85rem;color:var(--fg);margin:4px 0"><span id="pay-trial-days">30</span>-day trial</div>
+          <div style="font-size:.85rem;color:var(--tx);margin:4px 0"><span id="pay-trial-days">30</span>-day trial</div>
           <div style="font-size:.7rem;color:var(--mu)">Try it out</div>
         </button>
         <button onclick="activateLicense('annual')" style="flex:1;background:var(--sf);border:2px solid var(--ac);border-radius:10px;padding:18px 10px;cursor:pointer;transition:transform .15s;color:inherit;position:relative" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
           <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--ac);color:#000;font-size:.6rem;font-weight:700;padding:2px 10px;border-radius:10px;white-space:nowrap">BEST VALUE</div>
           <div style="font-size:1.6rem;font-weight:700;color:var(--ac)" id="pay-annual-price">$50</div>
-          <div style="font-size:.85rem;color:var(--fg);margin:4px 0">per year</div>
+          <div style="font-size:.85rem;color:var(--tx);margin:4px 0">per year</div>
           <div style="font-size:.7rem;color:var(--mu)">Save over 50%</div>
         </button>
       </div>
