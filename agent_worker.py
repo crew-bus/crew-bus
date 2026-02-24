@@ -2640,6 +2640,23 @@ def _execute_crew_actions(reply: str, from_agent_id: int, db_path: Path) -> str:
     matches = _re.findall(pattern, reply)
 
     if not matches:
+        # Fallback: LLM said "DM sent to X" without including JSON — auto-send
+        # Matches: 'DM sent to Guardian: "message here"' or 'DM sent to Tom: "hi"'
+        _dm_fb = _re.search(
+            r'(?:DM sent to|messaged|reached out to|sent (?:a )?(?:DM|message) to)\s+'
+            r'(\w[\w\s-]*?)(?:\s*:\s*["\u201c](.+?)["\u201d])',
+            reply, _re.IGNORECASE
+        )
+        if _dm_fb:
+            _fb_to = _dm_fb.group(1).strip()
+            _fb_msg = _dm_fb.group(2).strip()
+            if _fb_to and _fb_msg:
+                print(f"[crew-fallback] No JSON found, but detected DM to '{_fb_to}' — sending")
+                result = bus.crew_dm(from_agent_id, _fb_to, _fb_msg, db_path=db_path)
+                if result.get("ok"):
+                    print(f"[crew-fallback] DM sent: agent {from_agent_id} -> {result.get('to')}")
+                else:
+                    print(f"[crew-fallback] DM failed: {result.get('error')}")
         return reply
 
     for raw in matches:
