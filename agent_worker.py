@@ -2533,7 +2533,11 @@ def _process_single_message(row, db_path: Path):
                 _logger.warning("Delegation extraction failed for %s: %s", agent_name, e)
 
         # Auto-fan-out: forward the task to all workers
-        if agent_type == "manager" and row["from_agent_id"] != agent_id:
+        # Skip fan-out for relay replies (hop>=1) and worker-to-manager replies
+        # to prevent echo loops between manager and its workers
+        _is_relay = "hop=" in _msg_subject
+        _from_worker = sender_type == "worker"
+        if agent_type == "manager" and row["from_agent_id"] != agent_id and not _is_relay and not _from_worker:
             try:
                 _fan_out_to_workers(db_path, agent_id, user_text)
             except Exception as e:
