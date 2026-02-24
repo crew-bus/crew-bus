@@ -2369,7 +2369,9 @@ def _process_single_message(row, db_path: Path):
         sender_type = row["sender_type"]
     except (KeyError, IndexError):
         sender_type = "human"
-    if sender_type != "human" and user_text and len(user_text) < 120:
+    _msg_subject = (row["subject"] or "") if row["subject"] else ""
+    _is_hop_dm = "hop=" in _msg_subject
+    if sender_type != "human" and user_text and len(user_text) < 120 and not _is_hop_dm:
         lower = user_text.lower()
         if any(p in lower for p in _FAST_PATH_PATTERNS):
             _insert_reply_direct(db_path, agent_id, human_id,
@@ -2549,7 +2551,7 @@ def _process_single_message(row, db_path: Path):
         # Branch reply routing: agent-to-agent replies get queued or routed to human
         if sender_type != "human" and clean_reply:
             # Agent-to-agent reply: check hop count
-            _subject = (row.get("subject") or "")
+            _subject = (row["subject"] or "") if row["subject"] else ""
             _hop_match = _re.search(r'hop=(\d+)', _subject)
             _current_hop = int(_hop_match.group(1)) if _hop_match else 0
 
