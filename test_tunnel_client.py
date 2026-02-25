@@ -1,6 +1,7 @@
 """Tests for scripts/tunnel_client.py — WebSocket tunnel client for CrewBus cloud relay."""
 
 import asyncio
+import io
 import json
 import os
 import signal as signal_mod
@@ -356,3 +357,197 @@ def test_graceful_shutdown():
         assert shutdown_ok, "Tunnel did not shut down within 2 seconds after SIGTERM"
 
     _run_async(_run())
+
+
+# ---------------------------------------------------------------------------
+# Structured status output protocol
+# ---------------------------------------------------------------------------
+
+def _capture_stderr_async(coro_func):
+    """Run an async function while capturing stderr, return stderr_text."""
+    buf = io.StringIO()
+    old_stderr = sys.stderr
+    sys.stderr = buf
+    try:
+        _run_async(coro_func())
+    finally:
+        sys.stderr = old_stderr
+    return buf.getvalue()
+
+
+def test_status_connected_on_successful_connect():
+    """STATUS:CONNECTED is emitted after a successful WebSocket connection."""
+    ping_msg = json.dumps({"type": "ping"})
+    fake_ws = FakeWS(messages=[ping_msg])
+
+    mock_websockets = MagicMock()
+    mock_websockets.connect.return_value = fake_ws
+
+    async def _run():
+        with patch.dict("sys.modules", {"websockets": mock_websockets}):
+            task = asyncio.create_task(
+                tunnel_client.run_tunnel("wss://fake/tunnel", "tok", "http://127.0.0.1:8421")
+            )
+            await asyncio.sleep(0.1)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    stderr = _capture_stderr_async(_run)
+    lines = stderr.strip().splitlines()
+    status_lines = [l for l in lines if l.startswith("STATUS:")]
+
+    assert "STATUS:CONNECTING" in status_lines
+    assert "STATUS:CONNECTED" in status_lines
+    # CONNECTING should come before CONNECTED
+    assert status_lines.index("STATUS:CONNECTING") < status_lines.index("STATUS:CONNECTED")
+
+
+def test_status_reconnecting_includes_attempt():
+    """STATUS:RECONNECTING includes the attempt count on connection failure."""
+    connect_count = 0
+    mock_websockets = MagicMock()
+
+    class FailingWS:
+        async def __aenter__(self):
+            raise ConnectionError("refused")
+        async def __aexit__(self, *args):
+            pass
+
+    def fake_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return FailingWS()
+
+    mock_websockets.connect = fake_connect
+
+    async def _run():
+        async def patched_wait_for(coro, timeout):
+            if connect_count >= 3:
+                raise asyncio.CancelledError()
+            raise asyncio.TimeoutError()
+
+        with patch.dict("sys.modules", {"websockets": mock_websockets}), \
+             patch("asyncio.wait_for", side_effect=patched_wait_for):
+            try:
+                await tunnel_client.run_tunnel("wss://fake/tunnel", "tok", "http://127.0.0.1:8421")
+            except asyncio.CancelledError:
+                pass
+
+    stderr = _capture_stderr_async(_run)
+    lines = stderr.strip().splitlines()
+    reconnect_lines = [l for l in lines if l.startswith("STATUS:RECONNECTING")]
+
+    assert len(reconnect_lines) >= 2
+    assert "attempt=1" in reconnect_lines[0]
+    assert "attempt=2" in reconnect_lines[1]
+
+
+def test_status_disconnected_on_shutdown():
+    """STATUS:DISCONNECTED is emitted when the tunnel shuts down."""
+
+    class BlockingWS:
+        async def recv(self):
+            await asyncio.sleep(100)
+            return '{"type": "ping"}'
+        async def send(self, data):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            pass
+
+    mock_websockets = MagicMock()
+    mock_websockets.connect.return_value = BlockingWS()
+
+    async def _run():
+        with patch.dict("sys.modules", {"websockets": mock_websockets}):
+            task = asyncio.create_task(
+                tunnel_client.run_tunnel("wss://fake/tunnel", "tok", "http://127.0.0.1:8421")
+            )
+            await asyncio.sleep(0.1)
+            os.kill(os.getpid(), signal_mod.SIGTERM)
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except asyncio.TimeoutError:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+    stderr = _capture_stderr_async(_run)
+    lines = stderr.strip().splitlines()
+    assert "STATUS:DISCONNECTED" in lines
+
+
+def test_tool_call_status_includes_method_and_duration():
+    """TOOL_CALL status line includes the method name and duration."""
+    mcp_body = {"jsonrpc": "2.0", "method": "tools/list", "id": 1}
+    mcp_response = {"jsonrpc": "2.0", "result": {"tools": []}, "id": 1}
+    request_id = "tc-001"
+
+    incoming_msg = json.dumps({
+        "type": "mcp_request",
+        "id": request_id,
+        "body": mcp_body,
+    })
+
+    fake_ws = FakeWS(messages=[incoming_msg])
+    mock_websockets = MagicMock()
+    mock_websockets.connect.return_value = fake_ws
+
+    async def _run():
+        with patch.dict("sys.modules", {"websockets": mock_websockets}), \
+             patch.object(tunnel_client, "forward_to_local", return_value=mcp_response):
+            task = asyncio.create_task(
+                tunnel_client.run_tunnel("wss://fake/tunnel", "tok", "http://127.0.0.1:8421")
+            )
+            await asyncio.sleep(0.1)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    stderr = _capture_stderr_async(_run)
+    lines = stderr.strip().splitlines()
+    tool_call_lines = [l for l in lines if l.startswith("TOOL_CALL:")]
+
+    assert len(tool_call_lines) >= 1
+    assert "tools/list" in tool_call_lines[0]
+    assert "duration=" in tool_call_lines[0]
+    assert tool_call_lines[0].endswith("s")
+
+
+def test_status_error_on_connection_failure():
+    """STATUS:ERROR is emitted with error message on connection failure."""
+    mock_websockets = MagicMock()
+
+    class FailingWS:
+        async def __aenter__(self):
+            raise ConnectionError("Connection refused")
+        async def __aexit__(self, *args):
+            pass
+
+    mock_websockets.connect.return_value = FailingWS()
+
+    async def _run():
+        async def patched_wait_for(coro, timeout):
+            raise asyncio.CancelledError()
+
+        with patch.dict("sys.modules", {"websockets": mock_websockets}), \
+             patch("asyncio.wait_for", side_effect=patched_wait_for):
+            try:
+                await tunnel_client.run_tunnel("wss://fake/tunnel", "tok", "http://127.0.0.1:8421")
+            except asyncio.CancelledError:
+                pass
+
+    stderr = _capture_stderr_async(_run)
+    lines = stderr.strip().splitlines()
+    error_lines = [l for l in lines if l.startswith("STATUS:ERROR")]
+
+    assert len(error_lines) >= 1
+    assert "message=" in error_lines[0]

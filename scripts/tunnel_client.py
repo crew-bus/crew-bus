@@ -17,6 +17,7 @@ import asyncio
 import json
 import signal
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -28,6 +29,11 @@ MAX_BACKOFF = 30
 def _log(msg: str) -> None:
     """Log to stderr with prefix."""
     print(f"[crewbus-tunnel] {msg}", file=sys.stderr, flush=True)
+
+
+def _status(line: str) -> None:
+    """Emit a structured status line to stderr for the Mac app to parse."""
+    print(line, file=sys.stderr, flush=True)
 
 
 def forward_to_local(body: dict, local_url: str) -> dict:
@@ -108,18 +114,22 @@ async def _handle_messages(ws, shutdown_event, loop, local_url):
             elif msg_type == "mcp_request":
                 request_id = msg.get("id")
                 body = msg.get("body", {})
-                _log(f"MCP request {request_id}: {body.get('method', '?')}")
+                method = body.get("method", "?")
+                _log(f"MCP request {request_id}: {method}")
 
                 # Forward to local MCP server (run in executor to avoid blocking)
+                t0 = time.time()
                 response = await loop.run_in_executor(
                     None, forward_to_local, body, local_url
                 )
+                duration = time.time() - t0
 
                 await ws.send(json.dumps({
                     "type": "mcp_response",
                     "id": request_id,
                     "body": response,
                 }))
+                _status(f"TOOL_CALL:{method} duration={duration:.2f}s")
                 _log(f"MCP response {request_id} sent")
 
             else:
@@ -155,14 +165,18 @@ async def run_tunnel(relay_url: str, token: str, local_url: str) -> None:
             # signal handlers not supported on Windows event loop
             pass
 
+    attempt = 0
     while not shutdown_event.is_set():
         try:
+            _status("STATUS:CONNECTING")
             async with websockets.connect(
                 relay_url,
                 additional_headers={"Authorization": f"Bearer {token}"},
             ) as ws:
+                _status("STATUS:CONNECTED")
                 _log(f"Connected to relay")
                 backoff = 1  # reset on successful connection
+                attempt = 0
 
                 await _handle_messages(ws, shutdown_event, loop, local_url)
 
@@ -172,7 +186,10 @@ async def run_tunnel(relay_url: str, token: str, local_url: str) -> None:
         except Exception as e:
             if shutdown_event.is_set():
                 break
+            attempt += 1
+            _status(f"STATUS:ERROR message={e}")
             _log(f"Disconnected: {e}. Reconnecting in {backoff}s...")
+            _status(f"STATUS:RECONNECTING attempt={attempt}")
             try:
                 await asyncio.wait_for(shutdown_event.wait(), timeout=backoff)
                 break  # shutdown requested during backoff
@@ -180,6 +197,7 @@ async def run_tunnel(relay_url: str, token: str, local_url: str) -> None:
                 pass  # timeout expired, reconnect
             backoff = min(backoff * 2, MAX_BACKOFF)
 
+    _status("STATUS:DISCONNECTED")
     _log("Tunnel shut down")
 
 
