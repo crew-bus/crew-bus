@@ -9,15 +9,15 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["TunnelDurableObject"]
+new_sqlite_classes = ["TunnelDurableObject"]
 
 [[kv_namespaces]]
 binding = "OAUTH_KV"
-id = "placeholder-create-with-wrangler"
+id = "426929d9842a47c68c7ba685bc43e07a"
 
 [[kv_namespaces]]
 binding = "TUNNEL_KV"
-id = "placeholder-create-with-wrangler"
+id = "e73ac3e013ed4705b138526536c5424a"
 
 [vars]
 RELAY_ORIGIN = "https://relay.crew-bus.dev"
