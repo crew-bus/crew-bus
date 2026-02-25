@@ -2550,7 +2550,7 @@ def _process_single_message(row, db_path: Path):
                 if '"crew_action"' in reply and '"dm"' in reply:
                     fallback = "On it — I've reached out to the crew and I'll have an answer for you shortly."
                 elif '"web_search"' in reply or '"web_read_url"' in reply:
-                    fallback = "I tried to search the web but it didn't work. Web search may not be available right now."
+                    fallback = "I tried to search the web but couldn't get results. Please try again."
                 else:
                     fallback = "I processed your request but don't have a text response to share."
                 _insert_reply_direct(
@@ -3299,6 +3299,8 @@ def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, age
     if not matches:
         return reply
 
+    replacements = {}  # raw_match -> replacement text (for web results)
+
     for raw in matches:
         try:
             action = json.loads(raw)
@@ -3651,23 +3653,10 @@ def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, age
                                 f"   {r.get('url', '')}\n"
                                 f"   {r.get('snippet', '')}\n"
                             )
-                        _caller_id = agent_id
-                        _caller_type = agent_type
-                        if not _caller_id:
-                            guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
-                            _caller_id = guardian["id"] if guardian else None
-                            _caller_type = "guardian"
-                        _conn = bus.get_conn(db_path)
-                        _h = _conn.execute(
-                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
-                        ).fetchone()
-                        _conn.close()
-                        if _caller_id and _h:
-                            _insert_reply_direct(
-                                db_path, _caller_id, _h[0],
-                                results_text, agent_type=_caller_type,
-                            )
-                        print(f"[{_caller_type or 'agent'}] web search: {query} "
+                        # Track replacement — results will replace the JSON block
+                        # in clean_reply so they flow through the normal reply path
+                        replacements[raw] = results_text
+                        print(f"[{agent_type or 'agent'}] web search: {query} "
                               f"({result.get('count', 0)} results)")
                     else:
                         print(f"[guardian] web search failed: "
@@ -3687,23 +3676,9 @@ def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, age
                         content_text = f"\n[WEB PAGE: {url}]\n{result.get('content', '')}"
                         if result.get("truncated"):
                             content_text += "\n[content truncated]"
-                        _caller_id = agent_id
-                        _caller_type = agent_type
-                        if not _caller_id:
-                            guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
-                            _caller_id = guardian["id"] if guardian else None
-                            _caller_type = "guardian"
-                        _conn = bus.get_conn(db_path)
-                        _h = _conn.execute(
-                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
-                        ).fetchone()
-                        _conn.close()
-                        if _caller_id and _h:
-                            _insert_reply_direct(
-                                db_path, _caller_id, _h[0],
-                                content_text, agent_type=_caller_type,
-                            )
-                        print(f"[{_caller_type or 'agent'}] read URL: {url}")
+                        # Track replacement — content will replace the JSON block
+                        replacements[raw] = content_text
+                        print(f"[{agent_type or 'agent'}] read URL: {url}")
                     else:
                         print(f"[guardian] URL read failed: "
                               f"{result.get('error')}")
@@ -3914,10 +3889,13 @@ def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, age
             except Exception as e:
                 print(f"[guardian] health report error: {e}")
 
-    # Strip action blocks from reply so human sees clean text
+    # Strip or replace action blocks from reply so human sees clean text
     clean = reply
     for raw in matches:
-        clean = clean.replace(raw, "")
+        if raw in replacements:
+            clean = clean.replace(raw, replacements[raw])
+        else:
+            clean = clean.replace(raw, "")
     # Clean up extra whitespace left behind
     clean = _re.sub(r'\n{3,}', '\n\n', clean).strip()
     return clean
