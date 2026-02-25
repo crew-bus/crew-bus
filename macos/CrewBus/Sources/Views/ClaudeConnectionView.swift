@@ -5,18 +5,13 @@ struct ClaudeConnectionView: View {
     @Environment(AppState.self) private var appState
     @State private var connector = ClaudeConnector()
 
-    private let tools: [(name: String, desc: String)] = [
-        ("list_agents", "List all crew members with status"),
-        ("send_message", "Chat with any agent, get reply"),
-        ("get_agent_chat", "Recent chat history with an agent"),
-        ("get_crew_stats", "Dashboard overview and stats"),
-        ("list_teams", "All teams with managers/counts"),
-        ("get_team_detail", "Team info + agent list"),
-        ("get_message_feed", "Recent crew message feed"),
-        ("search_agent_memory", "Search an agent's memory"),
-        ("get_agent_learnings", "Mistakes + what works well"),
-        ("get_audit_log", "Recent crew audit events"),
-        ("post_to_team_mailbox", "Post to team mailbox"),
+    private let suggestions = [
+        "Who's on my crew?",
+        "Send a message to Crew Boss about my schedule",
+        "What has Guardian flagged recently?",
+        "Show me what the team has been up to",
+        "Check the team mailbox",
+        "What has Vault learned about me?",
     ]
 
     var body: some View {
@@ -30,22 +25,39 @@ struct ClaudeConnectionView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     switch connector.state {
-                    case .unknown:
+                    case .checking:
                         ProgressView()
                             .frame(maxWidth: .infinity, minHeight: 100)
+                    case .notInstalled:
+                        notInstalledContent
                     case .disconnected:
                         disconnectedContent
                     case .connecting:
                         connectingContent
-                    case .connected:
-                        connectedContent
+                    case .connected(let needsRestart):
+                        connectedContent(needsRestart: needsRestart)
+                    case .error(let message):
+                        errorContent(message: message)
                     }
                 }
                 .padding(20)
+                .animation(.easeInOut(duration: 0.25), value: stateId)
             }
         }
         .background(CrewTheme.bg)
         .task { await connector.checkStatus() }
+    }
+
+    /// Stable ID for animating state transitions.
+    private var stateId: String {
+        switch connector.state {
+        case .checking: return "checking"
+        case .notInstalled: return "not-installed"
+        case .disconnected: return "disconnected"
+        case .connecting: return "connecting"
+        case .connected: return "connected"
+        case .error: return "error"
+        }
     }
 
     // MARK: - Header
@@ -71,7 +83,7 @@ struct ClaudeConnectionView: View {
                 Text("Connect to Claude Desktop")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(CrewTheme.text)
-                Text("Let Claude Desktop talk to your local crew via MCP")
+                Text("Chat with your crew directly from Claude")
                     .font(.system(size: 12))
                     .foregroundStyle(CrewTheme.muted)
             }
@@ -82,6 +94,53 @@ struct ClaudeConnectionView: View {
         .padding(.vertical, 14)
     }
 
+    // MARK: - Not Installed
+
+    private var notInstalledContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 12) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 36))
+                    .foregroundStyle(CrewTheme.accent)
+
+                Text("Claude Desktop Required")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(CrewTheme.text)
+
+                Text("Install Claude Desktop to chat with your crew using natural language.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(CrewTheme.muted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(CrewTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.border, lineWidth: 1))
+
+            Button {
+                if let url = URL(string: "https://claude.ai/download") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Text("Download Claude Desktop")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(CrewTheme.accent)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Text("Already installed? Try restarting CrewBus.")
+                .font(.system(size: 11))
+                .foregroundStyle(CrewTheme.muted)
+
+            refreshButton
+        }
+    }
+
     // MARK: - Disconnected
 
     private var disconnectedContent: some View {
@@ -90,13 +149,6 @@ struct ClaudeConnectionView: View {
 
             if !connector.mcpAvailable {
                 mcpMissingCard
-            }
-
-            if let error = connector.errorMessage {
-                Text(error)
-                    .font(.system(size: 12))
-                    .foregroundStyle(CrewTheme.highlight)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: 10) {
@@ -116,35 +168,34 @@ struct ClaudeConnectionView: View {
                 refreshButton
             }
 
-            toolsSection
+            suggestionsSection
         }
     }
 
     // MARK: - Connecting
 
     private var connectingContent: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.large)
-                Text("Connecting to Claude Desktop...")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(CrewTheme.text)
-                Text("Writing MCP config")
-                    .font(.system(size: 12))
-                    .foregroundStyle(CrewTheme.muted)
-            }
-            .frame(maxWidth: .infinity, minHeight: 120)
-            .background(CrewTheme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.border, lineWidth: 1))
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Connecting to Claude Desktop...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(CrewTheme.text)
+            Text("Setting up the connection")
+                .font(.system(size: 12))
+                .foregroundStyle(CrewTheme.muted)
         }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .background(CrewTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.border, lineWidth: 1))
     }
 
     // MARK: - Connected
 
-    private var connectedContent: some View {
+    private func connectedContent(needsRestart: Bool) -> some View {
         VStack(spacing: 16) {
+            // Success card
             HStack(spacing: 12) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 24))
@@ -154,7 +205,7 @@ struct ClaudeConnectionView: View {
                     Text("Connected to Claude Desktop")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(CrewTheme.text)
-                    Text("Restart Claude Desktop if you haven't already")
+                    Text("Your crew is available in Claude. Just ask Claude to talk to your agents.")
                         .font(.system(size: 12))
                         .foregroundStyle(CrewTheme.muted)
                 }
@@ -166,24 +217,96 @@ struct ClaudeConnectionView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.green.opacity(0.3), lineWidth: 1))
 
+            // Restart hint
+            if needsRestart {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CrewTheme.accent)
+                    Text("Restart Claude Desktop to activate the connection")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CrewTheme.muted)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(CrewTheme.accent.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            // Action buttons
             HStack(spacing: 10) {
                 Button {
-                    Task { await connector.disconnect() }
+                    connector.openClaude()
                 } label: {
-                    Label("Disconnect", systemImage: "xmark.circle")
+                    Text("Open Claude")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(CrewTheme.highlight)
+                        .background(CrewTheme.accent)
                         .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Task { await connector.disconnect() }
+                } label: {
+                    Text("Disconnect")
+                        .font(.system(size: 13))
+                        .foregroundStyle(CrewTheme.muted)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
 
                 refreshButton
             }
 
-            toolsSection
+            suggestionsSection
+        }
+    }
+
+    // MARK: - Error
+
+    private func errorContent(message: String) -> some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(CrewTheme.highlight)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Connection failed")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(CrewTheme.text)
+                    Text(message)
+                        .font(.system(size: 12))
+                        .foregroundStyle(CrewTheme.muted)
+                }
+
+                Spacer()
+            }
+            .padding(14)
+            .background(CrewTheme.highlight.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(CrewTheme.highlight.opacity(0.3), lineWidth: 1))
+
+            HStack(spacing: 10) {
+                Button {
+                    Task { await connector.connect() }
+                } label: {
+                    Text("Try Again")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(CrewTheme.accent)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                refreshButton
+            }
         }
     }
 
@@ -193,13 +316,13 @@ struct ClaudeConnectionView: View {
         VStack(spacing: 10) {
             statusCard(
                 title: "Crew Bus Server",
-                subtitle: connector.serverOk ? "Running on port 8420" : "Not reachable",
+                subtitle: connector.crewbusRunning ? "Running on port 8420" : "Not reachable",
                 icon: "server.rack",
-                ok: connector.serverOk
+                ok: connector.crewbusRunning
             )
             statusCard(
                 title: "Claude Desktop",
-                subtitle: connector.claudeInstalled ? "Config file found" : "Not detected",
+                subtitle: connector.claudeInstalled ? "Installed" : "Not detected",
                 icon: "app.badge",
                 ok: connector.claudeInstalled
             )
@@ -296,31 +419,32 @@ struct ClaudeConnectionView: View {
         .buttonStyle(.plain)
     }
 
-    private var toolsSection: some View {
+    private var suggestionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Available MCP Tools")
+            Text("Things you can ask Claude")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(CrewTheme.text)
 
-            Text("Once connected, Claude Desktop can use these tools to interact with your crew:")
+            Text("Once connected, try saying things like:")
                 .font(.system(size: 12))
                 .foregroundStyle(CrewTheme.muted)
 
             VStack(spacing: 6) {
-                ForEach(tools, id: \.name) { tool in
+                ForEach(suggestions, id: \.self) { suggestion in
                     HStack(spacing: 10) {
-                        Text(tool.name)
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(CrewTheme.accent)
-                            .frame(width: 180, alignment: .leading)
+                        Image(systemName: "quote.opening")
+                            .font(.system(size: 10))
+                            .foregroundStyle(CrewTheme.accent.opacity(0.6))
+                            .frame(width: 16)
 
-                        Text(tool.desc)
-                            .font(.system(size: 12))
-                            .foregroundStyle(CrewTheme.muted)
+                        Text(suggestion)
+                            .font(.system(size: 13))
+                            .foregroundStyle(CrewTheme.text)
+                            .italic()
 
                         Spacer()
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                     .padding(.horizontal, 10)
                 }
             }

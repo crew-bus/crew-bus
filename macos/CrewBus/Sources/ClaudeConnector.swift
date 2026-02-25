@@ -1,14 +1,20 @@
 import Foundation
+import AppKit
 
 @Observable
 final class ClaudeConnector {
 
     enum ConnectionState: Equatable {
-        case unknown, disconnected, connecting, connected
+        case checking
+        case notInstalled
+        case disconnected
+        case connecting
+        case connected(needsRestart: Bool)
+        case error(String)
     }
 
-    var state: ConnectionState = .unknown
-    var serverOk = false
+    var state: ConnectionState = .checking
+    var crewbusRunning = false
     var claudeInstalled = false
     var mcpAvailable = false
     var errorMessage: String?
@@ -16,17 +22,26 @@ final class ClaudeConnector {
     // MARK: - Public
 
     func checkStatus() async {
-        let result = await runScript(["--status"])
+        await MainActor.run { state = .checking }
+
+        let result = await runScript(["status"])
         guard let result else {
             await MainActor.run { state = .disconnected }
             return
         }
         await MainActor.run {
-            serverOk = result["server_ok"] as? Bool ?? false
+            crewbusRunning = result["crewbus_running"] as? Bool ?? false
             claudeInstalled = result["claude_installed"] as? Bool ?? false
             mcpAvailable = result["mcp_available"] as? Bool ?? false
-            let linked = result["mcp_linked"] as? Bool ?? false
-            state = linked ? .connected : .disconnected
+            let connected = result["already_connected"] as? Bool ?? false
+
+            if !claudeInstalled {
+                state = .notInstalled
+            } else if connected {
+                state = .connected(needsRestart: false)
+            } else {
+                state = .disconnected
+            }
             errorMessage = nil
         }
     }
@@ -38,23 +53,30 @@ final class ClaudeConnector {
         }
 
         let mcpPath = resolveMCPPath()
-        let result = await runScript(["--connect", "--mcp-path", mcpPath])
+        var args = ["connect"]
+        if !mcpPath.isEmpty {
+            args += ["--mcp-path", mcpPath]
+        }
+
+        let result = await runScript(args)
         guard let result else {
             await MainActor.run {
-                state = .disconnected
-                errorMessage = "Failed to run connect script."
+                state = .error("Something went wrong. Please try again.")
+                errorMessage = "Something went wrong. Please try again."
             }
             return
         }
-        let ok = result["ok"] as? Bool ?? false
-        let message = result["message"] as? String
+        let success = result["success"] as? Bool ?? false
+        let message = result["message"] as? String ?? ""
+        let needsRestart = result["needs_restart"] as? Bool ?? false
+
         await MainActor.run {
-            if ok {
-                state = .connected
+            if success {
+                state = .connected(needsRestart: needsRestart)
                 errorMessage = nil
             } else {
-                state = .disconnected
-                errorMessage = message ?? "Connection failed."
+                state = .error(message)
+                errorMessage = message
             }
         }
     }
@@ -65,47 +87,54 @@ final class ClaudeConnector {
             errorMessage = nil
         }
 
-        let result = await runScript(["--disconnect"])
+        let result = await runScript(["disconnect"])
         guard let result else {
             await MainActor.run {
-                state = .connected
-                errorMessage = "Failed to run disconnect script."
+                state = .error("Something went wrong. Please try again.")
+                errorMessage = "Something went wrong. Please try again."
             }
             return
         }
-        let ok = result["ok"] as? Bool ?? false
-        let message = result["message"] as? String
+        let success = result["success"] as? Bool ?? false
+        let message = result["message"] as? String ?? ""
+
         await MainActor.run {
-            if ok {
+            if success {
                 state = .disconnected
                 errorMessage = nil
             } else {
-                state = .connected
-                errorMessage = message ?? "Disconnect failed."
+                state = .error(message)
+                errorMessage = message
             }
+        }
+    }
+
+    func openClaude() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.anthropic.claudefordesktop") {
+            NSWorkspace.shared.openApplication(at: url, configuration: .init())
         }
     }
 
     // MARK: - Private
 
     private func resolveScriptPath() -> String {
-        // Bundled inside .app
         if let bundled = Bundle.main.url(forResource: "connect_claude", withExtension: "py") {
             return bundled.path
         }
-        // Dev fallback
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/crew-bus/scripts/connect_claude.py"
     }
 
     private func resolveMCPPath() -> String {
-        // Bundled inside .app
         if let bundled = Bundle.main.url(forResource: "crew_bus_mcp", withExtension: "py") {
             return bundled.path
         }
-        // Dev fallback
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/crew-bus/crew_bus_mcp.py"
+        let devPath = "\(home)/crew-bus/crew_bus_mcp.py"
+        if FileManager.default.fileExists(atPath: devPath) {
+            return devPath
+        }
+        return ""
     }
 
     private func runScript(_ args: [String]) async -> [String: Any]? {
