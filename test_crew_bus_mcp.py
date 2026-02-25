@@ -210,3 +210,135 @@ def test_no_args_is_stdio():
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert result.stdout.strip() == "OK"
+
+
+# ---------------------------------------------------------------------------
+# Token authentication (requires auth-enabled HTTP server)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def auth_http_server():
+    """Start the MCP server in HTTP mode with token auth."""
+    proc = subprocess.Popen(
+        [PYTHON, MCP_SCRIPT, "--transport", "http", "--port", "8432", "--token", "test-secret"],
+        stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    import urllib.request, urllib.error
+    for _ in range(15):
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8432/health")
+            req.add_header("Authorization", "Bearer test-secret")
+            urllib.request.urlopen(req, timeout=2)
+            break
+        except Exception:
+            time.sleep(1)
+    else:
+        proc.terminate()
+        pytest.skip("Auth HTTP server did not start within 15s")
+
+    yield proc
+
+    proc.terminate()
+    proc.wait(timeout=5)
+
+
+def test_token_auth_rejects_without_token(auth_http_server):
+    """Requests without token should get 401."""
+    import urllib.request, urllib.error
+    req = urllib.request.Request("http://127.0.0.1:8432/health")
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        assert False, "Expected 401 but got 200"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
+        data = json.loads(e.read())
+        assert data["error"] == "Unauthorized"
+
+
+def test_token_auth_rejects_wrong_token(auth_http_server):
+    """Requests with wrong token should get 401."""
+    import urllib.request, urllib.error
+    req = urllib.request.Request("http://127.0.0.1:8432/health")
+    req.add_header("Authorization", "Bearer wrong-token")
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        assert False, "Expected 401 but got 200"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
+
+
+def test_token_auth_accepts_correct_token(auth_http_server):
+    """Requests with correct token should get 200."""
+    import urllib.request
+    req = urllib.request.Request("http://127.0.0.1:8432/health")
+    req.add_header("Authorization", "Bearer test-secret")
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert data["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Origin header validation (uses the no-auth HTTP server on port 8431)
+# ---------------------------------------------------------------------------
+
+def test_origin_localhost_ip_allowed(http_server):
+    """Requests with 127.0.0.1 Origin should be accepted."""
+    import urllib.request
+    req = urllib.request.Request("http://127.0.0.1:8431/health")
+    req.add_header("Origin", "http://127.0.0.1:3000")
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        assert resp.status == 200
+
+
+def test_origin_localhost_name_allowed(http_server):
+    """Requests with 'localhost' Origin should be accepted."""
+    import urllib.request
+    req = urllib.request.Request("http://127.0.0.1:8431/health")
+    req.add_header("Origin", "http://localhost:8080")
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        assert resp.status == 200
+
+
+def test_origin_external_rejected(http_server):
+    """Requests with external Origin should get 403."""
+    import urllib.request, urllib.error
+    req = urllib.request.Request("http://127.0.0.1:8431/health")
+    req.add_header("Origin", "http://evil.com")
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        assert False, "Expected 403 but got 200"
+    except urllib.error.HTTPError as e:
+        assert e.code == 403
+        data = json.loads(e.read())
+        assert data["error"] == "Forbidden: invalid origin"
+
+
+def test_no_origin_header_allowed(http_server):
+    """Requests without Origin header should be accepted (e.g., curl)."""
+    import urllib.request
+    req = urllib.request.Request("http://127.0.0.1:8431/health")
+    # No Origin header set — should pass through
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        assert resp.status == 200
+
+
+# ---------------------------------------------------------------------------
+# Backwards compatibility — stdio unaffected by token/origin
+# ---------------------------------------------------------------------------
+
+def test_stdio_ignores_token_flag():
+    """Token flag should be accepted but not affect stdio mode."""
+    result = subprocess.run(
+        [PYTHON, "-c",
+         "import sys; sys.argv = ['crew_bus_mcp.py']\n"
+         f"exec(open({MCP_SCRIPT!r}).read().split('if __name__')[0])\n"
+         "args = _build_parser().parse_args(['--token', 'secret'])\n"
+         "assert args.transport == 'stdio'\n"
+         "assert args.token == 'secret'\n"
+         "print('OK')"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert result.stdout.strip() == "OK"

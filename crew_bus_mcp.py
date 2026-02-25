@@ -100,6 +100,53 @@ def _resolve_agent(name: str) -> Tuple[Optional[dict], Optional[str]]:
 
 
 # ---------------------------------------------------------------------------
+# Security middleware (HTTP transport only)
+# ---------------------------------------------------------------------------
+
+class _AuthOriginMiddleware:
+    """ASGI middleware for Bearer token auth and Origin header validation."""
+
+    def __init__(self, app, token=None, public_mode=False):
+        self.app = app
+        self.token = token
+        self.public_mode = public_mode
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+
+        # Token authentication
+        if self.token:
+            auth = headers.get(b"authorization", b"").decode()
+            if auth != f"Bearer {self.token}":
+                from starlette.responses import JSONResponse
+                resp = JSONResponse({"error": "Unauthorized"}, status_code=401)
+                await resp(scope, receive, send)
+                return
+
+        # Origin validation (localhost-only unless --public)
+        origin = headers.get(b"origin", b"").decode()
+        if origin:
+            if self.public_mode:
+                _log(f"WARNING: Accepting request from origin {origin} (public mode)")
+            else:
+                from urllib.parse import urlparse
+                parsed = urlparse(origin)
+                if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+                    from starlette.responses import JSONResponse
+                    resp = JSONResponse(
+                        {"error": "Forbidden: invalid origin"}, status_code=403
+                    )
+                    await resp(scope, receive, send)
+                    return
+
+        await self.app(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------
 # Health endpoint (HTTP transport only)
 # ---------------------------------------------------------------------------
 
@@ -127,7 +174,14 @@ _RW = ToolAnnotations(readOnlyHint=False)
 
 @mcp.tool(annotations=_RO)
 def crewbus_list_agents() -> str:
-    """List all crew members with their status, type, and role."""
+    """List all crew members with their status, type, and role.
+
+    Returns:
+        Formatted list of agents with emoji, name, role, and status.
+
+    Examples:
+        crewbus_list_agents() → "🤖 Crew Boss — coordinator (online)"
+    """
     agents = _api_get("/api/agents")
     if isinstance(agents, dict) and "error" in agents:
         return json.dumps(agents)
@@ -145,7 +199,15 @@ def crewbus_list_agents() -> str:
 def crewbus_send_message(agent_name: str, message: str) -> str:
     """Send a message to a crew member and get their reply.
 
-    Use crewbus_list_agents() first to see available agent names.
+    Args:
+        agent_name: Name or display name of the agent (case-insensitive, partial match OK).
+        message: The message text to send.
+
+    Returns:
+        The agent's reply text.
+
+    Examples:
+        crewbus_send_message("Crew Boss", "What's on my schedule today?")
     """
     agent, err = _resolve_agent(agent_name)
     if err:
@@ -160,7 +222,18 @@ def crewbus_send_message(agent_name: str, message: str) -> str:
 
 @mcp.tool(annotations=_RO)
 def crewbus_get_agent_chat(agent_name: str, limit: int = 20) -> str:
-    """Get recent chat history with a crew member."""
+    """Get recent chat history with a crew member.
+
+    Args:
+        agent_name: Name or display name of the agent.
+        limit: Maximum number of messages to return (default 20).
+
+    Returns:
+        Formatted chat transcript with [role] prefix per line.
+
+    Examples:
+        crewbus_get_agent_chat("Crew Boss", limit=5)
+    """
     agent, err = _resolve_agent(agent_name)
     if err:
         return err
@@ -180,14 +253,28 @@ def crewbus_get_agent_chat(agent_name: str, limit: int = 20) -> str:
 
 @mcp.tool(annotations=_RO)
 def crewbus_get_crew_stats() -> str:
-    """Get a dashboard overview of the crew — agent counts, trust score, energy, etc."""
+    """Get a dashboard overview of the crew — agent counts, trust score, energy, etc.
+
+    Returns:
+        JSON object with crew statistics (agent counts, trust scores, energy levels).
+
+    Examples:
+        crewbus_get_crew_stats() → '{"total_agents": 3, "online": 2, ...}'
+    """
     stats = _api_get("/api/stats")
     return json.dumps(stats, indent=2)
 
 
 @mcp.tool(annotations=_RO)
 def crewbus_list_teams() -> str:
-    """List all teams with their manager and member count."""
+    """List all teams with their manager and member count.
+
+    Returns:
+        Formatted list of teams with name, manager, and member count.
+
+    Examples:
+        crewbus_list_teams() → "Team: Engineering — Manager: Crew Boss, Members: 3"
+    """
     teams = _api_get("/api/teams")
     if isinstance(teams, dict) and "error" in teams:
         return json.dumps(teams)
@@ -202,7 +289,17 @@ def crewbus_list_teams() -> str:
 
 @mcp.tool(annotations=_RO)
 def crewbus_get_team_detail(team_name: str) -> str:
-    """Get detailed info about a team including its agent list."""
+    """Get detailed info about a team including its agent list.
+
+    Args:
+        team_name: Name of the team (case-insensitive, partial match OK).
+
+    Returns:
+        JSON object with team metadata and list of member agents.
+
+    Examples:
+        crewbus_get_team_detail("Engineering")
+    """
     teams = _api_get("/api/teams")
     if isinstance(teams, dict) and "error" in teams:
         return json.dumps(teams)
@@ -226,7 +323,17 @@ def crewbus_get_team_detail(team_name: str) -> str:
 
 @mcp.tool(annotations=_RO)
 def crewbus_get_message_feed(limit: int = 30) -> str:
-    """Get the recent crew message feed — inter-agent messages, bus events, etc."""
+    """Get the recent crew message feed — inter-agent messages, bus events, etc.
+
+    Args:
+        limit: Maximum number of messages to return (default 30).
+
+    Returns:
+        Formatted feed with timestamps, sender names, and message text.
+
+    Examples:
+        crewbus_get_message_feed(limit=10)
+    """
     messages = _api_get("/api/messages", {"limit": str(limit)})
     if isinstance(messages, dict) and "error" in messages:
         return json.dumps(messages)
@@ -245,7 +352,15 @@ def crewbus_get_message_feed(limit: int = 30) -> str:
 def crewbus_search_agent_memory(agent_name: str, query: str = "") -> str:
     """Search a crew member's memory — experiences, facts, learned info.
 
-    If query is provided, filters memories containing that text.
+    Args:
+        agent_name: Name or display name of the agent.
+        query: Optional text filter — only returns memories containing this string.
+
+    Returns:
+        Formatted list of memories with type, importance, and content.
+
+    Examples:
+        crewbus_search_agent_memory("Vault", query="password policy")
     """
     agent, err = _resolve_agent(agent_name)
     if err:
@@ -269,7 +384,17 @@ def crewbus_search_agent_memory(agent_name: str, query: str = "") -> str:
 
 @mcp.tool(annotations=_RO)
 def crewbus_get_agent_learnings(agent_name: str) -> str:
-    """Get what a crew member has learned — mistakes and what works well."""
+    """Get what a crew member has learned — mistakes and what works well.
+
+    Args:
+        agent_name: Name or display name of the agent.
+
+    Returns:
+        JSON object with the agent's learned patterns and mistakes.
+
+    Examples:
+        crewbus_get_agent_learnings("Guardian")
+    """
     agent, err = _resolve_agent(agent_name)
     if err:
         return err
@@ -279,7 +404,17 @@ def crewbus_get_agent_learnings(agent_name: str) -> str:
 
 @mcp.tool(annotations=_RO)
 def crewbus_get_audit_log(limit: int = 50) -> str:
-    """Get recent crew audit events — actions, decisions, configuration changes."""
+    """Get recent crew audit events — actions, decisions, configuration changes.
+
+    Args:
+        limit: Maximum number of audit entries to return (default 50).
+
+    Returns:
+        Formatted log with timestamps, agent names, actions, and details.
+
+    Examples:
+        crewbus_get_audit_log(limit=10)
+    """
     entries = _api_get("/api/audit", {"limit": str(limit)})
     if isinstance(entries, dict) and "error" in entries:
         return json.dumps(entries)
@@ -301,7 +436,17 @@ def crewbus_post_to_team_mailbox(
 ) -> str:
     """Post a message to a team mailbox on behalf of an agent.
 
-    severity: info, warning, or code_red.
+    Args:
+        from_agent_name: Name of the sending agent.
+        subject: Message subject line.
+        body: Message body text.
+        severity: Priority level — "info", "warning", or "code_red" (default "info").
+
+    Returns:
+        JSON confirmation with message ID and delivery status.
+
+    Examples:
+        crewbus_post_to_team_mailbox("Guardian", "Security Alert", "Unusual login detected", severity="warning")
     """
     agent, err = _resolve_agent(from_agent_name)
     if err:
@@ -341,7 +486,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--token", default=None,
-        help="Bearer token for HTTP auth (reserved for future use)"
+        help="Bearer token for HTTP auth — all HTTP requests must include Authorization: Bearer <token>"
     )
     return parser
 
@@ -363,4 +508,12 @@ if __name__ == "__main__":
         _log(f"Starting Crew Bus MCP server (HTTP) on {host}:{args.port}")
         _log(f"  MCP endpoint: http://{host}:{args.port}/mcp")
         _log(f"  Health check: http://{host}:{args.port}/health")
-        mcp.run(transport="streamable-http")
+        if args.token:
+            _log("  Token auth: enabled")
+
+        import uvicorn
+        inner_app = mcp.streamable_http_app()
+        app = _AuthOriginMiddleware(
+            inner_app, token=args.token, public_mode=args.public
+        )
+        uvicorn.run(app, host=host, port=args.port, log_level="info")

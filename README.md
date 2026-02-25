@@ -47,6 +47,34 @@ python3 crew_bus_mcp.py
 
 This starts the MCP server so Claude Desktop can talk to your crew.
 
+### Connect from Any MCP Client (HTTP)
+
+Start the MCP server in HTTP mode for Claude Code, Cowork, or any MCP-compatible client:
+
+```bash
+python3 crew_bus_mcp.py --transport http --port 8421
+```
+
+Then point your MCP client to: `http://127.0.0.1:8421/mcp`
+
+Health check: `GET http://127.0.0.1:8421/health`
+
+**With token authentication:**
+
+```bash
+python3 crew_bus_mcp.py --transport http --port 8421 --token YOUR_SECRET
+```
+
+Clients must include `Authorization: Bearer YOUR_SECRET` in all requests.
+
+**LAN mode (accessible from other devices):**
+
+```bash
+python3 crew_bus_mcp.py --transport http --public --token YOUR_SECRET
+```
+
+> Always use `--token` when exposing to the network.
+
 ---
 
 ## Architecture
