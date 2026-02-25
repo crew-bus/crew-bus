@@ -4910,9 +4910,13 @@ def update_draft_status(draft_id: int, status: str,
 def is_guard_activated(db_path: Optional[Path] = None) -> bool:
     """Check if Guard activation key has been registered."""
     conn = get_conn(db_path)
-    row = conn.execute("SELECT COUNT(*) FROM guard_activation").fetchone()
-    conn.close()
-    return row[0] > 0
+    try:
+        row = conn.execute("SELECT COUNT(*) FROM guard_activation").fetchone()
+        return row[0] > 0
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 
 def activate_guard(activation_key: str, db_path: Optional[Path] = None):

@@ -2313,7 +2313,7 @@ def _process_queued_messages(db_path: Path):
         _synthesize_team_reports(manager_id, db_path)
 
 
-MSG_TIMEOUT = 90  # seconds — hard cap per message so one hung LLM can't freeze the queue
+MSG_TIMEOUT = 180  # seconds — hard cap per message (web search + LLM can take 2+ min)
 
 
 def _process_with_timeout(row, db_path: Path):
@@ -2544,12 +2544,17 @@ def _process_single_message(row, db_path: Path):
                 _logger.warning("Fan-out failed for %s: %s", agent_name, e)
 
         # Don't store empty replies (can happen when LLM returns only action blocks)
-        # But if a crew DM was sent, insert a brief status so the human isn't left with silence
+        # But always send SOMETHING to the human so they're not left with silence
         if not clean_reply or not clean_reply.strip():
-            if sender_type == "human" and '"crew_action"' in reply and '"dm"' in reply:
+            if sender_type == "human":
+                if '"crew_action"' in reply and '"dm"' in reply:
+                    fallback = "On it — I've reached out to the crew and I'll have an answer for you shortly."
+                elif '"web_search"' in reply or '"web_read_url"' in reply:
+                    fallback = "I tried to search the web but it didn't work. Web search may not be available right now."
+                else:
+                    fallback = "I processed your request but don't have a text response to share."
                 _insert_reply_direct(
-                    db_path, agent_id, human_id,
-                    f"On it — I've reached out to the crew and I'll have an answer for you shortly.",
+                    db_path, agent_id, human_id, fallback,
                     human_msg=user_text, agent_type=agent_type,
                 )
             return

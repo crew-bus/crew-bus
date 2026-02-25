@@ -34,7 +34,7 @@ interface PendingRequest {
   timer: number;
 }
 
-const REQUEST_TIMEOUT_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 195_000;
 const KEEPALIVE_INTERVAL_MS = 30_000;
 
 export class TunnelDurableObject implements DurableObject {

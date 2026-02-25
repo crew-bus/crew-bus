@@ -212,12 +212,31 @@ def crewbus_send_message(agent_name: str, message: str) -> str:
     agent, err = _resolve_agent(agent_name)
     if err:
         return err
-    result = _api_post(f"/api/agent/{agent['id']}/chat", {"text": message})
+
+    # Synchronous endpoint: sends message and waits for the reply in a single
+    # HTTP request (server polls its own DB internally, no HTTP polling overhead).
+    url = CREW_BUS_URL + f"/api/agent/{agent['id']}/chat/sync"
+    body = json.dumps({"text": message, "timeout": 180}).encode()
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("X-Requested-With", "crewbus-mcp")
+    try:
+        # 185s HTTP timeout > 180s server-side poll, so server always responds first
+        with urllib.request.urlopen(req, timeout=185) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.URLError as e:
+        return f"Crew Bus server unreachable at {CREW_BUS_URL}: {e}"
+    except Exception as e:
+        return f"Error contacting Crew Bus: {e}"
+
     if isinstance(result, dict) and "error" in result:
         return result["error"]
-    reply = (result.get("reply") or result.get("response")
-             or result.get("text") or json.dumps(result))
-    return reply
+
+    reply = result.get("reply")
+    if reply:
+        return reply
+
+    return "Message sent but no reply yet. The agent may still be thinking."
 
 
 @mcp.tool(annotations=_RO)
@@ -244,8 +263,9 @@ def crewbus_get_agent_chat(agent_name: str, limit: int = 20) -> str:
         messages = messages[-limit:]
         lines = []
         for m in messages:
-            sender = m.get("role", m.get("sender", "?"))
-            text = m.get("content", m.get("text", ""))
+            direction = m.get("direction", "")
+            sender = "You" if direction == "from_human" else m.get("role", m.get("sender", agent_name))
+            text = m.get("text", m.get("content", ""))
             lines.append(f"[{sender}] {text}")
         return "\n".join(lines) if lines else "No chat history."
     return json.dumps(messages)

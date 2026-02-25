@@ -66,7 +66,7 @@ def _ensure_session(local_url: str) -> None:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=190) as resp:
             sid = resp.headers.get("mcp-session-id")
             if sid:
                 _mcp_session_id = sid
@@ -76,7 +76,7 @@ def _ensure_session(local_url: str) -> None:
         _log(f"Failed to initialize MCP session: {e}")
 
 
-def forward_to_local(body: dict, local_url: str) -> dict:
+def _do_forward(body: dict, local_url: str) -> dict:
     """POST the MCP request body to the local MCP server and return the response."""
     global _mcp_session_id
     _ensure_session(local_url)
@@ -92,7 +92,7 @@ def forward_to_local(body: dict, local_url: str) -> dict:
 
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=190) as resp:
             response_data = resp.read()
             # Handle SSE responses (text/event-stream)
             content_type = resp.headers.get("Content-Type", "")
@@ -127,6 +127,25 @@ def forward_to_local(body: dict, local_url: str) -> dict:
             "error": {"code": -32603, "message": f"Forward error: {e}"},
             "id": body.get("id"),
         }
+
+
+def forward_to_local(body: dict, local_url: str) -> dict:
+    """Forward with stale-session retry. If the response looks empty due to a
+    stale session, reset the session and retry once."""
+    global _mcp_session_id
+    result = _do_forward(body, local_url)
+
+    # Detect stale session: valid response but empty result for list methods
+    method = body.get("method", "")
+    if method in ("tools/list", "resources/list", "prompts/list"):
+        items_key = method.split("/")[0]  # "tools", "resources", "prompts"
+        inner = result.get("result", {})
+        if isinstance(inner, dict) and inner.get(items_key) == [] and _mcp_session_id:
+            _log(f"Empty {method} response — resetting stale session and retrying")
+            _mcp_session_id = None
+            result = _do_forward(body, local_url)
+
+    return result
 
 
 async def _handle_messages(ws, shutdown_event, loop, local_url):
