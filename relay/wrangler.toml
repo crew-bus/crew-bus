@@ -1,0 +1,23 @@
+name = "crewbus-relay"
+main = "worker.ts"
+compatibility_date = "2025-01-01"
+
+[durable_objects]
+bindings = [
+    { name = "TUNNEL", class_name = "TunnelDurableObject" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TunnelDurableObject"]
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "placeholder-create-with-wrangler"
+
+[[kv_namespaces]]
+binding = "TUNNEL_KV"
+id = "placeholder-create-with-wrangler"
+
+[vars]
+RELAY_ORIGIN = "https://relay.crew-bus.dev"
