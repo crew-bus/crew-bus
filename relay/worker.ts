@@ -416,11 +416,65 @@ app.post("/auth/login", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /auth/verify — Verify magic link token
+// GET /auth/verify — Show confirmation page (prevents link scanners from consuming the token)
 // ---------------------------------------------------------------------------
 
-app.get("/auth/verify", async (c) => {
+app.get("/auth/verify", (c) => {
   const token = c.req.query("token");
+  if (!token) {
+    return c.html(renderLoginPage("Missing verification token."), 400);
+  }
+
+  // Render a confirmation page with a button that POSTs the token
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirm Sign In — CrewBus</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f23; color: #e0e0e0;
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; padding: 1rem;
+    }
+    .card {
+      background: #1a1a2e; border-radius: 16px; padding: 2.5rem;
+      max-width: 420px; width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4); text-align: center;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #fff; }
+    .subtitle { color: #888; margin-bottom: 1.5rem; font-size: 0.95rem; }
+    button {
+      width: 100%; padding: 0.75rem; background: #6c63ff; color: #fff;
+      border: none; border-radius: 8px; font-size: 1rem; cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #5a52d5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Confirm Sign In</h1>
+    <p class="subtitle">Click below to complete sign in to CrewBus.</p>
+    <form method="POST" action="/auth/verify">
+      <input type="hidden" name="token" value="${token.replace(/"/g, '&quot;')}">
+      <button type="submit">Confirm Sign In</button>
+    </form>
+  </div>
+</body>
+</html>`);
+});
+
+// ---------------------------------------------------------------------------
+// POST /auth/verify — Actually verify and consume the magic link token
+// ---------------------------------------------------------------------------
+
+app.post("/auth/verify", async (c) => {
+  const formData = await c.req.parseBody();
+  const token = String(formData.token ?? "");
   if (!token) {
     return c.html(renderLoginPage("Missing verification token."), 400);
   }
