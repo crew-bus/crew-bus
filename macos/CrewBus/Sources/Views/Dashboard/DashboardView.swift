@@ -4,6 +4,7 @@ import CrewBusKit
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var showSettings = false
+    @State private var showEnergy = false
 
     var body: some View {
         Group {
@@ -13,7 +14,8 @@ struct DashboardView: View {
                     ConstellationView(
                         agents: appState.crewAgents,
                         stats: stats,
-                        showSettings: $showSettings
+                        showSettings: $showSettings,
+                        showEnergy: $showEnergy
                     )
                     .frame(maxWidth: .infinity)
 
@@ -30,6 +32,13 @@ struct DashboardView: View {
                     if let stats = appState.stats {
                         AdjustSettingsSheet(
                             trustScore: stats.trustScore
+                        )
+                    }
+                }
+                .sheet(isPresented: $showEnergy) {
+                    if let stats = appState.stats {
+                        EnergyScoreSheet(
+                            energyScore: stats.energyScore ?? 5
                         )
                     }
                 }

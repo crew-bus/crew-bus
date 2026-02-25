@@ -6,6 +6,7 @@ struct ConstellationView: View {
     let agents: [Agent]
     let stats: CrewStats
     @Binding var showSettings: Bool
+    @Binding var showEnergy: Bool
 
     // Resolve core agents by type
     private var boss: Agent? { agents.first { $0.agentType == "right_hand" } }
@@ -70,7 +71,7 @@ struct ConstellationView: View {
                     .position(x: 60, y: 24)
 
                 // Trust + Energy pills — bottom
-                TrustEnergyPillsView(stats: stats, showSettings: $showSettings)
+                TrustEnergyPillsView(stats: stats, showSettings: $showSettings, showEnergy: $showEnergy)
                     .position(x: w * 0.42, y: h - 30)
             }
         }

@@ -33,6 +33,7 @@ public enum APIEndpoints {
 
     public static let createAgent = "/api/agents/create"
     public static let trust = "/api/trust"
+    public static let energy = "/api/energy"
     public static let configSet = "/api/config/set"
 
     // Setup

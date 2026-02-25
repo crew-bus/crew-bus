@@ -5302,12 +5302,17 @@ def _get_stats(db_path):
         agent_count = conn.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
         msg_count = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
         decision_count = conn.execute("SELECT COUNT(*) FROM decision_log").fetchone()[0]
+        energy_row = conn.execute(
+            "SELECT value FROM crew_config WHERE key='energy_score'"
+        ).fetchone()
+        energy_score = int(energy_row["value"]) if energy_row else 5
         return {
             "crew_name": (human["name"] + "'s Crew") if human else "Crew",
             "human_name": human["name"] if human else "",
             "human_id": human["id"] if human else None,
             "boss_name": rh["name"] if rh else "Crew Boss",
             "trust_score": rh["trust_score"] if rh else 1,
+            "energy_score": energy_score,
             "agent_count": agent_count,
             "message_count": msg_count,
             "decision_count": decision_count,
@@ -6678,6 +6683,25 @@ class CrewBusHandler(BaseHTTPRequestHandler):
             except ValueError as e:
                 return _json_response(self, {"error": str(e)}, 400)
             return _json_response(self, {"ok": True, "trust_score": score})
+
+        if path == "/api/energy":
+            score = data.get("score")
+            if score is None:
+                return _json_response(self, {"error": "need score"}, 400)
+            score = int(score)
+            if not 1 <= score <= 10:
+                return _json_response(self, {"error": "score must be 1-10"}, 400)
+            conn = bus.get_conn(self.db_path)
+            try:
+                conn.execute(
+                    "INSERT INTO crew_config(key,value) VALUES('energy_score',?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (str(score),),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            return _json_response(self, {"ok": True, "energy_score": score})
 
         m = re.match(r"^/api/quarantine/(\d+)$", path)
         if m:

@@ -129,6 +129,15 @@ final class AppState {
         }
     }
 
+    func updateEnergyScore(_ score: Int) async {
+        do {
+            try await client.post(APIEndpoints.energy, body: ["score": score])
+            await loadInitialData()
+        } catch {
+            print("Failed to update energy score: \(error)")
+        }
+    }
+
     func checkSetupStatus() async {
         struct SetupStatus: Decodable {
             let needsSetup: Bool

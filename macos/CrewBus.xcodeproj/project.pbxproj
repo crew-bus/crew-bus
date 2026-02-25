@@ -8,15 +8,17 @@
 
 /* Begin PBXBuildFile section */
 		07C69DCDBAB4BABC77A163EB /* AvatarPickerSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139876E1ED1AF70E00C8F2F9 /* AvatarPickerSection.swift */; };
-		098B66A0CDF59B8004A2E04A /* ClaudeExtensionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */; };
+		1AE94012C468BEBE87737EB8 /* EnergyScoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 891547C4723A9B2D66091DFC /* EnergyScoreSheet.swift */; };
 		25F190E461FAFFF477F03E06 /* SkillsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED8D0E61CBE76BCA05389A7 /* SkillsSection.swift */; };
 		2D6F6B64B2AAE8F06335F7E5 /* DeviceManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F84A207935AAC33FFF1D4A11 /* DeviceManagementView.swift */; };
+		2D87B4F6D6B59A146ECB582D /* ClaudeConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0113025D89F75A6CAC0597C6 /* ClaudeConnectionView.swift */; };
 		36C28E7CD597024421D19A97 /* TeamsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69215AAFBE73E8539AD98B4 /* TeamsListView.swift */; };
 		37B4DD535540AB79ADBDA6AB /* AgentCircleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E3512DF9E80BDDBF96AE95 /* AgentCircleView.swift */; };
 		3868B6EB7F391B000669F1F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F491B6A7AEF64F3EDA281E48 /* AppDelegate.swift */; };
 		3F66163D09E4DEA3453AAF8A /* ConnectionLinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18B547946D8D3B693EF2F53C /* ConnectionLinesView.swift */; };
 		431E120B95675A375EC8FB29 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00EADCE776DFD8136570AC3 /* MainView.swift */; };
 		4645261FA38304B05BA6D63B /* CrewFaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C1D45251A4E72EDD8D3A07 /* CrewFaceView.swift */; };
+		4663D0F9E63AAF97DEB14967 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0B03637B1BA38C341FB3DB0E /* Assets.xcassets */; };
 		4B1F782E97E5E3C0DAA3BDCF /* UpdateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85FE8C9BD09C19DCD6147C7 /* UpdateSettingsView.swift */; };
 		504991FED8D356396E7F2488 /* CrewTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FC84BF2472292212AA5546 /* CrewTheme.swift */; };
 		58BE4ED4491CCE0782A01405 /* HamburgerMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */; };
@@ -46,6 +48,7 @@
 		BAA373537C6EA2B5AE495890 /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B770D509ADCD35EBF44EAD94 /* ChatInputView.swift */; };
 		C4E8CC0036ED061E86F4DDF8 /* AdjustSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2475BF29C20FA52CDA350524 /* AdjustSettingsSheet.swift */; };
 		C5D459DE8F5B59162AC0E757 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2999E8FD9F11268D74B1E12 /* ServerManager.swift */; };
+		D0226BADB3631A5D0CC23904 /* ClaudeConnector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6489E14833E18C02FD82FA17 /* ClaudeConnector.swift */; };
 		D1035F19679A4FD0AF77393B /* TeamDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36817F57D49A30D568A55C3E /* TeamDetailView.swift */; };
 		D5149E85FAC71E538584308C /* CrewBusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */; };
 		D963AD37E31B25617F364906 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A7F9B7228EFC275C85D68B /* UpdateManager.swift */; };
@@ -60,7 +63,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0113025D89F75A6CAC0597C6 /* ClaudeConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConnectionView.swift; sourceTree = "<group>"; };
 		06A1400787F06734BC11EAEE /* HeartbeatSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartbeatSection.swift; sourceTree = "<group>"; };
+		0B03637B1BA38C341FB3DB0E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		139876E1ED1AF70E00C8F2F9 /* AvatarPickerSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarPickerSection.swift; sourceTree = "<group>"; };
 		15DDF0E73FA94516815C1FE3 /* TrustEnergyPillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustEnergyPillsView.swift; sourceTree = "<group>"; };
 		17C1D45251A4E72EDD8D3A07 /* CrewFaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewFaceView.swift; sourceTree = "<group>"; };
@@ -79,13 +84,14 @@
 		4DD639FF261CF61B860C9270 /* CrewBus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CrewBus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E1FF4DB74CF4AFC6F601366 /* DecisionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecisionLogView.swift; sourceTree = "<group>"; };
 		561CE41C4AC3F15411512BBA /* ChannelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelDetailView.swift; sourceTree = "<group>"; };
+		6489E14833E18C02FD82FA17 /* ClaudeConnector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConnector.swift; sourceTree = "<group>"; };
 		68190188CB881EB1062700E9 /* PinEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinEntryView.swift; sourceTree = "<group>"; };
 		70C6CEDB510DF4597481B50D /* SunMoonToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunMoonToggleView.swift; sourceTree = "<group>"; };
 		72A641160E812C6B713CC054 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		799142024EB373FF7B662127 /* AddTeamSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTeamSheet.swift; sourceTree = "<group>"; };
 		822FE8EC1115088542E04188 /* ThinkingLevelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelSection.swift; sourceTree = "<group>"; };
-		857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeExtensionView.swift; sourceTree = "<group>"; };
 		87A7F9B7228EFC275C85D68B /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
+		891547C4723A9B2D66091DFC /* EnergyScoreSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnergyScoreSheet.swift; sourceTree = "<group>"; };
 		8F0661EB2A8874C95DFC6E09 /* AgentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSettingsView.swift; sourceTree = "<group>"; };
 		923A657AB5F4951ECB429DC2 /* ChannelListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelListView.swift; sourceTree = "<group>"; };
 		9BD71D73370934F8411A84A5 /* SoulEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoulEditorSection.swift; sourceTree = "<group>"; };
@@ -125,6 +131,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		13675A1C2BFF8B171F3C661A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0B03637B1BA38C341FB3DB0E /* Assets.xcassets */,
+			);
+			name = Resources;
+			path = CrewBus/Resources;
+			sourceTree = "<group>";
+		};
 		1DD0596CC70D67C90414348F /* CrewFace */ = {
 			isa = PBXGroup;
 			children = (
@@ -156,6 +171,7 @@
 			isa = PBXGroup;
 			children = (
 				FB7149433D6D994681D958B7 /* Packages */,
+				13675A1C2BFF8B171F3C661A /* Resources */,
 				727B72DC6A0C7E9AEB5E7411 /* Sources */,
 				993C797DF80F3567E176835E /* Products */,
 			);
@@ -175,6 +191,7 @@
 			children = (
 				F491B6A7AEF64F3EDA281E48 /* AppDelegate.swift */,
 				F1CC97AAE72A5F8B62802001 /* AppState.swift */,
+				6489E14833E18C02FD82FA17 /* ClaudeConnector.swift */,
 				E236AA6A8755BF280481E8E0 /* CrewBusApp.swift */,
 				B9FC84BF2472292212AA5546 /* CrewTheme.swift */,
 				A2999E8FD9F11268D74B1E12 /* ServerManager.swift */,
@@ -240,7 +257,7 @@
 			isa = PBXGroup;
 			children = (
 				1F46844ADE6818BED4204515 /* AuditLogView.swift */,
-				857DAA25BDFC43BA263EA9C5 /* ClaudeExtensionView.swift */,
+				0113025D89F75A6CAC0597C6 /* ClaudeConnectionView.swift */,
 				19AA7E7C6009058E58D405BF /* HamburgerMenuView.swift */,
 				E00EADCE776DFD8136570AC3 /* MainView.swift */,
 				E5D17DF2A403E3B7B7670D9D /* MessageFeedView.swift */,
@@ -286,6 +303,7 @@
 				18B547946D8D3B693EF2F53C /* ConnectionLinesView.swift */,
 				19A2F804B0F1FC9783E53D6F /* ConstellationView.swift */,
 				41262803DABA11ABFC4A96C8 /* DashboardView.swift */,
+				891547C4723A9B2D66091DFC /* EnergyScoreSheet.swift */,
 				DC2B08A9E596959EC7D9CF13 /* ParticlesView.swift */,
 				D7564036E5861AFC600BD9AA /* StatsCardView.swift */,
 				70C6CEDB510DF4597481B50D /* SunMoonToggleView.swift */,
@@ -318,6 +336,7 @@
 			buildConfigurationList = 14E0308B6B74F2CDFFE8BA1E /* Build configuration list for PBXNativeTarget "CrewBus" */;
 			buildPhases = (
 				835250D3EB7262D2B8E66E9B /* Sources */,
+				443ABA71E2233C1C9CC38A07 /* Resources */,
 				60E7569D0938F7B4805DD0EE /* Frameworks */,
 			);
 			buildRules = (
@@ -371,6 +390,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		443ABA71E2233C1C9CC38A07 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4663D0F9E63AAF97DEB14967 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		835250D3EB7262D2B8E66E9B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -391,7 +421,8 @@
 				E12E524EF45C1DF5C5BF0C03 /* ChatHeaderView.swift in Sources */,
 				BAA373537C6EA2B5AE495890 /* ChatInputView.swift in Sources */,
 				7522DBC21A2D78D4940C07A0 /* ChatView.swift in Sources */,
-				098B66A0CDF59B8004A2E04A /* ClaudeExtensionView.swift in Sources */,
+				2D87B4F6D6B59A146ECB582D /* ClaudeConnectionView.swift in Sources */,
+				D0226BADB3631A5D0CC23904 /* ClaudeConnector.swift in Sources */,
 				3F66163D09E4DEA3453AAF8A /* ConnectionLinesView.swift in Sources */,
 				6ABAD886DAF41502C1C6A0E6 /* ConstellationView.swift in Sources */,
 				D5149E85FAC71E538584308C /* CrewBusApp.swift in Sources */,
@@ -400,6 +431,7 @@
 				6F56DA297336898A6CC0D0C8 /* DashboardView.swift in Sources */,
 				ECC48B89108F5A6CA0E7A279 /* DecisionLogView.swift in Sources */,
 				2D6F6B64B2AAE8F06335F7E5 /* DeviceManagementView.swift in Sources */,
+				1AE94012C468BEBE87737EB8 /* EnergyScoreSheet.swift in Sources */,
 				58BE4ED4491CCE0782A01405 /* HamburgerMenuView.swift in Sources */,
 				E9C1BF00096DF0B6FB4C7730 /* HeartbeatSection.swift in Sources */,
 				DE81EEFB2DDC2044E80791FD /* LearningSection.swift in Sources */,
@@ -436,6 +468,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CrewBus/Resources/CrewBus.entitlements;
 				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -516,6 +549,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CrewBus/Resources/CrewBus.entitlements;
 				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
