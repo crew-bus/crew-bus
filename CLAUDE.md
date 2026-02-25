@@ -13,13 +13,16 @@ Passion crews welcome: art, music, hobbies, whatever lights you up.
 ## Dev Workflow
 - Always run `pytest` before committing.
 - Conventional commits: `feat:`, `fix:`, `chore:`, `tweak:`, `ci:`, etc.
-- Python files in repo root (flat). Public site in `public/` & `templates/`.
+- Python files in repo root (flat).
 
 ## Skills → see details in each
 - `.claude/skills/crew-bus-core/` — core OS, agent bus, Crew Boss
-- `.claude/skills/dashboard-ui/` — dashboard & landing page visuals
 - `.claude/skills/security/` — encryption, private sessions, trust model
 
 ## Key Files
-- `bus.py` — agent message bus | `dashboard.py` — TUI dashboard
-- `security.py` — encryption & trust | `test_*.py` — run with `pytest`
+- `bus.py` — agent message bus
+- `agent_worker.py` — AI agent execution engine
+- `security.py` — encryption & trust
+- `cli.py` — command-line interface
+- `crew_bus_mcp.py` — MCP server for Claude integration
+- `test_*.py` — run with `pytest`

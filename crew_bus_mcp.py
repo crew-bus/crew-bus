@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""Crew Bus MCP Server — exposes the local crew to Claude Desktop.
+"""Crew Bus MCP Server — exposes the local crew to Claude Desktop & HTTP clients.
 
-Runs as a stdio JSON-RPC server using the `mcp` (FastMCP) package.
-Claude Desktop launches this as a child process and communicates via stdin/stdout.
-All crew interaction goes through the Crew Bus REST API on localhost.
+Supports two transports:
+  stdio  — Claude Desktop launches this as a child process (default)
+  http   — Streamable HTTP on port 8421 for Claude Code, Cowork, LAN clients
+
+All crew interaction goes through the Crew Bus REST API on localhost:8420.
 """
 
+import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Optional, Tuple, Union
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 CREW_BUS_URL = os.environ.get("CREW_BUS_URL", "http://127.0.0.1:8420")
+
+_start_time = time.time()
 
 mcp = FastMCP("crew-bus", instructions="Talk to your local Crew Bus agents")
 
@@ -29,7 +37,7 @@ def _log(msg: str) -> None:
     print(f"[crew-bus-mcp] {msg}", file=sys.stderr, flush=True)
 
 
-def _api_get(path: str, params: dict | None = None):
+def _api_get(path: str, params: Optional[dict] = None):
     """GET request to the Crew Bus API. Returns parsed JSON or error dict."""
     url = CREW_BUS_URL + path
     if params:
@@ -45,7 +53,7 @@ def _api_get(path: str, params: dict | None = None):
         return {"error": str(e)}
 
 
-def _api_post(path: str, body: dict | None = None):
+def _api_post(path: str, body: Optional[dict] = None):
     """POST request to the Crew Bus API. Returns parsed JSON or error dict."""
     url = CREW_BUS_URL + path
     data = json.dumps(body or {}).encode()
@@ -61,7 +69,7 @@ def _api_post(path: str, body: dict | None = None):
         return {"error": str(e)}
 
 
-def _find_agent(agents: list, name: str) -> dict | None:
+def _find_agent(agents: list, name: str) -> Optional[dict]:
     """Resolve agent by name or display_name, case-insensitive. Tries exact then partial."""
     lower = name.lower()
     # Exact match
@@ -79,7 +87,7 @@ def _find_agent(agents: list, name: str) -> dict | None:
     return None
 
 
-def _resolve_agent(name: str) -> tuple[dict | None, str | None]:
+def _resolve_agent(name: str) -> Tuple[Optional[dict], Optional[str]]:
     """Fetch agents list and resolve by name. Returns (agent, error)."""
     agents = _api_get("/api/agents")
     if isinstance(agents, dict) and "error" in agents:
@@ -92,11 +100,33 @@ def _resolve_agent(name: str) -> tuple[dict | None, str | None]:
 
 
 # ---------------------------------------------------------------------------
-# MCP Tools
+# Health endpoint (HTTP transport only)
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
-def list_agents() -> str:
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request):
+    from starlette.responses import JSONResponse
+    agents = _api_get("/api/agents")
+    count = len(agents) if isinstance(agents, list) else 0
+    return JSONResponse({
+        "status": "ok",
+        "server": "crew-bus-mcp",
+        "version": "1.0.0",
+        "agents_online": count,
+        "uptime_seconds": int(time.time() - _start_time),
+    })
+
+
+# ---------------------------------------------------------------------------
+# MCP Tools — all prefixed with crewbus_
+# ---------------------------------------------------------------------------
+
+_RO = ToolAnnotations(readOnlyHint=True)
+_RW = ToolAnnotations(readOnlyHint=False)
+
+
+@mcp.tool(annotations=_RO)
+def crewbus_list_agents() -> str:
     """List all crew members with their status, type, and role."""
     agents = _api_get("/api/agents")
     if isinstance(agents, dict) and "error" in agents:
@@ -111,11 +141,11 @@ def list_agents() -> str:
     return "\n".join(lines) if lines else "No agents found."
 
 
-@mcp.tool()
-def send_message(agent_name: str, message: str) -> str:
+@mcp.tool(annotations=_RW)
+def crewbus_send_message(agent_name: str, message: str) -> str:
     """Send a message to a crew member and get their reply.
 
-    Use list_agents() first to see available agent names.
+    Use crewbus_list_agents() first to see available agent names.
     """
     agent, err = _resolve_agent(agent_name)
     if err:
@@ -128,8 +158,8 @@ def send_message(agent_name: str, message: str) -> str:
     return reply
 
 
-@mcp.tool()
-def get_agent_chat(agent_name: str, limit: int = 20) -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_get_agent_chat(agent_name: str, limit: int = 20) -> str:
     """Get recent chat history with a crew member."""
     agent, err = _resolve_agent(agent_name)
     if err:
@@ -148,15 +178,15 @@ def get_agent_chat(agent_name: str, limit: int = 20) -> str:
     return json.dumps(messages)
 
 
-@mcp.tool()
-def get_crew_stats() -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_get_crew_stats() -> str:
     """Get a dashboard overview of the crew — agent counts, trust score, energy, etc."""
     stats = _api_get("/api/stats")
     return json.dumps(stats, indent=2)
 
 
-@mcp.tool()
-def list_teams() -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_list_teams() -> str:
     """List all teams with their manager and member count."""
     teams = _api_get("/api/teams")
     if isinstance(teams, dict) and "error" in teams:
@@ -170,8 +200,8 @@ def list_teams() -> str:
     return "\n".join(lines) if lines else "No teams found."
 
 
-@mcp.tool()
-def get_team_detail(team_name: str) -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_get_team_detail(team_name: str) -> str:
     """Get detailed info about a team including its agent list."""
     teams = _api_get("/api/teams")
     if isinstance(teams, dict) and "error" in teams:
@@ -194,8 +224,8 @@ def get_team_detail(team_name: str) -> str:
     return json.dumps({"team": team, "agents": agents}, indent=2)
 
 
-@mcp.tool()
-def get_message_feed(limit: int = 30) -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_get_message_feed(limit: int = 30) -> str:
     """Get the recent crew message feed — inter-agent messages, bus events, etc."""
     messages = _api_get("/api/messages", {"limit": str(limit)})
     if isinstance(messages, dict) and "error" in messages:
@@ -211,8 +241,8 @@ def get_message_feed(limit: int = 30) -> str:
     return json.dumps(messages, indent=2)
 
 
-@mcp.tool()
-def search_agent_memory(agent_name: str, query: str = "") -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_search_agent_memory(agent_name: str, query: str = "") -> str:
     """Search a crew member's memory — experiences, facts, learned info.
 
     If query is provided, filters memories containing that text.
@@ -237,8 +267,8 @@ def search_agent_memory(agent_name: str, query: str = "") -> str:
     return json.dumps(memories, indent=2)
 
 
-@mcp.tool()
-def get_agent_learnings(agent_name: str) -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_get_agent_learnings(agent_name: str) -> str:
     """Get what a crew member has learned — mistakes and what works well."""
     agent, err = _resolve_agent(agent_name)
     if err:
@@ -247,8 +277,8 @@ def get_agent_learnings(agent_name: str) -> str:
     return json.dumps(result, indent=2)
 
 
-@mcp.tool()
-def get_audit_log(limit: int = 50) -> str:
+@mcp.tool(annotations=_RO)
+def crewbus_get_audit_log(limit: int = 50) -> str:
     """Get recent crew audit events — actions, decisions, configuration changes."""
     entries = _api_get("/api/audit", {"limit": str(limit)})
     if isinstance(entries, dict) and "error" in entries:
@@ -265,8 +295,8 @@ def get_audit_log(limit: int = 50) -> str:
     return json.dumps(entries, indent=2)
 
 
-@mcp.tool()
-def post_to_team_mailbox(
+@mcp.tool(annotations=_RW)
+def crewbus_post_to_team_mailbox(
     from_agent_name: str, subject: str, body: str, severity: str = "info"
 ) -> str:
     """Post a message to a team mailbox on behalf of an agent.
@@ -286,9 +316,51 @@ def post_to_team_mailbox(
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# Entry point — dual transport: stdio (default) or streamable-http
 # ---------------------------------------------------------------------------
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Crew Bus MCP Server — stdio or HTTP transport"
+    )
+    parser.add_argument(
+        "--transport", choices=["stdio", "http"], default="stdio",
+        help="Transport mode (default: stdio)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8421,
+        help="HTTP port (default: 8421)"
+    )
+    parser.add_argument(
+        "--host", default="127.0.0.1",
+        help="HTTP bind address (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--public", action="store_true",
+        help="Bind to 0.0.0.0 (accessible from LAN)"
+    )
+    parser.add_argument(
+        "--token", default=None,
+        help="Bearer token for HTTP auth (reserved for future use)"
+    )
+    return parser
+
+
 if __name__ == "__main__":
-    _log("Starting Crew Bus MCP server...")
-    mcp.run()
+    args = _build_parser().parse_args()
+
+    if args.transport == "stdio":
+        _log("Starting Crew Bus MCP server (stdio)...")
+        mcp.run()
+    else:
+        host = "0.0.0.0" if args.public else args.host
+        if args.public:
+            _log("WARNING: Binding to 0.0.0.0 — accessible from LAN")
+        mcp.settings.host = host
+        mcp.settings.port = args.port
+        if host == "0.0.0.0":
+            mcp.settings.transport_security.allowed_hosts.append(f"0.0.0.0:{args.port}")
+        _log(f"Starting Crew Bus MCP server (HTTP) on {host}:{args.port}")
+        _log(f"  MCP endpoint: http://{host}:{args.port}/mcp")
+        _log(f"  Health check: http://{host}:{args.port}/health")
+        mcp.run(transport="streamable-http")

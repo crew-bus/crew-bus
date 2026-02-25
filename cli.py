@@ -315,7 +315,12 @@ def cmd_trust(args):
 
 def cmd_briefing(args):
     """Generate a briefing for the human."""
-    from right_hand import RightHand
+    try:
+        from right_hand import RightHand
+    except ImportError:
+        print("Error: Briefings require the CrewBus app (right_hand module).", file=sys.stderr)
+        print("Install from https://crew-bus.dev/install", file=sys.stderr)
+        sys.exit(1)
     from email_formatter import format_morning_brief, format_evening_summary, format_urgent_alert
 
     agent = _resolve_agent(args.human)

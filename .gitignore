@@ -18,7 +18,6 @@ build/
 *.log
 _b64_*.txt
 _tmp_*
-configs/ryan_stack.yaml
 crew_bus.db-shm
 crew_bus.db-wal
 *.db-shm
@@ -30,12 +29,6 @@ whatsapp-bridge/
 wa-bridge/wa-session/
 .wwebjs_auth/
 .wwebjs_cache/
-
-# Xcode user data
-xcuserdata/
-
-# SPM build cache
-CrewBusKit/.build/
 
 # Embedded repos / worktrees
 .claude/worktrees/
