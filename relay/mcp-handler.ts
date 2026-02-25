@@ -32,6 +32,49 @@ const MAC_NOT_CONNECTED_ERROR = {
 };
 
 /**
+ * MCP methods that the relay can handle locally without a tunnel connection.
+ * This allows the MCP handshake to succeed even when the Mac app is offline,
+ * so clients like claude.ai don't mistake a disconnected tunnel for an auth failure.
+ */
+function handleLocalMethod(rpcRequest: JsonRpcRequest): Response | null {
+  const { method, id } = rpcRequest;
+
+  if (method === "initialize") {
+    const sessionId = crypto.randomUUID();
+    return Response.json(
+      {
+        jsonrpc: "2.0",
+        result: {
+          protocolVersion: "2025-03-26",
+          capabilities: { tools: {} },
+          serverInfo: { name: "CrewBus Relay", version: "1.0.0" },
+        },
+        id: id ?? null,
+      },
+      { headers: { "Content-Type": "application/json", "Mcp-Session-Id": sessionId } },
+    );
+  }
+
+  if (method === "notifications/initialized") {
+    // Notification — no response needed, return 202 Accepted
+    return new Response(null, { status: 202 });
+  }
+
+  if (method === "tools/list") {
+    return Response.json(
+      {
+        jsonrpc: "2.0",
+        result: { tools: [] },
+        id: id ?? null,
+      },
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  return null; // Not a locally-handled method
+}
+
+/**
  * Handle an incoming MCP request. Accepts the raw Request, forwards it
  * through the tunnel DO, and returns a Response with the JSON-RPC result.
  */
@@ -40,14 +83,6 @@ export async function handleMcpRequest(
   tunnelStub: DurableObjectStub,
   userId: string,
 ): Promise<Response> {
-  // Check tunnel connectivity
-  const statusRes = await tunnelStub.fetch(new Request("http://tunnel/status"));
-  const status = (await statusRes.json()) as { connected: boolean };
-
-  if (!status.connected) {
-    return mcpErrorResponse(null, MAC_NOT_CONNECTED_ERROR);
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -63,8 +98,23 @@ export async function handleMcpRequest(
     return handleBatch(body, tunnelStub);
   }
 
-  // Handle single request
-  return handleSingle(body as JsonRpcRequest, tunnelStub);
+  const rpcRequest = body as JsonRpcRequest;
+
+  // Check tunnel connectivity
+  const statusRes = await tunnelStub.fetch(new Request("http://tunnel/status"));
+  const status = (await statusRes.json()) as { connected: boolean };
+
+  if (!status.connected) {
+    // Handle MCP handshake methods locally so the connection succeeds
+    const localResponse = handleLocalMethod(rpcRequest);
+    if (localResponse) return localResponse;
+
+    // For everything else, tell the user their Mac isn't connected
+    return mcpErrorResponse(rpcRequest.id ?? null, MAC_NOT_CONNECTED_ERROR);
+  }
+
+  // Tunnel is connected — forward everything to the Mac
+  return handleSingle(rpcRequest, tunnelStub);
 }
 
 async function handleSingle(

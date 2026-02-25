@@ -60,6 +60,24 @@ interface Env {
 const app = new Hono<{ Bindings: Env }>();
 
 // ---------------------------------------------------------------------------
+// Request logging — log every request so we can debug claude.ai issues
+// ---------------------------------------------------------------------------
+
+app.use("*", async (c, next) => {
+  const method = c.req.method;
+  const url = c.req.url;
+  const ua = c.req.header("User-Agent") ?? "(none)";
+  const auth = c.req.header("Authorization") ? "Bearer ***" : "(none)";
+  const accept = c.req.header("Accept") ?? "(none)";
+  const origin = c.req.header("Origin") ?? "(none)";
+  console.log(`[REQ] ${method} ${url} | UA: ${ua} | Auth: ${auth} | Accept: ${accept} | Origin: ${origin}`);
+
+  await next();
+
+  console.log(`[RES] ${method} ${url} → ${c.res.status}`);
+});
+
+// ---------------------------------------------------------------------------
 // CORS — allow Claude clients and localhost dev
 // ---------------------------------------------------------------------------
 
@@ -86,8 +104,8 @@ app.use(
       return allowed.includes(origin) ? origin : "";
     },
     allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Authorization", "Content-Type"],
-    exposeHeaders: ["Content-Type"],
+    allowHeaders: ["Authorization", "Content-Type", "Accept", "Mcp-Session-Id", "Last-Event-ID", "MCP-Protocol-Version"],
+    exposeHeaders: ["Content-Type", "Mcp-Session-Id"],
     credentials: true,
     maxAge: 86400,
   }),
@@ -204,7 +222,7 @@ app.get("/authorize", async (c) => {
   // Check for an existing session cookie
   const sessionToken = getCookie(c.req.raw, "crewbus_session");
   if (sessionToken) {
-    const userId = await validateToken(sessionToken, c.env.OAUTH_KV);
+    const userId = await validateToken(sessionToken, c.env.OAUTH_KV, c.env.MAGIC_LINK_SECRET);
     if (userId) {
       // User is already authenticated — issue authorization code directly
       const code = await generateAuthorizationCode(
@@ -282,19 +300,12 @@ app.post("/token", async (c) => {
 app.post("/mcp", async (c) => {
   const userId = await extractAndValidateUser(c);
   if (!userId) {
-    return c.json(
-      {
-        jsonrpc: "2.0",
-        error: { code: -32001, message: "Unauthorized — invalid or missing access token" },
-        id: null,
+    return new Response(null, {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": `Bearer resource_metadata="${c.env.RELAY_ORIGIN}/.well-known/oauth-protected-resource"`,
       },
-      {
-        status: 401,
-        headers: {
-          "WWW-Authenticate": `Bearer resource_metadata="${c.env.RELAY_ORIGIN}/.well-known/oauth-protected-resource"`,
-        },
-      },
-    );
+    });
   }
 
   // Rate limit
@@ -322,7 +333,12 @@ app.post("/mcp", async (c) => {
 app.get("/mcp", async (c) => {
   const userId = await extractAndValidateUser(c);
   if (!userId) {
-    return c.text("Unauthorized", 401);
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": `Bearer resource_metadata="${c.env.RELAY_ORIGIN}/.well-known/oauth-protected-resource"`,
+      },
+    });
   }
 
   // SSE stream — the Mac can push notifications through the tunnel
@@ -584,7 +600,7 @@ async function extractAndValidateUser(c: { req: { header: (name: string) => stri
     return null;
   }
   const token = authHeader.slice(7);
-  return validateToken(token, c.env.OAUTH_KV);
+  return validateToken(token, c.env.OAUTH_KV, c.env.MAGIC_LINK_SECRET);
 }
 
 // ---------------------------------------------------------------------------

@@ -38,7 +38,10 @@ interface ClientRegistration {
   client_id: string;
   client_name?: string;
   redirect_uris: string[];
-  created_at: number;
+  grant_types: string[];
+  response_types: string[];
+  token_endpoint_auth_method: string;
+  client_id_issued_at: number;
 }
 
 export async function registerClient(
@@ -50,7 +53,10 @@ export async function registerClient(
     client_id: clientId,
     client_name: body.client_name,
     redirect_uris: body.redirect_uris ?? [],
-    created_at: Date.now(),
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+    client_id_issued_at: Math.floor(Date.now() / 1000),
   };
 
   await kv.put(`client:${clientId}`, JSON.stringify(registration));
@@ -164,6 +170,7 @@ export async function exchangeCodeForToken(
     access_token: accessToken,
     token_type: "Bearer",
     expires_in: TOKEN_EXPIRY_SECONDS,
+    scope: "mcp",
   };
 }
 
@@ -174,7 +181,15 @@ export async function exchangeCodeForToken(
 export async function validateToken(
   token: string,
   kv: KVNamespace,
+  secret?: string,
 ): Promise<string | null> {
+  // First try stateless HMAC validation (avoids KV eventual consistency issues)
+  if (secret) {
+    const userId = await validateTokenBySignature(token, secret);
+    if (userId) return userId;
+  }
+
+  // Fallback to KV lookup (for session tokens set via cookie)
   const raw = await kv.get(`token:${token}`);
   if (!raw) return null;
 
@@ -185,6 +200,57 @@ export async function validateToken(
   }
 
   return record.userId;
+}
+
+async function validateTokenBySignature(
+  token: string,
+  secret: string,
+): Promise<string | null> {
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+
+  const [payloadB64, sigB64] = parts;
+
+  // Verify HMAC signature
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+
+  const sigBytes = base64UrlDecode(sigB64);
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    sigBytes,
+    new TextEncoder().encode(payloadB64),
+  );
+
+  if (!valid) return null;
+
+  // Decode payload
+  const payloadBytes = base64UrlDecode(payloadB64);
+  const payloadStr = new TextDecoder().decode(payloadBytes);
+  let payload: { sub: string; iat: number; jti: string };
+  try {
+    payload = JSON.parse(payloadStr);
+  } catch {
+    return null;
+  }
+
+  // Check expiry (30 days from iat)
+  const expiresAt = payload.iat + TOKEN_EXPIRY_SECONDS;
+  if (Math.floor(Date.now() / 1000) > expiresAt) return null;
+
+  return payload.sub;
+}
+
+function base64UrlDecode(str: string): Uint8Array {
+  const padded = str.replace(/-/g, "+").replace(/_/g, "/");
+  const binStr = atob(padded);
+  return Uint8Array.from(binStr, (c) => c.charCodeAt(0));
 }
 
 // ---------------------------------------------------------------------------
