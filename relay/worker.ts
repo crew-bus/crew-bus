@@ -85,7 +85,7 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
-      if (!origin) return "";
+      if (!origin) return "https://relay.crew-bus.dev"; // native apps (no Origin header)
       const allowed = [
         "https://claude.ai",
         "https://www.claude.ai",
@@ -423,36 +423,67 @@ app.get("/auth/login", (c) => {
 // ---------------------------------------------------------------------------
 
 app.post("/auth/login", async (c) => {
-  const formData = await c.req.parseBody();
-  const email = String(formData.email ?? "").trim().toLowerCase();
+  const contentType = c.req.header("content-type") ?? "";
+  const isJsonRequest = contentType.includes("application/json");
+
+  let email: string;
+  let formData: Record<string, string | File> = {};
+
+  if (isJsonRequest) {
+    const body = await c.req.json<{ email: string }>();
+    email = (body.email ?? "").trim().toLowerCase();
+  } else {
+    formData = await c.req.parseBody() as Record<string, string | File>;
+    email = String(formData.email ?? "").trim().toLowerCase();
+  }
 
   if (!email || !email.includes("@")) {
+    if (isJsonRequest) {
+      return c.json({ error: "invalid_email", message: "Please enter a valid email address." }, 400);
+    }
     return c.html(renderLoginPage("Please enter a valid email address."), 400);
   }
 
-  // Preserve OAuth flow params
-  const url = new URL(c.req.url);
-  const clientId = url.searchParams.get("client_id") ?? formData.client_id?.toString() ?? "";
-  const redirectUri = url.searchParams.get("redirect_uri") ?? formData.redirect_uri?.toString() ?? "";
-  const codeChallenge = url.searchParams.get("code_challenge") ?? formData.code_challenge?.toString() ?? "";
-  const codeChallengeMethod = url.searchParams.get("code_challenge_method") ?? formData.code_challenge_method?.toString() ?? "S256";
-  const state = url.searchParams.get("state") ?? formData.state?.toString() ?? "";
+  // Preserve OAuth flow params (form-based requests only)
+  if (!isJsonRequest) {
+    const url = new URL(c.req.url);
+    const clientId = url.searchParams.get("client_id") ?? formData.client_id?.toString() ?? "";
+    const redirectUri = url.searchParams.get("redirect_uri") ?? formData.redirect_uri?.toString() ?? "";
+    const codeChallenge = url.searchParams.get("code_challenge") ?? formData.code_challenge?.toString() ?? "";
+    const codeChallengeMethod = url.searchParams.get("code_challenge_method") ?? formData.code_challenge_method?.toString() ?? "S256";
+    const state = url.searchParams.get("state") ?? formData.state?.toString() ?? "";
 
-  // Store OAuth params in KV so we can continue the flow after email verification
-  if (clientId && redirectUri && codeChallenge) {
-    const flowId = crypto.randomUUID();
-    await c.env.OAUTH_KV.put(
-      `oauth_flow:${email}`,
-      JSON.stringify({ clientId, redirectUri, codeChallenge, codeChallengeMethod, state, flowId }),
-      { expirationTtl: 900 }, // 15 minutes
-    );
+    if (clientId && redirectUri && codeChallenge) {
+      const flowId = crypto.randomUUID();
+      await c.env.OAUTH_KV.put(
+        `oauth_flow:${email}`,
+        JSON.stringify({ clientId, redirectUri, codeChallenge, codeChallengeMethod, state, flowId }),
+        { expirationTtl: 900 },
+      );
+    }
   }
+
+  // Create auth poll record for app-based polling
+  const authRequestId = crypto.randomUUID();
+  await c.env.OAUTH_KV.put(
+    `auth_poll:${authRequestId}`,
+    JSON.stringify({ status: "pending", email, createdAt: Date.now() }),
+    { expirationTtl: 900 },
+  );
+  await c.env.OAUTH_KV.put(`auth_poll_by_email:${email}`, authRequestId, { expirationTtl: 900 });
 
   try {
     await sendMagicLink(email, c.env);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send email";
+    if (isJsonRequest) {
+      return c.json({ error: "send_failed", message }, 500);
+    }
     return c.html(renderLoginPage(message), 500);
+  }
+
+  if (isJsonRequest) {
+    return c.json({ auth_request_id: authRequestId });
   }
 
   return c.html(
@@ -461,6 +492,32 @@ app.post("/auth/login", async (c) => {
       "Check your email for a magic link to sign in.",
     ),
   );
+});
+
+// ---------------------------------------------------------------------------
+// GET /auth/poll — Poll for magic link verification status (used by iOS app)
+// ---------------------------------------------------------------------------
+
+app.get("/auth/poll", async (c) => {
+  const authRequestId = c.req.query("id");
+  if (!authRequestId) {
+    return c.json({ error: "missing_id", message: "auth_request_id is required" }, 400);
+  }
+
+  const raw = await c.env.OAUTH_KV.get(`auth_poll:${authRequestId}`);
+  if (!raw) {
+    return c.json({ status: "expired" }, 404);
+  }
+
+  const record = JSON.parse(raw) as { status: string; token?: string };
+
+  if (record.status === "complete" && record.token) {
+    // One-time pickup — delete after returning
+    await c.env.OAUTH_KV.delete(`auth_poll:${authRequestId}`);
+    return c.json({ status: "complete", token: record.token });
+  }
+
+  return c.json({ status: "pending" });
 });
 
 // ---------------------------------------------------------------------------
@@ -546,6 +603,21 @@ app.post("/auth/verify", async (c) => {
     { expirationTtl: 30 * 24 * 60 * 60 },
   );
 
+  // Complete any pending auth poll for this email (enables iOS app polling)
+  const pendingPollId = await c.env.OAUTH_KV.get(`auth_poll_by_email:${result.email}`);
+  if (pendingPollId) {
+    const pollRaw = await c.env.OAUTH_KV.get(`auth_poll:${pendingPollId}`);
+    if (pollRaw) {
+      const pollRecord = JSON.parse(pollRaw);
+      await c.env.OAUTH_KV.put(
+        `auth_poll:${pendingPollId}`,
+        JSON.stringify({ ...pollRecord, status: "complete", token: sessionToken, completedAt: Date.now() }),
+        { expirationTtl: 300 },
+      );
+    }
+    await c.env.OAUTH_KV.delete(`auth_poll_by_email:${result.email}`);
+  }
+
   // Check if there's a pending OAuth flow for this user
   const flowRaw = await c.env.OAUTH_KV.get(`oauth_flow:${result.email}`);
   if (flowRaw) {
@@ -580,7 +652,7 @@ app.post("/auth/verify", async (c) => {
     });
   }
 
-  // No OAuth flow — just set session and show success
+  // No OAuth flow — show success page
   return new Response(successHtml(result.email), {
     status: 200,
     headers: {

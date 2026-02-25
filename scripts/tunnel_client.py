@@ -36,22 +36,78 @@ def _status(line: str) -> None:
     print(line, file=sys.stderr, flush=True)
 
 
-def forward_to_local(body: dict, local_url: str) -> dict:
-    """POST the MCP request body to the local MCP server and return the response."""
+_mcp_session_id: str | None = None
+
+
+def _ensure_session(local_url: str) -> None:
+    """Initialize the local MCP session if we don't have one yet."""
+    global _mcp_session_id
+    if _mcp_session_id:
+        return
+
     url = f"{local_url}/mcp"
-    data = json.dumps(body).encode("utf-8")
+    init_body = json.dumps({
+        "jsonrpc": "2.0",
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "crewbus-tunnel", "version": "1.0.0"},
+        },
+        "id": 0,
+    }).encode("utf-8")
     req = urllib.request.Request(
         url,
-        data=data,
-        headers={"Content-Type": "application/json"},
+        data=init_body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+            sid = resp.headers.get("mcp-session-id")
+            if sid:
+                _mcp_session_id = sid
+                _log(f"MCP session initialized: {sid[:12]}...")
+            resp.read()  # drain
+    except Exception as e:
+        _log(f"Failed to initialize MCP session: {e}")
+
+
+def forward_to_local(body: dict, local_url: str) -> dict:
+    """POST the MCP request body to the local MCP server and return the response."""
+    global _mcp_session_id
+    _ensure_session(local_url)
+
+    url = f"{local_url}/mcp"
+    data = json.dumps(body).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    if _mcp_session_id:
+        headers["Mcp-Session-Id"] = _mcp_session_id
+
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            response_data = resp.read()
+            # Handle SSE responses (text/event-stream)
+            content_type = resp.headers.get("Content-Type", "")
+            if "text/event-stream" in content_type:
+                # Parse SSE: extract last "data:" line
+                for line in response_data.decode("utf-8").strip().split("\n"):
+                    if line.startswith("data: "):
+                        return json.loads(line[6:])
+                return {"jsonrpc": "2.0", "error": {"code": -32603, "message": "Empty SSE"}, "id": body.get("id")}
+            return json.loads(response_data)
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
         _log(f"Local MCP server returned HTTP {e.code}: {error_body}")
+        if e.code == 400 and "session" in error_body.lower():
+            _mcp_session_id = None  # reset session on session errors
         return {
             "jsonrpc": "2.0",
             "error": {"code": -32603, "message": f"Local MCP error: HTTP {e.code}"},

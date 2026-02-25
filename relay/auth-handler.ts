@@ -168,6 +168,7 @@ export async function sendMagicLink(email: string, env: Env): Promise<void> {
 
   if (!res.ok) {
     const text = await res.text();
+    console.error(`[RESEND ERROR] ${res.status}: ${text}`);
     throw new Error(`Failed to send email: ${res.status} ${text}`);
   }
 }
