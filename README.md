@@ -22,6 +22,40 @@ Crew Bus is an agent coordination framework that runs entirely on your machine. 
 
 ---
 
+## Install
+
+### MCPB Bundle (Claude Desktop)
+
+Download the latest `.mcpb` bundle from [Releases](https://github.com/crew-bus/crew-bus/releases) and double-click to install in Claude Desktop.
+
+### pip (Claude Code, VS Code, any MCP client)
+
+```bash
+pip install crew-bus-mcp
+```
+
+Then add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "crew-bus": {
+      "command": "crew-bus-mcp",
+      "env": {
+        "CREW_BUS_URL": "http://127.0.0.1:8420"
+      }
+    }
+  }
+}
+```
+
+### Mac App (required)
+
+CrewBus must be running on your Mac for any of the above to work.
+Download: [crew-bus.dev](https://crew-bus.dev)
+
+---
+
 ## Quick Start
 
 ```bash

@@ -1,0 +1,68 @@
+{
+  "manifest_version": "0.3",
+  "name": "crew-bus",
+  "display_name": "Crew Bus",
+  "version": "1.0.0",
+  "description": "Talk to your local AI agent crew from Claude. Coordinate tasks, send messages, search memories, and manage your team — all through natural conversation.",
+  "long_description": "Crew Bus connects Claude to your local AI agent team running on your Mac. Your crew includes Crew Boss (task coordinator), Guardian (security gatekeeper), and Vault (personal memory). Use Claude to send messages, check what your agents have been working on, search their memories, review audit logs, and post to the team mailbox. Everything runs locally — your data never leaves your Mac.",
+  "author": {
+    "name": "Ryan Johnson",
+    "email": "ryanjohnsonpersonal@gmail.com",
+    "url": "https://crew-bus.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crew-bus/crew-bus.git"
+  },
+  "homepage": "https://crew-bus.dev",
+  "documentation": "https://github.com/crew-bus/crew-bus#readme",
+  "support": "https://github.com/crew-bus/crew-bus/issues",
+  "icon": "assets/icon.png",
+  "keywords": ["agents", "crew", "local", "macos", "team", "mcp", "ai-agents", "coordination"],
+  "license": "MIT",
+  "privacy_policies": ["https://crew-bus.dev/privacy"],
+  "server": {
+    "type": "python",
+    "entry_point": "crew_bus_mcp.py",
+    "mcp_config": {
+      "command": "python3",
+      "args": ["${__dirname}/crew_bus_mcp.py"],
+      "env": {
+        "PYTHONPATH": "${__dirname}",
+        "CREW_BUS_URL": "http://127.0.0.1:8420"
+      }
+    }
+  },
+  "tools": [
+    {"name": "crewbus_list_agents", "description": "List all crew members with their status, role, and type"},
+    {"name": "crewbus_send_message", "description": "Send a message to an agent and get their reply"},
+    {"name": "crewbus_get_agent_chat", "description": "Get recent chat history with an agent"},
+    {"name": "crewbus_get_crew_stats", "description": "Get dashboard overview with agent counts and metrics"},
+    {"name": "crewbus_list_teams", "description": "List all teams with manager and member info"},
+    {"name": "crewbus_get_team_detail", "description": "Get detailed info about a specific team"},
+    {"name": "crewbus_get_message_feed", "description": "View recent inter-agent messages and bus events"},
+    {"name": "crewbus_search_agent_memory", "description": "Search an agent's experiences and learned facts"},
+    {"name": "crewbus_get_agent_learnings", "description": "See what an agent has learned — mistakes and successes"},
+    {"name": "crewbus_get_audit_log", "description": "View recent crew actions and configuration changes"},
+    {"name": "crewbus_post_to_team_mailbox", "description": "Post a message to the team mailbox with priority level"}
+  ],
+  "tools_generated": false,
+  "compatibility": {
+    "claude_desktop": ">=1.0.0",
+    "platforms": ["darwin"],
+    "runtimes": {
+      "python": ">=3.9,<4.0"
+    }
+  },
+  "user_config": {
+    "crewbus_port": {
+      "type": "number",
+      "title": "CrewBus Port",
+      "description": "Port where CrewBus is running (default: 8420)",
+      "required": false,
+      "default": 8420,
+      "min": 1024,
+      "max": 65535
+    }
+  }
+}

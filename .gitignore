@@ -13,6 +13,7 @@ Thumbs.db
 *.egg-info/
 dist/
 build/
+*.mcpb
 .idea/
 .vscode/
 *.log

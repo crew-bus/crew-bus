@@ -491,7 +491,8 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for CLI (crew-bus-mcp) and direct execution."""
     args = _build_parser().parse_args()
 
     if args.transport == "stdio":
@@ -517,3 +518,7 @@ if __name__ == "__main__":
             inner_app, token=args.token, public_mode=args.public
         )
         uvicorn.run(app, host=host, port=args.port, log_level="info")
+
+
+if __name__ == "__main__":
+    main()
