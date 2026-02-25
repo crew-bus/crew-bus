@@ -25,7 +25,7 @@ const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 // Login Page
 // ---------------------------------------------------------------------------
 
-export function renderLoginPage(error?: string, success?: string): string {
+export function renderLoginPage(error?: string, success?: string, oauthParams?: Record<string, string>): string {
   const errorHtml = error
     ? `<div class="alert error">${escapeHtml(error)}</div>`
     : "";
@@ -119,6 +119,7 @@ export function renderLoginPage(error?: string, success?: string): string {
     ${errorHtml}
     ${successHtml}
     <form method="POST" action="/auth/login">
+      ${Object.entries(oauthParams ?? {}).map(([k, v]) => v ? `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">` : "").join("\n      ")}
       <label for="email">Email address</label>
       <input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email">
       <button type="submit">Send magic link</button>

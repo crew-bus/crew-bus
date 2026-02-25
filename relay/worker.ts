@@ -137,6 +137,28 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /.well-known/oauth-protected-resource — Protected Resource Metadata (RFC 9728)
+// ---------------------------------------------------------------------------
+
+app.get("/.well-known/oauth-protected-resource/*", (c) => {
+  return c.json({
+    resource: `${c.env.RELAY_ORIGIN}/mcp`,
+    authorization_servers: [`${c.env.RELAY_ORIGIN}`],
+    scopes_supported: ["mcp"],
+    bearer_methods_supported: ["header"],
+  });
+});
+
+app.get("/.well-known/oauth-protected-resource", (c) => {
+  return c.json({
+    resource: `${c.env.RELAY_ORIGIN}/mcp`,
+    authorization_servers: [`${c.env.RELAY_ORIGIN}`],
+    scopes_supported: ["mcp"],
+    bearer_methods_supported: ["header"],
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /register — Dynamic client registration (RFC 7591)
 // ---------------------------------------------------------------------------
 
@@ -266,7 +288,12 @@ app.post("/mcp", async (c) => {
         error: { code: -32001, message: "Unauthorized — invalid or missing access token" },
         id: null,
       },
-      401,
+      {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": `Bearer resource_metadata="${c.env.RELAY_ORIGIN}/.well-known/oauth-protected-resource"`,
+        },
+      },
     );
   }
 
@@ -367,7 +394,12 @@ app.get("/tunnel", async (c) => {
 // ---------------------------------------------------------------------------
 
 app.get("/auth/login", (c) => {
-  return c.html(renderLoginPage());
+  const oauthParams: Record<string, string> = {};
+  for (const key of ["client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state", "scope"]) {
+    const val = c.req.query(key);
+    if (val) oauthParams[key] = val;
+  }
+  return c.html(renderLoginPage(undefined, undefined, oauthParams));
 });
 
 // ---------------------------------------------------------------------------
