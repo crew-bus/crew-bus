@@ -31,7 +31,7 @@ struct HamburgerMenuView: View {
             menuItem("Security & Devices", icon: "lock.shield") {
                 navigate(to: .deviceManagement)
             }
-            menuItem("Link to Claude Desktop", icon: "link.badge.plus") {
+            menuItem("Connect to Claude", icon: "link.badge.plus") {
                 navigate(to: .claudeExtension)
             }
 

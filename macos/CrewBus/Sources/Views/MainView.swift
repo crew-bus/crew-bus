@@ -98,7 +98,7 @@ struct MainView: View {
                             removal: .move(edge: .trailing).combined(with: .opacity)
                         ))
                 case .claudeExtension:
-                    ClaudeExtensionView()
+                    ClaudeConnectionView()
                         .transition(.asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity)
