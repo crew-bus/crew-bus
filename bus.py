@@ -928,6 +928,27 @@ def init_db(db_path: Optional[Path] = None) -> None:
         )
     """)
 
+    # ========= Feedback Items =========
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS feedback_items (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            source     TEXT NOT NULL,
+            source_id  TEXT,
+            category   TEXT NOT NULL DEFAULT 'bug',
+            severity   INTEGER NOT NULL DEFAULT 3,
+            summary    TEXT NOT NULL,
+            body       TEXT,
+            author     TEXT,
+            url        TEXT,
+            flagged    INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            fetched_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            UNIQUE(source, source_id)
+        )
+    """)
+    cur.execute("""CREATE INDEX IF NOT EXISTS idx_feedback_source
+        ON feedback_items(source, severity)""")
+
     # Migrate: add face_mode and face_config columns to agents
     if "face_mode" not in cols:
         cur.execute("ALTER TABLE agents ADD COLUMN face_mode TEXT NOT NULL DEFAULT 'emoji'")
@@ -4901,6 +4922,54 @@ def update_draft_status(draft_id: int, status: str,
     conn.commit()
     conn.close()
     return {"ok": True, "draft_id": draft_id, "status": status}
+
+
+# ---------------------------------------------------------------------------
+# Feedback Items (App Store reviews + GitHub issues)
+# ---------------------------------------------------------------------------
+
+def add_feedback_item(source: str, source_id: str, category: str,
+                      severity: int, summary: str,
+                      body: str = "", author: str = "", url: str = "",
+                      db_path: Optional[Path] = None) -> Optional[int]:
+    """Insert a feedback item. Returns new row id, or None if duplicate."""
+    try:
+        with db_write(db_path) as conn:
+            cur = conn.execute(
+                "INSERT INTO feedback_items "
+                "(source, source_id, category, severity, summary, body, author, url) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (source, source_id, category, severity, summary, body, author, url),
+            )
+            return cur.lastrowid
+    except Exception:
+        # UNIQUE constraint violation = duplicate; skip silently
+        return None
+
+
+def get_feedback_items(source: str = "", min_severity: int = 1,
+                       limit: int = 50, db_path: Optional[Path] = None) -> list:
+    """Return feedback items ordered by severity desc, created_at desc."""
+    conn = get_conn(db_path)
+    sql = "SELECT * FROM feedback_items WHERE severity >= ?"
+    params: list = [min_severity]
+    if source:
+        sql += " AND source = ?"
+        params.append(source)
+    sql += " ORDER BY severity DESC, created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def flag_feedback_item(item_id: int, db_path: Optional[Path] = None) -> bool:
+    """Mark a feedback item as flagged/escalated to Crew Boss."""
+    with db_write(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE feedback_items SET flagged=1 WHERE id=?", (item_id,)
+        )
+    return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------

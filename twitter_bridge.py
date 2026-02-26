@@ -435,6 +435,103 @@ def quick_tweet(text: str, agent_id: int = None, db_path: Optional[Path] = None)
 
 
 # ---------------------------------------------------------------------------
+# Read operations (bearer token / app-only auth)
+# ---------------------------------------------------------------------------
+
+def _bearer_get(url: str, db_path: Optional[Path] = None) -> dict:
+    """Make a bearer-token GET request (app-only auth for read endpoints)."""
+    creds = _get_creds(db_path)
+    bearer = creds.get("twitter_bearer_token", "")
+    if not bearer:
+        return {"ok": False, "error": "twitter_bearer_token not configured"}
+    headers = {"Authorization": f"Bearer {bearer}", "User-Agent": "CrewBus/1.0"}
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw.strip() else {"ok": True}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")[:500]
+        return {"ok": False, "error": f"HTTP {e.code}", "detail": err_body}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def get_mentions(since_id: str = None, count: int = 20,
+                 db_path: Optional[Path] = None) -> list:
+    """Fetch recent mentions of the authenticated account.
+
+    Uses Twitter API v2 GET /2/users/:id/mentions.
+    Returns list of tweet dicts with public_metrics.
+    """
+    my_id = get_my_user_id(db_path)
+    params = {
+        "max_results": min(count, 100),
+        "tweet.fields": "public_metrics,created_at,author_id,text",
+        "expansions": "author_id",
+        "user.fields": "username,name",
+    }
+    if since_id:
+        params["since_id"] = since_id
+    qs = urllib.parse.urlencode(params)
+    url = f"https://api.x.com/2/users/{my_id}/mentions?{qs}"
+    result = _bearer_get(url, db_path)
+    if result.get("ok") is False:
+        return []
+    tweets = result.get("data", [])
+    # Attach usernames from expansions
+    users = {u["id"]: u for u in result.get("includes", {}).get("users", [])}
+    for t in tweets:
+        author = users.get(t.get("author_id", ""), {})
+        t["author_username"] = author.get("username", "")
+        t["author_name"] = author.get("name", "")
+    return tweets
+
+
+def get_engagement_stats(tweet_id: str, db_path: Optional[Path] = None) -> dict:
+    """Fetch public engagement metrics for a tweet.
+
+    Returns dict with likes, retweets, replies, impressions.
+    """
+    url = (f"https://api.x.com/2/tweets/{tweet_id}"
+           "?tweet.fields=public_metrics,created_at,text")
+    result = _bearer_get(url, db_path)
+    if result.get("ok") is False:
+        return result
+    data = result.get("data", {})
+    metrics = data.get("public_metrics", {})
+    return {
+        "tweet_id": tweet_id,
+        "text": data.get("text", ""),
+        "created_at": data.get("created_at", ""),
+        "likes": metrics.get("like_count", 0),
+        "retweets": metrics.get("retweet_count", 0),
+        "replies": metrics.get("reply_count", 0),
+        "quotes": metrics.get("quote_count", 0),
+        "impressions": metrics.get("impression_count", 0),
+    }
+
+
+def get_my_tweets(count: int = 10, db_path: Optional[Path] = None) -> list:
+    """Fetch the authenticated user's recent tweets with engagement stats.
+
+    Returns list of tweet dicts with public_metrics.
+    """
+    my_id = get_my_user_id(db_path)
+    params = {
+        "max_results": min(count, 100),
+        "tweet.fields": "public_metrics,created_at,text",
+        "exclude": "retweets,replies",
+    }
+    qs = urllib.parse.urlencode(params)
+    url = f"https://api.x.com/2/users/{my_id}/tweets?{qs}"
+    result = _bearer_get(url, db_path)
+    if result.get("ok") is False:
+        return []
+    return result.get("data", [])
+
+
+# ---------------------------------------------------------------------------
 # Status / health check
 # ---------------------------------------------------------------------------
 
