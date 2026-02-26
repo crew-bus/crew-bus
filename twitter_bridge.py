@@ -351,6 +351,19 @@ def follow_users(usernames: list, db_path: Optional[Path] = None) -> dict:
     return results
 
 
+def follow_account(username: str, db_path: Optional[Path] = None) -> dict:
+    """Follow an account by @username. Strips leading @ automatically.
+
+    Uses Twitter API v2 POST /2/users/:id/following.
+    Returns {"ok": True, "followed": username} on success.
+    Safe to call on already-followed accounts (Twitter returns following=true).
+    """
+    username = username.lstrip("@").strip()
+    if not username:
+        return {"ok": False, "error": "username is required"}
+    return follow_user(username, db_path)
+
+
 def like_tweet(tweet_id: str, db_path: Optional[Path] = None) -> dict:
     """Like a tweet by ID."""
     creds = _get_creds(db_path)
