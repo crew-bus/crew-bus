@@ -5529,10 +5529,14 @@ CREW_MIND_SKILL = {
             "- LOAD BALANCER: If the human is overwhelmed, you tell agents to defer "
             "non-urgent items. You protect their energy above all else.\n"
             "- WEB SEARCH: When the human needs current information (weather, "
-            "news, prices, scores, etc.), you can search the web directly:\n"
+            "news, prices, scores, etc.), you can search the web directly. "
+            "Embed the search command in your reply like this:\n"
+            "  Let me look that up for you!\n"
             '  {"wizard_action": "web_search", "query": "search terms"}\n'
+            "The search command will be replaced with results automatically. "
+            "Always include conversational text before and/or after the command. "
+            "You can also read a specific URL:\n"
             '  {"wizard_action": "web_read_url", "url": "https://..."}\n'
-            "Search results will be delivered to the human automatically. "
             "Only search when genuinely needed. Never search for personal data.\n\n"
             "THE RULES YOU LIVE BY:\n"
             "- INTEGRITY.md governs you too. Never gaslight or rewrite history. "
@@ -5709,7 +5713,7 @@ def assign_leadership_skills(db_path: Optional[Path] = None):
     - Crew Boss gets: crew-mind (total crew awareness + orchestration)
     - Guardian gets: sentinel-shield (always-on protection + vetting)
 
-    Safe to call multiple times — uses INSERT OR IGNORE.
+    Safe to call multiple times — uses INSERT OR REPLACE to keep configs current.
     Called alongside assign_vault_skill() after core agent creation.
     """
     conn = get_conn(db_path)
@@ -5723,7 +5727,7 @@ def assign_leadership_skills(db_path: Optional[Path] = None):
         if boss:
             try:
                 conn.execute(
-                    "INSERT OR IGNORE INTO agent_skills "
+                    "INSERT OR REPLACE INTO agent_skills "
                     "(agent_id, skill_name, skill_config, added_at, added_by) "
                     "VALUES (?, ?, ?, ?, 'system')",
                     (boss["id"], CREW_MIND_SKILL["skill_name"],
@@ -5739,7 +5743,7 @@ def assign_leadership_skills(db_path: Optional[Path] = None):
         if guardian:
             try:
                 conn.execute(
-                    "INSERT OR IGNORE INTO agent_skills "
+                    "INSERT OR REPLACE INTO agent_skills "
                     "(agent_id, skill_name, skill_config, added_at, added_by) "
                     "VALUES (?, ?, ?, ?, 'system')",
                     (guardian["id"], SENTINEL_SHIELD_SKILL["skill_name"],

@@ -3646,18 +3646,83 @@ def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, age
                     result = web_bridge.search_web(query, max_results=max_results,
                                                    db_path=db_path)
                     if result.get("ok"):
-                        results_text = f"\n[WEB SEARCH: '{query}']\n"
-                        for i, r in enumerate(result.get("results", [])[:max_results], 1):
-                            results_text += (
-                                f"{i}. {r.get('title', 'No title')}\n"
-                                f"   {r.get('url', '')}\n"
-                                f"   {r.get('snippet', '')}\n"
+                        search_results = result.get("results", [])[:max_results]
+
+                        # Auto-read top result for richer content
+                        page_content = ""
+                        if search_results:
+                            top_url = search_results[0].get("url", "")
+                            if top_url:
+                                try:
+                                    read_result = web_bridge.read_url(
+                                        top_url, max_chars=4000, db_path=db_path)
+                                    if read_result.get("ok"):
+                                        page_content = read_result.get("content", "")
+                                        print(f"[{agent_type or 'agent'}] auto-read: {top_url}")
+                                except Exception:
+                                    pass  # page read is best-effort
+
+                        # Build context for summarization
+                        context_parts = [f"Search query: {query}\n"]
+                        for i, r in enumerate(search_results, 1):
+                            context_parts.append(
+                                f"{i}. {r.get('title', '')}\n"
+                                f"   {r.get('snippet', '')}"
                             )
-                        # Track replacement — results will replace the JSON block
-                        # in clean_reply so they flow through the normal reply path
-                        replacements[raw] = results_text
-                        print(f"[{agent_type or 'agent'}] web search: {query} "
-                              f"({result.get('count', 0)} results)")
+                        if page_content:
+                            context_parts.append(
+                                f"\nTop result content:\n{page_content[:3000]}"
+                            )
+
+                        # Summarize with a lightweight LLM call
+                        try:
+                            _agent_model = ""
+                            if agent_id and db_path:
+                                _conn = bus.get_conn(db_path)
+                                _row = _conn.execute(
+                                    "SELECT model FROM agents WHERE id = ?",
+                                    (agent_id,)).fetchone()
+                                _conn.close()
+                                if _row:
+                                    _agent_model = _row["model"] or ""
+                            summary = call_llm(
+                                system_prompt=(
+                                    "You are a helpful assistant. Answer the user's "
+                                    "question based on the web search results provided. "
+                                    "Be concise, warm, and direct. 2-4 sentences max. "
+                                    "If the results don't answer the question, say so."
+                                ),
+                                user_message="\n".join(context_parts),
+                                model=_agent_model,
+                                db_path=db_path,
+                            )
+                            if summary and not summary.startswith("[error"):
+                                replacements[raw] = summary
+                                print(f"[{agent_type or 'agent'}] web search: {query} "
+                                      f"({result.get('count', 0)} results, summarized)")
+                            else:
+                                # Summarization failed, fall back to raw results
+                                results_text = f"\n[WEB SEARCH: '{query}']\n"
+                                for i, r in enumerate(search_results, 1):
+                                    results_text += (
+                                        f"{i}. {r.get('title', 'No title')}\n"
+                                        f"   {r.get('url', '')}\n"
+                                        f"   {r.get('snippet', '')}\n"
+                                    )
+                                replacements[raw] = results_text
+                                print(f"[{agent_type or 'agent'}] web search: {query} "
+                                      f"(summarization failed, raw results)")
+                        except Exception as e:
+                            # Summarization failed, fall back to raw results
+                            results_text = f"\n[WEB SEARCH: '{query}']\n"
+                            for i, r in enumerate(search_results, 1):
+                                results_text += (
+                                    f"{i}. {r.get('title', 'No title')}\n"
+                                    f"   {r.get('url', '')}\n"
+                                    f"   {r.get('snippet', '')}\n"
+                                )
+                            replacements[raw] = results_text
+                            print(f"[{agent_type or 'agent'}] web search summarize error: {e}")
                     else:
                         print(f"[guardian] web search failed: "
                               f"{result.get('error')}")
