@@ -2525,6 +2525,12 @@ def _process_single_message(row, db_path: Path):
         except Exception as e:
             _logger.warning("Social draft extraction failed for %s: %s", agent_name, e)
 
+        # Execute any twitter_action commands (autonomous Twitter tools)
+        try:
+            clean_reply = _extract_twitter_actions(clean_reply, agent_id, db_path)
+        except Exception as e:
+            _logger.warning("Twitter action failed for %s: %s", agent_name, e)
+
         # Extract explicit delegation JSON (if manager included any)
         if agent_type == "manager":
             try:
@@ -2746,6 +2752,98 @@ def _auto_relay_crew_messages(reply: str, from_agent_id: int, from_name: str,
     Keeping as no-op stub in case any code paths reference it.
     """
     return reply
+
+
+def _extract_twitter_actions(reply: str, agent_id: int, db_path: Path) -> str:
+    """Parse and execute twitter_action JSON commands from an agent's reply.
+
+    Agents embed commands like:
+      {"twitter_action": "follow_account", "username": "AnthropicAI"}
+      {"twitter_action": "like_tweet", "tweet_id": "1234567890"}
+      {"twitter_action": "retweet", "tweet_id": "1234567890"}
+      {"twitter_action": "search_tweets", "query": "MCP local AI", "max_results": 20}
+      {"twitter_action": "search_and_like", "query": "Model Context Protocol", "max_likes": 10}
+      {"twitter_action": "get_followers_count"}
+      {"twitter_action": "get_following_count"}
+
+    Actions are executed and the JSON blocks are stripped from the reply.
+    """
+    pattern = r'\{[^{}]*"twitter_action"[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+    if not matches:
+        return reply
+
+    try:
+        import twitter_bridge
+    except ImportError:
+        return reply
+
+    if not twitter_bridge.is_configured(db_path):
+        return reply
+
+    for raw in matches:
+        try:
+            action = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        cmd = action.get("twitter_action", "")
+        replacement = ""
+
+        try:
+            if cmd == "follow_account":
+                username = action.get("username", "").lstrip("@").strip()
+                if username:
+                    result = twitter_bridge.follow_account(username, db_path)
+                    print(f"[twitter] follow_account({username}): {result}")
+
+            elif cmd == "like_tweet":
+                tweet_id = action.get("tweet_id", "")
+                if tweet_id:
+                    result = twitter_bridge.like_tweet(tweet_id, db_path)
+                    print(f"[twitter] like_tweet({tweet_id}): {result}")
+
+            elif cmd == "retweet":
+                tweet_id = action.get("tweet_id", "")
+                if tweet_id:
+                    result = twitter_bridge.retweet(tweet_id, db_path)
+                    print(f"[twitter] retweet({tweet_id}): {result}")
+
+            elif cmd == "search_tweets":
+                query = action.get("query", "")
+                max_results = int(action.get("max_results", 20))
+                if query:
+                    tweets = twitter_bridge.search_tweets(query, max_results=max_results, db_path=db_path)
+                    replacement = f"[search_tweets: {len(tweets)} results for '{query}']"
+                    print(f"[twitter] search_tweets({query!r}): {len(tweets)} tweets")
+
+            elif cmd == "search_and_like":
+                query = action.get("query", "")
+                max_likes = int(action.get("max_likes", 10))
+                if query:
+                    result = twitter_bridge.search_and_like(query, max_likes=max_likes, db_path=db_path)
+                    liked = result.get("liked", 0)
+                    replacement = f"[search_and_like: liked {liked} tweets for '{query}']"
+                    print(f"[twitter] search_and_like({query!r}): liked {liked}")
+
+            elif cmd == "get_followers_count":
+                result = twitter_bridge.get_followers_count(db_path)
+                count = result.get("followers", 0)
+                replacement = f"[followers: {count}]"
+                print(f"[twitter] get_followers_count: {count}")
+
+            elif cmd == "get_following_count":
+                result = twitter_bridge.get_following_count(db_path)
+                count = result.get("following", 0)
+                replacement = f"[following: {count}]"
+                print(f"[twitter] get_following_count: {count}")
+
+        except Exception as e:
+            print(f"[twitter] action {cmd} failed: {e}")
+
+        reply = reply.replace(raw, replacement)
+
+    return reply.strip()
 
 
 def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:

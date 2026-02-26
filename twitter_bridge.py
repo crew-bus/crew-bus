@@ -381,6 +381,102 @@ def retweet(tweet_id: str, db_path: Optional[Path] = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Search / discovery
+# ---------------------------------------------------------------------------
+
+def search_tweets(query: str, max_results: int = 20,
+                  db_path: Optional[Path] = None) -> list:
+    """Search for recent tweets matching query.
+
+    Uses Twitter API v2 GET /2/tweets/search/recent.
+    Returns list of tweet dicts with id, text, author_username, likes, retweets, replies.
+    Requires twitter_bearer_token.
+    """
+    max_results = min(max(10, max_results), 100)  # API requires 10–100
+    params = {
+        "query": query,
+        "max_results": max_results,
+        "tweet.fields": "public_metrics,created_at,author_id,text",
+        "expansions": "author_id",
+        "user.fields": "username,name",
+    }
+    qs = urllib.parse.urlencode(params)
+    url = f"https://api.x.com/2/tweets/search/recent?{qs}"
+    result = _bearer_get(url, db_path)
+    if result.get("ok") is False:
+        return []
+    tweets = result.get("data", [])
+    users = {u["id"]: u for u in result.get("includes", {}).get("users", [])}
+    for t in tweets:
+        author = users.get(t.get("author_id", ""), {})
+        t["author_username"] = author.get("username", "")
+        t["author_name"] = author.get("name", "")
+        metrics = t.get("public_metrics", {})
+        t["likes"] = metrics.get("like_count", 0)
+        t["retweets"] = metrics.get("retweet_count", 0)
+        t["replies"] = metrics.get("reply_count", 0)
+    return tweets
+
+
+def search_and_like(query: str, max_likes: int = 10,
+                    db_path: Optional[Path] = None) -> dict:
+    """Search for recent tweets and like the top results.
+
+    Combines search_tweets() + like_tweet() in one autonomous call.
+    Perfect for automated engagement on keywords like 'MCP', 'local AI', etc.
+    """
+    tweets = search_tweets(query, max_results=max_likes, db_path=db_path)
+    if not tweets:
+        return {"ok": False, "error": "No tweets found", "liked": 0}
+    liked = []
+    errors = []
+    for t in tweets:
+        result = like_tweet(t["id"], db_path=db_path)
+        if result.get("data", {}).get("liked") or result.get("ok") is not False:
+            liked.append({
+                "id": t["id"],
+                "text": t["text"][:80],
+                "author": t.get("author_username", ""),
+            })
+        else:
+            errors.append({"id": t["id"], "error": result.get("error", "unknown")})
+        time.sleep(0.5)  # Rate-limit courtesy
+    return {
+        "ok": True,
+        "query": query,
+        "liked": len(liked),
+        "liked_tweets": liked,
+        "errors": errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Account stats
+# ---------------------------------------------------------------------------
+
+def get_followers_count(db_path: Optional[Path] = None) -> dict:
+    """Get the authenticated user's current follower count."""
+    my_id = get_my_user_id(db_path)
+    url = f"https://api.x.com/2/users/{my_id}?user.fields=public_metrics"
+    result = _bearer_get(url, db_path)
+    if result.get("ok") is False:
+        return result
+    metrics = result.get("data", {}).get("public_metrics", {})
+    return {"ok": True, "followers": metrics.get("followers_count", 0)}
+
+
+def get_following_count(db_path: Optional[Path] = None) -> dict:
+    """Get the count of accounts the authenticated user is following."""
+    my_id = get_my_user_id(db_path)
+    url = f"https://api.x.com/2/users/{my_id}?user.fields=public_metrics"
+    result = _bearer_get(url, db_path)
+    if result.get("ok") is False:
+        return result
+    metrics = result.get("data", {}).get("public_metrics", {})
+    return {"ok": True, "following": metrics.get("following_count", 0)}
+
+
+# ---------------------------------------------------------------------------
 # Draft → Post flow (integrates with social_drafts system)
 # ---------------------------------------------------------------------------
 
