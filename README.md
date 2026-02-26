@@ -243,6 +243,33 @@ pytest
 
 ---
 
+## Privacy Policy
+
+Crew Bus is privacy-first. All AI agent processing runs locally on your Mac.
+
+**Data Collection:**
+- **Email address** — collected for authentication via magic links. Used solely for login. Not shared with third parties.
+- No analytics, no tracking, no telemetry.
+
+**Data Processing:**
+- All agent conversations, memory, and files stay on your Mac in `~/.crewbus/`
+- The Cloudflare Workers relay at `relay.crew-bus.dev` is pass-through only — it forwards encrypted WebSocket messages between your iPhone and Mac. No message content is stored or logged.
+- Email delivery uses Resend (transactional only, magic link codes).
+
+**Third-Party Services:**
+- Cloudflare Workers (relay infrastructure)
+- Resend (email delivery for magic links)
+- No data is sold, shared, or used for advertising.
+
+**Data Retention:**
+- Agent data persists locally until you delete it
+- Relay messages are ephemeral (not stored)
+- Email records retained only as needed for authentication
+
+Full privacy policy: https://crew-bus.dev/privacy
+
+---
+
 ## Contributing
 
 Contributions welcome. Please run `pytest` before submitting PRs.

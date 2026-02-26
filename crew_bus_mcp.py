@@ -168,8 +168,9 @@ async def health_check(request):
 # MCP Tools — all prefixed with crewbus_
 # ---------------------------------------------------------------------------
 
-_RO = ToolAnnotations(readOnlyHint=True)
-_RW = ToolAnnotations(readOnlyHint=False)
+_RO   = ToolAnnotations(readOnlyHint=True,  destructiveHint=False)
+_RW   = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+_DEST = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 
 @mcp.tool(annotations=_RO)
@@ -450,7 +451,7 @@ def crewbus_get_audit_log(limit: int = 50) -> str:
     return json.dumps(entries, indent=2)
 
 
-@mcp.tool(annotations=_RW)
+@mcp.tool(annotations=_DEST)
 def crewbus_post_to_team_mailbox(
     from_agent_name: str, subject: str, body: str, severity: str = "info"
 ) -> str:
