@@ -56,6 +56,70 @@ Download: [crew-bus.dev](https://crew-bus.dev)
 
 ---
 
+## Usage Examples
+
+### Example 1 — Ask Crew Boss to plan your day
+
+**User prompt to Claude:**
+"Ask Crew Boss what I should focus on today"
+
+**MCP tools called:**
+1. `crewbus_send_message(agent_name="Crew Boss", message="What should I focus on today?")`
+
+**Response from Crew Bus:**
+Crew Boss reviews the user's active tasks, team status, and any flagged items from other agents, then returns a prioritized plan:
+
+> "Good morning! Here's what I'd focus on today:
+> 1. The website redesign mockups are due — Vault has the latest assets saved
+> 2. Guardian flagged a new MCP skill request that needs your approval
+> 3. Your Freelance team has 2 pending client responses
+>
+> Want me to delegate any of these to a specific agent?"
+
+---
+
+### Example 2 — Review Guardian's security flags
+
+**User prompt to Claude:**
+"What has Guardian flagged recently?"
+
+**MCP tools called:**
+1. `crewbus_get_agent_chat(agent_name="Guardian", limit=10)`
+2. `crewbus_search_agent_memory(agent_name="Guardian", query="flagged")`
+
+**Response from Crew Bus:**
+Guardian returns recent security events and skill approval requests:
+
+> "Guardian has flagged 2 items:
+> 1. A new MCP skill 'weather-lookup' was requested — pending your approval (marked safe, read-only)
+> 2. An agent tried to write outside its allowed directory — blocked automatically
+>
+> No active threats. All agent permissions are within normal bounds."
+
+---
+
+### Example 3 — Get a crew status overview
+
+**User prompt to Claude:**
+"Show me my crew stats and which agents are online"
+
+**MCP tools called:**
+1. `crewbus_get_crew_stats()`
+2. `crewbus_list_agents()`
+
+**Response from Crew Bus:**
+Returns a dashboard overview of all agents and teams:
+
+> "Your crew status:
+> - 4 agents total: Crew Boss (online), Guardian (online), Vault (online), Scout (offline)
+> - 2 teams: Household (3 members), Passion Project (2 members)
+> - Trust score: 98/100
+> - Energy: 85%
+>
+> Crew Boss and Guardian have been active today. Scout went offline 2 hours ago — want me to check why?"
+
+---
+
 ## Quick Start
 
 ```bash
