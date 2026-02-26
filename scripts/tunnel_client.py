@@ -20,6 +20,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from typing import Optional
 
 DEFAULT_RELAY_URL = "wss://relay.crew-bus.dev/tunnel"
 DEFAULT_LOCAL_URL = "http://127.0.0.1:8421"
@@ -36,7 +37,7 @@ def _status(line: str) -> None:
     print(line, file=sys.stderr, flush=True)
 
 
-_mcp_session_id: str | None = None
+_mcp_session_id: Optional[str] = None
 
 
 def _ensure_session(local_url: str) -> None:
