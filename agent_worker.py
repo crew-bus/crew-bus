@@ -628,6 +628,19 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
+    # --- Inject file sharing capabilities ---
+    parts.append(
+        "FILE SHARING — you can send files and images to the human in chat.\n\n"
+        "1. ATTACH inline (file renders in the chat bubble):\n"
+        "   Embed this JSON anywhere in your reply:\n"
+        "   {\"file_attach\": \"/tmp/yourfile.ext\"}\n"
+        "   Images render as a preview. Other files appear as a download link.\n\n"
+        "2. SHARE a direct link (paste anywhere in text):\n"
+        "   http://127.0.0.1:8420/api/download/filename.ext\n"
+        "   Works for any file saved to /tmp/. Human can click, copy, or open in browser.\n\n"
+        "Use these any time you want to share a result, asset, report, chart, or image."
+    )
+
     # Token budget guard — tiered by agent importance:
     # Crew Boss: 10000 chars (highest IQ, runs on best model, needs full crew awareness)
     # Guardian:  8000 chars (system knowledge + integrity + sentinel duties)
