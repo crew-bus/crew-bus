@@ -2838,28 +2838,6 @@ def _extract_twitter_actions(reply: str, agent_id: int, db_path: Path) -> str:
                 replacement = f"[following: {count}]"
                 print(f"[twitter] get_following_count: {count}")
 
-            elif cmd == "get_mentions":
-                count = int(action.get("count", 10))
-                mentions = twitter_bridge.get_mentions(count=count, db_path=db_path)
-                if mentions:
-                    lines = [f"  @{m.get('author_username','?')}: {m.get('text','')[:100]}"
-                             for m in mentions[:5]]
-                    replacement = f"[mentions: {len(mentions)} recent]\n" + "\n".join(lines)
-                else:
-                    replacement = "[mentions: none found]"
-                print(f"[twitter] get_mentions: {len(mentions)} mentions")
-
-            elif cmd == "generate":
-                prompt = action.get("prompt", "")
-                if prompt:
-                    try:
-                        import leonardo_bridge
-                        path = leonardo_bridge.generate(prompt, db_path=db_path)
-                        replacement = f"[image_generated: {path}]"
-                        print(f"[twitter] generate: {path}")
-                    except Exception as gen_e:
-                        replacement = f"[image_failed: {gen_e}]"
-
         except Exception as e:
             print(f"[twitter] action {cmd} failed: {e}")
 
