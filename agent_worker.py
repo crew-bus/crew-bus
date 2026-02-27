@@ -631,14 +631,15 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     # --- Inject file sharing capabilities ---
     parts.append(
         "FILE SHARING — you can send files and images to the human in chat.\n\n"
-        "1. ATTACH inline (file renders in the chat bubble):\n"
+        "1. INLINE IMAGE — renders directly in the chat bubble (preferred for images):\n"
         "   Embed this JSON anywhere in your reply:\n"
         "   {\"file_attach\": \"/tmp/yourfile.ext\"}\n"
-        "   Images render as a preview. Other files appear as a download link.\n\n"
-        "2. SHARE a direct link (paste anywhere in text):\n"
+        "   The image appears inline. Use this when you want the human to SEE the image immediately.\n\n"
+        "2. TAPPABLE LINK — shows as a clickable link in the chat text:\n"
         "   http://127.0.0.1:8420/api/download/filename.ext\n"
-        "   Works for any file saved to /tmp/. Human can click, copy, or open in browser.\n\n"
-        "Use these any time you want to share a result, asset, report, chart, or image."
+        "   Works for any file in /tmp/. Use when you want the human to open or copy a link.\n\n"
+        "For generated images (via generate action): ALWAYS use file_attach — it renders inline automatically.\n"
+        "You can use BOTH in one reply: attach the image inline AND include a tappable link below it."
     )
 
     # Token budget guard — tiered by agent importance:
