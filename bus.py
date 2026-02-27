@@ -294,7 +294,8 @@ def init_db(db_path: Optional[Path] = None) -> None:
             private_session_id INTEGER DEFAULT NULL REFERENCES private_sessions(id),
             created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             delivered_at    TEXT,
-            read_at         TEXT
+            read_at         TEXT,
+            attachment      TEXT    DEFAULT NULL
         );
 
         CREATE TABLE IF NOT EXISTS routing_rules (
@@ -958,6 +959,11 @@ def init_db(db_path: Optional[Path] = None) -> None:
     # Migrate: add title column to agents (paid team feature)
     if "title" not in cols:
         cur.execute("ALTER TABLE agents ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+
+    # Migrate: add attachment column to messages (file/image attachments)
+    msg_cols = [r[1] for r in cur.execute("PRAGMA table_info(messages)").fetchall()]
+    if "attachment" not in msg_cols:
+        cur.execute("ALTER TABLE messages ADD COLUMN attachment TEXT DEFAULT NULL")
 
     # Seed default routing rules (skip if already populated)
     existing = cur.execute("SELECT COUNT(*) FROM routing_rules").fetchone()[0]
@@ -2220,6 +2226,7 @@ def _check_routing(conn: sqlite3.Connection,
 def send_message(from_id: int, to_id: int, message_type: str,
                  subject: str, body: str = "",
                  priority: str = "normal",
+                 attachment: Optional[str] = None,
                  db_path: Optional[Path] = None) -> dict:
     """Send a message between agents, enforcing routing rules.
 
@@ -2268,9 +2275,9 @@ def send_message(from_id: int, to_id: int, message_type: str,
         })
 
         cur = wconn.execute(
-            "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (from_id, to_id, message_type, subject, body, priority, initial_status),
+            "INSERT INTO messages (from_agent_id, to_agent_id, message_type, subject, body, priority, status, attachment) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (from_id, to_id, message_type, subject, body, priority, initial_status, attachment),
         )
         msg_id = cur.lastrowid
 
