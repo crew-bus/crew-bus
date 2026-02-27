@@ -1517,6 +1517,7 @@ def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
     """
     db = db_path or DB_PATH
     conn = get_conn(db)
+    conn.execute("PRAGMA foreign_keys = OFF")
     try:
         mgr = conn.execute(
             "SELECT * FROM agents WHERE id=? AND agent_type='manager'",
@@ -1585,8 +1586,10 @@ def delete_team(manager_id: int, db_path: Optional[Path] = None) -> dict:
             conn.execute("DELETE FROM agents WHERE id=?", (aid,))
 
         conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
         return {"ok": True, "deleted_count": len(all_ids)}
     except Exception as e:
+        conn.execute("PRAGMA foreign_keys = ON")
         return {"ok": False, "error": str(e)}
     finally:
         conn.close()
