@@ -4216,7 +4216,7 @@ def _run_due_heartbeats(db_path: Path):
                 to_id=agent_id,
                 subject=f"[heartbeat] {task_text}",
                 body=task_text,
-                message_type="task",
+                msg_type="task",
                 priority="normal",
                 db_path=db_path,
             )
