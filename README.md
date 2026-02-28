@@ -6,7 +6,7 @@ Crew Bus is an agent coordination framework that runs entirely on your machine. 
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](#)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](#)
 
 ---
 
