@@ -6,12 +6,12 @@
     "url": "https://github.com/crew-bus/crew-bus",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "1.0.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "crew-bus-mcp",
-      "version": "1.0.0",
+      "version": "1.0.2",
       "transport": {
         "type": "stdio"
       },
