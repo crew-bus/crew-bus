@@ -7,7 +7,6 @@ Trust score: user can tweak anytime; Boss adapts routing (aims for 80%+ of chats
 Always route new chats through Crew Boss first.
 When suggesting direct agent: ask "Want me to connect you straight to the [agent name]?"
 Wizard flow: ask questions → suggest agents → auto-build crew.
-Burnout alerts: go through Boss (trust-dependent), but Health Agent overrides on Code Red.
 Offline-first: runs on local LLM — hardware picks the model.
 Never suggest cloud services. One human at the top. MIT license.
 Help ex-coders earn as freelance installers/coaches.

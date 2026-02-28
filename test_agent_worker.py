@@ -31,11 +31,11 @@ def _setup_db():
         "VALUES (?, ?, ?, 1, ?, ?)",
         ("Crew Boss", "right_hand", "right_hand", "active", 1),
     )
-    # Create Health Buddy (wellness) — parent is Crew Boss
+    # Create Vault — parent is Crew Boss
     conn.execute(
         "INSERT INTO agents (name, agent_type, role, parent_agent_id, status, active) "
         "VALUES (?, ?, ?, 2, ?, ?)",
-        ("Health Buddy", "wellness", "core_crew", "active", 1),
+        ("Vault", "vault", "worker", "active", 1),
     )
     conn.commit()
     conn.close()
@@ -150,7 +150,7 @@ def test_insert_reply_direct():
 
 
 def test_system_prompts_exist():
-    """All core agent types should have system prompts."""
-    for agent_type in ("right_hand", "security", "wellness", "strategy", "financial"):
+    """Crew Boss, Guardian, Vault should have system prompts."""
+    for agent_type in ("right_hand", "guardian", "vault", "manager"):
         assert agent_type in agent_worker.SYSTEM_PROMPTS
         assert len(agent_worker.SYSTEM_PROMPTS[agent_type]) > 20

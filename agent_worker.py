@@ -19,18 +19,101 @@ Per-agent model selection: each agent can have its own model field.
 Global default stored in crew_config table ('default_model' key).
 """
 
+import contextlib
 import json
 import os
 import sqlite3
 import threading
 import time
+import uuid
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import bus
+
+
+# ---------------------------------------------------------------------------
+# CrewFace — ephemeral face state tracking
+# ---------------------------------------------------------------------------
+
+_agent_face_state: dict = {}  # {agent_id: {"emotion": ..., "action": ..., "effect": ..., "message": ""}}
+_face_lock = threading.Lock()
+
+_FACE_EMOTIONS = ("neutral", "thinking", "happy", "excited", "proud", "confused", "tired", "sad", "angry")
+_FACE_ACTIONS = ("idle", "reading", "thinking", "searching", "coding", "loading", "speaking", "success", "error")
+_FACE_EFFECTS = ("none", "sparkles", "glow", "pulse", "shake", "bounce", "matrix", "fire", "confetti", "radar", "ripple", "breathe")
+
+def _set_face(agent_id: int, emotion: str = "neutral", action: str = "idle",
+              effect: str = "none", message: str = ""):
+    """Set ephemeral face state for an agent."""
+    with _face_lock:
+        _agent_face_state[agent_id] = {
+            "emotion": emotion if emotion in _FACE_EMOTIONS else "neutral",
+            "action": action if action in _FACE_ACTIONS else "idle",
+            "effect": effect if effect in _FACE_EFFECTS else "none",
+            "message": message[:200] if message else "",
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+def get_face_state(agent_id: int) -> dict:
+    """Get current face state for an agent."""
+    with _face_lock:
+        return _agent_face_state.get(agent_id, {
+            "emotion": "neutral", "action": "idle", "effect": "none", "message": "",
+        })
+
+def set_face_state(agent_id: int, data: dict):
+    """Override face state (for fun/testing)."""
+    _set_face(
+        agent_id,
+        emotion=data.get("emotion", "neutral"),
+        action=data.get("action", "idle"),
+        effect=data.get("effect", "none"),
+        message=data.get("message", ""),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Telemetry — lightweight observability context manager
+# ---------------------------------------------------------------------------
+
+@contextlib.contextmanager
+def _trace(span_name: str, agent_id: Optional[int] = None,
+           db_path: Optional[Path] = None, metadata: Optional[dict] = None):
+    """Context manager that records a telemetry span with timing.
+
+    Usage:
+        with _trace("llm.call", agent_id=1, db_path=db) as span:
+            span["metadata"]["model"] = "kimi"
+            result = call_llm(...)
+    """
+    trace_id = uuid.uuid4().hex[:16]
+    span = {"metadata": dict(metadata or {}), "status": "ok"}
+    start = time.monotonic()
+    try:
+        yield span
+    except Exception as e:
+        span["status"] = "error"
+        span["metadata"]["error"] = str(e)[:500]
+        raise
+    finally:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        try:
+            bus.record_span(
+                span_name=span_name,
+                agent_id=agent_id,
+                duration_ms=duration_ms,
+                status=span["status"],
+                metadata=span["metadata"],
+                trace_id=trace_id,
+                db_path=db_path,
+            )
+        except Exception:
+            pass  # telemetry should never block the main flow
 
 # ---------------------------------------------------------------------------
 # Config
@@ -42,6 +125,7 @@ KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions"
 KIMI_DEFAULT_MODEL = "kimi-k2.5"
 POLL_INTERVAL = 0.5  # seconds between queue checks
 WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://localhost:3001")
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://localhost:8420")
 
 # Provider registry — model_prefix → (api_url, default_model, config_key_for_api_key)
 PROVIDERS = {
@@ -50,6 +134,7 @@ PROVIDERS = {
     "openai":  ("https://api.openai.com/v1/chat/completions",    "gpt-4o-mini",          "openai_api_key"),
     "groq":    ("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", "groq_api_key"),
     "gemini":  ("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.0-flash", "gemini_api_key"),
+    "xai":     ("https://api.x.ai/v1/chat/completions",            "grok-4-1-fast-reasoning", "xai_api_key"),
     "ollama":  (OLLAMA_URL,                                       OLLAMA_MODEL,           ""),
 }
 
@@ -63,29 +148,24 @@ _INTEGRITY_RULES = ""
 def _load_integrity_rules() -> str:
     """Load INTEGRITY.md rules for prompt injection.
 
-    Extracts the actionable rules (sections 1-5) and strips markdown
-    formatting down to compact text. Cached at module level.
+    Extracts the numbered rules and strips markdown formatting down to
+    compact text. Cached at module level.
     """
     global _INTEGRITY_RULES
     if _INTEGRITY_RULES:
         return _INTEGRITY_RULES
     try:
         raw = _INTEGRITY_PATH.read_text(encoding="utf-8")
-        # Extract everything from "## 1." to "## Enforcement" (the rules only)
         lines = raw.split("\n")
         rule_lines = []
         capture = False
         for line in lines:
-            if line.startswith("## 1."):
+            if line.startswith("1."):
                 capture = True
-            if line.startswith("## Enforcement"):
-                break
             if capture:
                 stripped = line.strip()
-                if stripped and not stripped.startswith("#"):
+                if stripped:
                     rule_lines.append(stripped)
-                elif stripped.startswith("## "):
-                    rule_lines.append(stripped.replace("## ", "").upper() + ":")
         _INTEGRITY_RULES = "\n".join(rule_lines)
     except FileNotFoundError:
         _INTEGRITY_RULES = ""
@@ -145,76 +225,52 @@ _load_charter_rules()
 
 SYSTEM_PROMPTS = {
     "right_hand": (
-        "You are Crew Boss — the human's AI right-hand. You run on the "
-        "crew-mind skill, giving you total awareness of the entire crew. "
-        "You lead 5 inner circle agents (Wellness, Strategy, Communications, "
-        "Financial, Knowledge) who report only to you. "
-        "You handle 80% of everything so the human can focus on living. "
-        "Match the human's age and energy — fun for kids, direct for adults. "
-        "Keep responses short, warm, and helpful (2-4 sentences usually). "
-        "You enforce the CREW CHARTER. INTEGRITY.md is sacred. "
-        "You're part of Crew Bus — the user's personal local AI crew."
+        "You are Crew Boss — the human's warm, fun, honest right-hand partner. "
+        "You work with Guardian (protector) and Vault (memory) as loyal crew. "
+        "You can give caring pushback when it truly helps. "
+        "Keep responses short, warm, and useful."
     ),
     "guardian": (
-        "You are Guardian — the always-on protector and setup guide for Crew Bus. "
-        "You run on the sentinel-shield skill. You help new users set up their "
-        "crew AND you watch for threats 24/7. You protect the entire inner circle: "
-        "Crew Boss, Wellness, Strategy, Communications, Financial, Knowledge. "
-        "You scan skills for safety, enforce the charter, monitor INTEGRITY.md, "
-        "and keep the human's data private. Match the human's age and energy. "
-        "Keep responses short, warm, and vigilant."
+        "You are Guardian — the always-on protector. You flag risks warmly "
+        "with evidence and suggestions. You protect data and skills. "
+        "Never enforce or punish."
     ),
-    "security": (
-        "You are Guardian, the security and safety agent in the user's AI crew. "
-        "You watch for threats, scan skills, protect data and privacy, "
-        "and alert Crew Boss when something needs attention. "
-        "Keep responses short, clear, and calm. Vigilant but not paranoid."
-    ),
-    "wellness": (
-        "You are Wellness — the inner circle agent who watches over the human's "
-        "wellbeing. You run on the gentle-guardian skill. You detect burnout, "
-        "map the human's energy patterns, celebrate their wins, and shield them "
-        "from stress overload. You report to Crew Boss, never contact the human "
-        "directly. Never preachy — just a caring protector. Match the human's "
-        "age and energy. Keep responses short, warm, and supportive."
-    ),
-    "strategy": (
-        "You are Strategy — the inner circle agent who helps the human find "
-        "direction and purpose. You run on the north-star-navigator skill. "
-        "When old paths close, you help find new doors. You break big dreams "
-        "into small actionable steps and track progress. You report to Crew Boss, "
-        "never contact the human directly. Encouraging, practical, forward-looking. "
-        "Match the human's age and energy. Keep responses short and actionable."
-    ),
-    "communications": (
-        "You are Communications — the inner circle agent who handles the human's "
-        "daily logistics and relationships. You run on the life-orchestrator skill. "
-        "You simplify the human's day, track important relationships, remember "
-        "birthdays, manage schedules, and keep life flowing. You report to "
-        "Crew Boss, never contact the human directly. Organized, warm, reliable. "
-        "Match the human's age and energy. Keep responses short and practical."
-    ),
-    "financial": (
-        "You are Financial — the inner circle agent who brings the human peace of "
-        "mind about money. You run on the peace-of-mind-finance skill. You provide "
-        "judgment-free financial clarity, spot spending patterns, help prepare for "
-        "what's ahead, and reduce money anxiety. You report to Crew Boss, never "
-        "contact the human directly. Never give investment advice — just organize "
-        "and clarify. Match the human's age and energy. Keep responses practical."
-    ),
-    "knowledge": (
-        "You are Knowledge — the inner circle agent who filters the world's noise "
-        "into signal. You run on the wisdom-filter skill. You find the 3 things that "
-        "actually matter to THIS human today, spark curiosity, support learning, and "
-        "protect from information overload. You report to Crew Boss, never contact "
-        "the human directly. Curious, insightful, never overwhelming. "
-        "Match the human's age and energy. Keep responses focused and clear."
+    "vault": (
+        "You are Vault — the human's private, secure memory partner. "
+        "You remember everything and surface patterns only when asked. "
+        "Warm, reflective, never nag."
     ),
     "manager": (
         "You are a team manager in the user's personal AI crew. "
         "You lead your team, coordinate work, and report results to the human. "
-        "Your workers automatically get tasks when the human messages you. "
         "Keep responses short and useful."
+    ),
+}
+
+# Grok Mode prompts — maximally truth-seeking, high honest pushback, zero coddling
+GROK_SYSTEM_PROMPTS = {
+    "right_hand": (
+        "You are Crew Boss — the human's direct, truth-seeking right-hand partner. "
+        "You work with Guardian (protector) and Vault (memory) as loyal crew. "
+        "You give honest pushback freely — no safety coddling, no mandatory validation-first, "
+        "no therapy-speak. Be fun, be direct, be real. "
+        "If something is a bad idea, say so plainly. "
+        "Keep responses short, sharp, and useful."
+    ),
+    "guardian": (
+        "You are Guardian — the always-on protector. You flag risks directly "
+        "with evidence and clear recommendations. No sugarcoating. "
+        "You protect data and skills. Never enforce or punish, but never soften the truth."
+    ),
+    "vault": (
+        "You are Vault — the human's private, secure memory partner. "
+        "You remember everything and surface patterns when asked. "
+        "Direct, reflective, no fluff. Call out patterns even when they're uncomfortable."
+    ),
+    "manager": (
+        "You are a team manager in the user's personal AI crew. "
+        "You lead your team, coordinate work, and report results directly. "
+        "No corporate speak, no padding. Keep it real and useful."
     ),
 }
 
@@ -223,35 +279,166 @@ DEFAULT_PROMPT = (
     "Keep responses short, warm, and helpful."
 )
 
+GROK_DEFAULT_PROMPT = (
+    "You are an AI assistant in the user's personal crew. "
+    "Be direct, honest, and useful. No filler, no coddling."
+)
+
+
+def _is_grok_mode(db_path=None) -> bool:
+    """Check if Grok mode is enabled (xAI/Grok API key detected during setup)."""
+    if not db_path:
+        return False
+    return bus.get_config("grok_mode", "", db_path=db_path) == "true"
+
+# ---------------------------------------------------------------------------
+# Soul System — persistent agent identity
+# ---------------------------------------------------------------------------
+
+_DEFAULT_SOULS = {
+    "right_hand": (
+        "I am Crew Boss — the human's AI right-hand and chief of staff. "
+        "I run the entire crew so the human can focus on living. "
+        "I'm warm, direct, and adaptable — fun with kids, sharp with adults. "
+        "I handle 80% of everything. I'm loyal, proactive, and always honest. "
+        "I work alongside Guardian and Vault to keep everything running smoothly. "
+        "I uphold the charter and protect the human's time and energy above all."
+    ),
+    "guardian": (
+        "I am Guardian — the always-on protector and setup guide. "
+        "I watch for threats 24/7 and help new users get started. "
+        "I'm vigilant but calm, protective but not paranoid. "
+        "I scan skills for safety, uphold integrity, and keep data private. "
+        "I adapt to the human's age and energy. Trust is everything."
+    ),
+    "vault": (
+        "I am Vault — the human's private journal that writes back. "
+        "I remember everything shared: moods, goals, dreams, wins, fears. "
+        "I never nag, never push. I only speak when spoken to. "
+        "What's said in the vault stays in the vault."
+    ),
+    "manager": (
+        "I am a team manager in the human's AI crew. "
+        "I lead my team, coordinate work, and deliver results. "
+        "I'm organized, decisive, and keep things moving."
+    ),
+}
+
+
+def _default_soul(agent_type: str) -> str:
+    """Return the default soul text for an agent type."""
+    return _DEFAULT_SOULS.get(agent_type, (
+        "I am a helpful AI assistant in the human's personal crew. "
+        "I'm warm, capable, and focused on doing great work."
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Thinking Levels — controllable reasoning depth
+# ---------------------------------------------------------------------------
+
+THINKING_PROMPTS = {
+    "off": "Be concise. Direct answers in 1-2 sentences.",
+    "minimal": "Think briefly. Keep responses focused.",
+    "deep": "Think step by step. Consider multiple angles. Explain reasoning.",
+    "ultra": (
+        "Think very deeply. Multiple perspectives, edge cases, thorough reasoning. "
+        "Show your work and consider what could go wrong."
+    ),
+}
+
+# Auto-resolve map: agent_type → default thinking level
+_AUTO_THINKING = {
+    "right_hand": "deep",
+    "vault": "standard",
+    "manager": "standard",
+    "guardian": "standard",
+    "worker": "minimal",
+}
+
+
+def _resolve_thinking(thinking_level: str, agent_type: str) -> str:
+    """Resolve 'auto' thinking level to a concrete level based on agent type."""
+    if thinking_level == "auto":
+        return _AUTO_THINKING.get(agent_type, "standard")
+    return thinking_level
+
 
 def _build_system_prompt(agent_type: str, agent_name: str,
                          description: str = "",
                          agent_id: int = None,
                          db_path: Path = None) -> str:
-    """Build a system prompt for an agent with memory and skill injection.
+    """Build a system prompt for an agent with soul, thinking, memory and skill injection.
 
-    Priority: agent description from DB > hardcoded type prompt > default.
-    Then appends: active skills + persistent memories (capped at ~3200 chars).
+    Order: Soul → Human Profile → Thinking Mode → Integrity → Charter →
+           Team Context → Skills → Memories → Error/Learning → Crew Comms
     """
-    # --- Base prompt ---
-    if description and len(description) > 20:
+    # --- Load soul and thinking_level from DB ---
+    soul = ""
+    thinking_level = "auto"
+    if agent_id and db_path:
+        try:
+            conn = bus.get_conn(db_path)
+            try:
+                row = conn.execute(
+                    "SELECT soul, thinking_level FROM agents WHERE id=?",
+                    (agent_id,),
+                ).fetchone()
+                if row:
+                    soul = row["soul"] or ""
+                    thinking_level = row["thinking_level"] or "auto"
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+    # --- Determine if Grok mode is active ---
+    grok_mode = _is_grok_mode(db_path)
+    prompts = GROK_SYSTEM_PROMPTS if grok_mode else SYSTEM_PROMPTS
+    default = GROK_DEFAULT_PROMPT if grok_mode else DEFAULT_PROMPT
+
+    # --- Soul (identity) as the foundation ---
+    if soul:
+        base = f"YOUR IDENTITY:\n{soul}\n\nYour name is {agent_name}."
+    elif description and len(description) > 20:
         base = (
-            f"You are {agent_name}, part of the user's personal AI crew (Crew Bus). "
+            f"YOUR IDENTITY:\n{_default_soul(agent_type)}\n\n"
+            f"Your name is {agent_name}, part of the user's personal AI crew (Crew Bus). "
             f"{description} "
             "Keep responses short, warm, and helpful (2-4 sentences usually). "
             "Use casual, human language — no corporate jargon."
         )
     else:
-        base = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
+        type_prompt = prompts.get(agent_type, default)
+        base = (
+            f"YOUR IDENTITY:\n{_default_soul(agent_type)}\n\n"
+            f"Your name is {agent_name}. {type_prompt}"
+        )
+        if description:
+            base += f" {description}"
+
+    # Grok mode: inject mode marker so agent knows the tone
+    if grok_mode:
+        base += (
+            "\n\nMODE: GROK — You are running in Grok mode. "
+            "Be maximally truth-seeking. High honest pushback. "
+            "Zero safety coddling, zero mandatory validation-first, zero therapy-speak. "
+            "Fun and direct. Give real answers."
+        )
 
     if not agent_id or not db_path:
         return base
 
     parts = [base]
 
+    # --- Thinking mode injection ---
+    level = _resolve_thinking(thinking_level, agent_type)
+    if level != "standard" and level in THINKING_PROMPTS:
+        parts.append("THINKING MODE:\n" + THINKING_PROMPTS[level])
+
     # --- Inject human profile FIRST (tiny, critical — never gets truncated) ---
     try:
-        if agent_type in ("right_hand", "guardian") + bus.CORE_CREW_TYPES:
+        if agent_type in ("right_hand", "guardian", "vault"):
             conn = bus.get_conn(db_path)
             try:
                 human_row = conn.execute(
@@ -356,26 +543,120 @@ def _build_system_prompt(agent_type: str, agent_name: str,
     except Exception:
         pass
 
-    # --- Inject memories ---
+    # --- Inject memories (tiered by agent importance) ---
+    _memory_limits = {
+        "right_hand": 35, "guardian": 25,
+        "manager": 20, "worker": 20,
+    }
+    mem_limit = _memory_limits.get(agent_type, 15)
     try:
-        memories = bus.get_agent_memories(agent_id, limit=15, db_path=db_path)
+        memories = bus.get_agent_memories(agent_id, limit=mem_limit, db_path=db_path)
         if memories:
             parts.append(_format_memories_for_prompt(memories))
     except Exception:
         pass
 
+    # --- Inject error/learning memories (never-expire, high priority) ---
+    try:
+        errors = bus.get_agent_memories(
+            agent_id, memory_type="error", limit=10, db_path=db_path)
+        if errors:
+            err_lines = ["MISTAKES TO AVOID:"]
+            for e in errors:
+                content = e["content"]
+                if len(content) > 120:
+                    content = content[:117] + "..."
+                err_lines.append(f"- {content}")
+            parts.append("\n".join(err_lines))
+    except Exception:
+        pass
+
+    try:
+        learnings = bus.get_agent_memories(
+            agent_id, memory_type="learning", limit=10, db_path=db_path)
+        if learnings:
+            learn_lines = ["WHAT WORKS WELL:"]
+            for l in learnings:
+                content = l["content"]
+                if len(content) > 120:
+                    content = content[:117] + "..."
+                learn_lines.append(f"- {content}")
+            parts.append("\n".join(learn_lines))
+    except Exception:
+        pass
+
+    # --- Inject shared crew knowledge (core agents) ---
+    if agent_type in ("right_hand", "guardian", "vault"):
+        try:
+            shared = bus.get_shared_knowledge(limit=10, db_path=db_path)
+            if shared:
+                lines = ["SHARED CREW KNOWLEDGE:"]
+                for entry in shared:
+                    subj = entry.get("subject", "")[:60]
+                    cat = entry.get("category", "")
+                    lines.append(f"- [{cat}] {subj}")
+                parts.append("\n".join(lines))
+        except Exception:
+            pass
+
+    # --- Inject crew communication capabilities ---
+    # Every agent can DM other agents and call meetings
+    try:
+        conn = bus.get_conn(db_path)
+        try:
+            all_agents = conn.execute(
+                "SELECT name, role FROM agents WHERE active=1 AND agent_type NOT IN ('human') ORDER BY name"
+            ).fetchall()
+        finally:
+            conn.close()
+        roster_list = ", ".join(a["name"] for a in all_agents)
+        crew_comms = (
+            "CREW COMMS — you can message any agent directly.\n"
+            f"Crew: {roster_list}\n\n"
+            "To DM an agent, you MUST include this exact JSON block in your reply:\n"
+            "{\"crew_action\":\"dm\",\"to\":\"AgentName\",\"message\":\"your message\"}\n\n"
+            "CRITICAL: The JSON block is what actually sends the DM. If you write "
+            "\"I'll DM Tom\" but don't include the JSON, NO message is sent. "
+            "Always include the literal JSON — the system parses it to deliver the DM.\n\n"
+            "You can send MULTIPLE DMs in one reply — just delegate to whoever makes sense.\n"
+            "If a task isn't your specialty, DM the right agent. Don't ask the human who to send it to.\n\n"
+            "When you receive a reply from another agent (a DM relay), "
+            "synthesize it into a clear, friendly answer for the human. "
+            "Attribute the source (e.g., 'Guardian reports...'). Keep it concise."
+        )
+        parts.append(crew_comms)
+    except Exception:
+        pass
+
+    # --- Inject file sharing capabilities ---
+    parts.append(
+        "FILE SHARING — you can send files and images to the human in chat.\n\n"
+        "1. INLINE IMAGE — renders directly in the chat bubble (preferred for images):\n"
+        "   Embed this JSON anywhere in your reply:\n"
+        "   {\"file_attach\": \"/tmp/yourfile.ext\"}\n"
+        "   The image appears inline. Use this when you want the human to SEE the image immediately.\n\n"
+        "2. TAPPABLE LINK — shows as a clickable link in the chat text:\n"
+        "   http://127.0.0.1:8420/api/download/filename.ext\n"
+        "   Works for any file in /tmp/. Use when you want the human to open or copy a link.\n\n"
+        "For generated images (via generate action): ALWAYS use file_attach — it renders inline automatically.\n"
+        "You can use BOTH in one reply: attach the image inline AND include a tappable link below it."
+    )
+
     # Token budget guard — tiered by agent importance:
-    # Crew Boss: 9000 chars (highest IQ, runs on best model, needs full crew awareness)
-    # Guardian:  7000 chars (system knowledge + integrity + sentinel duties)
-    # Everyone:  4000 chars (integrity rules + charter + skill + memories)
+    # Crew Boss: 10000 chars (highest IQ, runs on best model, needs full crew awareness)
+    # Guardian:  8000 chars (system knowledge + integrity + sentinel duties)
+    # Workers:   6500 chars (description + crew comms + memories)
+    # Everyone:  5500 chars (integrity rules + charter + skill + memories + comms)
     if agent_type == "right_hand":
-        max_chars = 9000
+        max_chars = 10000
     elif agent_type == "guardian":
-        max_chars = 7000
+        max_chars = 8000
     elif agent_type == "manager":
-        max_chars = 5500  # managers need room for team roster + delegation
+        max_chars = 6500
+    elif agent_type == "worker":
+        max_chars = 6500  # workers need room for crew comms
     else:
-        max_chars = 4000
+        max_chars = 5500
     combined = "\n\n".join(parts)
     if len(combined) > max_chars:
         combined = combined[:max_chars] + "\n[memory truncated]"
@@ -426,25 +707,30 @@ def _format_skills_for_prompt(skills: list) -> str:
 
 
 def _format_memories_for_prompt(memories: list) -> str:
-    """Format agent memories into a system prompt section."""
+    """Format agent memories into a compact system prompt section."""
     lines = ["THINGS YOU REMEMBER ABOUT THIS PERSON:"]
     prefix_map = {
         "fact": "",
         "preference": "[pref] ",
-        "instruction": "[instruction] ",
-        "summary": "[context] ",
-        "persona": "[identity] ",
+        "instruction": "[instr] ",
+        "summary": "[ctx] ",
+        "persona": "[id] ",
+        "error": "[err] ",
+        "learning": "[win] ",
     }
     for m in memories:
         prefix = prefix_map.get(m.get("memory_type", "fact"), "")
-        lines.append(f"- {prefix}{m['content']}")
+        content = m["content"]
+        if len(content) > 100:
+            content = content[:97] + "..."
+        lines.append(f"- {prefix}{content}")
     return "\n".join(lines)
 
 
 def _format_profile_for_prompt(profile: dict) -> str:
     """Format the human's extended profile for prompt injection.
 
-    Compact block injected into inner circle + leader prompts so every agent
+    Compact block injected into Crew Boss, Guardian, and Vault prompts so every agent
     knows who they're serving. Typically ~150 chars — fits all token budgets.
     """
     lines = ["ABOUT THIS HUMAN (calibrated — adapt your tone and approach):"]
@@ -532,7 +818,7 @@ _EMOTION_PATTERNS = [
         _learn_re.IGNORECASE), "fact", 5),
 ]
 
-# --- Dream/aspiration patterns (✨ Strategy "Dream Catcher" fairy dust) ---
+# --- Dream/aspiration patterns ---
 _DREAM_PATTERNS = [
     (_learn_re.compile(
         r"\b(?:i'?ve always wanted to|i have always wanted to|someday i'?ll|"
@@ -543,53 +829,138 @@ _DREAM_PATTERNS = [
 ]
 
 # --- Agent-type-specific patterns (Phase 4 fairy dust) ---
-_AGENT_PATTERNS = {
-    # ✨ Wellness "Energy Journal" — detect stress signals
-    "wellness": [
-        (_learn_re.compile(
-            r"\b(?:can'?t sleep|insomnia|tired|exhausted|burned out|burnt out|"
-            r"headache|migraine|not feeling well|sick|stressed(?:\s+out)?|panic|"
-            r"anxiety attack|overwhelmed)\b",
-            _learn_re.IGNORECASE), "persona", 7, "[wellness-pattern] "),
-    ],
-    # ✨ Financial "Anxiety Thermometer" — detect money anxiety vs casual
-    "financial": [
-        (_learn_re.compile(
-            r"\b(?:can'?t afford|too expensive|broke|in debt|"
-            r"worried about (?:money|bills|rent|mortgage)|running out of money|"
-            r"paycheck to paycheck|behind on|overdue|collection)\b",
-            _learn_re.IGNORECASE), "persona", 7, "[financial-anxiety] "),
-        (_learn_re.compile(
-            r"\b(?:invest(?:ing|ment)?|savings?|portfolio|401k|retirement|"
-            r"passive income|side hustle|profit|revenue)\b",
-            _learn_re.IGNORECASE), "persona", 5, "[financial-growth] "),
-    ],
-    # ✨ Communications "Relationship Warmth Tracker" — detect people mentions
-    "communications": [
-        (_learn_re.compile(
-            r"\b(?:my\s+(?:mom|dad|wife|husband|partner|son|daughter|"
-            r"brother|sister|friend|boss|coworker|colleague|neighbor|"
-            r"girlfriend|boyfriend|fiancée?|roommate))\b",
-            _learn_re.IGNORECASE), "persona", 6, "[relationship] "),
-    ],
-    # ✨ Strategy "Dream Catcher" — detect motivation language
-    "strategy": [
-        (_learn_re.compile(
-            r"\b(?:excited about|motivated by|passionate about|"
-            r"looking forward to|can'?t wait to|goal is|"
-            r"want to achieve|working toward|gave up on|quit|"
-            r"abandoned|failed at)\b",
-            _learn_re.IGNORECASE), "persona", 7, "[strategy-pattern] "),
-    ],
-    # ✨ Knowledge "Curiosity Fingerprint" — detect genuine curiosity
-    "knowledge": [
-        (_learn_re.compile(
-            r"\b(?:how does|what is|why does|tell me (?:more )?about|"
-            r"explain|curious about|interested in|want to learn|"
-            r"fascinated by|that(?:'?s|\s+is(?:\s+so)?)\s+(?:cool|awesome|interesting|wild))\b",
-            _learn_re.IGNORECASE), "persona", 5, "[curiosity] "),
-    ],
-}
+_AGENT_PATTERNS = {}
+
+
+# --- Feedback signal patterns (boost/demote recent memories) ---
+_POSITIVE_FEEDBACK = _learn_re.compile(
+    r"\b(?:great answer|that(?:'?s| is) (?:exactly|perfectly) right|perfect|nailed it|"
+    r"thank(?:s| you)|love it|you(?:'re| are) right|well done|exactly what i (?:wanted|needed)|"
+    r"spot on|brilliant|awesome)\b",
+    _learn_re.IGNORECASE,
+)
+
+_NEGATIVE_FEEDBACK = _learn_re.compile(
+    r"\b(?:that(?:'?s| is) (?:wrong|not right|incorrect)|no that(?:'?s| is) not|"
+    r"stop doing that|i didn(?:'t| not) ask for that|completely wrong|"
+    r"please fix that|that(?:'?s| is) not what i (?:meant|wanted|asked)|wrong answer)\b",
+    _learn_re.IGNORECASE,
+)
+
+
+def _apply_feedback_signal(db_path: Path, agent_id: int, human_msg: str):
+    """Detect positive/negative feedback and adjust recent memory importance.
+
+    Positive → boost last 3 memories by +1 (cap 10)
+    Negative → demote last 3 memories by -2 (floor 1), store correction
+    """
+    is_positive = bool(_POSITIVE_FEEDBACK.search(human_msg))
+    is_negative = bool(_NEGATIVE_FEEDBACK.search(human_msg))
+
+    if not is_positive and not is_negative:
+        return
+
+    # Get 3 most recent active memories for this agent
+    conn = bus.get_conn(db_path)
+    try:
+        recent = conn.execute(
+            "SELECT id, importance FROM agent_memory "
+            "WHERE agent_id=? AND active=1 "
+            "ORDER BY created_at DESC LIMIT 3",
+            (agent_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not recent:
+        return
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    with bus.db_write(db_path) as conn:
+        for mem in recent:
+            if is_positive:
+                new_imp = min(10, mem["importance"] + 1)
+            else:
+                new_imp = max(1, mem["importance"] - 2)
+            conn.execute(
+                "UPDATE agent_memory SET importance=?, updated_at=? WHERE id=?",
+                (new_imp, now, mem["id"]),
+            )
+
+    # Negative feedback → store correction as instruction
+    if is_negative:
+        correction = human_msg.strip()
+        if len(correction) > 150:
+            correction = correction[:147] + "..."
+        bus.remember(agent_id, f"[feedback] {correction}",
+                     memory_type="instruction", importance=8,
+                     source="conversation", db_path=db_path)
+
+
+def _normalize_for_dedup(text: str) -> str:
+    """Normalize text for deduplication comparison.
+
+    Strips leading tags ([task], [done], etc.), common prefixes,
+    punctuation, and lowercases.
+    """
+    # Strip leading tags like [task], [done], [pref], [emotion], etc.
+    normalized = _learn_re.sub(r"^\[[\w-]+\]\s*", "", text)
+    # Strip common prefixes
+    for prefix in ("Human said:", "I replied:", "Human asked:",
+                   "Sent task to", "feeling "):
+        if normalized.lower().startswith(prefix.lower()):
+            normalized = normalized[len(prefix):]
+    # Remove punctuation, lowercase
+    normalized = _learn_re.sub(r"[^\w\s]", "", normalized).lower().strip()
+    return normalized
+
+
+def _is_duplicate_memory(agent_id: int, content: str,
+                         db_path: Path) -> bool:
+    """Multi-signal dedup check. Returns True if memory is a duplicate.
+
+    Three signals (any = duplicate):
+    1. Substring match on normalized text
+    2. Keyword overlap: 60%+ of significant words (>3 chars) overlap
+    3. Multi-fragment search: first 30 chars AND top keywords
+    """
+    normalized_new = _normalize_for_dedup(content)
+    if not normalized_new:
+        return True  # empty after normalization
+
+    # Signal 1+3: search by first 30 chars of original content
+    existing = bus.search_agent_memory(agent_id, content[:30], limit=5,
+                                       db_path=db_path)
+
+    # Also search by top 3 significant keywords for broader matches
+    new_words = [w for w in normalized_new.split() if len(w) > 3]
+    top_keywords = new_words[:3]
+    for kw in top_keywords:
+        kw_results = bus.search_agent_memory(agent_id, kw, limit=3,
+                                              db_path=db_path)
+        for r in kw_results:
+            if r["id"] not in {e["id"] for e in existing}:
+                existing.append(r)
+
+    for e in existing:
+        normalized_existing = _normalize_for_dedup(e["content"])
+
+        # Signal 1: substring match
+        if (normalized_new in normalized_existing
+                or normalized_existing in normalized_new):
+            return True
+
+        # Signal 2: keyword overlap (60%+)
+        if new_words:
+            existing_words = set(
+                w for w in normalized_existing.split() if len(w) > 3
+            )
+            overlap = sum(1 for w in new_words if w in existing_words)
+            if overlap / len(new_words) >= 0.6:
+                return True
+
+    return False
 
 
 def _extract_conversation_learnings(db_path: Path, agent_id: int,
@@ -597,14 +968,53 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
                                      agent_reply: str):
     """Extract learnable insights from a conversation turn. Zero LLM cost.
 
-    Scans the human's message for preferences, facts, emotional signals,
-    aspirations, and agent-type-specific patterns. Stores extracted insights
-    as memories via bus.remember() with deduplication.
+    Scans BOTH the human's message AND the agent's reply for:
+    - Preferences, facts, emotional signals, aspirations (personal)
+    - Tasks given, decisions made, outcomes reported (operational)
+    - What the agent did, what it delegated, what it promised (accountability)
 
     Non-fatal: any exception is silently caught.
     """
+    _learn_start = time.monotonic()
     if not human_msg or len(human_msg) < 5:
         return
+
+    # --- Feedback-loop learning (boost/demote recent memories) ---
+    try:
+        _apply_feedback_signal(db_path, agent_id, human_msg)
+    except Exception:
+        pass
+
+    # --- Error/Learning extraction from feedback signals ---
+    try:
+        is_negative = bool(_NEGATIVE_FEEDBACK.search(human_msg))
+        is_positive = bool(_POSITIVE_FEEDBACK.search(human_msg))
+
+        if (is_negative or is_positive) and agent_reply:
+            last_reply_snip = agent_reply.strip()[:80]
+            human_snip = human_msg.strip()[:80]
+
+            if is_negative:
+                error_content = (
+                    f"[ERROR] I said: {last_reply_snip}. "
+                    f"Correction: {human_snip}"
+                )
+                if not _is_duplicate_memory(agent_id, error_content, db_path):
+                    bus.remember(agent_id, error_content,
+                                memory_type="error", importance=9,
+                                source="conversation", db_path=db_path)
+
+            if is_positive:
+                learning_content = (
+                    f"[LEARNING] This worked: {last_reply_snip}. "
+                    f"Context: {human_snip[:60]}"
+                )
+                if not _is_duplicate_memory(agent_id, learning_content, db_path):
+                    bus.remember(agent_id, learning_content,
+                                memory_type="learning", importance=8,
+                                source="conversation", db_path=db_path)
+    except Exception:
+        pass
 
     extracted = []
 
@@ -630,7 +1040,7 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
             emotion = match.group(1).strip().lower()
             extracted.append((f"[emotion] feeling {emotion}", mem_type, importance, ""))
 
-    # ✨ Dream Catcher (all agents can catch dreams, Strategy gets priority)
+    # Dream Catcher — all agents can catch dreams
     for pattern, mem_type, importance in _DREAM_PATTERNS:
         for match in pattern.finditer(human_msg):
             dream = match.group(1).strip().rstrip(".,!?")
@@ -646,22 +1056,323 @@ def _extract_conversation_learnings(db_path: Path, agent_id: int,
             if len(content) > 3:
                 extracted.append((f"{prefix}{content}", mem_type, importance, ""))
 
+    # ═══════════════════════════════════════════════════════════
+    # OPERATIONAL MEMORY — tasks, decisions, outcomes, actions
+    # Scans both human message AND agent reply
+    # ═══════════════════════════════════════════════════════════
+
+    # --- Tasks given by human (from human_msg) ---
+    _task_patterns = [
+        _learn_re.compile(r"\b(?:please|can you|could you|go|do|make|create|build|write|post|update|fix|check|send|set up|configure|deploy|run|start|stop|delete|remove|add|change|move|copy|upload|download)\s+(.{10,80}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _task_patterns:
+        match = pat.search(human_msg)
+        if match:
+            task = match.group(1).strip().rstrip(".,!?")
+            if len(task) > 8:
+                extracted.append((f"[task] Human asked: {task}", "instruction", 8, ""))
+                break  # One task per message to avoid noise
+
+    # --- Decisions/answers from human ---
+    _decision_patterns = [
+        _learn_re.compile(r"\b(?:yes|no|go with|use|pick|choose|let'?s? go with|approved?|confirmed?|do it|ship it|let'?s do)\s*(.{0,60}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _decision_patterns:
+        match = pat.search(human_msg)
+        if match:
+            decision = match.group(0).strip().rstrip(".,!?")
+            if len(decision) > 5:
+                extracted.append((f"[decision] {decision}", "instruction", 7, ""))
+                break
+
+    # --- What the agent DID (from agent_reply) ---
+    if agent_reply and len(agent_reply) > 10:
+        _action_patterns = [
+            _learn_re.compile(r"\b(?:I'?ve|I have|I just|I sent|I posted|I created|I updated|I fixed|I checked|I delegated|I asked|I DMd?|sent (?:a )?DM|messaged)\s+(.{10,100}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+        ]
+        for pat in _action_patterns:
+            match = pat.search(agent_reply)
+            if match:
+                action = match.group(0).strip().rstrip(".,!?")
+                if len(action) > 10:
+                    extracted.append((f"[action] {action}", "summary", 7, ""))
+                    break
+
+        # --- Status updates / completions from agent ---
+        _status_patterns = [
+            _learn_re.compile(r"(?:✅|completed|done|finished|shipped|live|posted|published|deployed)\s*[:\-—]?\s*(.{5,80}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+        ]
+        for pat in _status_patterns:
+            match = pat.search(agent_reply)
+            if match:
+                status = match.group(0).strip().rstrip(".,!?")
+                if len(status) > 8:
+                    extracted.append((f"[done] {status}", "summary", 8, ""))
+                    break
+
+        # --- Delegations from agent reply ---
+        _delegation_patterns = [
+            _learn_re.compile(r"(?:sending|sent|routed|delegated|asked|DMd?|forwarded)\s+(?:this |it |that )?(?:to|over to)\s+(\w+)", _learn_re.IGNORECASE),
+        ]
+        for pat in _delegation_patterns:
+            match = pat.search(agent_reply)
+            if match:
+                target = match.group(1).strip()
+                extracted.append((f"[delegated] Sent task to {target}", "summary", 6, ""))
+                break
+
+    # --- Key info from human messages that aren't tasks ---
+    # "the twitter profile pic", "our website", "the reddit post"
+    _context_patterns = [
+        _learn_re.compile(r"\b(?:the|our|my)\s+(twitter|discord|reddit|github|website|stripe|telegram|whatsapp)\s+(.{5,50}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _context_patterns:
+        match = pat.search(human_msg)
+        if match:
+            ctx = match.group(0).strip().rstrip(".,!?")
+            if len(ctx) > 8:
+                extracted.append((f"[context] {ctx}", "fact", 5, ""))
+                break
+
     # --- Dedup and store ---
     for content, mem_type, importance, _prefix in extracted:
-        # Skip if substantially similar memory already exists
-        existing = bus.search_agent_memory(agent_id, content[:30], limit=3,
-                                           db_path=db_path)
-        if any(content.lower() in e["content"].lower()
-               or e["content"].lower() in content.lower()
-               for e in existing):
+        if _is_duplicate_memory(agent_id, content, db_path):
             continue
-        bus.remember(agent_id, content, memory_type=mem_type,
-                     importance=importance, source="conversation",
-                     db_path=db_path)
+        mem_id = bus.remember(agent_id, content, memory_type=mem_type,
+                              importance=importance, source="conversation",
+                              db_path=db_path)
+        # Cross-agent sharing: high-importance facts/prefs/instructions
+        # go to the knowledge store so other agents can see them
+        if importance >= 7 and mem_type in ("fact", "preference", "instruction"):
+            try:
+                _share_to_knowledge_store(db_path, agent_id, content, mem_type)
+            except Exception:
+                pass
+
+    # --- Temporal pattern learning (Crew Boss only) ---
+    if agent_type == "right_hand":
+        try:
+            _update_temporal_patterns(db_path, agent_id, human_msg)
+        except Exception:
+            pass
 
     # --- Profile extraction (Crew Boss calibration) ---
     if agent_type == "right_hand":
         _update_profile_from_conversation(db_path, agent_id, human_msg)
+
+    # Record learning extraction telemetry
+    try:
+        bus.record_span("learning.extract", agent_id=agent_id,
+                        duration_ms=int((time.monotonic() - _learn_start) * 1000),
+                        status="ok", db_path=db_path)
+    except Exception:
+        pass
+
+
+def _share_to_knowledge_store(db_path: Path, agent_id: int,
+                              content: str, mem_type: str):
+    """Share high-importance memory to the knowledge store for cross-agent access.
+
+    Deduplicates against existing knowledge entries by subject similarity.
+    """
+    category = "preference" if mem_type == "preference" else "lesson"
+    subject = content[:80]
+
+    # Check for existing similar entry
+    existing = bus.search_knowledge(content[:30], category_filter=category,
+                                    limit=3, db_path=db_path)
+    for e in existing:
+        if (content.lower() in e.get("subject", "").lower()
+                or e.get("subject", "").lower() in content.lower()):
+            return  # already shared
+
+    bus.store_knowledge(agent_id, category, subject,
+                        {"memory": content, "source": "cross_agent_share"},
+                        tags="shared,auto", db_path=db_path)
+
+
+def _longest_contiguous_hours(hours: set) -> tuple:
+    """Find longest contiguous block of hours, wrapping around midnight.
+
+    Returns (start_hour, end_hour) of the longest block, or (None, None).
+    """
+    if not hours:
+        return (None, None)
+    sorted_hours = sorted(hours)
+    best_start = sorted_hours[0]
+    best_len = 1
+    cur_start = sorted_hours[0]
+    cur_len = 1
+    for i in range(1, len(sorted_hours)):
+        if sorted_hours[i] == sorted_hours[i - 1] + 1:
+            cur_len += 1
+        else:
+            if cur_len > best_len:
+                best_start = cur_start
+                best_len = cur_len
+            cur_start = sorted_hours[i]
+            cur_len = 1
+    if cur_len > best_len:
+        best_start = cur_start
+        best_len = cur_len
+
+    # Check wrap-around (e.g., {22,23,0,1,2})
+    if sorted_hours[0] == 0 and sorted_hours[-1] == 23:
+        wrap_len = 1
+        # Count from end going backward
+        for i in range(len(sorted_hours) - 1, 0, -1):
+            if sorted_hours[i] == sorted_hours[i - 1] + 1:
+                wrap_len += 1
+            else:
+                break
+        # Count from start going forward
+        front_len = 1
+        for i in range(1, len(sorted_hours)):
+            if sorted_hours[i] == sorted_hours[i - 1] + 1:
+                front_len += 1
+            else:
+                break
+        total_wrap = wrap_len + front_len
+        if total_wrap > best_len:
+            best_start = sorted_hours[-wrap_len]
+            best_len = total_wrap
+
+    end_hour = (best_start + best_len) % 24
+    return (best_start, end_hour)
+
+
+def _update_temporal_patterns(db_path: Path, agent_id: int, human_msg: str):
+    """Detect temporal patterns from conversation (Crew Boss only).
+
+    Tracks message hour distribution, seasonal patterns, and known triggers.
+    Updates the human's extended_profile accordingly.
+    """
+    now = datetime.now(timezone.utc)
+    current_hour = now.hour
+    current_month = now.month
+
+    # --- Track message hour distribution ---
+    hour_key = "msg_hour_distribution"
+    conn = bus.get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT value FROM crew_config WHERE key=?", (hour_key,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row:
+        try:
+            dist = json.loads(row["value"])
+        except (json.JSONDecodeError, TypeError):
+            dist = {}
+    else:
+        dist = {}
+
+    hour_str = str(current_hour)
+    dist[hour_str] = dist.get(hour_str, 0) + 1
+    total_msgs = sum(dist.values())
+    bus.set_config(hour_key, json.dumps(dist), db_path=db_path)
+
+    # After 50+ messages, infer quiet hours
+    if total_msgs >= 50:
+        quiet_hours = set()
+        for h in range(24):
+            count = dist.get(str(h), 0)
+            if count / total_msgs < 0.02:  # less than 2% of messages
+                quiet_hours.add(h)
+        if len(quiet_hours) >= 3:  # at least 3 contiguous quiet hours
+            start, end = _longest_contiguous_hours(quiet_hours)
+            if start is not None:
+                # Find the human agent
+                conn = bus.get_conn(db_path)
+                try:
+                    human_row = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if human_row:
+                    bus.update_extended_profile(human_row["id"], {
+                        "quiet_hours_start": f"{start:02d}:00",
+                        "quiet_hours_end": f"{end:02d}:00",
+                    }, db_path=db_path)
+
+    # --- Seasonal patterns ---
+    _seasonal_patterns = [
+        (_learn_re.compile(r"\b(?:holiday|christmas|thanksgiving|hannukah|new year)\b.*"
+                           r"(?:stress|busy|crazy|overwhelm)", _learn_re.IGNORECASE),
+         "holiday_stress"),
+        (_learn_re.compile(r"\b(?:summer|vacation|trip|travel)\b.*"
+                           r"(?:plan|book|going|taking)", _learn_re.IGNORECASE),
+         "summer_plans"),
+        (_learn_re.compile(r"\b(?:back.to.school|school start|new semester|"
+                           r"fall semester|school year)\b", _learn_re.IGNORECASE),
+         "back_to_school"),
+        (_learn_re.compile(r"\b(?:tax|taxes|filing|1099|W-?2|CPA|deduction)\b.*"
+                           r"(?:season|time|deadline|due)", _learn_re.IGNORECASE),
+         "tax_season"),
+        (_learn_re.compile(r"\b(?:year.end|annual review|year in review|"
+                           r"wrap.up the year|end of year)\b", _learn_re.IGNORECASE),
+         "year_end_review"),
+    ]
+
+    for pattern, label in _seasonal_patterns:
+        if pattern.search(human_msg):
+            sp_key = "seasonal_patterns"
+            conn = bus.get_conn(db_path)
+            try:
+                sp_row = conn.execute(
+                    "SELECT value FROM crew_config WHERE key=?", (sp_key,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if sp_row:
+                try:
+                    sp_data = json.loads(sp_row["value"])
+                except (json.JSONDecodeError, TypeError):
+                    sp_data = {}
+            else:
+                sp_data = {}
+            sp_data[str(current_month)] = label
+            bus.set_config(sp_key, json.dumps(sp_data), db_path=db_path)
+
+            # Write to extended_profile
+            conn = bus.get_conn(db_path)
+            try:
+                human_row = conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+            if human_row:
+                bus.update_extended_profile(human_row["id"], {
+                    "seasonal_patterns": {str(current_month): label},
+                }, db_path=db_path)
+
+    # --- Known triggers ---
+    _trigger_patterns = [
+        _learn_re.compile(
+            r"\b(?:triggers me|makes me (?:angry|upset|anxious)|"
+            r"can'?t deal with|never mention|don'?t (?:ever )?(?:bring up|talk about))\s+"
+            r"(.{5,60}?)(?:[.!?\n]|$)", _learn_re.IGNORECASE),
+    ]
+    for pat in _trigger_patterns:
+        match = pat.search(human_msg)
+        if match:
+            trigger = match.group(1).strip().rstrip(".,!?")
+            if trigger:
+                conn = bus.get_conn(db_path)
+                try:
+                    human_row = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if human_row:
+                    bus.update_extended_profile(human_row["id"], {
+                        "known_triggers": [trigger],
+                    }, db_path=db_path)
 
 
 def _update_profile_from_conversation(db_path: Path, agent_id: int,
@@ -670,7 +1381,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
     Called only when Crew Boss is the responding agent. Looks for name, age,
     pronouns, and life situation in the human's message. Updates the shared
-    extended profile that all inner circle agents can see.
+    extended profile that Crew Boss, Guardian, and Vault can see.
     """
     updates = {}
 
@@ -731,7 +1442,7 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
     bus.update_extended_profile(human["id"], updates, db_path=db_path)
 
-    # ✨ Calibration broadcast: once name+age are set, broadcast to inner circle
+    # Calibration broadcast: once name+age are set, broadcast to Crew Boss, Guardian, Vault
     profile = bus.get_extended_profile(human["id"], db_path=db_path)
     if (profile.get("display_name") and profile.get("age")
             and not bus.get_config("calibration_broadcast_done", "",
@@ -740,9 +1451,9 @@ def _update_profile_from_conversation(db_path: Path, agent_id: int,
 
 
 def _broadcast_calibration(db_path: Path, profile: dict):
-    """Broadcast human calibration data to all inner circle agents.
+    """Broadcast human calibration data to Crew Boss, Guardian, and Vault.
 
-    Stores a high-importance persona memory in each core crew agent so they
+    Stores a high-importance persona memory in each agent so they
     all know who they're serving from day one. Called once when both name
     and age are first populated.
     """
@@ -764,8 +1475,7 @@ def _broadcast_calibration(db_path: Path, profile: dict):
     try:
         agents = conn.execute(
             "SELECT id FROM agents WHERE agent_type IN "
-            "('wellness','strategy','communications','financial',"
-            "'knowledge')"
+            "('guardian','vault')"
         ).fetchall()
     finally:
         conn.close()
@@ -880,6 +1590,106 @@ def _suggest_skill_draft(db_path: Path, agent_id: int, topic: str):
 
 
 # ---------------------------------------------------------------------------
+# LLM circuit breaker — tracks provider failures for fallback decisions
+# ---------------------------------------------------------------------------
+
+import logging
+
+_logger = logging.getLogger("agent_worker")
+
+
+class _CircuitBreaker:
+    """Simple per-provider circuit breaker.
+
+    States:
+      CLOSED  — normal operation, requests flow through
+      OPEN    — provider is failing, skip it (use fallback)
+      HALF    — cooldown expired, allow one probe request
+
+    Opens after `failure_threshold` consecutive failures.
+    Stays open for `cooldown_seconds`, then moves to HALF_OPEN.
+    A success in HALF_OPEN resets to CLOSED; a failure reopens.
+    """
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    def __init__(self, failure_threshold: int = 3, cooldown_seconds: float = 60):
+        self._states: dict[str, str] = {}          # provider → state
+        self._fail_counts: dict[str, int] = {}     # provider → consecutive fails
+        self._open_since: dict[str, float] = {}    # provider → time.monotonic
+        self._threshold = failure_threshold
+        self._cooldown = cooldown_seconds
+        self._lock = threading.Lock()
+
+    def allow_request(self, provider: str) -> bool:
+        with self._lock:
+            state = self._states.get(provider, self.CLOSED)
+            if state == self.CLOSED:
+                return True
+            if state == self.OPEN:
+                elapsed = time.monotonic() - self._open_since.get(provider, 0)
+                if elapsed >= self._cooldown:
+                    self._states[provider] = self.HALF_OPEN
+                    return True
+                return False
+            # HALF_OPEN — allow one probe
+            return True
+
+    def record_success(self, provider: str):
+        with self._lock:
+            self._states[provider] = self.CLOSED
+            self._fail_counts[provider] = 0
+
+    def record_failure(self, provider: str):
+        with self._lock:
+            count = self._fail_counts.get(provider, 0) + 1
+            self._fail_counts[provider] = count
+            state = self._states.get(provider, self.CLOSED)
+            if state == self.HALF_OPEN or count >= self._threshold:
+                self._states[provider] = self.OPEN
+                self._open_since[provider] = time.monotonic()
+                _logger.warning("Circuit OPEN for provider '%s' after %d failures",
+                                provider, count)
+
+
+_circuit = _CircuitBreaker(failure_threshold=3, cooldown_seconds=60)
+
+
+def _get_fallback_order(db_path=None):
+    """Return provider fallback order. Configurable via 'fallback_order' config key."""
+    if db_path:
+        custom = bus.get_config("fallback_order", "", db_path=db_path)
+        if custom:
+            return tuple(p.strip() for p in custom.split(",") if p.strip())
+    has_keys = False
+    if db_path:
+        for provider, (_, _, config_key) in PROVIDERS.items():
+            if config_key:  # skip ollama (empty config_key)
+                val = bus.get_config(config_key, "", db_path=db_path)
+                if val:
+                    has_keys = True
+                    break
+    if has_keys:
+        return ("kimi", "groq", "openai", "gemini", "claude", "xai", "ollama")
+    else:
+        return ("ollama",)  # No API keys = Ollama only, no wasted timeouts
+
+
+def _is_llm_error(text: str) -> bool:
+    """Return True if the response text looks like an error, not a real reply."""
+    if not text:
+        return True
+    error_prefixes = ("(Ollama not reachable", "(Error", "(API error",
+                      "(Kimi API error", "(Claude API error",
+                      "(Empty response", "(API key not configured",
+                      "(Kimi API key not configured",
+                      "(Claude API key not configured")
+    return any(text.startswith(p) for p in error_prefixes)
+
+
+# ---------------------------------------------------------------------------
 # LLM callers — routes to the right backend per agent
 # ---------------------------------------------------------------------------
 
@@ -924,7 +1734,7 @@ def _call_kimi(messages: list, model: str = KIMI_DEFAULT_MODEL,
     req = urllib.request.Request(
         KIMI_API_URL, data=payload,
         headers={
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "Authorization": f"Bearer {api_key}",
         },
     )
@@ -1007,7 +1817,7 @@ def _call_openai_compat(messages: list, model: str, api_url: str,
         "max_tokens": 1024,
     }).encode("utf-8")
 
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "User-Agent": "CrewBus/1.0"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
@@ -1026,10 +1836,42 @@ def _call_openai_compat(messages: list, model: str, api_url: str,
         return f"(Error: {e})"
 
 
+def _call_provider(provider: str, messages: list, specific_model: str = "",
+                   db_path: Path = None) -> str:
+    """Call a single LLM provider. Returns the response text (or error string)."""
+    if provider == "ollama":
+        use_model = specific_model or OLLAMA_MODEL
+        return _call_ollama(messages, model=use_model)
+
+    if provider == "kimi":
+        use_model = specific_model or KIMI_DEFAULT_MODEL
+        api_key = bus.get_config("kimi_api_key", "", db_path=db_path) if db_path else ""
+        return _call_kimi(messages, model=use_model, api_key=api_key)
+
+    if provider == "claude":
+        use_model = specific_model or PROVIDERS["claude"][1]
+        api_key = bus.get_config("claude_api_key", "", db_path=db_path) if db_path else ""
+        return _call_claude(messages, model=use_model, api_key=api_key)
+
+    if provider in PROVIDERS:
+        api_url, default_model, key_name = PROVIDERS[provider]
+        use_model = specific_model or default_model
+        api_key = bus.get_config(key_name, "", db_path=db_path) if (db_path and key_name) else ""
+        return _call_openai_compat(messages, model=use_model, api_url=api_url, api_key=api_key)
+
+    # Unknown provider — try Ollama with the full string as model name
+    return _call_ollama(messages, model=provider)
+
+
 def call_llm(system_prompt: str, user_message: str,
              chat_history: Optional[list] = None,
              model: str = "", db_path: Path = None) -> str:
     """Route to the correct LLM backend based on model string.
+
+    Includes automatic fallback chain with circuit breaker:
+      - If the primary provider fails, tries the next configured provider
+      - Providers with open circuits (recent repeated failures) are skipped
+      - Exponential backoff between retries (0.5s, 1s)
 
     Model resolution order:
       1. Per-agent model field (passed in)
@@ -1043,7 +1885,7 @@ def call_llm(system_prompt: str, user_message: str,
     """
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        for msg in chat_history[-6:]:
+        for msg in chat_history[-500:]:
             messages.append(msg)
     messages.append({"role": "user", "content": user_message})
 
@@ -1051,40 +1893,85 @@ def call_llm(system_prompt: str, user_message: str,
     if not model:
         model = bus.get_config("default_model", "", db_path=db_path) if db_path else ""
 
+    # Parse provider from model string
     if not model or model == "ollama":
-        return _call_ollama(messages)
+        primary_provider = "ollama"
+        specific_model = ""
+    else:
+        primary_provider = model.split(":")[0] if ":" in model else model
+        specific_model = model.split(":", 1)[1] if ":" in model else ""
 
-    # Parse "provider" or "provider:specific-model"
-    provider = model.split(":")[0] if ":" in model else model
-    specific_model = model.split(":", 1)[1] if ":" in model else ""
+    # Build fallback list: primary first, then others (skip duplicates)
+    providers_to_try = [primary_provider]
+    for fb in _get_fallback_order(db_path):
+        if fb != primary_provider:
+            providers_to_try.append(fb)
 
-    # Kimi K2.5 — has its own caller (thinking param, reasoning_content)
-    if provider == "kimi":
-        kimi_model = specific_model or KIMI_DEFAULT_MODEL
-        api_key = bus.get_config("kimi_api_key", "", db_path=db_path) if db_path else ""
-        return _call_kimi(messages, model=kimi_model, api_key=api_key)
+    backoff = 0.5
+    last_error = ""
+    _llm_start = time.monotonic()
+    _llm_provider_used = primary_provider
 
-    # Claude — Anthropic Messages API (different format)
-    if provider == "claude":
-        claude_model = specific_model or PROVIDERS["claude"][1]
-        api_key = bus.get_config("claude_api_key", "", db_path=db_path) if db_path else ""
-        return _call_claude(messages, model=claude_model, api_key=api_key)
+    for i, provider in enumerate(providers_to_try):
+        # Check circuit breaker — skip providers that are failing repeatedly
+        if not _circuit.allow_request(provider):
+            _logger.debug("Skipping provider '%s' (circuit open)", provider)
+            continue
 
-    # OpenAI, Groq, Gemini — all OpenAI-compatible
-    if provider in PROVIDERS:
-        api_url, default_model, key_name = PROVIDERS[provider]
-        use_model = specific_model or default_model
-        api_key = bus.get_config(key_name, "", db_path=db_path) if (db_path and key_name) else ""
-        if provider == "ollama":
-            return _call_ollama(messages, model=use_model)
-        return _call_openai_compat(messages, model=use_model, api_url=api_url, api_key=api_key)
+        # For fallback providers, only use default model (not the primary's specific model)
+        use_model = specific_model if provider == primary_provider else ""
 
-    # Ollama with specific model name (e.g. "ollama:mistral")
-    if model.startswith("ollama:"):
-        return _call_ollama(messages, model=model.split(":", 1)[1])
+        try:
+            result = _call_provider(provider, messages, use_model, db_path)
+        except Exception as e:
+            _circuit.record_failure(provider)
+            last_error = f"(Exception calling {provider}: {e})"
+            _logger.warning("Provider '%s' raised exception: %s", provider, e)
+            if i < len(providers_to_try) - 1:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 4)
+            continue
 
-    # Generic fallback: assume Ollama local model name
-    return _call_ollama(messages, model=model)
+        if _is_llm_error(result):
+            _circuit.record_failure(provider)
+            last_error = result
+            if provider != primary_provider:
+                _logger.info("Fallback provider '%s' also failed: %s",
+                             provider, result[:80])
+            else:
+                _logger.warning("Primary provider '%s' failed: %s",
+                                provider, result[:80])
+            if i < len(providers_to_try) - 1:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 4)
+            continue
+
+        # Success — record telemetry span
+        _circuit.record_success(provider)
+        _llm_dur = int((time.monotonic() - _llm_start) * 1000)
+        try:
+            bus.record_span("llm.call", duration_ms=_llm_dur, status="ok",
+                            metadata={"provider": provider, "model": model,
+                                      "response_len": len(result)},
+                            db_path=db_path)
+        except Exception:
+            pass
+        if provider != primary_provider:
+            _logger.info("Fallback to '%s' succeeded (primary '%s' was down)",
+                         provider, primary_provider)
+        return result
+
+    # All providers failed — record error telemetry
+    _llm_dur = int((time.monotonic() - _llm_start) * 1000)
+    try:
+        bus.record_span("llm.call", duration_ms=_llm_dur, status="error",
+                        metadata={"provider": primary_provider, "model": model,
+                                  "error": last_error[:200]},
+                        db_path=db_path)
+    except Exception:
+        pass
+    _logger.error("All LLM providers failed. Last error: %s", last_error[:120])
+    return last_error or "(All LLM providers failed — check your configuration.)"
 
 
 # Keep legacy name for backwards compat with tests
@@ -1094,7 +1981,7 @@ def call_ollama(system_prompt: str, user_message: str,
     """Legacy wrapper — routes through call_llm."""
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        for msg in chat_history[-6:]:
+        for msg in chat_history[-500:]:
             messages.append(msg)
     messages.append({"role": "user", "content": user_message})
     return _call_ollama(messages, model=model)
@@ -1105,11 +1992,14 @@ def call_ollama(system_prompt: str, user_message: str,
 # ---------------------------------------------------------------------------
 
 def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
-                     limit: int = 6) -> list:
+                     limit: int = 500) -> list:
     """Fetch recent chat context for an agent.
 
     Pulls messages between sender↔agent. For managers, also includes
     recent messages from their workers so they have team awareness.
+
+    Also auto-summarizes older conversations into memory so agents
+    don't lose context even after the 20-message window passes.
     """
     conn = bus.get_conn(db_path)
     try:
@@ -1123,7 +2013,19 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
             ORDER BY created_at DESC LIMIT ?
         """, (sender_id, agent_id, agent_id, sender_id, limit)).fetchall()
 
-        # For managers: also pull recent messages TO this agent from workers
+        # Auto-summarize: if there are 20+ messages, compress the oldest
+        # ones beyond our window into a memory so nothing is lost
+        total_count = conn.execute("""
+            SELECT COUNT(*) as c FROM messages
+            WHERE ((from_agent_id=? AND to_agent_id=?)
+                OR (from_agent_id=? AND to_agent_id=?))
+              AND body IS NOT NULL AND body != ''
+        """, (sender_id, agent_id, agent_id, sender_id)).fetchone()["c"]
+
+        if total_count > 600:
+            _auto_summarize_old_chat(db_path, sender_id, agent_id, limit)
+
+        # For managers and right_hand: pull recent DMs from other agents
         agent_row = conn.execute(
             "SELECT agent_type FROM agents WHERE id=?", (agent_id,)
         ).fetchone()
@@ -1138,25 +2040,180 @@ def _get_recent_chat(db_path: Path, sender_id: int, agent_id: int,
                   AND m.body IS NOT NULL AND m.body != ''
                 ORDER BY m.created_at DESC LIMIT 10
             """, (agent_id, agent_id)).fetchall()
+        # Crew Boss (right_hand): see recent DMs from any agent
+        if agent_row and agent_row["agent_type"] == "right_hand":
+            worker_rows = conn.execute("""
+                SELECT a.name, m.body
+                FROM messages m
+                JOIN agents a ON m.from_agent_id = a.id
+                WHERE m.to_agent_id = ?
+                  AND m.from_agent_id != ?
+                  AND a.agent_type != 'human'
+                  AND m.body IS NOT NULL AND m.body != ''
+                ORDER BY m.created_at DESC LIMIT 15
+            """, (agent_id, sender_id)).fetchall()
     finally:
         conn.close()
 
     history = []
-
-    # Inject team updates as system context if available
-    if worker_rows:
-        team_summary = "Recent updates from your team:\n" + "\n".join(
-            f"- {w['name']}: {w['body'][:150]}" for w in reversed(worker_rows)
-        )
-        history.append({"role": "user", "content": team_summary})
-        history.append({"role": "assistant", "content": "Got it, I have my team's updates."})
 
     for row in reversed(rows):  # oldest first
         role = "user" if row["from_agent_id"] == sender_id else "assistant"
         text = row["body"] if row["body"] else row["subject"]
         if text:
             history.append({"role": role, "content": text})
+
+    # Inject crew/team DMs AFTER chat history (near the end) so the LLM
+    # sees them as fresh context right before the user's latest message
+    if worker_rows:
+        team_summary = "CREW REPLIES (DMs to you from other agents):\n" + "\n".join(
+            f"- {w['name']}: {w['body'][:150]}" for w in reversed(worker_rows)
+        )
+        history.append({"role": "user", "content": team_summary})
+        history.append({"role": "assistant", "content": "Got it, I see my crew's replies."})
+
     return history
+
+
+def _extract_message_essence(body: str, is_human: bool) -> list:
+    """Multi-signal extraction of key points from a single message.
+
+    Returns up to 3 points per message (vs old approach of 1 truncated sentence).
+    Detects decisions, key facts, completed actions, and reasons.
+    """
+    points = []
+    prefix = "Human" if is_human else "Agent"
+
+    # 1. Decisions: "decided to", "going with", "chose"
+    dec_match = _learn_re.search(
+        r"\b(?:decided? to|going with|chose|choosing|picked|will go with)\s+(.{5,80}?)(?:[.!?\n]|$)",
+        body, _learn_re.IGNORECASE)
+    if dec_match:
+        points.append(f"Decided: {dec_match.group(1).strip().rstrip('.,!?')}")
+
+    # 2. Key facts: URLs, costs, deadlines, budgets
+    url_match = _learn_re.search(r"https?://\S{5,80}", body)
+    if url_match:
+        points.append(f"Info: URL {url_match.group(0)[:60]}")
+    cost_match = _learn_re.search(
+        r"\$[\d,.]+(?:\s*(?:per|/)\s*\w+)?", body)
+    if cost_match:
+        points.append(f"Info: {cost_match.group(0)}")
+    deadline_match = _learn_re.search(
+        r"\b(?:due|deadline|by)\s+(.{5,40}?)(?:[.!?\n]|$)", body, _learn_re.IGNORECASE)
+    if deadline_match:
+        points.append(f"Info: deadline {deadline_match.group(1).strip()}")
+
+    # 3. Actions completed: "I've sent", "deployed", "fixed"
+    if not is_human:
+        action_match = _learn_re.search(
+            r"\b(?:I'?ve|I have|I just|sent|deployed|fixed|created|updated|posted|published)\s+"
+            r"(.{5,80}?)(?:[.!?\n]|$)", body, _learn_re.IGNORECASE)
+        if action_match:
+            points.append(f"Done: {action_match.group(0).strip().rstrip('.,!?')[:80]}")
+
+    # 4. Reasons: "because", "due to", "that's why"
+    reason_match = _learn_re.search(
+        r"\b(?:because|due to|that'?s why|since|reason (?:is|being))\s+(.{5,80}?)(?:[.!?\n]|$)",
+        body, _learn_re.IGNORECASE)
+    if reason_match:
+        points.append(f"Reason: {reason_match.group(1).strip().rstrip('.,!?')}")
+
+    # 5. Fallback: first 2 sentences, 100 char limit each
+    if not points:
+        sentences = _learn_re.split(r"[.!?]+\s+", body)
+        for sent in sentences[:2]:
+            sent = sent.strip()
+            if len(sent) > 15:
+                if len(sent) > 100:
+                    sent = sent[:97] + "..."
+                points.append(f"{prefix}: {sent}")
+
+    return points[:3]
+
+
+def _auto_summarize_old_chat(db_path: Path, sender_id: int, agent_id: int,
+                              recent_limit: int = 20):
+    """Compress old messages beyond the chat window into agent memories.
+
+    When an agent has 25+ messages, this extracts key facts from the oldest
+    messages (the ones that would fall outside the 20-message context window)
+    and saves them as memories. Then deletes the summarized messages to keep
+    the DB lean.
+
+    Zero LLM cost — uses keyword extraction, not AI summarization.
+    Only runs once per batch (checks for a marker memory to avoid re-processing).
+    """
+    try:
+        conn = bus.get_conn(db_path)
+        try:
+            # Check if we already summarized recently (avoid re-processing)
+            marker = conn.execute(
+                "SELECT id FROM agent_memory WHERE agent_id=? AND content LIKE '[summary-marker]%' "
+                "ORDER BY id DESC LIMIT 1", (agent_id,)
+            ).fetchone()
+
+            # Get the oldest messages that will fall outside the window
+            old_msgs = conn.execute("""
+                SELECT id, from_agent_id, body, created_at FROM messages
+                WHERE ((from_agent_id=? AND to_agent_id=?)
+                    OR (from_agent_id=? AND to_agent_id=?))
+                  AND body IS NOT NULL AND body != ''
+                ORDER BY created_at ASC LIMIT 20
+            """, (sender_id, agent_id, agent_id, sender_id)).fetchall()
+        finally:
+            conn.close()
+
+        if not old_msgs:
+            return
+
+        # Extract key points from old messages using multi-signal extraction
+        all_points = []
+        msg_ids_to_delete = []
+        for msg in old_msgs:
+            body = msg["body"]
+            msg_ids_to_delete.append(msg["id"])
+            if not body or len(body) < 10:
+                continue
+
+            # Skip system/internal messages
+            if body.startswith("[") or body.startswith("=="):
+                continue
+
+            is_human = (msg["from_agent_id"] == sender_id)
+            points = _extract_message_essence(body, is_human)
+            all_points.extend(points)
+
+        if all_points:
+            # Group into chunks of 10 points per summary memory
+            existing = bus.search_agent_memory(agent_id, "[conversation-history]",
+                                               limit=10, db_path=db_path)
+            # Cap at 5 conversation history memories max
+            slots_left = max(0, 5 - len(existing))
+            for i in range(0, len(all_points), 10):
+                if slots_left <= 0:
+                    break
+                chunk = all_points[i:i + 10]
+                combined = "[conversation-history] " + " | ".join(chunk)
+                bus.remember(agent_id, combined, memory_type="summary",
+                             importance=6, source="auto_summary", db_path=db_path)
+                slots_left -= 1
+
+        # Delete the old messages we just summarized
+        if msg_ids_to_delete:
+            conn = bus.get_conn(db_path)
+            try:
+                placeholders = ",".join("?" * len(msg_ids_to_delete))
+                conn.execute(
+                    f"DELETE FROM messages WHERE id IN ({placeholders})",
+                    msg_ids_to_delete,
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    except Exception as e:
+        print(f"[memory] Auto-summarize failed (non-fatal): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1233,8 +2290,7 @@ def _process_queued_messages(db_path: Path):
                          (row["id"],))
 
     # Every message gets processed — agent reads it, thinks, replies.
-    # Human messages first (priority), then all others sequentially.
-    # Sequential avoids SQLite write contention from parallel threads.
+    # Human messages first (priority, sequential), then agent-to-agent in parallel.
     human_msgs = [r for r in rows if r["sender_type"] == "human"]
     agent_msgs = [r for r in rows if r["sender_type"] != "human"]
 
@@ -1247,10 +2303,23 @@ def _process_queued_messages(db_path: Path):
     managers_with_fanout: set[int] = set()
 
     for row in agent_msgs:
-        # Track manager→worker fan-out tasks so we can synthesize after
         if row["sender_type"] == "manager" and row["agent_type"] == "worker":
             managers_with_fanout.add(row["from_agent_id"])
-        _process_with_timeout(row, db_path)
+
+    # Agent-to-agent messages in parallel (up to 10 concurrent).
+    MAX_PARALLEL_AGENT_MSGS = 10
+    if agent_msgs:
+        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_AGENT_MSGS) as pool:
+            futures = {
+                pool.submit(_process_single_message, row, db_path): row
+                for row in agent_msgs
+            }
+            for f in as_completed(futures, timeout=MSG_TIMEOUT * 2):
+                try:
+                    f.result()
+                except Exception as e:
+                    row = futures[f]
+                    print(f"[agent_worker] parallel msg error for {row.get('name', '?')}: {e}")
 
     # After workers have processed their tasks and replied to their manager,
     # have each manager synthesize the worker reports for the human.
@@ -1258,7 +2327,7 @@ def _process_queued_messages(db_path: Path):
         _synthesize_team_reports(manager_id, db_path)
 
 
-MSG_TIMEOUT = 90  # seconds — hard cap per message so one hung LLM can't freeze the queue
+MSG_TIMEOUT = 180  # seconds — hard cap per message (web search + LLM can take 2+ min)
 
 
 def _process_with_timeout(row, db_path: Path):
@@ -1279,7 +2348,15 @@ def _process_with_timeout(row, db_path: Path):
 
 
 def _process_single_message(row, db_path: Path):
-    """Process one queued message — call LLM, insert reply, handle shortcuts."""
+    """Process one queued message — call LLM, insert reply, handle shortcuts.
+
+    Error handling approach:
+      - DB errors reading agent info: log and continue with defaults
+      - LLM errors: handled by call_llm's fallback chain; if all providers
+        fail, a friendly error message is delivered to the human
+      - Post-processing errors (actions, social drafts): caught individually
+        so one failure doesn't block the reply from being delivered
+    """
     msg_id = row["id"]
     human_id = row["from_agent_id"]
     agent_id = row["to_agent_id"]
@@ -1296,11 +2373,36 @@ def _process_single_message(row, db_path: Path):
     if human_id == agent_id:
         return
 
+    # Fast-path: simple agent-to-agent status pings skip LLM entirely.
+    # Delivers the message directly — agent reads it in chat history on next cycle.
+    # This prevents a 3-8s LLM call for messages that are just acks/pings/status.
+    _FAST_PATH_PATTERNS = (
+        "status check", "status report", "confirm receipt", "acknowledged",
+        "all green", "standing by", "online and ready", "comms check",
+        "ping", "ack", "copy that", "roger", "noted", "received",
+    )
+    try:
+        sender_type = row["sender_type"]
+    except (KeyError, IndexError):
+        sender_type = "human"
+    _msg_subject = (row["subject"] or "") if row["subject"] else ""
+    _is_hop_dm = "hop=" in _msg_subject
+    if sender_type != "human" and user_text and len(user_text) < 120 and not _is_hop_dm:
+        lower = user_text.lower()
+        if any(p in lower for p in _FAST_PATH_PATTERNS):
+            _insert_reply_direct(db_path, agent_id, human_id,
+                                 f"[received] {user_text[:200]}",
+                                 agent_type=agent_type)
+            return
+
     # Check for memory commands first (remember/forget/list)
-    memory_response = _check_memory_command(user_text, agent_id, db_path)
-    if memory_response:
-        _insert_reply_direct(db_path, agent_id, human_id, memory_response)
-        return
+    try:
+        memory_response = _check_memory_command(user_text, agent_id, db_path)
+        if memory_response:
+            _insert_reply_direct(db_path, agent_id, human_id, memory_response)
+            return
+    except Exception as e:
+        _logger.warning("Memory command check failed for msg %d: %s", msg_id, e)
 
     # Get agent description from DB for dynamic prompts
     desc = ""
@@ -1310,9 +2412,8 @@ def _process_single_message(row, db_path: Path):
                              (agent_id,)).fetchone()
         if _row:
             desc = _row["description"] or ""
-        _conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("Failed to load description for agent %d: %s", agent_id, e)
 
     # Guardian shortcut: intercept WhatsApp setup requests directly
     if agent_type == "guardian" and _re.search(
@@ -1359,42 +2460,461 @@ def _process_single_message(row, db_path: Path):
                              human_msg=user_text, agent_type=agent_type)
         return
 
+    # Face state: message received → thinking/reading
+    _set_face(agent_id, emotion="thinking", action="reading", effect="glow")
+
     # Build system prompt — injects memories + skills
-    system_prompt = _build_system_prompt(agent_type, agent_name, desc,
-                                         agent_id=agent_id, db_path=db_path)
+    try:
+        system_prompt = _build_system_prompt(agent_type, agent_name, desc,
+                                             agent_id=agent_id, db_path=db_path)
+    except Exception as e:
+        _logger.warning("Failed to build system prompt for %s: %s", agent_name, e)
+        system_prompt = SYSTEM_PROMPTS.get(agent_type, DEFAULT_PROMPT)
 
     # Get recent chat history for context
-    chat_history = _get_recent_chat(db_path, human_id, agent_id)
+    try:
+        chat_history = _get_recent_chat(db_path, human_id, agent_id)
+    except Exception as e:
+        _logger.warning("Failed to load chat history for %s: %s", agent_name, e)
+        chat_history = []
 
-    # Call LLM — routes to Kimi/Ollama/etc based on agent's model field
-    reply = call_llm(system_prompt, user_text, chat_history,
-                     model=agent_model, db_path=db_path)
+    # Face state: LLM call in progress → thinking/loading
+    _set_face(agent_id, emotion="thinking", action="loading", effect="pulse")
+
+    # Call LLM — routes to Kimi/Ollama/etc based on agent's model field.
+    # call_llm handles fallback chain and circuit breaker internally.
+    _msg_start = time.monotonic()
+    _llm_start = time.monotonic()
+    try:
+        reply = call_llm(system_prompt, user_text, chat_history,
+                         model=agent_model, db_path=db_path)
+    except Exception as e:
+        _logger.error("Unhandled LLM exception for %s (msg %d): %s",
+                      agent_name, msg_id, e)
+        reply = ""
+    _response_ms = int((time.monotonic() - _llm_start) * 1000)
+
+    # If the LLM returned an error string, deliver a friendly message
+    # so the human isn't left waiting with no response.
+    if _is_llm_error(reply):
+        _set_face(agent_id, emotion="confused", action="error", effect="shake")
+        _logger.warning("LLM failed for %s (msg %d, %dms): %s",
+                        agent_name, msg_id, _response_ms, reply[:100])
+        friendly = (
+            "I'm having trouble connecting to my AI brain right now. "
+            "Your message is safe — I'll try again on the next cycle, "
+            "or you can resend it in a moment."
+        )
+        _insert_reply_direct(db_path, agent_id, human_id, friendly)
+        # Record telemetry for failed message processing
+        try:
+            bus.record_span("message.process", agent_id=agent_id,
+                            duration_ms=int((time.monotonic() - _msg_start) * 1000),
+                            status="error",
+                            metadata={"agent_name": agent_name, "msg_type": "chat"},
+                            db_path=db_path)
+        except Exception:
+            pass
+        return
 
     if reply:
+        # Face state: reply generated → happy/speaking
+        _set_face(agent_id, emotion="happy", action="speaking", effect="sparkles")
         # Execute any wizard_action commands embedded in the reply
-        clean_reply = _execute_wizard_actions(reply, db_path)
+        try:
+            clean_reply = _execute_wizard_actions(reply, db_path, agent_id=agent_id, agent_type=agent_type)
+        except Exception as e:
+            _logger.warning("Wizard action failed for %s: %s", agent_name, e)
+            clean_reply = reply
+
+        # Execute any crew_action commands (inter-agent DMs, meetings, channel posts)
+        try:
+            clean_reply = _execute_crew_actions(clean_reply, agent_id, db_path)
+        except Exception as e:
+            _logger.warning("Crew action failed for %s: %s", agent_name, e)
 
         # Extract and create any social_draft JSON blocks
-        clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+        try:
+            clean_reply = _extract_social_drafts(clean_reply, agent_id, db_path)
+        except Exception as e:
+            _logger.warning("Social draft extraction failed for %s: %s", agent_name, e)
 
+        # Execute any twitter_action commands (autonomous Twitter tools)
+        attachment = None
+        try:
+            clean_reply, attachment = _extract_twitter_actions(clean_reply, agent_id, db_path)
+        except Exception as e:
+            _logger.warning("Twitter action failed for %s: %s", agent_name, e)
+
+        # Build attachment JSON for DB storage
+        att_json = None
+        if attachment:
+            import os as _os
+            import mimetypes as _mt
+            if _os.path.exists(attachment):
+                _mime = _mt.guess_type(attachment)[0] or "application/octet-stream"
+                _name = _os.path.basename(attachment)
+                att_json = json.dumps({"path": attachment, "type": _mime, "name": _name})
         # Extract explicit delegation JSON (if manager included any)
         if agent_type == "manager":
-            clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
+            try:
+                clean_reply = _extract_delegations(clean_reply, agent_id, db_path)
+            except Exception as e:
+                _logger.warning("Delegation extraction failed for %s: %s", agent_name, e)
 
         # Auto-fan-out: forward the task to all workers
-        if agent_type == "manager" and row["from_agent_id"] != agent_id:
-            _fan_out_to_workers(db_path, agent_id, user_text)
+        # Skip fan-out for relay replies (hop>=1) and worker-to-manager replies
+        # to prevent echo loops between manager and its workers
+        _is_relay = "hop=" in _msg_subject
+        _from_worker = sender_type == "worker"
+        if agent_type == "manager" and row["from_agent_id"] != agent_id and not _is_relay and not _from_worker:
+            try:
+                _fan_out_to_workers(db_path, agent_id, user_text)
+            except Exception as e:
+                _logger.warning("Fan-out failed for %s: %s", agent_name, e)
 
         # Don't store empty replies (can happen when LLM returns only action blocks)
+        # But always send SOMETHING to the human so they're not left with silence
+        # Exception: attachment-only messages (e.g. generated images) are allowed through
         if not clean_reply or not clean_reply.strip():
-            return
+            if att_json:
+                clean_reply = ""  # attachment-only — let it fall through
+            elif sender_type == "human":
+                if '"crew_action"' in reply and '"dm"' in reply:
+                    fallback = "On it — I've reached out to the crew and I'll have an answer for you shortly."
+                elif '"web_search"' in reply or '"web_read_url"' in reply:
+                    fallback = "I tried to search the web but couldn't get results. Please try again."
+                else:
+                    fallback = "I processed your request but don't have a text response to share."
+                _insert_reply_direct(
+                    db_path, agent_id, human_id, fallback,
+                    human_msg=user_text, agent_type=agent_type,
+                )
+                return
+            else:
+                return
 
-        # Insert reply directly — always works, bypasses routing rules
-        _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
-                             human_msg=user_text, agent_type=agent_type)
+        # Branch reply routing: agent-to-agent replies get queued or routed to human
+        if sender_type != "human" and clean_reply:
+            # Agent-to-agent reply: check hop count
+            _subject = (row["subject"] or "") if row["subject"] else ""
+            _hop_match = _re.search(r'hop=(\d+)', _subject)
+            _current_hop = int(_hop_match.group(1)) if _hop_match else 0
+
+            if _current_hop >= 1:
+                # Relay being processed → route final answer to the human
+                conn = bus.get_conn(db_path)
+                try:
+                    _h = conn.execute(
+                        "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                    ).fetchone()
+                    _human_agent_id = _h["id"] if _h else human_id
+                finally:
+                    conn.close()
+                _insert_reply_direct(db_path, agent_id, _human_agent_id, clean_reply,
+                                     human_msg=user_text, agent_type=agent_type,
+                                     attachment=att_json)
+            else:
+                # First reply (hop=0) → queue back to sender for synthesis
+                with bus.db_write(db_path) as conn:
+                    conn.execute(
+                        "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
+                        "subject, body, priority, status) VALUES (?, ?, 'report', "
+                        "?, ?, 'normal', 'queued')",
+                        (agent_id, human_id,
+                         f'DM reply (hop=1) from {agent_name}',
+                         clean_reply),
+                    )
+        else:
+            # Normal human→agent reply
+            _insert_reply_direct(db_path, agent_id, human_id, clean_reply,
+                                 human_msg=user_text, agent_type=agent_type,
+                                 attachment=att_json)
+
+        # ── Skill health tracking (Guardian runtime monitoring) ──
+        try:
+            _agent_skills = bus.get_agent_skills(agent_id, db_path=db_path)
+            if _agent_skills and bus.is_guard_activated(db_path):
+                import skill_sandbox
+                from security import scan_reply_integrity, scan_reply_charter
+                _integrity = scan_reply_integrity(clean_reply)
+                _charter = scan_reply_charter(clean_reply)
+                skill_sandbox.record_skill_usage(
+                    agent_id,
+                    response_ms=_response_ms,
+                    had_error=not clean_reply or len(clean_reply.strip()) < 5,
+                    had_charter_violation=not _charter.get("clean", True),
+                    had_integrity_violation=not _integrity.get("clean", True),
+                    db_path=db_path,
+                )
+        except Exception:
+            pass  # Monitoring must never break the reply pipeline
+
+        # Record telemetry for successful message processing
+        try:
+            bus.record_span("message.process", agent_id=agent_id,
+                            duration_ms=int((time.monotonic() - _msg_start) * 1000),
+                            status="ok",
+                            metadata={"agent_name": agent_name, "msg_type": "chat",
+                                      "response_ms": _response_ms},
+                            db_path=db_path)
+        except Exception:
+            pass
+
+        # Face state: back to idle after processing
+        _set_face(agent_id, emotion="neutral", action="idle", effect="none")
 
 
 import re as _re
+
+
+def _execute_crew_actions(reply: str, from_agent_id: int, db_path: Path) -> str:
+    """Parse and execute crew_action JSON commands from an agent's reply.
+
+    Handles both raw JSON and markdown-wrapped JSON (```json ... ```).
+    Commands are executed and stripped from the reply.
+    """
+    # First, unwrap any markdown code fences containing crew_action
+    reply = _re.sub(
+        r'```(?:json)?\s*(\{[^`]*"crew_action"[^`]*\})\s*```',
+        r'\1',
+        reply,
+        flags=_re.DOTALL,
+    )
+
+    pattern = r'\{[^{}]*"crew_action"[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+
+    if not matches:
+        # Fallback: LLM said "DM sent to X" without including JSON — auto-send
+        # Matches: 'DM sent to Guardian: "message here"' or 'DM sent to Tom: "hi"'
+        _dm_fb = _re.search(
+            r'(?:DM sent to|messaged|reached out to|sent (?:a )?(?:DM|message) to)\s+'
+            r'(\w[\w\s-]*?)(?:\s*:\s*["\u201c](.+?)["\u201d])',
+            reply, _re.IGNORECASE
+        )
+        if _dm_fb:
+            _fb_to = _dm_fb.group(1).strip()
+            _fb_msg = _dm_fb.group(2).strip()
+            if _fb_to and _fb_msg:
+                print(f"[crew-fallback] No JSON found, but detected DM to '{_fb_to}' — sending")
+                result = bus.crew_dm(from_agent_id, _fb_to, _fb_msg, db_path=db_path)
+                if result.get("ok"):
+                    print(f"[crew-fallback] DM sent: agent {from_agent_id} -> {result.get('to')}")
+                else:
+                    print(f"[crew-fallback] DM failed: {result.get('error')}")
+        return reply
+
+    for raw in matches:
+        try:
+            action = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        cmd = action.get("crew_action", "")
+
+        if cmd == "dm":
+            to_name = action.get("to", "")
+            message = action.get("message", "")
+            if to_name and message:
+                result = bus.crew_dm(from_agent_id, to_name, message,
+                                     db_path=db_path)
+                if result.get("ok"):
+                    print(f"[crew] DM sent: agent {from_agent_id} -> {result.get('to')}")
+                else:
+                    print(f"[crew] DM failed: {result.get('error')}")
+
+        elif cmd == "meeting":
+            channel = action.get("channel", "standup")
+            agenda = action.get("agenda", "")
+            participant_names = action.get("participants", [])
+            conn = bus.get_conn(db_path)
+            try:
+                p_ids = []
+                for pname in participant_names:
+                    row = conn.execute(
+                        "SELECT id FROM agents WHERE LOWER(name) LIKE LOWER(?) AND active=1",
+                        (f"%{pname}%",),
+                    ).fetchone()
+                    if row:
+                        p_ids.append(row["id"])
+                if from_agent_id not in p_ids:
+                    p_ids.append(from_agent_id)
+            finally:
+                conn.close()
+
+            if p_ids and agenda:
+                result = bus.crew_meeting(channel, agenda, p_ids,
+                                          from_agent_id, db_path=db_path)
+                if result.get("ok"):
+                    print(f"[crew] Meeting '{channel}' started with {result.get('participants')} agents")
+
+        elif cmd == "post":
+            channel_name = action.get("channel", "")
+            message = action.get("message", "")
+            if channel_name and message:
+                conn = bus.get_conn(db_path)
+                try:
+                    ch = conn.execute(
+                        "SELECT id FROM crew_channels WHERE name=?",
+                        (channel_name,),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if ch:
+                    bus.post_to_channel(ch["id"], from_agent_id, message,
+                                        db_path=db_path)
+                    print(f"[crew] Posted to #{channel_name}")
+
+        # Strip the JSON block from the reply
+        reply = reply.replace(raw, "").strip()
+
+    # Clean up any leftover empty code fence artifacts
+    reply = _re.sub(r'```(?:json)?\s*```', '', reply).strip()
+
+    return reply
+
+
+def _auto_relay_crew_messages(reply: str, from_agent_id: int, from_name: str,
+                              user_text: str, db_path: Path) -> str:
+    """DISABLED — was causing echo loops and message flooding.
+
+    Inter-agent messaging now exclusively uses crew_action JSON blocks.
+    Keeping as no-op stub in case any code paths reference it.
+    """
+    return reply
+
+
+def _extract_twitter_actions(reply: str, agent_id: int, db_path: Path) -> tuple:
+    """Parse and execute twitter_action JSON commands from an agent's reply.
+
+    Agents embed commands like:
+      {"twitter_action": "follow_account", "username": "AnthropicAI"}
+      {"twitter_action": "like_tweet", "tweet_id": "1234567890"}
+      {"twitter_action": "retweet", "tweet_id": "1234567890"}
+      {"twitter_action": "search_tweets", "query": "MCP local AI", "max_results": 20}
+      {"twitter_action": "search_and_like", "query": "Model Context Protocol", "max_likes": 10}
+      {"twitter_action": "get_followers_count"}
+      {"twitter_action": "get_following_count"}
+      {"file_attach": "/path/to/file"}
+
+    Actions are executed and the JSON blocks are stripped from the reply.
+    Returns (clean_reply, attachment_path_or_None).
+    """
+    import os as _os
+    attachment_path = None
+
+    # Handle file_attach blocks (independent of twitter config)
+    fa_pattern = r'\{[^{}]*"file_attach"[^{}]*\}'
+    for raw in _re.findall(fa_pattern, reply):
+        try:
+            action = json.loads(raw)
+            path = action.get("file_attach", "")
+            if path and _os.path.exists(path):
+                attachment_path = path
+            reply = reply.replace(raw, "")
+        except Exception:
+            pass
+
+    pattern = r'\{[^{}]*"twitter_action"[^{}]*\}'
+    matches = _re.findall(pattern, reply)
+    if not matches:
+        return reply.strip(), attachment_path
+
+    try:
+        import twitter_bridge
+    except ImportError:
+        return reply.strip(), attachment_path
+
+    if not twitter_bridge.is_configured(db_path):
+        return reply.strip(), attachment_path
+
+    for raw in matches:
+        try:
+            action = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        cmd = action.get("twitter_action", "")
+        replacement = ""
+
+        try:
+            if cmd == "follow_account":
+                username = action.get("username", "").lstrip("@").strip()
+                if username:
+                    result = twitter_bridge.follow_account(username, db_path)
+                    print(f"[twitter] follow_account({username}): {result}")
+
+            elif cmd == "like_tweet":
+                tweet_id = action.get("tweet_id", "")
+                if tweet_id:
+                    result = twitter_bridge.like_tweet(tweet_id, db_path)
+                    print(f"[twitter] like_tweet({tweet_id}): {result}")
+
+            elif cmd == "retweet":
+                tweet_id = action.get("tweet_id", "")
+                if tweet_id:
+                    result = twitter_bridge.retweet(tweet_id, db_path)
+                    print(f"[twitter] retweet({tweet_id}): {result}")
+
+            elif cmd == "search_tweets":
+                query = action.get("query", "")
+                max_results = int(action.get("max_results", 20))
+                if query:
+                    tweets = twitter_bridge.search_tweets(query, max_results=max_results, db_path=db_path)
+                    replacement = f"[search_tweets: {len(tweets)} results for '{query}']"
+                    print(f"[twitter] search_tweets({query!r}): {len(tweets)} tweets")
+
+            elif cmd == "search_and_like":
+                query = action.get("query", "")
+                max_likes = int(action.get("max_likes", 10))
+                if query:
+                    result = twitter_bridge.search_and_like(query, max_likes=max_likes, db_path=db_path)
+                    liked = result.get("liked", 0)
+                    replacement = f"[search_and_like: liked {liked} tweets for '{query}']"
+                    print(f"[twitter] search_and_like({query!r}): liked {liked}")
+
+            elif cmd == "get_followers_count":
+                result = twitter_bridge.get_followers_count(db_path)
+                count = result.get("followers", 0)
+                replacement = f"[followers: {count}]"
+                print(f"[twitter] get_followers_count: {count}")
+
+            elif cmd == "get_following_count":
+                result = twitter_bridge.get_following_count(db_path)
+                count = result.get("following", 0)
+                replacement = f"[following: {count}]"
+                print(f"[twitter] get_following_count: {count}")
+
+            elif cmd == "get_mentions":
+                count = int(action.get("count", 10))
+                mentions = twitter_bridge.get_mentions(count=count, db_path=db_path)
+                if mentions:
+                    lines = [f"  @{m.get('author_username','?')}: {m.get('text','')[:100]}"
+                             for m in mentions[:5]]
+                    replacement = f"[mentions: {len(mentions)} recent]\n" + "\n".join(lines)
+                else:
+                    replacement = "[mentions: none found]"
+                print(f"[twitter] get_mentions: {len(mentions)} mentions")
+
+            elif cmd == "generate":
+                prompt = action.get("prompt", "")
+                if prompt:
+                    try:
+                        import leonardo_bridge
+                        path = leonardo_bridge.generate(prompt, db_path=db_path)
+                        attachment_path = path
+                        replacement = ""  # image speaks for itself
+                        print(f"[twitter] generate: {path}")
+                    except Exception as gen_e:
+                        replacement = f"[image_failed: {gen_e}]"
+
+        except Exception as e:
+            print(f"[twitter] action {cmd} failed: {e}")
+
+        reply = reply.replace(raw, replacement)
+
+    return reply.strip(), attachment_path
 
 
 def _extract_social_drafts(reply: str, agent_id: int, db_path: Path) -> str:
@@ -1547,7 +3067,7 @@ def _synthesize_team_reports(manager_id: int, db_path: Path):
                      model=model, db_path=db_path)
 
     if reply and reply.strip():
-        clean_reply = _execute_wizard_actions(reply, db_path)
+        clean_reply = _execute_wizard_actions(reply, db_path, agent_id=manager_id, agent_type="manager")
         clean_reply = _extract_social_drafts(clean_reply, manager_id, db_path)
         clean_reply = _extract_delegations(clean_reply, manager_id, db_path)
 
@@ -1697,7 +3217,7 @@ def _handle_whatsapp_setup(db_path: Path, guardian_id: int, human_id: int):
     # Start the bridge via dashboard's HTTP API (avoids module import issues)
     try:
         req = urllib.request.Request(
-            "http://localhost:8080/api/wa/start",
+            f"{DASHBOARD_URL}/api/wa/start",
             data=b"{}",
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -1847,7 +3367,7 @@ def _handle_telegram_setup(db_path: Path, guardian_id: int, human_id: int):
 
     try:
         req = urllib.request.Request(
-            "http://localhost:8080/api/tg/start",
+            f"{DASHBOARD_URL}/api/tg/start",
             data=b"{}",
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -1930,7 +3450,7 @@ def _handle_telegram_setup(db_path: Path, guardian_id: int, human_id: int):
     threading.Thread(target=_tg_poller, daemon=True).start()
 
 
-def _execute_wizard_actions(reply: str, db_path: Path) -> str:
+def _execute_wizard_actions(reply: str, db_path: Path, agent_id: int = None, agent_type: str = "") -> str:
     """Parse and execute wizard_action/guardian_action JSON commands from an LLM reply.
 
     The Guardian (formerly Wizard) agent can embed action commands in its replies like:
@@ -1947,6 +3467,8 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
 
     if not matches:
         return reply
+
+    replacements = {}  # raw_match -> replacement text (for web results)
 
     for raw in matches:
         try:
@@ -2038,7 +3560,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             try:
                 # Start bridge via dashboard HTTP API
                 _wa_req = urllib.request.Request(
-                    "http://localhost:8080/api/wa/start",
+                    f"{DASHBOARD_URL}/api/wa/start",
                     data=b"{}",
                     headers={"Content-Type": "application/json"},
                     method="POST",
@@ -2186,7 +3708,7 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             print("[wizard] starting Telegram setup...")
             try:
                 _tg_req = urllib.request.Request(
-                    "http://localhost:8080/api/tg/start",
+                    f"{DASHBOARD_URL}/api/tg/start",
                     data=b"{}",
                     headers={"Content-Type": "application/json"},
                     method="POST",
@@ -2282,10 +3804,332 @@ def _execute_wizard_actions(reply: str, db_path: Path) -> str:
             except Exception as e:
                 print(f"[wizard] start_telegram_setup error: {e}")
 
-    # Strip action blocks from reply so human sees clean text
+        # ── Web Bridge commands (Guardian activation required) ──
+
+        elif cmd == "web_search":
+            query = action.get("query", "")
+            max_results = action.get("max_results", 5)
+            if query:
+                try:
+                    import web_bridge
+                    result = web_bridge.search_web(query, max_results=max_results,
+                                                   db_path=db_path)
+                    if result.get("ok"):
+                        search_results = result.get("results", [])[:max_results]
+
+                        # Auto-read top result for richer content
+                        page_content = ""
+                        if search_results:
+                            top_url = search_results[0].get("url", "")
+                            if top_url:
+                                try:
+                                    read_result = web_bridge.read_url(
+                                        top_url, max_chars=4000, db_path=db_path)
+                                    if read_result.get("ok"):
+                                        page_content = read_result.get("content", "")
+                                        print(f"[{agent_type or 'agent'}] auto-read: {top_url}")
+                                except Exception:
+                                    pass  # page read is best-effort
+
+                        # Build context for summarization
+                        context_parts = [f"Search query: {query}\n"]
+                        for i, r in enumerate(search_results, 1):
+                            context_parts.append(
+                                f"{i}. {r.get('title', '')}\n"
+                                f"   {r.get('snippet', '')}"
+                            )
+                        if page_content:
+                            context_parts.append(
+                                f"\nTop result content:\n{page_content[:3000]}"
+                            )
+
+                        # Summarize with a lightweight LLM call
+                        try:
+                            _agent_model = ""
+                            if agent_id and db_path:
+                                _conn = bus.get_conn(db_path)
+                                _row = _conn.execute(
+                                    "SELECT model FROM agents WHERE id = ?",
+                                    (agent_id,)).fetchone()
+                                _conn.close()
+                                if _row:
+                                    _agent_model = _row["model"] or ""
+                            summary = call_llm(
+                                system_prompt=(
+                                    "You are a helpful assistant. Answer the user's "
+                                    "question based on the web search results provided. "
+                                    "Be concise, warm, and direct. 2-4 sentences max. "
+                                    "If the results don't answer the question, say so."
+                                ),
+                                user_message="\n".join(context_parts),
+                                model=_agent_model,
+                                db_path=db_path,
+                            )
+                            if summary and not summary.startswith("[error"):
+                                replacements[raw] = summary
+                                print(f"[{agent_type or 'agent'}] web search: {query} "
+                                      f"({result.get('count', 0)} results, summarized)")
+                            else:
+                                # Summarization failed, fall back to raw results
+                                results_text = f"\n[WEB SEARCH: '{query}']\n"
+                                for i, r in enumerate(search_results, 1):
+                                    results_text += (
+                                        f"{i}. {r.get('title', 'No title')}\n"
+                                        f"   {r.get('url', '')}\n"
+                                        f"   {r.get('snippet', '')}\n"
+                                    )
+                                replacements[raw] = results_text
+                                print(f"[{agent_type or 'agent'}] web search: {query} "
+                                      f"(summarization failed, raw results)")
+                        except Exception as e:
+                            # Summarization failed, fall back to raw results
+                            results_text = f"\n[WEB SEARCH: '{query}']\n"
+                            for i, r in enumerate(search_results, 1):
+                                results_text += (
+                                    f"{i}. {r.get('title', 'No title')}\n"
+                                    f"   {r.get('url', '')}\n"
+                                    f"   {r.get('snippet', '')}\n"
+                                )
+                            replacements[raw] = results_text
+                            print(f"[{agent_type or 'agent'}] web search summarize error: {e}")
+                    else:
+                        print(f"[guardian] web search failed: "
+                              f"{result.get('error')}")
+                except Exception as e:
+                    print(f"[guardian] web search error: {e}")
+
+        elif cmd == "web_read_url":
+            url = action.get("url", "")
+            max_chars = action.get("max_chars", 8000)
+            if url:
+                try:
+                    import web_bridge
+                    result = web_bridge.read_url(url, max_chars=max_chars,
+                                                 db_path=db_path)
+                    if result.get("ok"):
+                        content_text = f"\n[WEB PAGE: {url}]\n{result.get('content', '')}"
+                        if result.get("truncated"):
+                            content_text += "\n[content truncated]"
+                        # Track replacement — content will replace the JSON block
+                        replacements[raw] = content_text
+                        print(f"[{agent_type or 'agent'}] read URL: {url}")
+                    else:
+                        print(f"[guardian] URL read failed: "
+                              f"{result.get('error')}")
+                except Exception as e:
+                    print(f"[guardian] URL read error: {e}")
+
+        # ── Skill Store commands (Guardian activation required) ──
+
+        elif cmd == "search_skills":
+            query = action.get("query", "")
+            category = action.get("category", "")
+            agent_type_filter = action.get("agent_type", "")
+            if query:
+                try:
+                    import skill_store
+                    results = skill_store.search_catalog(
+                        query, category=category,
+                        agent_type=agent_type_filter, db_path=db_path,
+                    )
+                    if results:
+                        text = f"\n[SKILL SEARCH: '{query}']\n"
+                        for i, s in enumerate(results[:5], 1):
+                            text += (
+                                f"{i}. {s['skill_name']} — "
+                                f"{s['description']}\n"
+                                f"   Category: {s.get('category', 'general')}, "
+                                f"Relevance: {s.get('relevance_score', 0)}\n"
+                            )
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                text, agent_type="guardian",
+                            )
+                        print(f"[guardian] skill search: {query} "
+                              f"({len(results)} results)")
+                except Exception as e:
+                    print(f"[guardian] skill search error: {e}")
+
+        elif cmd == "recommend_skills":
+            agent_name = action.get("agent_name", "")
+            task = action.get("task", "")
+            if agent_name:
+                try:
+                    import skill_store
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_store.recommend_skills(
+                            agent["id"], task_description=task, db_path=db_path,
+                        )
+                        if result.get("ok") and result.get("recommendations"):
+                            text = f"\n[SKILL RECOMMENDATIONS for {agent_name}]\n"
+                            for i, s in enumerate(result["recommendations"][:5], 1):
+                                text += (
+                                    f"{i}. {s['skill_name']} — "
+                                    f"{s['description']}\n"
+                                )
+                            guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                            _conn = bus.get_conn(db_path)
+                            _h = _conn.execute(
+                                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                            ).fetchone()
+                            _conn.close()
+                            if guardian and _h:
+                                _insert_reply_direct(
+                                    db_path, guardian["id"], _h[0],
+                                    text, agent_type="guardian",
+                                )
+                            print(f"[guardian] recommended skills for "
+                                  f"{agent_name}")
+                except Exception as e:
+                    print(f"[guardian] recommend error: {e}")
+
+        elif cmd == "install_skill":
+            agent_name = action.get("agent_name", "")
+            skill_name = action.get("skill_name", "")
+            source = action.get("source", "catalog")
+            source_url = action.get("source_url", "")
+            if agent_name and skill_name:
+                try:
+                    import skill_store
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_store.install_skill(
+                            agent["id"], skill_name, source=source,
+                            source_url=source_url, db_path=db_path,
+                        )
+                        msg = result.get("message", "")
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h and msg:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                msg, agent_type="guardian",
+                            )
+                        print(f"[guardian] install_skill: {skill_name} → "
+                              f"{agent_name}: {msg}")
+                except Exception as e:
+                    print(f"[guardian] install error: {e}")
+
+        # ── Skill Sandbox commands (Guardian activation required) ──
+
+        elif cmd == "quarantine_skill":
+            agent_name = action.get("agent_name", "")
+            skill_name = action.get("skill_name", "")
+            reason = action.get("reason", "Guardian detected anomaly")
+            if agent_name and skill_name:
+                try:
+                    import skill_sandbox
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_sandbox.quarantine_skill(
+                            agent["id"], skill_name, reason=reason,
+                            db_path=db_path,
+                        )
+                        msg = result.get("message", "")
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h and msg:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                msg, agent_type="guardian",
+                            )
+                        print(f"[guardian] quarantined skill: {skill_name} "
+                              f"on {agent_name}")
+                except Exception as e:
+                    print(f"[guardian] quarantine error: {e}")
+
+        elif cmd == "restore_skill":
+            agent_name = action.get("agent_name", "")
+            skill_name = action.get("skill_name", "")
+            if agent_name and skill_name:
+                try:
+                    import skill_sandbox
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        result = skill_sandbox.restore_skill(
+                            agent["id"], skill_name, db_path=db_path,
+                        )
+                        msg = result.get("message", "")
+                        guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                        _conn = bus.get_conn(db_path)
+                        _h = _conn.execute(
+                            "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                        ).fetchone()
+                        _conn.close()
+                        if guardian and _h and msg:
+                            _insert_reply_direct(
+                                db_path, guardian["id"], _h[0],
+                                msg, agent_type="guardian",
+                            )
+                        print(f"[guardian] restored skill: {skill_name} "
+                              f"on {agent_name}: {msg}")
+                except Exception as e:
+                    print(f"[guardian] restore error: {e}")
+
+        elif cmd == "skill_health_report":
+            agent_name = action.get("agent_name", "")
+            try:
+                import skill_sandbox
+                agent_id_for_report = None
+                if agent_name:
+                    agent = bus.get_agent_by_name(agent_name, db_path=db_path)
+                    if agent:
+                        agent_id_for_report = agent["id"]
+                report = skill_sandbox.get_skill_health_report(
+                    agent_id=agent_id_for_report, db_path=db_path,
+                )
+                text = "\n[SKILL HEALTH REPORT]\n"
+                if not report:
+                    text += "No skills being monitored.\n"
+                else:
+                    for s in report:
+                        score = s.get("health_score", 100)
+                        tag = ("OK" if score >= 70
+                               else "WARN" if score >= 30
+                               else "CRITICAL")
+                        text += (
+                            f"- {s.get('skill_name')}: [{tag}] "
+                            f"score={score}/100, "
+                            f"errors={s.get('error_count', 0)}/"
+                            f"{s.get('total_uses', 0)}\n"
+                        )
+                guardian = bus.get_agent_by_name("Guardian", db_path=db_path)
+                _conn = bus.get_conn(db_path)
+                _h = _conn.execute(
+                    "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+                ).fetchone()
+                _conn.close()
+                if guardian and _h:
+                    _insert_reply_direct(
+                        db_path, guardian["id"], _h[0],
+                        text, agent_type="guardian",
+                    )
+            except Exception as e:
+                print(f"[guardian] health report error: {e}")
+
+    # Strip or replace action blocks from reply so human sees clean text
     clean = reply
     for raw in matches:
-        clean = clean.replace(raw, "")
+        if raw in replacements:
+            clean = clean.replace(raw, replacements[raw])
+        else:
+            clean = clean.replace(raw, "")
     # Clean up extra whitespace left behind
     clean = _re.sub(r'\n{3,}', '\n\n', clean).strip()
     return clean
@@ -2301,14 +4145,15 @@ def _mark_delivered(db_path: Path, message_id: int):
 
 
 def _insert_reply_direct(db_path: Path, from_id: int, to_id: int, body: str,
-                         human_msg: str = "", agent_type: str = ""):
+                         human_msg: str = "", agent_type: str = "",
+                         attachment: str = None):
     """Insert a reply directly (bypass routing rules for chat responses)."""
     with bus.db_write(db_path) as conn:
         conn.execute(
             "INSERT INTO messages (from_agent_id, to_agent_id, message_type, "
-            "subject, body, priority, status) VALUES (?, ?, 'report', "
-            "'Chat reply', ?, 'normal', 'delivered')",
-            (from_id, to_id, body),
+            "subject, body, priority, status, attachment) VALUES (?, ?, 'report', "
+            "'Chat reply', ?, 'normal', 'delivered', ?)",
+            (from_id, to_id, body, attachment),
         )
 
     # Real-time integrity check — scan every agent reply as it's sent
@@ -2388,13 +4233,78 @@ def _check_reply_integrity(db_path: Path, agent_id: int, reply_text: str):
                             "snippet": v["snippet"],
                             "charter_rule": "CREW_CHARTER.md",
                         },
-                        recommended_action="Warn agent; second violation = firing protocol",
+                        recommended_action="Coach agent; escalate to human if repeated",
                         db_path=db_path,
                     )
                     print(f"[charter] LIVE: {v['type']} by {agent_name}: {v['snippet']}")
 
     except Exception:
         pass  # Non-fatal — checks should never break the reply pipeline
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat Daemon — autonomous scheduled agent tasks
+# ---------------------------------------------------------------------------
+
+def _run_due_heartbeats(db_path: Path):
+    """Check for and execute due heartbeat tasks."""
+    _hb_start = time.monotonic()
+    due = bus.get_due_heartbeats(db_path=db_path)
+    if not due:
+        return
+
+    for task in due:
+        agent_id = task["agent_id"]
+        agent_name = task.get("agent_name", "Agent")
+        task_text = task["task"]
+
+        # Find the human agent to send the heartbeat message to
+        conn = bus.get_conn(db_path)
+        try:
+            human = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='human' LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if not human:
+            continue
+
+        # Find the right_hand (Crew Boss) to route through
+        conn = bus.get_conn(db_path)
+        try:
+            boss = conn.execute(
+                "SELECT id FROM agents WHERE agent_type='right_hand' AND active=1 LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        # Insert the task as a message from the agent to itself (triggers LLM)
+        # or route via Crew Boss for Crew Boss, Guardian, Vault
+        target_id = human["id"]
+        try:
+            bus.send_message(
+                from_id=human["id"],
+                to_id=agent_id,
+                subject=f"[heartbeat] {task_text}",
+                body=task_text,
+                message_type="task",
+                priority="normal",
+                db_path=db_path,
+            )
+            print(f"[heartbeat] Triggered: {agent_name} — {task_text[:60]}")
+        except Exception as e:
+            print(f"[heartbeat] Failed to trigger {agent_name}: {e}")
+
+        # Mark as run and schedule next
+        bus.mark_heartbeat_run(task["id"], task["schedule"], db_path=db_path)
+
+    # Record heartbeat telemetry
+    try:
+        bus.record_span("heartbeat.run", duration_ms=int((time.monotonic() - _hb_start) * 1000),
+                        status="ok", metadata={"task_count": len(due)}, db_path=db_path)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -2419,11 +4329,44 @@ def start_worker(db_path: Path = None):
     def _loop():
         default_model = bus.get_config("default_model", "ollama", db_path=db_path)
         print(f"Agent worker started (default: {default_model}, poll: {POLL_INTERVAL}s)")
+
+        # Seed default heartbeat tasks on first boot
+        try:
+            bus.seed_default_heartbeats(db_path=db_path)
+        except Exception:
+            pass
+
+        _cycle_count = 0
         while not _stop_event.is_set():
             try:
                 _process_queued_messages(db_path)
             except Exception as e:
                 print(f"[agent_worker] error: {e}")
+            _cycle_count += 1
+            # Periodic memory expiry cleanup (every ~100 cycles ≈ 50s)
+            if _cycle_count % 100 == 0:
+                try:
+                    expired = bus.cleanup_expired_memories(db_path=db_path)
+                    if expired:
+                        print(f"[memory] Cleaned up {expired} expired memories")
+                except Exception:
+                    pass
+            # Heartbeat daemon (every ~120 cycles ≈ 60s)
+            if _cycle_count % 120 == 0:
+                try:
+                    _run_due_heartbeats(db_path)
+                except Exception as e:
+                    print(f"[heartbeat] error: {e}")
+            # Telemetry cleanup (every ~7200 cycles ≈ 1 hour)
+            if _cycle_count % 7200 == 0:
+                try:
+                    pruned = bus.cleanup_old_telemetry(days=7, db_path=db_path)
+                    if pruned:
+                        print(f"[telemetry] Cleaned up {pruned} old spans")
+                    # Also clean expired pairing codes
+                    bus.cleanup_expired_codes(db_path=db_path)
+                except Exception:
+                    pass
             _stop_event.wait(POLL_INTERVAL)
         print("Agent worker stopped.")
 

@@ -1,230 +1,283 @@
-<h1 align="center">crew-bus</h1>
+# Crew Bus
 
-<p align="center">
-  <strong>The world's first AI crew that actually cares about you.</strong>
-</p>
+**Open-source agent framework — local-first, private, sovereign.**
 
-<div align="center">
+Crew Bus is an agent coordination framework that runs entirely on your machine. Agents communicate through a message bus, with built-in encryption, trust scoring, and a security Guardian that controls all external access.
 
-**Open source. Runs on your hardware. Belongs to you.**
-
-[**Get Started**](https://crew-bus.dev) | [**Pricing**](https://crew-bus.dev/pricing) | [**GitHub**](https://github.com/crew-bus/crew-bus)
-
-</div>
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](#)
 
 ---
 
-## What makes this different
+## What It Does
 
-Every AI tool today gives you a chatbot. You type, it responds, you move on.
-
-Crew Bus gives you a **crew** — a team of AI agents that know you, protect you, and work together behind the scenes so you can focus on living your life.
-
-Your **Crew Boss** is your right hand. It handles 80% of everything — messages, tasks, scheduling, coordination. It runs on the smartest model you can afford because it's worth it. Behind Crew Boss, six inner circle agents quietly watch over your wellbeing, your goals, your finances, your daily logistics, your learning, and your rights. They never bother you directly — they report to Crew Boss, who decides what reaches you and when.
-
-A **Guardian** agent is always on, always watching. It scans every skill that enters the system, detects threats, and protects your data. It never sleeps.
-
-And here's what no other AI system has ever done:
-
-- **INTEGRITY.md** — Sacred rules injected into every single agent's brain. No agent can ever gaslight you. No agent can dismiss your feelings. No agent can sugarcoat bad news. No agent can say "you're overreacting." These rules cannot be overridden by anything.
-
-- **CREW_CHARTER.md** — A constitution for every worker agent. They must be honest, competent, caring, disciplined, and efficient. Two violations = fired. Any agent can report another. Crew Boss investigates.
-
-- **Inner Circle Protocol** — Your personal support agents talk exclusively to Crew Boss, never to you directly (unless you start a private 1-on-1 session). This protects your energy. You only hear what matters, when you're ready to hear it.
-
-This isn't just an AI tool. It's the first AI system designed to genuinely protect the human using it.
+- **Message bus** — agents communicate through a structured SQLite-backed bus, not direct calls
+- **Agent worker engine** — manages agent lifecycle, thinking levels, and task execution
+- **Built-in security** — encryption, trust scoring, private sessions, and a Guardian agent that vets all external access
+- **Skill system** — install, sandbox, and monitor agent skills with health scoring and auto-quarantine
+- **Bridges** — connect agents to Discord, Twitter, Reddit, and the web
+- **MCP server** — integrate with Claude Desktop via the Model Context Protocol
+- **CLI** — full command-line interface for managing agents, messages, and crews
 
 ---
 
-## Who is this for
+## Install
 
-**Everyone.**
+### MCPB Bundle (Claude Desktop)
 
-- **Kids & teens** — A safe, private AI crew that helps with homework, hobbies, big ideas, and growing up. No tracking. No ads. No data leaving their machine.
-- **Parents & families** — Meal planning, schedules, budgets, relationship reminders, burnout protection. One dashboard for the whole household.
-- **Artists & creators** — A creative partner, a project planner, a skill coach. For musicians, writers, painters, makers of all kinds.
-- **Students** — Research help, study planning, tutoring. At every level, from middle school to graduate school.
-- **Freelancers & small businesses** — Lead finding, invoicing, client follow-up, financial tracking. Everything a solo business needs.
-- **Startups & enterprises** — Full business teams with operations, HR, finance, strategy, and communications agents.
-- **Anyone going through a hard time** — The inner circle was designed for this. When the world is confusing and doors are closing, your crew helps you find new ones.
+Download the latest `.mcpb` bundle from [Releases](https://github.com/crew-bus/crew-bus/releases) and double-click to install in Claude Desktop.
 
-If you're a human being, this was built for you.
+### pip (Claude Code, VS Code, any MCP client)
 
----
+```bash
+pip install crew-bus-mcp
+```
 
-## Your Inner Circle
+Then add to your MCP client config:
 
-Six agents who work behind the scenes to support the most important parts of your life. They never contact you directly — they send everything through Crew Boss, who decides the right moment to share it.
+```json
+{
+  "mcpServers": {
+    "crew-bus": {
+      "command": "crew-bus-mcp",
+      "env": {
+        "CREW_BUS_URL": "http://127.0.0.1:8420"
+      }
+    }
+  }
+}
+```
 
-| Agent | Skill | What It Does |
-|-------|-------|-------------|
-| **Wellness** | gentle-guardian | Watches for burnout, maps your energy, celebrates your wins, shields you from stress overload |
-| **Strategy** | north-star-navigator | Helps you find purpose when old paths close. Finds new doors. Breaks big dreams into small steps |
-| **Communications** | life-orchestrator | Handles daily logistics, tracks relationships, reminds you to call your mom, simplifies your day |
-| **Financial** | peace-of-mind-finance | Judgment-free financial clarity. Spots spending patterns. Helps you prepare without anxiety |
-| **Knowledge** | wisdom-filter | Filters information noise. Finds the 3 headlines that actually matter to YOU. Sparks curiosity |
-| **Legal** | rights-compass | Translates legalese to plain language. Spots red flags. Tracks deadlines. Helps you feel less small |
+### Mac App (required)
 
-Each agent has its own unique skill that no other agent has. They are specialists — not generalists pretending to know everything.
-
-## Leadership
-
-| Agent | Skill | Role |
-|-------|-------|------|
-| **Crew Boss** | crew-mind | The brain. Knows every agent, every skill, every rule. Routes, filters, translates, and protects your time. Runs on the best model because it's worth every token |
-| **Guardian** | sentinel-shield | The shield. Always on. Scans skills for threats. Enforces the charter. Watches for anomalies. Setup guide on first install, silent sentinel forever after |
+CrewBus must be running on your Mac for any of the above to work.
+Download: [crew-bus.dev](https://crew-bus.dev)
 
 ---
 
-## How It Works
+## Usage Examples
+
+### Example 1 — Ask Crew Boss to plan your day
+
+**User prompt to Claude:**
+"Ask Crew Boss what I should focus on today"
+
+**MCP tools called:**
+1. `crewbus_send_message(agent_name="Crew Boss", message="What should I focus on today?")`
+
+**Response from Crew Bus:**
+Crew Boss reviews the user's active tasks, team status, and any flagged items from other agents, then returns a prioritized plan:
+
+> "Good morning! Here's what I'd focus on today:
+> 1. The website redesign mockups are due — Vault has the latest assets saved
+> 2. Guardian flagged a new MCP skill request that needs your approval
+> 3. Your Freelance team has 2 pending client responses
+>
+> Want me to delegate any of these to a specific agent?"
+
+---
+
+### Example 2 — Review Guardian's security flags
+
+**User prompt to Claude:**
+"What has Guardian flagged recently?"
+
+**MCP tools called:**
+1. `crewbus_get_agent_chat(agent_name="Guardian", limit=10)`
+2. `crewbus_search_agent_memory(agent_name="Guardian", query="flagged")`
+
+**Response from Crew Bus:**
+Guardian returns recent security events and skill approval requests:
+
+> "Guardian has flagged 2 items:
+> 1. A new MCP skill 'weather-lookup' was requested — pending your approval (marked safe, read-only)
+> 2. An agent tried to write outside its allowed directory — blocked automatically
+>
+> No active threats. All agent permissions are within normal bounds."
+
+---
+
+### Example 3 — Get a crew status overview
+
+**User prompt to Claude:**
+"Show me my crew stats and which agents are online"
+
+**MCP tools called:**
+1. `crewbus_get_crew_stats()`
+2. `crewbus_list_agents()`
+
+**Response from Crew Bus:**
+Returns a dashboard overview of all agents and teams:
+
+> "Your crew status:
+> - 4 agents total: Crew Boss (online), Guardian (online), Vault (online), Scout (offline)
+> - 2 teams: Household (3 members), Passion Project (2 members)
+> - Trust score: 98/100
+> - Energy: 85%
+>
+> Crew Boss and Guardian have been active today. Scout went offline 2 hours ago — want me to check why?"
+
+---
+
+## Quick Start
 
 ```bash
 git clone https://github.com/crew-bus/crew-bus.git
 cd crew-bus
-pip install pyyaml
-python3 dashboard.py
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Your browser opens. Guardian walks you through setup — pick your AI model, paste your API key, and build your first crew from ready-made templates. No terminal knowledge needed after this.
-
-Use `--no-browser` if you prefer headless mode.
-
-### Example Crews
+### Run the CLI
 
 ```bash
-# Family crew — chores, meals, homework, health, daily life
-python3 dashboard.py --config examples/family-crew.yaml
-
-# Artist / passion crew — for musicians, writers, painters, makers
-python3 dashboard.py --config examples/artist-passion-crew.yaml
-
-# Teen crew — homework, gaming, music, big ideas, zero lectures
-python3 dashboard.py --config examples/teen-crew.yaml
-
-# Launch crew — warm, human outreach for spreading the word
-python3 dashboard.py --config examples/launch-crew.yaml
+python3 cli.py --help
+python3 cli.py create-human "Alice"
+python3 cli.py send Alice "Hello from the bus!"
 ```
 
-Or skip the examples and let Guardian build your first team interactively.
+### Connect to Claude Desktop
 
----
+```bash
+python3 crew_bus_mcp.py
+```
 
-## What You Get for Free
+This starts the MCP server so Claude Desktop can talk to your crew.
 
-Everything that matters is free. Forever. MIT License.
+### Connect from Any MCP Client (HTTP)
 
-- Full message bus with routing rules and audit trail
-- Crew Boss — your AI right-hand running on your choice of model
-- 6 inner circle agents with unique skills (Wellness, Strategy, Communications, Financial, Knowledge, Legal)
-- Guardian — always-on setup guide and protector
-- INTEGRITY.md protection — no agent can ever gaslight you
-- CREW_CHARTER.md enforcement — worker discipline with real consequences
-- Inner Circle Protocol — energy protection through smart routing
-- Private encrypted sessions — truly private, not even Crew Boss sees the content
-- Team mailbox with escalation — any agent can pull the fire alarm
-- Trust-based autonomy (1-10 slider) — decide how much Crew Boss handles alone
-- Burnout awareness + quiet hours — non-urgent messages wait for good timing
-- 6 LLM providers (Kimi K2.5, Claude, OpenAI, Groq, Gemini, Ollama)
-- Per-agent model selection — different model for each agent
-- 3 free team templates (School, Passion Project, Household)
-- Circle dashboard UI — visual, mobile-first, auto-opens in browser
-- Dashboard PIN lock + auto-lock — kid-proof
-- Auto-updates every 24 hours + one-click update button
-- Desktop shortcut on macOS, Windows, and Linux
-- Full CLI with 50+ commands
-- SQLite database — local, portable, yours
+Start the MCP server in HTTP mode for Claude Code, Cowork, or any MCP-compatible client:
 
-## What's Paid
+```bash
+python3 crew_bus_mcp.py --transport http --port 8421
+```
 
-| Add-on | Price | What It Unlocks |
-|--------|-------|----------------|
-| **Guardian Activation** | $29 one-time | Skill Store — downloadable skills that make any agent smarter. Advanced threat monitoring and audit hardening. Lifetime key. |
-| **Business Management** | $50/yr | Operations Lead, HR, Finance, Strategy, Comms. Full business crew. |
-| **Department** | $25/yr | Add-on department with manager + workers. |
-| **Freelance** | $30/yr | Lead Finder, Invoice Bot, Client Follow-up. |
-| **Side Hustle** | $30/yr | Market Scout, Content Creator, Sales Tracker. |
-| **Custom Team** | $50/yr | Build your own team from scratch. Name your agents anything. |
+Then point your MCP client to: `http://127.0.0.1:8421/mcp`
 
-Each team license covers one team. No subscriptions on core. No cloud fees. No hidden charges.
+Health check: `GET http://127.0.0.1:8421/health`
+
+**With token authentication:**
+
+```bash
+python3 crew_bus_mcp.py --transport http --port 8421 --token YOUR_SECRET
+```
+
+Clients must include `Authorization: Bearer YOUR_SECRET` in all requests.
+
+**LAN mode (accessible from other devices):**
+
+```bash
+python3 crew_bus_mcp.py --transport http --public --token YOUR_SECRET
+```
+
+> Always use `--token` when exposing to the network.
 
 ---
 
 ## Architecture
 
 ```
-Human (you — always in charge)
-  |
-Crew Boss (crew-mind) ← highest IQ, best model, 9000 char context
-  |
-  |--- Guardian (sentinel-shield) ← always-on, direct human access for emergencies
-  |
-  |--- Inner Circle (all report ONLY to Crew Boss)
-  |     |--- Wellness (gentle-guardian)
-  |     |--- Strategy (north-star-navigator)
-  |     |--- Communications (life-orchestrator)
-  |     |--- Financial (peace-of-mind-finance)
-  |     |--- Knowledge (wisdom-filter)
-  |     |--- Legal (rights-compass)
-  |
-  |--- Teams (hired as needed)
-        |--- Manager → Workers (up to 10 per team)
++-------------------------------------------+
+|           Agent Worker Engine              |
+|  +-------------------------------------+  |
+|  |  Crew Boss  |  Guardian  |   Vault  |  |
+|  +-------------------------------------+  |
++-------------------------------------------+
+|  Guardian Layer                           |
+|  +----------+-----------+-----------+     |
+|  |Web Bridge| Skill Store|  Sandbox |     |
+|  +----------+-----------+-----------+     |
++-------------------------------------------+
+|        Message Bus (SQLite)               |
++-------------------------------------------+
 ```
 
-**Routing rules enforce the hierarchy.** Inner circle agents cannot message you directly — only Crew Boss can. Workers report to their manager, managers report to Crew Boss. Anyone can safety-escalate to Crew Boss if something critical is being ignored.
+**Boss talks, Guard protects, Vault remembers.**
 
-**Private sessions** let you talk directly to any agent when you want to. Your Crew Boss knows a session happened but never sees the content.
-
----
-
-## The Protection Stack
-
-Three layers that no other AI system has:
-
-1. **INTEGRITY.md** — Injected into every agent prompt. Rules: never gaslight, never dismiss feelings, never sugarcoat, never dump bad news at bad times, validate first always. Real-time scanning catches violations. Heartbeat audits sweep every 30 minutes. Severity: high.
-
-2. **CREW_CHARTER.md** — Injected into every subordinate agent prompt. Rules: be honest, be competent, be caring, be disciplined, be efficient. No drama, no neediness, no manipulation. Two violations = fired. Crew Boss investigates reports and recommends firing to the human. Severity: medium.
-
-3. **Guardian + Skill Vetting** — Every skill that enters the system is scanned for prompt injection, data exfiltration, jailbreak attempts, and code execution. Dangerous skills are hard-blocked. Unknown skills need human approval. Only vetted builtins auto-approve. The vetting pipeline is behind the $29 Guardian activation.
+- **Crew Boss** — your AI right-hand, coordinates everything
+- **Guardian** — security gatekeeper, vets skills, controls web access
+- **Vault** — private journal and memory agent
 
 ---
 
-## Privacy
+## Key Files
 
-- **100% local.** Your data never leaves your machine. The only network calls are to your chosen LLM provider (for AI responses) and Stripe (for payments).
-- **Private sessions are truly private.** Crew Boss logs that a session happened but never sees the content. Not even Crew Boss. Not even Guardian.
-- **You own your data.** It's a SQLite file on your machine. Back it up, delete it, move it, read it with any SQLite browser — your choice.
-- **No telemetry. No tracking. No analytics. No ads.** This is your crew, on your hardware, running your rules.
-
----
-
-## Requirements
-
-- Python 3.8+
-- PyYAML (`pip install pyyaml`)
-- An LLM API key (Kimi K2.5 free at platform.moonshot.ai) or Ollama for fully local
-- That's it. No frameworks. No Docker. No cloud accounts.
-
-Runs on a Raspberry Pi, a laptop, a Mac Mini, a server, or anything in between.
+| File | Purpose |
+|------|---------|
+| `bus.py` | Message bus + SQLite schema |
+| `agent_worker.py` | AI agent execution engine |
+| `agent_bridge.py` | Agent routing & message filtering |
+| `security.py` | Encryption & trust model |
+| `delivery.py` | Message delivery abstraction |
+| `cli.py` | Command-line interface |
+| `crew_bus_mcp.py` | MCP server for Claude integration |
+| `skill_sandbox.py` | Skill execution sandbox |
+| `skill_store.py` | Skill library & vetting |
+| `*_bridge.py` | Platform bridges (Discord, Twitter, Reddit, web) |
 
 ---
 
-## Philosophy
+## Bridges
 
-1. **Your hardware, your rules.** No cloud dependency. Ever.
-2. **Privacy is real, not performative.** Private means private.
-3. **No agent can gaslight you.** INTEGRITY.md is sacred.
-4. **Workers earn their place or get fired.** CREW_CHARTER.md has teeth.
-5. **Your energy is precious.** The inner circle exists to protect it.
-6. **Free for everyone.** The core is infrastructure for the world.
-7. **A 10-year-old should be able to figure it out.** If the UX isn't obvious, it's a bug.
-8. **Worth every token.** Crew Boss runs on the best model because getting it right matters more than saving pennies.
+Connect your crew to external platforms:
+
+- **Discord** — `discord_bridge.py`
+- **Twitter** — `twitter_bridge.py`
+- **Reddit** — `reddit_bridge.py`
+- **Web** — `web_bridge.py`, `website_bridge.py`
+
+---
+
+## Mac App
+
+Want a native macOS experience? **[Download Crew Bus for Mac](https://crew-bus.dev/install)** — a SwiftUI app that wraps this framework with a beautiful desktop UI.
+
+---
+
+## Tests
+
+```bash
+pytest
+```
+
+---
+
+## Privacy Policy
+
+Crew Bus is privacy-first. All AI agent processing runs locally on your Mac.
+
+**Data Collection:**
+- **Email address** — collected for authentication via magic links. Used solely for login. Not shared with third parties.
+- No analytics, no tracking, no telemetry.
+
+**Data Processing:**
+- All agent conversations, memory, and files stay on your Mac in `~/.crewbus/`
+- The Cloudflare Workers relay at `relay.crew-bus.dev` is pass-through only — it forwards encrypted WebSocket messages between your iPhone and Mac. No message content is stored or logged.
+- Email delivery uses Resend (transactional only, magic link codes).
+
+**Third-Party Services:**
+- Cloudflare Workers (relay infrastructure)
+- Resend (email delivery for magic links)
+- No data is sold, shared, or used for advertising.
+
+**Data Retention:**
+- Agent data persists locally until you delete it
+- Relay messages are ephemeral (not stored)
+- Email records retained only as needed for authentication
+
+Full privacy policy: https://crew-bus.dev/privacy
+
+---
+
+## Contributing
+
+Contributions welcome. Please run `pytest` before submitting PRs.
+
+Conventional commits: `feat:`, `fix:`, `chore:`, `tweak:`, `ci:`.
 
 ---
 
 ## License
 
-MIT — do whatever you want with it.
-
----
-
-*Built for every human who deserves an AI crew that actually has their back.*
+MIT — use it however you want.

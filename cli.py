@@ -16,7 +16,6 @@ Usage:
     crew-bus report <agent>             Compile subordinate report
     crew-bus deliver <message_id>       Deliver a queued message
     crew-bus trust <human> <score>      Set Crew Boss trust score
-    crew-bus burnout <human> <score>    Set human burnout score
     crew-bus briefing <human> <type>    Generate briefing (morning|evening|urgent)
     crew-bus autonomy <right_hand>      Show Crew Boss autonomy level and stats
     crew-bus decisions [--agent <id>]   Show decision history
@@ -83,7 +82,7 @@ def cmd_load(args):
     print(f"Agents: {', '.join(result['agents_loaded'])}")
     print(f"Database: {bus.DB_PATH}")
     print()
-    print("Crew is live! Open http://localhost:8080 to see your dashboard.")
+    print("Crew is live! Open the Crew Bus app to see your dashboard.")
 
 
 def cmd_send(args):
@@ -163,12 +162,10 @@ def cmd_status(args):
         active_disp = "yes" if a["active"] else "no"
         parent = a.get("parent_name") or "--"
 
-        # Add trust/burnout info for special types
+        # Add trust info for special types
         extra = ""
         if a["agent_type"] == "right_hand":
             extra = f" [trust:{a['trust_score']}]"
-        elif a["agent_type"] == "human":
-            extra = f" [burnout:{a['burnout_score']}]"
 
         print(f"  {a['name']:<22} {a['agent_type']:<16} {status_disp:<14} "
               f"{active_disp:<8} {a['channel']:<10} {parent}{extra}")
@@ -316,20 +313,14 @@ def cmd_trust(args):
         sys.exit(1)
 
 
-def cmd_burnout(args):
-    """Update burnout score for a human."""
-    agent = _resolve_agent(args.human)
-    try:
-        bus.update_burnout_score(agent["id"], args.score)
-        print(f"Burnout score for {agent['name']} set to {args.score}/10")
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
 def cmd_briefing(args):
     """Generate a briefing for the human."""
-    from right_hand import RightHand
+    try:
+        from right_hand import RightHand
+    except ImportError:
+        print("Error: Briefings require the CrewBus app (right_hand module).", file=sys.stderr)
+        print("Install from https://crew-bus.dev/install", file=sys.stderr)
+        sys.exit(1)
     from email_formatter import format_morning_brief, format_evening_summary, format_urgent_alert
 
     agent = _resolve_agent(args.human)
@@ -351,11 +342,11 @@ def cmd_briefing(args):
     briefing = engine.compile_briefing(args.type)
 
     # Format as email
-    burnout = agent.get("burnout_score", 5)
+    energy_level = briefing.get("energy_level", "medium")
     if args.type == "morning":
-        email = format_morning_brief(briefing, agent["name"], burnout)
+        email = format_morning_brief(briefing, agent["name"], energy_level)
     elif args.type == "evening":
-        email = format_evening_summary(briefing, agent["name"], burnout)
+        email = format_evening_summary(briefing, agent["name"], energy_level)
     elif args.type == "urgent":
         email = format_urgent_alert(briefing, agent["name"])
     else:
@@ -521,11 +512,10 @@ def cmd_accuracy(args):
 # ---------------------------------------------------------------------------
 
 def cmd_state(args):
-    """Show current human state (burnout, energy, activity, mood)."""
+    """Show current human state (energy, activity, mood)."""
     agent = _resolve_agent(args.human)
     state = bus.get_human_state(agent["id"])
     print(f"  Human State: {agent['name']}")
-    print(f"  Burnout:        {state['burnout_score']}/10")
     print(f"  Energy:         {state['energy_level']}")
     print(f"  Activity:       {state['current_activity']}")
     print(f"  Mood:           {state['mood_indicator']}")
@@ -936,12 +926,6 @@ def main():
     p.add_argument("human", help="Human agent name or ID")
     p.add_argument("score", type=int, help="Trust score (1-10)")
     p.set_defaults(func=cmd_trust)
-
-    # burnout
-    p = sub.add_parser("burnout", help="Set human burnout score")
-    p.add_argument("human", help="Human agent name or ID")
-    p.add_argument("score", type=int, help="Burnout score (1-10)")
-    p.set_defaults(func=cmd_burnout)
 
     # briefing
     p = sub.add_parser("briefing", help="Generate briefing for human")

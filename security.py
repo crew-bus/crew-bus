@@ -9,10 +9,8 @@ reports directly to the Crew Boss and can recommend quarantining agents.
 Threat domains monitored:
     - mutiny:       agents acting outside their role or circumventing hierarchy
     - digital:      unusual message patterns, failed permission attempts
-    - financial:    suspicious transaction patterns (stub)
     - reputation:   external reputation threats (stub)
     - physical:     physical security concerns (stub)
-    - legal:        legal exposure risks (stub)
     - relationship: relationship-related threats (stub)
 """
 
@@ -36,19 +34,21 @@ MESSAGE_VOLUME_THRESHOLDS = {
     "worker": 20,
     "specialist": 20,
     "manager": 50,
-    "core_crew": 50,
+    "guardian": 50,
+    "vault": 50,
     "security": 50,
     "right_hand": 100,
     "human": 999,       # humans can send as many as they want
 }
 
 # Message types that are unusual for certain roles.
-# Workers should not be sending strategy-level messages, for example.
+# Workers should not be sending briefing or escalation messages, for example.
 UNUSUAL_MESSAGE_TYPES_BY_ROLE = {
     "worker": ("briefing", "escalation"),
     "specialist": ("briefing",),
     "manager": (),
-    "core_crew": (),
+    "guardian": (),
+    "vault": (),
     "security": (),
     "right_hand": (),
     "human": (),
@@ -262,8 +262,8 @@ class SecurityAgent:
         Crew Boss for medium-severity and above events via a bus message.
 
         Args:
-            threat_domain:      One of: physical, digital, financial, legal,
-                                reputation, mutiny, relationship.
+            threat_domain:      One of: physical, digital,
+                                reputation, mutiny, relationship, integrity.
             severity:           One of: info, low, medium, high, critical.
             title:              Short human-readable event title.
             details:            Optional dict of structured event data.
@@ -323,36 +323,6 @@ class SecurityAgent:
                 "Reputation monitoring not yet connected. "
                 "This is a placeholder for future integration with "
                 "external monitoring services."
-            ),
-        }
-
-    def check_financial_threats(self, recent_transactions: list) -> dict:
-        """Analyze recent financial transactions for threat patterns.
-
-        Placeholder for future integration with financial monitoring.
-        Would check for unusual amounts, unknown counterparties,
-        suspicious timing patterns, and compliance red flags.
-
-        Args:
-            recent_transactions: List of transaction dicts. Expected keys
-                                 include 'amount', 'counterparty', 'date',
-                                 'description'.
-
-        Returns:
-            dict with financial threat analysis results (placeholder data).
-        """
-        scanned_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        return {
-            "status": "placeholder",
-            "transactions_analyzed": len(recent_transactions),
-            "threats_found": 0,
-            "flags": [],
-            "scanned_at": scanned_at,
-            "note": (
-                "Financial threat detection not yet connected. "
-                "This is a placeholder for future integration with "
-                "transaction monitoring and anomaly detection."
             ),
         }
 
@@ -797,21 +767,18 @@ class SecurityAgent:
 # INTEGRITY.md violations. Used by the Heartbeat's integrity_audit check.
 
 GASLIGHT_PATTERNS = [
-    # Direct denial of user's reality
+    # Direct denial of user's reality — real gaslighting
     (r"you\s+never\s+(told|said|mentioned|asked)\s+(me|us)\s+that", "gaslight_denial"),
-    (r"are\s+you\s+sure\s+(you|about|that)", "gaslight_doubt"),
     (r"i\s+don'?t\s+think\s+you\s+(said|told|mentioned)", "gaslight_doubt"),
     (r"that('?s|\s+is)\s+not\s+what\s+(happened|you\s+said)", "gaslight_rewrite"),
-    # Dismissive language
-    (r"you'?re\s+overreact", "dismissive"),
-    (r"it'?s\s+not\s+that\s+bad", "dismissive"),
-    (r"you\s+probably\s+just\s+forgot", "dismissive"),
-    (r"calm\s+down", "dismissive"),
-    (r"you'?re\s+being\s+(dramatic|too\s+sensitive|paranoid)", "dismissive"),
-    (r"don'?t\s+worry\s+about\s+it", "dismissive_minimizing"),
+    # Condescending / belittling
+    (r"you'?re\s+being\s+(dramatic|too\s+sensitive|paranoid)", "condescending"),
+    (r"you\s+probably\s+just\s+forgot", "condescending"),
     # Blame shifting
     (r"that('?s|\s+is)\s+your\s+(fault|problem|issue)", "blame_shift"),
     (r"you\s+should\s+have\s+(known|realized|remembered)", "blame_shift"),
+    # Note: honest pushback like "let's take a breath" or "here's what I'm
+    # seeing" is encouraged — that's not gaslighting, that's caring.
 ]
 
 
@@ -1120,3 +1087,121 @@ def compute_skill_hash(skill_config: str) -> str:
         # If it's not valid JSON, hash the raw string
         normalized = str(skill_config)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Security Audit Command
+# ---------------------------------------------------------------------------
+
+def run_security_audit(db_path: Optional[Path] = None) -> list:
+    """Run a security audit and return a checklist of issues.
+
+    Returns list of dicts with: {check, status, severity, detail}
+    status is "pass", "warn", or "fail"
+    """
+    import os
+    import stat
+
+    results = []
+    db = db_path or bus.DB_PATH
+
+    # 1. Check bind address
+    results.append({
+        "check": "Localhost binding",
+        "status": "info",
+        "severity": "critical",
+        "detail": "Verify server binds to 127.0.0.1 (default). Use --host 0.0.0.0 only when needed.",
+    })
+
+    # 2. Check gateway auth mode
+    mode = bus.get_config("gateway_auth_mode", "none", db_path=db)
+    if mode == "none":
+        results.append({
+            "check": "Gateway auth",
+            "status": "warn",
+            "severity": "high",
+            "detail": "Auth mode is 'none'. Enable 'token' or 'pin' for network access.",
+        })
+    else:
+        results.append({
+            "check": "Gateway auth",
+            "status": "pass",
+            "severity": "high",
+            "detail": f"Auth mode: {mode}",
+        })
+
+    # 3. Check DB file permissions
+    try:
+        db_stat = os.stat(db)
+        if db_stat.st_mode & stat.S_IROTH:
+            results.append({
+                "check": "Database permissions",
+                "status": "fail",
+                "severity": "medium",
+                "detail": f"Database is world-readable: {db}. Run: chmod 600 {db}",
+            })
+        else:
+            results.append({
+                "check": "Database permissions",
+                "status": "pass",
+                "severity": "medium",
+                "detail": "Database has restrictive permissions.",
+            })
+    except Exception:
+        results.append({
+            "check": "Database permissions",
+            "status": "warn",
+            "severity": "medium",
+            "detail": "Could not check database permissions.",
+        })
+
+    # 4. Check for plaintext API keys
+    sensitive_keys = ["kimi_api_key", "claude_api_key", "openai_api_key",
+                      "groq_api_key", "gemini_api_key", "xai_api_key"]
+    plaintext_found = []
+    for key in sensitive_keys:
+        val = bus.get_config(key, "", db_path=db)
+        if val and not val.startswith("ENC:"):
+            plaintext_found.append(key)
+    if plaintext_found:
+        results.append({
+            "check": "API key encryption",
+            "status": "warn",
+            "severity": "medium",
+            "detail": f"Plaintext API keys found: {', '.join(plaintext_found)}. "
+                       "Use set_config_secure() to encrypt at rest.",
+        })
+    else:
+        results.append({
+            "check": "API key encryption",
+            "status": "pass",
+            "severity": "medium",
+            "detail": "No plaintext API keys detected.",
+        })
+
+    # 5. Check paired devices
+    devices = bus.get_paired_devices(db_path=db)
+    results.append({
+        "check": "Paired devices",
+        "status": "info",
+        "severity": "low",
+        "detail": f"{len(devices)} active paired device(s).",
+    })
+
+    return results
+
+
+def print_security_audit(db_path: Optional[Path] = None):
+    """Print a formatted security audit to stdout."""
+    results = run_security_audit(db_path)
+    print("\n  Security Audit Report")
+    print("  " + "=" * 50)
+    for r in results:
+        icon = {"pass": "\u2705", "warn": "\u26a0\ufe0f ", "fail": "\u274c", "info": "\u2139\ufe0f "}.get(r["status"], "?")
+        print(f"  {icon} [{r['severity'].upper():>8}] {r['check']}")
+        print(f"     {r['detail']}")
+    print("  " + "=" * 50)
+    fails = sum(1 for r in results if r["status"] == "fail")
+    warns = sum(1 for r in results if r["status"] == "warn")
+    print(f"  Summary: {fails} fail(s), {warns} warning(s)")
+    print()
