@@ -2,8 +2,93 @@
   "manifest_version": "0.3",
   "name": "crew-bus",
   "display_name": "Crew Bus",
-  "description": "Run coordinated AI agent teams locally on your Mac with iPhone remote access",
-  "privacy_policies": [
-    "https://crew-bus.dev/privacy"
+  "version": "1.0.2",
+  "description": "Talk to your local AI agent crew — Crew Boss, Guardian, Vault, and custom teams — directly from Claude.",
+  "long_description": "Crew Bus runs coordinated AI agent teams locally on your Mac. Install the Crew Bus Mac app (crew-bus.dev), then use this extension to let Claude talk to your crew through natural conversation.\n\nAsk Crew Boss to plan your day, check what Guardian has flagged, search Vault's memory, monitor your teams, and post to team mailboxes — all without leaving Claude.\n\nAll agent processing happens on your Mac. Nothing hits the cloud unless you opt in.",
+  "author": {
+    "name": "Ryan Johnson",
+    "email": "ryanjohnsonpersonal@gmail.com",
+    "url": "https://crew-bus.dev"
+  },
+  "homepage": "https://crew-bus.dev",
+  "documentation": "https://github.com/crew-bus/crew-bus#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crew-bus/crew-bus"
+  },
+  "license": "MIT",
+  "keywords": ["agents", "local-first", "crew", "assistant", "privacy", "mac"],
+  "icon": "icon.png",
+  "privacy_policies": ["https://crew-bus.dev/privacy"],
+  "compatibility": {
+    "platforms": ["macos"]
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp[cli]", "${__dirname}/server/main.py"],
+      "env": {
+        "CREW_BUS_URL": "http://127.0.0.1:8420"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "crewbus_list_agents",
+      "description": "List all crew members with their status, type, and role",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_send_message",
+      "description": "Send a message to a crew member and get their reply",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_get_agent_chat",
+      "description": "Get recent chat history with a crew member",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_get_crew_stats",
+      "description": "Get a dashboard overview of the crew — agent counts, trust score, energy",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_list_teams",
+      "description": "List all teams with their manager and member count",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_get_team_detail",
+      "description": "Get detailed info about a team including its agent list",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_get_message_feed",
+      "description": "Get recent crew message feed — inter-agent messages and bus events",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_search_agent_memory",
+      "description": "Search a crew member's memory — experiences, facts, learned info",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_get_agent_learnings",
+      "description": "Get what a crew member has learned — mistakes and what works well",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_get_audit_log",
+      "description": "Get recent crew audit events — actions, decisions, configuration changes",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "crewbus_post_to_team_mailbox",
+      "description": "Post a message to a team mailbox on behalf of an agent",
+      "annotations": { "readOnlyHint": false, "destructiveHint": true }
+    }
   ]
 }
